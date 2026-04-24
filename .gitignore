@@ -3,6 +3,10 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Database
+adas.db
+adas.db-journal
+
 # C extensions
 *.so
 
