@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
+import os
 from app.core.db import init_db
 from app.ws_manager import manager
-from app.api.routes import internal, auth
+from app.api.routes import internal, auth, cameras
 
 
 
@@ -25,13 +26,15 @@ app = FastAPI(
 )
 
 # Mount the static snapshots directory so FE can display the images
-import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SNAPSHOT_DIR = os.path.join(BASE_DIR, "..", "..", "ai_engine", "snapshots")
 os.makedirs("snapshots", exist_ok=True) # Ensure the folder exists
-app.mount("/snapshots", StaticFiles(directory="snapshots"), name="snapshots")
+app.mount("/snapshots", StaticFiles(directory=SNAPSHOT_DIR), name="snapshots")
 
 
 app.include_router(internal.router)
 app.include_router(auth.router)
+app.include_router(cameras.router)
 
 @app.websocket("/ws/alerts")
 async def websocket_alerts(websocket: WebSocket):
