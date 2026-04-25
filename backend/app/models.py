@@ -94,6 +94,13 @@ class CameraRead(CameraBase):
     created_at: datetime
     updated_at: datetime
 
+class CameraListResponse(SQLModel):
+    total_cameras: int
+    network_connected: int
+    active_detection: int
+    total_filtered: int  # Tells React how many pages there are
+    cameras: list[CameraRead]
+
 class CameraUpdate(SQLModel):
     camera_name: Optional[str] = None
     channel_id: Optional[int] = None

@@ -1,103 +1,188 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>A.D.A.S. Live Alert Feed</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #1e1e1e;
-            color: white;
-            padding: 20px;
-        }
-        .alert {
-            background: #ff4757;
-            padding: 15px;
-            margin-top: 10px;
-            border-radius: 5px;
-            border: 1px solid #ff8a95;
-        }
-        .alert time {
-            display: block;
-            margin-top: 8px;
-            font-size: 12px;
-            opacity: 0.85;
-        }
+      body {
+        font-family: Arial, sans-serif;
+        background: #1e1e1e;
+        color: white;
+        padding: 20px;
+      }
+      .alert {
+        background: #ff4757;
+        padding: 15px;
+        margin-top: 10px;
+        border-radius: 5px;
+        border: 1px solid #ff8a95;
+      }
+      .snapshot {
+        display: block;
+        width: 100%;
+        max-width: 420px;
+        margin-top: 10px;
+        border-radius: 6px;
+        border: 1px solid #ff8a95;
+        background: #111;
+      }
+      .snapshot-missing {
+        margin-top: 10px;
+        font-size: 12px;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px dashed #ffd0d5;
+        background: rgba(0, 0, 0, 0.15);
+      }
+      .snapshot-path {
+        margin-top: 8px;
+        font-size: 12px;
+        opacity: 0.9;
+        word-break: break-all;
+      }
+      .alert time {
+        display: block;
+        margin-top: 8px;
+        font-size: 12px;
+        opacity: 0.85;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <h1>Live Detection Feed</h1>
     <div id="status">Connecting to A.D.A.S. WebSockets...</div>
     <div id="alerts"></div>
 
     <script>
-        const ALERT_STORAGE_KEY = "adas_alerts";
-        const MAX_ALERTS = 30;
-        const alertsDiv = document.getElementById("alerts");
-        const statusDiv = document.getElementById("status");
+      const BACKEND_HTTP_ORIGIN = "http://localhost:8000";
+      const BACKEND_WS_ORIGIN = "ws://localhost:8000";
+      const ALERT_STORAGE_KEY = "adas_alerts";
+      const MAX_ALERTS = 30;
+      const alertsDiv = document.getElementById("alerts");
+      const statusDiv = document.getElementById("status");
 
-        function getStoredAlerts() {
-            try {
-                return JSON.parse(localStorage.getItem(ALERT_STORAGE_KEY)) ?? [];
-            } catch {
-                return [];
-            }
+      function getStoredAlerts() {
+        try {
+          return JSON.parse(localStorage.getItem(ALERT_STORAGE_KEY)) ?? [];
+        } catch {
+          return [];
         }
+      }
 
-        function storeAlerts(alerts) {
-            localStorage.setItem(ALERT_STORAGE_KEY, JSON.stringify(alerts));
+      function storeAlerts(alerts) {
+        localStorage.setItem(ALERT_STORAGE_KEY, JSON.stringify(alerts));
+      }
+
+      function resolveSnapshotUrls(snapshotPath) {
+        if (!snapshotPath) return [];
+        const normalized = String(snapshotPath).trim();
+
+        if (/^https?:\/\//i.test(normalized)) return [normalized];
+        if (normalized.startsWith("/snapshots/")) {
+          const raw = `${BACKEND_HTTP_ORIGIN}${normalized}`;
+          return expandImageCandidates(raw);
         }
+        if (normalized.startsWith("snapshots/")) {
+          const raw = `${BACKEND_HTTP_ORIGIN}/${normalized}`;
+          return expandImageCandidates(raw);
+        }
+        if (normalized.startsWith("/")) return [`${BACKEND_HTTP_ORIGIN}${normalized}`];
 
-        function renderAlert(alert) {
-            const box = document.createElement("div");
-            box.className = "alert";
-            box.innerHTML = `
+        const fileName = normalized.split(/[\\/]/).pop();
+        return expandImageCandidates(`${BACKEND_HTTP_ORIGIN}/snapshots/${fileName}`);
+      }
+
+      function hasKnownImageExtension(path) {
+        return /\.(jpg|jpeg|png|webp)$/i.test(path);
+      }
+
+      function expandImageCandidates(baseUrl) {
+        if (hasKnownImageExtension(baseUrl)) return [baseUrl];
+
+        return [
+          baseUrl,
+          `${baseUrl}.jpg`,
+          `${baseUrl}.jpeg`,
+          `${baseUrl}.png`,
+        ];
+      }
+
+      function renderAlert(alert) {
+        const snapshotUrls = resolveSnapshotUrls(alert.snapshot_path);
+        const snapshotUrl = snapshotUrls[0] ?? null;
+        const box = document.createElement("div");
+        box.className = "alert";
+        box.innerHTML = `
                 <strong>New Incident Detected!</strong><br>
                 Log ID: ${alert.log_id} | Camera ID: ${alert.camera_id}<br>
                 Confidence: ${(alert.confidence_score * 100).toFixed(1)}%<br>
                 Status: ${alert.detection_status}
+                ${
+                  snapshotUrl
+                    ? `<img class="snapshot" src="${snapshotUrl}" alt="Accident snapshot for log ${alert.log_id}" loading="lazy">`
+                    : `<div class="snapshot-missing">Snapshot unavailable</div>`
+                }
+                <div class="snapshot-path">Snapshot: ${alert.snapshot_path ?? "None"}</div>
                 <time>${new Date(alert.detected_at).toLocaleString()}</time>
             `;
-            return box;
+
+        const image = box.querySelector("img.snapshot");
+        if (image) {
+          let candidateIndex = 0;
+          image.addEventListener("error", () => {
+            candidateIndex += 1;
+            if (candidateIndex < snapshotUrls.length) {
+              image.src = snapshotUrls[candidateIndex];
+              return;
+            }
+
+            const fallback = document.createElement("div");
+            fallback.className = "snapshot-missing";
+            fallback.innerText = "Snapshot unavailable";
+            image.replaceWith(fallback);
+          });
         }
 
-        function renderAllAlerts(alerts) {
-            alertsDiv.innerHTML = "";
-            alerts.forEach((alert) => alertsDiv.appendChild(renderAlert(alert)));
-        }
+        return box;
+      }
 
-        function prependAlert(alert) {
-            const alerts = getStoredAlerts();
-            const nextAlerts = [alert, ...alerts].slice(0, MAX_ALERTS);
-            storeAlerts(nextAlerts);
-            renderAllAlerts(nextAlerts);
-        }
+      function renderAllAlerts(alerts) {
+        alertsDiv.innerHTML = "";
+        alerts.forEach((alert) => alertsDiv.appendChild(renderAlert(alert)));
+      }
 
-        function connectWebSocket() {
-            const ws = new WebSocket("ws://localhost:8000/ws/alerts");
+      function prependAlert(alert) {
+        const alerts = getStoredAlerts();
+        const nextAlerts = [alert, ...alerts].slice(0, MAX_ALERTS);
+        storeAlerts(nextAlerts);
+        renderAllAlerts(nextAlerts);
+      }
 
-            ws.onopen = () => {
-                statusDiv.innerText = "Connected to WebSockets";
-            };
+      function connectWebSocket() {
+        const ws = new WebSocket(`${BACKEND_WS_ORIGIN}/ws/alerts`);
 
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                prependAlert(data);
-            };
+        ws.onopen = () => {
+          statusDiv.innerText = "Connected to WebSockets";
+        };
 
-            ws.onclose = () => {
-                statusDiv.innerText = "Disconnected. Reconnecting...";
-                setTimeout(connectWebSocket, 1500);
-            };
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          prependAlert(data);
+        };
 
-            ws.onerror = () => {
-                statusDiv.innerText = "Connection error. Retrying...";
-                ws.close();
-            };
-        }
+        ws.onclose = () => {
+          statusDiv.innerText = "Disconnected. Reconnecting...";
+          setTimeout(connectWebSocket, 1500);
+        };
 
-        renderAllAlerts(getStoredAlerts());
-        connectWebSocket();
+        ws.onerror = () => {
+          statusDiv.innerText = "Connection error. Retrying...";
+          ws.close();
+        };
+      }
+
+      renderAllAlerts(getStoredAlerts());
+      connectWebSocket();
     </script>
-</body>
+  </body>
 </html>
