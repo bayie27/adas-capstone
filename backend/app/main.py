@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 from app.core.db import init_db
 from app.ws_manager import manager
-from app.api.routes import internal, auth, cameras
+from app.api.routes import internal, auth, cameras, alerts
 
 
 
@@ -34,6 +34,7 @@ app.mount("/snapshots", StaticFiles(directory=SNAPSHOT_DIR), name="snapshots")
 app.include_router(internal.router)
 app.include_router(auth.router)
 app.include_router(cameras.router)
+app.include_router(alerts.router)
 
 @app.websocket("/ws/alerts")
 async def websocket_alerts(websocket: WebSocket):

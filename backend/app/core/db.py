@@ -1,10 +1,18 @@
 from sqlmodel import SQLModel, Session, create_engine, select
+from sqlalchemy import event
 from app.core.config import settings
 from passlib.context import CryptContext
 
 engine = create_engine(
     settings.DATABASE_URL, echo=True, connect_args={"check_same_thread": False}
 )
+
+# Enable WAL mode for concurrent read/write support
+@event.listens_for(engine, "connect")
+def set_wal_mode(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.close()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
