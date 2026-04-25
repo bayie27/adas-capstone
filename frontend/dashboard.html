@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>A.D.A.S. Live Alert Feed</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1e1e1e;
+            color: white;
+            padding: 20px;
+        }
+        .alert {
+            background: #ff4757;
+            padding: 15px;
+            margin-top: 10px;
+            border-radius: 5px;
+            border: 1px solid #ff8a95;
+        }
+        .alert time {
+            display: block;
+            margin-top: 8px;
+            font-size: 12px;
+            opacity: 0.85;
+        }
+    </style>
+</head>
+<body>
+    <h1>Live Detection Feed</h1>
+    <div id="status">Connecting to A.D.A.S. WebSockets...</div>
+    <div id="alerts"></div>
+
+    <script>
+        const ALERT_STORAGE_KEY = "adas_alerts";
+        const MAX_ALERTS = 30;
+        const alertsDiv = document.getElementById("alerts");
+        const statusDiv = document.getElementById("status");
+
+        function getStoredAlerts() {
+            try {
+                return JSON.parse(localStorage.getItem(ALERT_STORAGE_KEY)) ?? [];
+            } catch {
+                return [];
+            }
+        }
+
+        function storeAlerts(alerts) {
+            localStorage.setItem(ALERT_STORAGE_KEY, JSON.stringify(alerts));
+        }
+
+        function renderAlert(alert) {
+            const box = document.createElement("div");
+            box.className = "alert";
+            box.innerHTML = `
+                <strong>New Incident Detected!</strong><br>
+                Log ID: ${alert.log_id} | Camera ID: ${alert.camera_id}<br>
+                Confidence: ${(alert.confidence_score * 100).toFixed(1)}%<br>
+                Status: ${alert.detection_status}
+                <time>${new Date(alert.detected_at).toLocaleString()}</time>
+            `;
+            return box;
+        }
+
+        function renderAllAlerts(alerts) {
+            alertsDiv.innerHTML = "";
+            alerts.forEach((alert) => alertsDiv.appendChild(renderAlert(alert)));
+        }
+
+        function prependAlert(alert) {
+            const alerts = getStoredAlerts();
+            const nextAlerts = [alert, ...alerts].slice(0, MAX_ALERTS);
+            storeAlerts(nextAlerts);
+            renderAllAlerts(nextAlerts);
+        }
+
+        function connectWebSocket() {
+            const ws = new WebSocket("ws://localhost:8000/ws/alerts");
+
+            ws.onopen = () => {
+                statusDiv.innerText = "Connected to WebSockets";
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                prependAlert(data);
+            };
+
+            ws.onclose = () => {
+                statusDiv.innerText = "Disconnected. Reconnecting...";
+                setTimeout(connectWebSocket, 1500);
+            };
+
+            ws.onerror = () => {
+                statusDiv.innerText = "Connection error. Retrying...";
+                ws.close();
+            };
+        }
+
+        renderAllAlerts(getStoredAlerts());
+        connectWebSocket();
+    </script>
+</body>
+</html>

@@ -20,6 +20,7 @@ def init_db() -> None:
 
     SQLModel.metadata.create_all(engine)
 
+    # Seed the default Administrator account
     with Session(engine) as session:
         user_exists = session.exec(select(User)).first()
 
