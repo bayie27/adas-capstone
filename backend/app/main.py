@@ -6,6 +6,7 @@ from app.ws_manager import manager
 from app.api.routes import internal, auth
 
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # This runs exactly once when the server boots up

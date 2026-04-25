@@ -3,6 +3,7 @@
 if nvidia gpu:
     uv pip uninstall torch torchvision
     uv pip install {pytorch cuda}
+    uv pip install tensorrt
 then:
     uv run --no-sync 
 

@@ -17,6 +17,29 @@
             border-radius: 5px;
             border: 1px solid #ff8a95;
         }
+        .snapshot {
+            display: block;
+            width: 100%;
+            max-width: 420px;
+            margin-top: 10px;
+            border-radius: 6px;
+            border: 1px solid #ff8a95;
+            background: #111;
+        }
+        .snapshot-missing {
+            margin-top: 10px;
+            font-size: 12px;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px dashed #ffd0d5;
+            background: rgba(0, 0, 0, 0.15);
+        }
+        .snapshot-path {
+            margin-top: 8px;
+            font-size: 12px;
+            opacity: 0.9;
+            word-break: break-all;
+        }
         .alert time {
             display: block;
             margin-top: 8px;
@@ -31,6 +54,8 @@
     <div id="alerts"></div>
 
     <script>
+        const BACKEND_HTTP_ORIGIN = "http://localhost:8000";
+        const BACKEND_WS_ORIGIN = "ws://localhost:8000";
         const ALERT_STORAGE_KEY = "adas_alerts";
         const MAX_ALERTS = 30;
         const alertsDiv = document.getElementById("alerts");
@@ -48,7 +73,21 @@
             localStorage.setItem(ALERT_STORAGE_KEY, JSON.stringify(alerts));
         }
 
+        function resolveSnapshotUrl(snapshotPath) {
+            if (!snapshotPath) return null;
+            const normalized = String(snapshotPath).trim();
+
+            if (/^https?:\/\//i.test(normalized)) return normalized;
+            if (normalized.startsWith("/snapshots/")) return `${BACKEND_HTTP_ORIGIN}${normalized}`;
+            if (normalized.startsWith("snapshots/")) return `${BACKEND_HTTP_ORIGIN}/${normalized}`;
+            if (normalized.startsWith("/")) return `${BACKEND_HTTP_ORIGIN}${normalized}`;
+
+            const fileName = normalized.split(/[\\/]/).pop();
+            return `${BACKEND_HTTP_ORIGIN}/snapshots/${fileName}`;
+        }
+
         function renderAlert(alert) {
+            const snapshotUrl = resolveSnapshotUrl(alert.snapshot_path);
             const box = document.createElement("div");
             box.className = "alert";
             box.innerHTML = `
@@ -56,8 +95,24 @@
                 Log ID: ${alert.log_id} | Camera ID: ${alert.camera_id}<br>
                 Confidence: ${(alert.confidence_score * 100).toFixed(1)}%<br>
                 Status: ${alert.detection_status}
+                ${snapshotUrl
+                    ? `<img class="snapshot" src="${snapshotUrl}" alt="Accident snapshot for log ${alert.log_id}" loading="lazy">`
+                    : `<div class="snapshot-missing">Snapshot unavailable</div>`
+                }
+                <div class="snapshot-path">Snapshot: ${alert.snapshot_path ?? "None"}</div>
                 <time>${new Date(alert.detected_at).toLocaleString()}</time>
             `;
+
+            const image = box.querySelector("img.snapshot");
+            if (image) {
+                image.addEventListener("error", () => {
+                    const fallback = document.createElement("div");
+                    fallback.className = "snapshot-missing";
+                    fallback.innerText = "Snapshot unavailable";
+                    image.replaceWith(fallback);
+                });
+            }
+
             return box;
         }
 
@@ -74,7 +129,7 @@
         }
 
         function connectWebSocket() {
-            const ws = new WebSocket("ws://localhost:8000/ws/alerts");
+            const ws = new WebSocket(`${BACKEND_WS_ORIGIN}/ws/alerts`);
 
             ws.onopen = () => {
                 statusDiv.innerText = "Connected to WebSockets";
