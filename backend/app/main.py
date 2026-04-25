@@ -7,6 +7,7 @@ from app.ws_manager import manager
 from app.api.routes import internal, auth, cameras, alerts
 
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # This runs exactly once when the server boots up
@@ -27,7 +28,6 @@ app = FastAPI(
 # Mount the static snapshots directory so FE can display the images
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SNAPSHOT_DIR = os.path.join(BASE_DIR, "..", "..", "ai_engine", "snapshots")
-os.makedirs("snapshots", exist_ok=True) # Ensure the folder exists
 app.mount("/snapshots", StaticFiles(directory=SNAPSHOT_DIR), name="snapshots")
 
 
