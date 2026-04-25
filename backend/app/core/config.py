@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     DSS_USERNAME: str
     DSS_PASS: SecretStr
 
+    # Automatically load from the .env file in the root directory
     model_config = SettingsConfigDict(env_file=ROOT_ENV_FILE, extra="ignore")
-
 
 settings = Settings()
