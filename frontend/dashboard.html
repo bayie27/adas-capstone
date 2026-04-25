@@ -10,6 +10,23 @@
         color: white;
         padding: 20px;
       }
+      .header-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .clear-btn {
+        background: #ff4757;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .clear-btn:hover {
+        background: #ff6b81;
+      }
       .alert {
         background: #ff4757;
         padding: 15px;
@@ -49,7 +66,10 @@
     </style>
   </head>
   <body>
-    <h1>Live Detection Feed</h1>
+    <div class="header-container">
+      <h1>Live Detection Feed</h1>
+      <button onclick="clearAlerts()" class="clear-btn">Clear Alerts</button>
+    </div>
     <div id="status">Connecting to A.D.A.S. WebSockets...</div>
     <div id="alerts"></div>
 
@@ -71,6 +91,11 @@
 
       function storeAlerts(alerts) {
         localStorage.setItem(ALERT_STORAGE_KEY, JSON.stringify(alerts));
+      }
+
+      function clearAlerts() {
+        localStorage.removeItem(ALERT_STORAGE_KEY);
+        renderAllAlerts([]);
       }
 
       function resolveSnapshotUrls(snapshotPath) {
@@ -155,7 +180,12 @@
         const alerts = getStoredAlerts();
         const nextAlerts = [alert, ...alerts].slice(0, MAX_ALERTS);
         storeAlerts(nextAlerts);
-        renderAllAlerts(nextAlerts);
+        
+        // Prepend directly to DOM to avoid image flickering ("blip")
+        alertsDiv.insertBefore(renderAlert(alert), alertsDiv.firstChild);
+        while (alertsDiv.children.length > MAX_ALERTS) {
+          alertsDiv.removeChild(alertsDiv.lastChild);
+        }
       }
 
       function connectWebSocket() {

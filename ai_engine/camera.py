@@ -10,6 +10,7 @@ class CameraStream:
         self.name = name
         self.camera_id = camera_id
         self.latest_frame = None
+        self.frame_ready = False
         self.running = True
         self.is_paused = False  # The digital blindfold
         self.cap = None
@@ -48,6 +49,7 @@ class CameraStream:
             success, frame = self.cap.read()
             if success:
                 self.latest_frame = frame
+                self.frame_ready = True
             else:
                 print(f"[SYSTEM] Stream dropped on {self.name}! Releasing socket...")
                 self.cap.release()
@@ -55,6 +57,13 @@ class CameraStream:
                 time.sleep(1)
 
             time.sleep(0.01)
+
+    def read(self):
+        """Returns the latest frame if it's new; otherwise returns None."""
+        if self.frame_ready:
+            self.frame_ready = False
+            return self.latest_frame
+        return None
 
     def stop(self):
         """Safely shuts down the thread and connection."""

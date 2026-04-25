@@ -28,9 +28,11 @@ def run_multi_camera_inference():
 
         # Gather frames ONLY from cameras that are online and NOT paused
         for cam in cameras:
-            if not cam.is_paused and cam.latest_frame is not None:
-                frames_to_process.append(cam.latest_frame)
-                active_cameras.append(cam)
+            if not cam.is_paused:
+                frame = cam.read()
+                if frame is not None:
+                    frames_to_process.append(frame)
+                    active_cameras.append(cam)
 
         # GPU BATCHING
         if frames_to_process:
