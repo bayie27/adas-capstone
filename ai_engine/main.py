@@ -13,10 +13,10 @@ def run_multi_camera_inference():
 
     # Initialize cameras with their exact Database IDs
     cameras = [
-        # CameraStream("rtsp://localhost:8554/camera1", "jeep_motorcycle", camera_id=1),
-        # CameraStream("rtsp://localhost:8554/camera2", "car_car", camera_id=2),
-        CameraStream("ai_engine/sample_vids/jeep_motorcycle.mp4", "jeep_motorcycle", camera_id=1),
-        CameraStream("ai_engine/sample_vids/car_car.mp4", "car_car", camera_id=2),
+        CameraStream("rtsp://localhost:8554/camera1", "jeep_motorcycle", camera_id=1),
+        CameraStream("rtsp://localhost:8554/camera2", "car_car", camera_id=2),
+        # CameraStream("ai_engine/sample_vids/jeep_motorcycle.mp4", "jeep_motorcycle", camera_id=1),
+        # CameraStream("ai_engine/sample_vids/car_car.mp4", "car_car", camera_id=2),
         # Add more cameras as your hardware allows!
     ]
 
