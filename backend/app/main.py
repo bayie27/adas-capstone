@@ -3,7 +3,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from app.core.db import init_db
 from app.ws_manager import manager
-from app.api.routes import internal
+from app.api.routes import internal, auth
 
 
 @asynccontextmanager
@@ -30,6 +30,7 @@ app.mount("/snapshots", StaticFiles(directory="snapshots"), name="snapshots")
 
 
 app.include_router(internal.router)
+app.include_router(auth.router)
 
 @app.websocket("/ws/alerts")
 async def websocket_alerts(websocket: WebSocket):
