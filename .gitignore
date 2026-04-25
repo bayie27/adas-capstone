@@ -6,6 +6,8 @@ __pycache__/
 # Database
 adas.db
 adas.db-journal
+adas.db-wal
+adas.db-shm
 
 # C extensions
 *.so
