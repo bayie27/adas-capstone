@@ -62,7 +62,9 @@ class AccidentManager:
             safe_filename = (
                 f"cam{camera.camera_id}_{timestamp_now.strftime('%Y%m%d_%H%M%S')}.jpg"
             )
-            local_path = os.path.join("snapshots", safe_filename)
+            os.makedirs("snapshots", exist_ok=True)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            local_path = os.path.join(script_dir, "snapshots", safe_filename)
 
             # 2. Save the image physically to the shared Edge Server hard drive
             cv2.imwrite(local_path, frame)
@@ -167,10 +169,10 @@ def run_multi_camera_inference():
 
     # Initialize cameras with their exact Database IDs
     cameras = [
-        CameraStream("rtsp://localhost:8554/camera1", "jeep_motorcycle", camera_id=1),
-        CameraStream("rtsp://localhost:8554/camera2", "car_car", camera_id=2),
-        # CameraStream("ai_engine/sample_vids/jeep_motorcycle.mp4", "jeep_motorcycle", camera_id=1),
-        # CameraStream("ai_engine/sample_vids/car_car.mp4", "car_car", camera_id=2),
+        # CameraStream("rtsp://localhost:8554/camera1", "jeep_motorcycle", camera_id=1),
+        # CameraStream("rtsp://localhost:8554/camera2", "car_car", camera_id=2),
+        CameraStream("ai_engine/sample_vids/jeep_motorcycle.mp4", "jeep_motorcycle", camera_id=1),
+        CameraStream("ai_engine/sample_vids/car_car.mp4", "car_car", camera_id=2),
         # Add more cameras as your hardware allows!
     ]
 
