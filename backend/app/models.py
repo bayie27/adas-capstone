@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Optional
 from sqlmodel import Field, SQLModel, Relationship
 
@@ -110,6 +111,13 @@ class CameraUpdate(SQLModel):
 # ==========================================
 # 3. DETECTION LOGS (HITL Workflow) - Table 6.0
 # ==========================================
+class DetectionStatus(str, Enum):
+    UNVERIFIED = "Unverified"
+    ONGOING = "Ongoing"
+    DISMISSED = "Dismissed"
+    RESOLVED = "Resolved"
+
+
 class DetectionLogBase(SQLModel):
     camera_id: int = Field(foreign_key="camera.camera_id", index=True)
     detected_at: datetime
@@ -122,7 +130,7 @@ class DetectionLog(DetectionLogBase, table=True):
     # We redeclare detected_at here to tell SQLite to index it
     detected_at: datetime = Field(index=True) 
     
-    detection_status: str = Field(default="Unverified", index=True) 
+    detection_status: str = Field(default=DetectionStatus.UNVERIFIED.value, index=True)
     
     # Audit Trail
     verified_by_id: Optional[int] = Field(default=None, foreign_key="user.user_id")
@@ -152,6 +160,9 @@ class DetectionLogRead(DetectionLogBase):
     closed_by_id: Optional[int] = None
     closed_at: Optional[datetime] = None
 
+class DetectionLogListResponse(SQLModel):
+    total_filtered: int
+    logs: list[DetectionLogRead]
 
 # -----------------------------------------
 # 4. SYSTEM HEALTH RAW - Table 7.0

@@ -1,0 +1,298 @@
+import csv
+import io
+from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlmodel import Session, col, func, or_, select
+
+from app.api.dependencies import get_current_user
+from app.core.db import get_session
+from app.models import (
+    Camera,
+    DetectionLog,
+    DetectionLogListResponse,
+    DetectionLogRead,
+    DetectionStatus,
+    User,
+)
+
+router = APIRouter(
+    prefix="/api/alerts",
+    tags=["Alerts & Accident Management"],
+    dependencies=[Depends(get_current_user)],
+)
+
+
+def _apply_alert_filters(
+    query,
+    *,
+    search: str | None,
+    start_date: datetime | None,
+    end_date: datetime | None,
+    status_values: list[DetectionStatus] | None,
+    camera_ids: list[int] | None,
+    user_ids: list[int] | None,
+):
+    if search:
+        query = query.join(Camera)
+        if search.isdigit():
+            query = query.where(
+                or_(
+                    DetectionLog.log_id == int(search),
+                    col(Camera.camera_name).icontains(search),
+                )
+            )
+        else:
+            query = query.where(col(Camera.camera_name).icontains(search))
+
+    if start_date:
+        query = query.where(col(DetectionLog.detected_at) >= start_date)
+    if end_date:
+        query = query.where(col(DetectionLog.detected_at) <= end_date)
+    if status_values:
+        query = query.where(
+            col(DetectionLog.detection_status).in_([status.value for status in status_values])
+        )
+    if camera_ids:
+        query = query.where(col(DetectionLog.camera_id).in_(camera_ids))
+    if user_ids:
+        query = query.where(
+            or_(
+                col(DetectionLog.verified_by_id).in_(user_ids),
+                col(DetectionLog.closed_by_id).in_(user_ids),
+            )
+        )
+
+    return query
+
+
+def _validate_common_filters(
+    *,
+    start_date: datetime | None,
+    end_date: datetime | None,
+    camera_id: list[int] | None,
+    user_id: list[int] | None,
+) -> None:
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid date range: `start_date` must be earlier than or equal to `end_date`.",
+        )
+
+    if camera_id and any(cid <= 0 for cid in camera_id):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid `camera_id` value(s): values must be positive integers.",
+        )
+
+    if user_id and any(uid <= 0 for uid in user_id):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid `user_id` value(s): values must be positive integers.",
+        )
+
+
+@router.get("/", response_model=DetectionLogListResponse)
+def get_alerts(
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    status: list[DetectionStatus] | None = Query(
+        default=None,
+        description="Filter by status with repeated params, e.g. ?status=Unverified&status=Ongoing",
+    ),
+    camera_id: list[int] | None = Query(
+        default=None,
+        description="Filter by one or more camera IDs with repeated params, e.g. ?camera_id=1&camera_id=2",
+    ),
+    user_id: list[int] | None = Query(
+        default=None,
+        description=(
+            "Filter by one or more operator IDs (verified_by OR closed_by) with repeated params, "
+            "e.g. ?user_id=4&user_id=5"
+        ),
+    ),
+    search: Optional[str] = Query(default=None, min_length=1, max_length=100),
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+):
+    """Fetches paginated incident logs with robust multi-select filtering."""
+    _validate_common_filters(
+        start_date=start_date,
+        end_date=end_date,
+        camera_id=camera_id,
+        user_id=user_id,
+    )
+
+    query = select(DetectionLog)
+    query = _apply_alert_filters(
+        query,
+        search=search,
+        start_date=start_date,
+        end_date=end_date,
+        status_values=status,
+        camera_ids=camera_id,
+        user_ids=user_id,
+    )
+    query = query.order_by(col(DetectionLog.detected_at).desc())
+
+    total_filtered = session.exec(
+        select(func.count()).select_from(query.subquery())
+    ).one()
+    logs = session.exec(query.offset(offset).limit(limit)).all()
+
+    return DetectionLogListResponse(
+        total_filtered=total_filtered,
+        logs=[DetectionLogRead.model_validate(log) for log in logs],
+    )
+
+
+@router.get("/export")
+def export_alerts_csv(
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    status: list[DetectionStatus] | None = Query(default=None),
+    camera_id: list[int] | None = Query(default=None),
+    user_id: list[int] | None = Query(default=None),
+    search: Optional[str] = Query(default=None, min_length=1, max_length=100),
+    session: Session = Depends(get_session),
+):
+    """Exports the filtered logs directly to a downloadable CSV file."""
+    _validate_common_filters(
+        start_date=start_date,
+        end_date=end_date,
+        camera_id=camera_id,
+        user_id=user_id,
+    )
+
+    query = select(DetectionLog)
+    query = _apply_alert_filters(
+        query,
+        search=search,
+        start_date=start_date,
+        end_date=end_date,
+        status_values=status,
+        camera_ids=camera_id,
+        user_ids=user_id,
+    )
+    query = query.order_by(col(DetectionLog.detected_at).desc())
+    logs = session.exec(query).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "Log ID",
+            "Detected At",
+            "Camera ID",
+            "Status",
+            "Confidence",
+            "Verified By ID",
+            "Closed By ID",
+        ]
+    )
+
+    for log in logs:
+        writer.writerow(
+            [
+                log.log_id,
+                log.detected_at.isoformat(),
+                log.camera_id,
+                log.detection_status,
+                f"{log.confidence_score * 100:.1f}%",
+                log.verified_by_id or "N/A",
+                log.closed_by_id or "N/A",
+            ]
+        )
+
+    response = Response(content=output.getvalue(), media_type="text/csv")
+    response.headers["Content-Disposition"] = (
+        "attachment; filename=adas_incident_export.csv"
+    )
+    return response
+
+
+@router.get("/{log_id}", response_model=DetectionLogRead)
+def get_alert_details(log_id: int, session: Session = Depends(get_session)):
+    """Retrieves the complete, detailed record when an operator clicks for full details."""
+    log = session.get(DetectionLog, log_id)
+    if not log:
+        raise HTTPException(status_code=404, detail="Incident log not found")
+    return log
+
+
+# ---------------------------------------------------------
+# HITL STATE MACHINE TRANSITIONS
+# ---------------------------------------------------------
+@router.post("/{log_id}/confirm", response_model=DetectionLogRead)
+def confirm_alert(
+    log_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Operator action to verify an incident. Updates log to 'Ongoing'."""
+    log = session.get(DetectionLog, log_id)
+    if not log or log.detection_status != DetectionStatus.UNVERIFIED:
+        raise HTTPException(
+            status_code=400, detail="Only 'Unverified' alerts can be confirmed."
+        )
+
+    log.detection_status = DetectionStatus.ONGOING
+    log.verified_by_id = current_user.user_id
+    log.verified_at = datetime.now(timezone.utc)
+
+    session.add(log)
+    session.commit()
+    session.refresh(log)
+    return log
+
+
+@router.post("/{log_id}/dismiss", response_model=DetectionLogRead)
+def dismiss_alert(
+    log_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Operator action for false positives."""
+    log = session.get(DetectionLog, log_id)
+    if not log or log.detection_status not in (
+        DetectionStatus.UNVERIFIED,
+        DetectionStatus.ONGOING,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot dismiss an already resolved or dismissed alert.",
+        )
+
+    log.detection_status = DetectionStatus.DISMISSED
+    log.closed_by_id = current_user.user_id
+    log.closed_at = datetime.now(timezone.utc)
+
+    session.add(log)
+    session.commit()
+    session.refresh(log)
+    return log
+
+
+@router.post("/{log_id}/resolve", response_model=DetectionLogRead)
+def resolve_alert(
+    log_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Operator action indicating the scene is cleared."""
+    log = session.get(DetectionLog, log_id)
+    if not log or log.detection_status != DetectionStatus.ONGOING:
+        raise HTTPException(
+            status_code=400, detail="Only 'Ongoing' alerts can be resolved."
+        )
+
+    log.detection_status = DetectionStatus.RESOLVED
+    log.closed_by_id = current_user.user_id
+    log.closed_at = datetime.now(timezone.utc)
+
+    session.add(log)
+    session.commit()
+    session.refresh(log)
+    return log
