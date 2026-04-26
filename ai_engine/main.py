@@ -1,7 +1,8 @@
 import cv2
 from ultralytics import YOLO
 from camera import CameraStream
-from ai_engine.accident import AccidentManager
+from accident import AccidentManager
+from config import CONFIDENCE_THRESHOLD
 
 def run_multi_camera_inference():
     print("Initializing ADAS Edge Inference Server...")
@@ -12,11 +13,15 @@ def run_multi_camera_inference():
 
     # Initialize cameras with their exact Database IDs
     cameras = [
-        CameraStream("rtsp://localhost:8554/camera1", "jeep_motorcycle", camera_id=1),
-        CameraStream("rtsp://localhost:8554/camera2", "car_car", camera_id=2),
-        # CameraStream("ai_engine/sample_vids/jeep_motorcycle.mp4", "jeep_motorcycle", camera_id=1),
-        # CameraStream("ai_engine/sample_vids/car_car.mp4", "car_car", camera_id=2),
-        # Add more cameras as your hardware allows!
+        # CameraStream("rtsp://localhost:8554/camera1", "jeep_motorcycle", camera_id=1),
+        # CameraStream("rtsp://localhost:8554/camera2", "car_car", camera_id=2),
+        # CameraStream("rtsp://localhost:8554/camera3", "defour", camera_id=3),
+        # CameraStream("rtsp://localhost:8554/camera4", "motor-to-motor", camera_id=4),
+
+        CameraStream("ai_engine/sample_vids/jeep_motorcycle.mp4", "jeep_motorcycle", camera_id=1),
+        CameraStream("ai_engine/sample_vids/car_car.mp4", "car_car", camera_id=2),
+        CameraStream("ai_engine/sample_vids/defour.mp4", "defour", camera_id=3),
+        CameraStream("ai_engine/sample_vids/motor-to-motor.mp4", "motor-to-motor", camera_id=4),
     ]
 
     print("Streams loaded. Press 'q' in any video window to quit.")
@@ -35,7 +40,7 @@ def run_multi_camera_inference():
 
         # GPU BATCHING
         if frames_to_process:
-            results = model(frames_to_process, stream=False, device=0, verbose=False)
+            results = model(frames_to_process, stream=False, device=0, verbose=False, conf=CONFIDENCE_THRESHOLD)
 
             for i, r in enumerate(results):
                 current_cam = active_cameras[i]
@@ -44,7 +49,7 @@ def run_multi_camera_inference():
                 # Hand it to the manager to check for accidents and trigger webhooks
                 alert_manager.process_detections(current_cam, r, annotated_frame)
 
-                cv2.imshow(f"ADAS Stream: {current_cam.name}", annotated_frame)
+                cv2.imshow(f"ADAS Stream {current_cam.camera_id}: {current_cam.name}", annotated_frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             print("Manual exit triggered.")

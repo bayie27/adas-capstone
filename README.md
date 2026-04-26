@@ -1,13 +1,15 @@
 # adas-capstone
 
 if nvidia gpu:
-    uv pip uninstall torch torchvision
-    uv pip install {pytorch cuda}
-    uv pip install tensorrt
+uv pip uninstall torch torchvision
+uv pip install {pytorch cuda}
+uv pip install tensorrt
 then:
-    uv run --no-sync 
+uv run --no-sync 
 
 
 broadcast video file to MediaMTX (force tcp):
-    ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\jeep_motorcycle.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/camera1
-    ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\car_car.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/camera2
+ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\jeep_motorcycle.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/camera1
+ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\car_car.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/camera2
+ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\defour.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/camera3
+ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\motor-to-motor.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/camera4

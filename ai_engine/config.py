@@ -10,4 +10,4 @@ INTERNAL_API_KEY = "adam-yolo-internal-secret-key-2026"  # Used to authenticate 
 
 # AI Configuration
 ACCIDENT_CLASS_ID = 0  # CHANGE THIS to your custom model's specific accident ID
-CONFIDENCE_THRESHOLD = 0.90  # Minimum confidence to trigger an alert
+CONFIDENCE_THRESHOLD = 0.75  # Minimum confidence to trigger an alert

@@ -8,27 +8,19 @@ from config import (
     WEBHOOK_URL,
     INTERNAL_API_KEY,
     ACCIDENT_CLASS_ID,
-    CONFIDENCE_THRESHOLD,
 )
 
 class AccidentManager:
     """Handles alert logic, payload formatting, and backend communication."""
 
     def process_detections(self, camera, results, frame):
-        highest_confidence = 0.0
-        accident_detected = False
+        # 1. YOLO already filtered by CONFIDENCE_THRESHOLD, so we just check for the class ID
+        accident_confs = [float(box.conf[0]) for box in results.boxes if int(box.cls[0]) == ACCIDENT_CLASS_ID]
 
-        # 1. Check for the most confident accident detection in this frame
-        for box in results.boxes:
-            if int(box.cls[0]) == ACCIDENT_CLASS_ID:
-                conf = float(box.conf[0])
-                if conf >= CONFIDENCE_THRESHOLD:
-                    accident_detected = True
-                    if conf > highest_confidence:
-                        highest_confidence = conf
-
-        if not accident_detected:
+        if not accident_confs:
             return
+
+        highest_confidence = max(accident_confs)
 
         print(
             f"\n[ALERT] Accident detected on {camera.name} ({highest_confidence * 100:.1f}%)! Pausing inference..."
