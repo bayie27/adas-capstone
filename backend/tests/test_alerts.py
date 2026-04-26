@@ -3,14 +3,18 @@ Tests for /api/alerts.
 Covers: list/filtering, CSV export, detail view, and alert state transitions.
 """
 
+import asyncio
 import csv
 from datetime import datetime, timedelta, timezone
 from io import StringIO
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import DetectionLog, DetectionStatus
+import app.api.routes.alerts as alert_routes
+import app.core.db as db_module
+from app.models import AIStatus, DetectionLog, DetectionStatus
 
 from .conftest import auth_headers, make_camera, make_operator
 
@@ -501,3 +505,285 @@ class TestAlertTransitions:
         resp = client.post("/api/alerts/99999/resolve", headers=headers)
 
         assert resp.status_code == 400
+
+
+class TestAlertCameraStatusSideEffects:
+    def test_confirm_keeps_camera_paused(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="pausecheck")
+        camera = make_camera(
+            session,
+            name="Paused Confirm Cam",
+            channel_id=101,
+            ai_status=AIStatus.PAUSED.value,
+        )
+        log = make_alert(session, camera, status=DetectionStatus.UNVERIFIED)
+
+        resp = client.post(f"/api/alerts/{log.log_id}/confirm", headers=headers)
+
+        assert resp.status_code == 200
+        session.refresh(camera)
+        assert camera.ai_status == AIStatus.PAUSED.value
+
+    def test_dismiss_unverified_keeps_camera_paused_and_schedules_cooldown(
+        self,
+        client: TestClient,
+        session: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        scheduled: list[str] = []
+
+        def fake_create_task(coro):
+            scheduled.append(coro.cr_code.co_name)
+            coro.close()
+            return object()
+
+        monkeypatch.setattr(alert_routes.asyncio, "create_task", fake_create_task)
+
+        _, headers = operator_with_headers(client, session, username="dismissu")
+        camera = make_camera(
+            session,
+            name="Cooldown Dispatch Cam",
+            channel_id=102,
+            ai_status=AIStatus.PAUSED.value,
+        )
+        log = make_alert(session, camera, status=DetectionStatus.UNVERIFIED)
+
+        resp = client.post(f"/api/alerts/{log.log_id}/dismiss", headers=headers)
+
+        assert resp.status_code == 200
+        session.refresh(camera)
+        assert camera.ai_status == AIStatus.PAUSED.value
+        assert scheduled == ["_resume_camera_after_cooldown"]
+
+    def test_dismiss_ongoing_reactivates_enabled_camera_and_broadcasts(
+        self,
+        client: TestClient,
+        session: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        payloads: list[dict] = []
+
+        async def fake_broadcast(payload: dict) -> None:
+            payloads.append(payload)
+
+        monkeypatch.setattr(alert_routes.manager, "broadcast_alert", fake_broadcast)
+
+        operator, headers = operator_with_headers(client, session, username="dismisso")
+        camera = make_camera(
+            session,
+            name="Dismiss Ongoing Status Cam",
+            channel_id=103,
+            ai_status=AIStatus.PAUSED.value,
+        )
+        log = make_alert(
+            session,
+            camera,
+            status=DetectionStatus.ONGOING,
+            verified_by_id=operator.user_id,
+            verified_at=datetime.now(timezone.utc),
+        )
+
+        resp = client.post(f"/api/alerts/{log.log_id}/dismiss", headers=headers)
+
+        assert resp.status_code == 200
+        session.refresh(camera)
+        assert camera.ai_status == AIStatus.ACTIVE.value
+        assert payloads == [
+            {
+                "type": "CAMERA_STATUS_UPDATE",
+                "camera_id": camera.camera_id,
+                "connection_status": camera.connection_status,
+                "ai_status": AIStatus.ACTIVE.value,
+            }
+        ]
+
+    def test_dismiss_ongoing_does_not_reactivate_disabled_camera(
+        self,
+        client: TestClient,
+        session: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        payloads: list[dict] = []
+
+        async def fake_broadcast(payload: dict) -> None:
+            payloads.append(payload)
+
+        monkeypatch.setattr(alert_routes.manager, "broadcast_alert", fake_broadcast)
+
+        operator, headers = operator_with_headers(client, session, username="dismissdisabled")
+        camera = make_camera(
+            session,
+            name="Disabled Dismiss Cam",
+            channel_id=104,
+            ai_status=AIStatus.PAUSED.value,
+            is_enabled=False,
+        )
+        log = make_alert(
+            session,
+            camera,
+            status=DetectionStatus.ONGOING,
+            verified_by_id=operator.user_id,
+            verified_at=datetime.now(timezone.utc),
+        )
+
+        resp = client.post(f"/api/alerts/{log.log_id}/dismiss", headers=headers)
+
+        assert resp.status_code == 200
+        session.refresh(camera)
+        assert camera.ai_status == AIStatus.PAUSED.value
+        assert payloads == []
+
+    def test_resolve_ongoing_reactivates_enabled_camera_and_broadcasts(
+        self,
+        client: TestClient,
+        session: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        payloads: list[dict] = []
+
+        async def fake_broadcast(payload: dict) -> None:
+            payloads.append(payload)
+
+        monkeypatch.setattr(alert_routes.manager, "broadcast_alert", fake_broadcast)
+
+        operator, headers = operator_with_headers(client, session, username="resolveactive")
+        camera = make_camera(
+            session,
+            name="Resolve Status Cam",
+            channel_id=105,
+            ai_status=AIStatus.PAUSED.value,
+        )
+        log = make_alert(
+            session,
+            camera,
+            status=DetectionStatus.ONGOING,
+            verified_by_id=operator.user_id,
+            verified_at=datetime.now(timezone.utc),
+        )
+
+        resp = client.post(f"/api/alerts/{log.log_id}/resolve", headers=headers)
+
+        assert resp.status_code == 200
+        session.refresh(camera)
+        assert camera.ai_status == AIStatus.ACTIVE.value
+        assert payloads == [
+            {
+                "type": "CAMERA_STATUS_UPDATE",
+                "camera_id": camera.camera_id,
+                "connection_status": camera.connection_status,
+                "ai_status": AIStatus.ACTIVE.value,
+            }
+        ]
+
+    def test_resolve_ongoing_does_not_reactivate_disabled_camera(
+        self,
+        client: TestClient,
+        session: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        payloads: list[dict] = []
+
+        async def fake_broadcast(payload: dict) -> None:
+            payloads.append(payload)
+
+        monkeypatch.setattr(alert_routes.manager, "broadcast_alert", fake_broadcast)
+
+        operator, headers = operator_with_headers(client, session, username="resolvedisabled")
+        camera = make_camera(
+            session,
+            name="Disabled Resolve Cam",
+            channel_id=106,
+            ai_status=AIStatus.PAUSED.value,
+            is_enabled=False,
+        )
+        log = make_alert(
+            session,
+            camera,
+            status=DetectionStatus.ONGOING,
+            verified_by_id=operator.user_id,
+            verified_at=datetime.now(timezone.utc),
+        )
+
+        resp = client.post(f"/api/alerts/{log.log_id}/resolve", headers=headers)
+
+        assert resp.status_code == 200
+        session.refresh(camera)
+        assert camera.ai_status == AIStatus.PAUSED.value
+        assert payloads == []
+
+    def test_resume_camera_after_cooldown_reactivates_and_broadcasts(
+        self,
+        session: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        slept: list[int] = []
+        broadcasted: list[tuple[int, str]] = []
+
+        async def fake_sleep(seconds: int) -> None:
+            slept.append(seconds)
+
+        async def fake_broadcast(camera) -> None:
+            broadcasted.append((camera.camera_id, camera.ai_status))
+
+        monkeypatch.setattr(db_module, "engine", session.get_bind())
+        monkeypatch.setattr(alert_routes.asyncio, "sleep", fake_sleep)
+        monkeypatch.setattr(alert_routes, "_broadcast_camera_status", fake_broadcast)
+
+        camera = make_camera(
+            session,
+            name="Resume Helper Cam",
+            channel_id=107,
+            ai_status=AIStatus.PAUSED.value,
+        )
+
+        asyncio.run(alert_routes._resume_camera_after_cooldown(camera.camera_id))
+
+        session.refresh(camera)
+        assert slept == [60]
+        assert camera.ai_status == AIStatus.ACTIVE.value
+        assert broadcasted == [(camera.camera_id, AIStatus.ACTIVE.value)]
+
+    @pytest.mark.parametrize(
+        ("is_enabled", "is_active"),
+        [
+            (False, True),
+            (True, False),
+        ],
+    )
+    def test_resume_camera_after_cooldown_skips_unavailable_camera(
+        self,
+        session: Session,
+        monkeypatch: pytest.MonkeyPatch,
+        is_enabled: bool,
+        is_active: bool,
+    ):
+        slept: list[int] = []
+        broadcasted: list[tuple[int, str]] = []
+
+        async def fake_sleep(seconds: int) -> None:
+            slept.append(seconds)
+
+        async def fake_broadcast(camera) -> None:
+            broadcasted.append((camera.camera_id, camera.ai_status))
+
+        monkeypatch.setattr(db_module, "engine", session.get_bind())
+        monkeypatch.setattr(alert_routes.asyncio, "sleep", fake_sleep)
+        monkeypatch.setattr(alert_routes, "_broadcast_camera_status", fake_broadcast)
+
+        camera = make_camera(
+            session,
+            name=f"Skipped Resume Cam {is_enabled}-{is_active}",
+            channel_id=108 if is_enabled else 109,
+            ai_status=AIStatus.PAUSED.value,
+            is_enabled=is_enabled,
+            is_active=is_active,
+        )
+
+        asyncio.run(alert_routes._resume_camera_after_cooldown(camera.camera_id))
+
+        session.refresh(camera)
+        assert slept == [60]
+        assert camera.ai_status == AIStatus.PAUSED.value
+        assert broadcasted == []

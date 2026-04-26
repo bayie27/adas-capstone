@@ -11,9 +11,18 @@ from sqlmodel import SQLModel, Session, create_engine
 from sqlmodel.pool import StaticPool
 
 from app.main import app
+from app.core.config import settings
 from app.core.db import get_session
 from app.core.security import get_password_hash
-from app.models import User, UserRole, Camera, DetectionLog, DetectionStatus
+from app.models import (
+    AIStatus,
+    Camera,
+    ConnectionStatus,
+    DetectionLog,
+    DetectionStatus,
+    User,
+    UserRole,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -78,8 +87,24 @@ def make_operator(session: Session, username="operator", password="Operator123")
     return user
 
 
-def make_camera(session: Session, name="Test Camera", channel_id=1) -> Camera:
-    camera = Camera(camera_name=name, channel_id=channel_id)
+def make_camera(
+    session: Session,
+    name="Test Camera",
+    channel_id=1,
+    *,
+    connection_status: str = ConnectionStatus.DISCONNECTED.value,
+    ai_status: str = AIStatus.INACTIVE.value,
+    is_enabled: bool = True,
+    is_active: bool = True,
+) -> Camera:
+    camera = Camera(
+        camera_name=name,
+        channel_id=channel_id,
+        connection_status=connection_status,
+        ai_status=ai_status,
+        is_enabled=is_enabled,
+        is_active=is_active,
+    )
     session.add(camera)
     session.commit()
     session.refresh(camera)
@@ -121,3 +146,7 @@ def get_token(client: TestClient, username: str, password: str) -> str:
 
 def auth_headers(client: TestClient, username: str, password: str) -> dict:
     return {"Authorization": f"Bearer {get_token(client, username, password)}"}
+
+
+def internal_headers() -> dict:
+    return {"x-api-key": settings.INTERNAL_API_KEY.get_secret_value()}
