@@ -16,8 +16,19 @@ dependencies = [
     "python-multipart>=0.0.26",
     "requests>=2.33.1",
     "sqlmodel>=0.0.38",
+    "tensorrt>=10.16.1.11",
+    "torch>=2.11.0",
+    "torchvision>=0.26.0",
     "ultralytics>=8.4.41",
 ]
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
