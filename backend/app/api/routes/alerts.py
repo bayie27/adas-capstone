@@ -1,14 +1,17 @@
+import asyncio
 import csv
 import io
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, func, or_, select
 
 from app.api.dependencies import get_current_user
 from app.core.db import get_session
 from app.models import (
+    AIStatus,
     Camera,
     DetectionLog,
     DetectionLogListResponse,
@@ -16,12 +19,65 @@ from app.models import (
     DetectionStatus,
     User,
 )
+from app.ws_manager import manager
 
 router = APIRouter(
     prefix="/api/alerts",
     tags=["Alerts & Accident Management"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+def _format_user_name(user: User | None) -> str | None:
+    if not user:
+        return None
+    full_name = f"{user.first_name} {user.last_name}".strip()
+    return full_name or user.username
+
+
+def _to_detection_log_read(log: DetectionLog) -> DetectionLogRead:
+    log_read = DetectionLogRead.model_validate(log)
+    log_read.camera_name = log.camera.camera_name if log.camera else None
+    log_read.verified_by_name = _format_user_name(log.verified_by)
+    log_read.closed_by_name = _format_user_name(log.closed_by)
+    return log_read
+
+
+async def _broadcast_camera_status(camera: Camera) -> None:
+    """Broadcast a CAMERA_STATUS_UPDATE payload to all connected FE clients."""
+    await manager.broadcast_alert({
+        "type": "CAMERA_STATUS_UPDATE",
+        "camera_id": camera.camera_id,
+        "connection_status": camera.connection_status,
+        "ai_status": camera.ai_status,
+    })
+
+
+async def _resume_camera_after_cooldown(camera_id: int) -> None:
+    """
+    Background task: wait 60 seconds then set ai_status = Active in DB
+    and broadcast the update to FE. Used for the Unverified → Dismissed
+    false-positive cooldown.
+    """
+    await asyncio.sleep(60)
+
+    # Import here to avoid circular imports at module level
+    from app.core.db import get_session as _get_session
+    from sqlmodel import Session as _Session
+
+    # We need a fresh DB session since this runs outside the request lifecycle
+    from app.core.db import engine
+    from sqlmodel import Session as SyncSession
+
+    with SyncSession(engine) as session:
+        camera = session.get(Camera, camera_id)
+        if camera and camera.is_active and camera.is_enabled:
+            camera.ai_status = AIStatus.ACTIVE.value
+            session.add(camera)
+            session.commit()
+            session.refresh(camera)
+
+            await _broadcast_camera_status(camera)
 
 
 def _apply_alert_filters(
@@ -125,7 +181,11 @@ def get_alerts(
         user_id=user_id,
     )
 
-    query = select(DetectionLog)
+    query = select(DetectionLog).options(
+        selectinload(DetectionLog.camera),
+        selectinload(DetectionLog.verified_by),
+        selectinload(DetectionLog.closed_by),
+    )
     query = _apply_alert_filters(
         query,
         search=search,
@@ -142,12 +202,7 @@ def get_alerts(
     ).one()
     logs = session.exec(query.offset(offset).limit(limit)).all()
 
-    logs_with_names = []
-    for log in logs:
-        log_read = DetectionLogRead.model_validate(log)
-        if log.camera:
-            log_read.camera_name = log.camera.camera_name
-        logs_with_names.append(log_read)
+    logs_with_names = [_to_detection_log_read(log) for log in logs]
 
     return DetectionLogListResponse(
         total_filtered=total_filtered,
@@ -174,7 +229,11 @@ def export_alerts_csv(
         user_id=user_id,
     )
 
-    query = select(DetectionLog)
+    query = select(DetectionLog).options(
+        selectinload(DetectionLog.camera),
+        selectinload(DetectionLog.verified_by),
+        selectinload(DetectionLog.closed_by),
+    )
     query = _apply_alert_filters(
         query,
         search=search,
@@ -200,8 +259,10 @@ def export_alerts_csv(
             "Confidence",
             "Snapshot URL",
             "Verified By ID",
+            "Verified By Name",
             "Verified At",
             "Closed By ID",
+            "Closed By Name",
             "Closed At",
         ]
     )
@@ -218,8 +279,10 @@ def export_alerts_csv(
                 f"{log.confidence_score * 100:.1f}%",
                 snapshot_url,
                 log.verified_by_id or "N/A",
+                _format_user_name(log.verified_by) or "N/A",
                 log.verified_at.isoformat() if log.verified_at else "N/A",
                 log.closed_by_id or "N/A",
+                _format_user_name(log.closed_by) or "N/A",
                 log.closed_at.isoformat() if log.closed_at else "N/A",
             ]
         )
@@ -234,25 +297,35 @@ def export_alerts_csv(
 @router.get("/{log_id}", response_model=DetectionLogRead)
 def get_alert_details(log_id: int, session: Session = Depends(get_session)):
     """Retrieves the complete, detailed record when an operator clicks for full details."""
-    log = session.get(DetectionLog, log_id)
+    log = session.exec(
+        select(DetectionLog)
+        .where(DetectionLog.log_id == log_id)
+        .options(
+            selectinload(DetectionLog.camera),
+            selectinload(DetectionLog.verified_by),
+            selectinload(DetectionLog.closed_by),
+        )
+    ).first()
     if not log:
         raise HTTPException(status_code=404, detail="Incident log not found")
-    log_read = DetectionLogRead.model_validate(log)
-    if log.camera:
-        log_read.camera_name = log.camera.camera_name
-    return log_read
+    return _to_detection_log_read(log)
 
 
 # ---------------------------------------------------------
 # HITL STATE MACHINE TRANSITIONS
 # ---------------------------------------------------------
+
 @router.post("/{log_id}/confirm", response_model=DetectionLogRead)
-def confirm_alert(
+async def confirm_alert(
     log_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Operator action to verify an incident. Updates log to 'Ongoing'."""
+    """
+    Operator confirms an incident as a true positive.
+    Camera is already Paused in DB from when the alert arrived (/api/internal/alert).
+    This just transitions the detection log to Ongoing.
+    """
     log = session.get(DetectionLog, log_id)
     if not log or log.detection_status != DetectionStatus.UNVERIFIED:
         raise HTTPException(
@@ -261,21 +334,28 @@ def confirm_alert(
 
     log.detection_status = DetectionStatus.ONGOING
     log.verified_by_id = current_user.user_id
+    log.verified_by = current_user
     log.verified_at = datetime.now(timezone.utc)
 
     session.add(log)
     session.commit()
     session.refresh(log)
-    return log
+    return _to_detection_log_read(log)
 
 
 @router.post("/{log_id}/dismiss", response_model=DetectionLogRead)
-def dismiss_alert(
+async def dismiss_alert(
     log_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Operator action for false positives."""
+    """
+    Operator dismisses an alert as a false positive (Unverified) or corrects
+    a human error on a confirmed incident (Ongoing).
+
+    - Unverified → Dismissed: camera gets a 60-second cooldown before resuming.
+    - Ongoing → Dismissed: camera resumes immediately (human error correction).
+    """
     log = session.get(DetectionLog, log_id)
     if not log or log.detection_status not in (
         DetectionStatus.UNVERIFIED,
@@ -286,23 +366,52 @@ def dismiss_alert(
             detail="Only 'Unverified' or 'Ongoing' alerts can be dismissed.",
         )
 
+    was_unverified = log.detection_status == DetectionStatus.UNVERIFIED
+
     log.detection_status = DetectionStatus.DISMISSED
     log.closed_by_id = current_user.user_id
+    log.closed_by = current_user
     log.closed_at = datetime.now(timezone.utc)
 
     session.add(log)
-    session.commit()
-    session.refresh(log)
-    return log
+
+    camera = session.get(Camera, log.camera_id)
+
+    if was_unverified:
+        # False positive: keep camera Paused during the 60s cooldown window.
+        # The background task will set it back to Active after the cooldown.
+        # Camera is already Paused from when the alert arrived; no DB change needed here.
+        session.commit()
+        session.refresh(log)
+
+        if camera and camera.is_active and camera.is_enabled and camera.camera_id:
+            asyncio.create_task(_resume_camera_after_cooldown(camera.camera_id))
+
+    else:
+        # Human error correction on an Ongoing incident: resume immediately.
+        if camera and camera.is_active and camera.is_enabled:
+            camera.ai_status = AIStatus.ACTIVE.value
+            session.add(camera)
+
+        session.commit()
+        session.refresh(log)
+
+        if camera and camera.is_active and camera.is_enabled:
+            session.refresh(camera)
+            await _broadcast_camera_status(camera)
+
+    return _to_detection_log_read(log)
 
 
 @router.post("/{log_id}/resolve", response_model=DetectionLogRead)
-def resolve_alert(
+async def resolve_alert(
     log_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Operator action indicating the scene is cleared."""
+    """
+    Operator marks the scene as cleared. Camera resumes AI detection immediately.
+    """
     log = session.get(DetectionLog, log_id)
     if not log or log.detection_status != DetectionStatus.ONGOING:
         raise HTTPException(
@@ -311,9 +420,21 @@ def resolve_alert(
 
     log.detection_status = DetectionStatus.RESOLVED
     log.closed_by_id = current_user.user_id
+    log.closed_by = current_user
     log.closed_at = datetime.now(timezone.utc)
 
     session.add(log)
+
+    camera = session.get(Camera, log.camera_id)
+    if camera and camera.is_active and camera.is_enabled:
+        camera.ai_status = AIStatus.ACTIVE.value
+        session.add(camera)
+
     session.commit()
     session.refresh(log)
-    return log
+
+    if camera and camera.is_active and camera.is_enabled:
+        session.refresh(camera)
+        await _broadcast_camera_status(camera)
+
+    return _to_detection_log_read(log)

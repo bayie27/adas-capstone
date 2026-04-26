@@ -88,12 +88,15 @@ class UserRead(UserBase):
     last_login: Optional[datetime] = None
 
 
-class UserUpdate(SQLModel):
+class UserListResponse(SQLModel):
+    total_filtered: int
+    users: list[UserRead]
+
+
+class UserOperatorUpdate(SQLModel):
     username: Optional[str] = Field(default=None, min_length=3, max_length=20)
     first_name: Optional[str] = Field(default=None, min_length=1, max_length=20)
     last_name: Optional[str] = Field(default=None, min_length=1, max_length=20)
-    role: Optional[UserRole] = None
-    is_active: Optional[bool] = None
 
     @field_validator("username", "first_name", "last_name", mode="before")
     @classmethod
@@ -101,6 +104,11 @@ class UserUpdate(SQLModel):
         if v is not None and isinstance(v, str):
             return v.strip()
         return v
+
+
+class UserAdminUpdate(UserOperatorUpdate):
+    role: Optional[UserRole] = None
+    is_active: Optional[bool] = None
 
 class UserUpdatePassword(SQLModel):
     old_password: str = Field(min_length=8)
@@ -204,6 +212,9 @@ class CameraUpdate(SQLModel):
             return v.strip()
         return v
 
+class CameraStatusUpdate(SQLModel):
+    connection_status: Optional[ConnectionStatus] = None
+    ai_status: Optional[AIStatus] = None
 
 # ==========================================
 # 3. DETECTION LOGS (HITL Workflow) - Table 6.0
@@ -255,8 +266,10 @@ class DetectionLogRead(DetectionLogBase):
     log_id: int
     detection_status: str
     verified_by_id: Optional[int] = None
+    verified_by_name: Optional[str] = None
     verified_at: Optional[datetime] = None
     closed_by_id: Optional[int] = None
+    closed_by_name: Optional[str] = None
     closed_at: Optional[datetime] = None
     camera_name: Optional[str] = None
 

@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel, Session, create_engine, select
 from sqlalchemy import event
 from app.core.config import settings
+from app.core.security import get_password_hash
 from app.models import UserRole
 from passlib.context import CryptContext
 
@@ -14,9 +15,6 @@ def set_wal_mode(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.close()
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def init_db() -> None:
     from app.models import (
@@ -39,7 +37,7 @@ def init_db() -> None:
                 username="admin",
                 first_name="System",
                 last_name="Administrator",
-                password_hash=pwd_context.hash(settings.DEFAULT_ADMIN_PASSWORD),  # Must be changed on first login!
+                password_hash=get_password_hash(settings.DEFAULT_ADMIN_PASSWORD),  # Must be changed on first login!
                 role=UserRole.ADMIN,
                 is_active=True,
             )
