@@ -11,7 +11,7 @@ from sqlmodel import Session, select, col
 from app.core.db import init_db, engine
 from app.models import Camera, ConnectionStatus, AIStatus
 from app.ws_manager import manager
-from app.api.routes import internal, auth, cameras, alerts, users
+from app.api.routes import internal, auth, cameras, alerts, users, analytics
 from app.models import ApiError
 
 @asynccontextmanager
@@ -70,6 +70,7 @@ app.include_router(auth.router)
 app.include_router(cameras.router)
 app.include_router(alerts.router)
 app.include_router(users.router)
+app.include_router(analytics.router)
 
 logger = logging.getLogger("uvicorn.error")
 
