@@ -119,7 +119,6 @@ class CameraUpdate(SQLModel):
     camera_name: Optional[str] = None
     channel_id: Optional[int] = None
     is_enabled: Optional[bool] = None
-    is_active: Optional[bool] = None
 
 # ==========================================
 # 3. DETECTION LOGS (HITL Workflow) - Table 6.0
@@ -171,6 +170,7 @@ class DetectionLogRead(DetectionLogBase):
     verified_at: Optional[datetime] = None
     closed_by_id: Optional[int] = None
     closed_at: Optional[datetime] = None
+    camera_name: Optional[str] = None
 
 class DetectionLogListResponse(SQLModel):
     total_filtered: int

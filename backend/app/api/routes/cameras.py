@@ -4,7 +4,6 @@ from app.core.db import get_session
 from app.models import Camera, CameraCreate, CameraRead, CameraUpdate, CameraListResponse, ConnectionStatus, AIStatus
 from app.api.dependencies import get_current_user
 from typing import Optional
-from enum import Enum
 
 router = APIRouter(
     prefix="/api/cameras",
@@ -122,7 +121,7 @@ def add_camera(camera_in: CameraCreate, session: Session = Depends(get_session))
             col(Camera.is_active).is_(True),
             (
                 (col(Camera.channel_id) == camera_in.channel_id)
-                | (col(Camera.camera_name) == camera_in.camera_name)
+                | (func.lower(Camera.camera_name) == camera_in.camera_name.lower())
             ),
         )
     ).first()
