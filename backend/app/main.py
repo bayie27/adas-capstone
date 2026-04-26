@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import json
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -56,12 +57,13 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = json.loads(json.dumps(exc.errors(), default=str))
     return JSONResponse(
         status_code=422,
         content=ApiError(
             detail="Validation failed",
             code="VALIDATION_ERROR",
-            errors=list(exc.errors()),
+            errors=errors,
         ).model_dump(),
     )
 
