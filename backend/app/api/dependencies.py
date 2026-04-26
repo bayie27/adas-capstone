@@ -4,7 +4,7 @@ from app.core.db import get_session
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from sqlmodel import Session, select
-from app.models import User
+from app.models import User, UserRole
 
 def verify_internal_api_key(x_api_key: str = Header(...)) -> str:
     if x_api_key != settings.INTERNAL_API_KEY.get_secret_value():
@@ -44,6 +44,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Dep
 
 def get_current_admin(current_user: User = Depends(get_current_user)):
     """Runs the standard guard first, then checks if the role is Admin."""
-    if current_user.role != "Admin":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
     return current_user
