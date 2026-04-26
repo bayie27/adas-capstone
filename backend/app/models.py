@@ -19,9 +19,9 @@ def validate_password_strength(v: str) -> str:
     return v
 
 class UserBase(SQLModel):
-    username: str = Field(unique=True, index=True, min_length=3, max_length=50)
-    first_name: str = Field(min_length=1, max_length=50)
-    last_name: str = Field(min_length=1, max_length=50)
+    username: str = Field(unique=True, index=True, min_length=3, max_length=20)
+    first_name: str = Field(min_length=1, max_length=20)
+    last_name: str = Field(min_length=1, max_length=20)
     role: UserRole
 
     @field_validator("username", "first_name", "last_name", mode="before")
@@ -78,9 +78,9 @@ class UserRead(UserBase):
 
 
 class UserUpdate(SQLModel):
-    username: Optional[str] = Field(default=None, min_length=3, max_length=50)
-    first_name: Optional[str] = Field(default=None, min_length=1, max_length=50)
-    last_name: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    username: Optional[str] = Field(default=None, min_length=3, max_length=20)
+    first_name: Optional[str] = Field(default=None, min_length=1, max_length=20)
+    last_name: Optional[str] = Field(default=None, min_length=1, max_length=20)
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
 
@@ -92,7 +92,7 @@ class UserUpdate(SQLModel):
         return v
 
 class UserUpdatePassword(SQLModel):
-    old_password: str = Field(min_length=1)
+    old_password: str = Field(min_length=8)
     new_password: str = Field(min_length=8, max_length=128)
 
     @field_validator("new_password")
