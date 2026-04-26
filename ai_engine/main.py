@@ -1,8 +1,7 @@
 import cv2
 from ultralytics import YOLO
-import config  # Executes OS configurations automatically
 from camera import CameraStream
-from manager import AccidentManager
+from ai_engine.accident import AccidentManager
 
 def run_multi_camera_inference():
     print("Initializing ADAS Edge Inference Server...")
