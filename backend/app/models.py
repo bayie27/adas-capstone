@@ -64,6 +64,19 @@ class UserResetPassword(SQLModel):
 # -----------------------------------------
 # 2. CAMERA MANAGEMENT - Table 5.0
 # -----------------------------------------
+
+class ConnectionStatus(str, Enum):
+    CONNECTED = "Connected"
+    DISCONNECTED = "Disconnected"
+    RECONNECTING = "Reconnecting"
+    UNRESPONSIVE = "Unresponsive"
+
+class AIStatus(str, Enum):
+    ACTIVE = "Active"
+    INACTIVE = "Inactive"
+    PAUSED = "Paused"
+    UNRESPONSIVE = "Unresponsive"
+    
 class CameraBase(SQLModel):
     camera_name: str = Field(unique=True)
     channel_id: int = Field(unique=True)
@@ -116,7 +129,6 @@ class DetectionStatus(str, Enum):
     ONGOING = "Ongoing"
     DISMISSED = "Dismissed"
     RESOLVED = "Resolved"
-
 
 class DetectionLogBase(SQLModel):
     camera_id: int = Field(foreign_key="camera.camera_id", index=True)
