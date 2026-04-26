@@ -185,9 +185,11 @@ class TestGetAlerts:
 
         assert resp.status_code == 200
         body = resp.json()
-        returned_ids = {log["log_id"] for log in body["logs"]}
+        logs_by_id = {log["log_id"]: log for log in body["logs"]}
         assert body["total_filtered"] == 2
-        assert returned_ids == {verified_log.log_id, closed_log.log_id}
+        assert set(logs_by_id) == {verified_log.log_id, closed_log.log_id}
+        assert logs_by_id[verified_log.log_id]["verified_by_name"] == "Test Operator"
+        assert logs_by_id[closed_log.log_id]["closed_by_name"] == "Test Operator"
 
     def test_filter_by_date_range(self, client: TestClient, session: Session):
         _, headers = operator_with_headers(client, session)
@@ -307,7 +309,7 @@ class TestGetAlerts:
 
 class TestExportAlerts:
     def test_export_alerts_csv(self, client: TestClient, session: Session):
-        _, headers = operator_with_headers(client, session)
+        operator, headers = operator_with_headers(client, session)
         camera = make_camera(session, name="CSV Cam", channel_id=1)
         log = make_alert(
             session,
@@ -315,6 +317,10 @@ class TestExportAlerts:
             status=DetectionStatus.UNVERIFIED,
             confidence_score=0.87,
             snapshot_path="exports/test_snapshot.jpg",
+            verified_by_id=operator.user_id,
+            verified_at=datetime(2026, 7, 1, 8, 5, tzinfo=timezone.utc),
+            closed_by_id=operator.user_id,
+            closed_at=datetime(2026, 7, 1, 8, 10, tzinfo=timezone.utc),
         )
 
         resp = client.get("/api/alerts/export?status=Unverified", headers=headers)
@@ -333,8 +339,10 @@ class TestExportAlerts:
             "Confidence",
             "Snapshot URL",
             "Verified By ID",
+            "Verified By Name",
             "Verified At",
             "Closed By ID",
+            "Closed By Name",
             "Closed At",
         ]
         assert rows[1][0] == str(log.log_id)
@@ -342,13 +350,25 @@ class TestExportAlerts:
         assert rows[1][4] == "Unverified"
         assert rows[1][5] == "87.0%"
         assert rows[1][6] == "http://testserver/snapshots/exports/test_snapshot.jpg"
+        assert rows[1][7] == str(operator.user_id)
+        assert rows[1][8] == "Test Operator"
+        assert rows[1][10] == str(operator.user_id)
+        assert rows[1][11] == "Test Operator"
 
 
 class TestGetAlertDetails:
     def test_get_alert_details_success(self, client: TestClient, session: Session):
-        _, headers = operator_with_headers(client, session)
+        operator, headers = operator_with_headers(client, session)
         camera = make_camera(session, name="Detail Cam", channel_id=1)
-        log = make_alert(session, camera)
+        log = make_alert(
+            session,
+            camera,
+            status=DetectionStatus.RESOLVED,
+            verified_by_id=operator.user_id,
+            verified_at=datetime(2026, 7, 2, 8, 5, tzinfo=timezone.utc),
+            closed_by_id=operator.user_id,
+            closed_at=datetime(2026, 7, 2, 8, 10, tzinfo=timezone.utc),
+        )
 
         resp = client.get(f"/api/alerts/{log.log_id}", headers=headers)
 
@@ -356,6 +376,8 @@ class TestGetAlertDetails:
         body = resp.json()
         assert body["log_id"] == log.log_id
         assert body["camera_name"] == "Detail Cam"
+        assert body["verified_by_name"] == "Test Operator"
+        assert body["closed_by_name"] == "Test Operator"
         assert body["snapshot_path"] == log.snapshot_path
 
     def test_get_alert_details_404(self, client: TestClient, session: Session):
@@ -378,6 +400,7 @@ class TestAlertTransitions:
         body = resp.json()
         assert body["detection_status"] == "Ongoing"
         assert body["verified_by_id"] == operator.user_id
+        assert body["verified_by_name"] == "Test Operator"
         assert body["verified_at"] is not None
 
         session.refresh(log)
@@ -416,6 +439,7 @@ class TestAlertTransitions:
         body = resp.json()
         assert body["detection_status"] == "Dismissed"
         assert body["closed_by_id"] == operator.user_id
+        assert body["closed_by_name"] == "Test Operator"
         assert body["closed_at"] is not None
 
         session.refresh(log)
@@ -479,6 +503,7 @@ class TestAlertTransitions:
         body = resp.json()
         assert body["detection_status"] == "Resolved"
         assert body["closed_by_id"] == operator.user_id
+        assert body["closed_by_name"] == "Test Operator"
         assert body["closed_at"] is not None
 
         session.refresh(log)

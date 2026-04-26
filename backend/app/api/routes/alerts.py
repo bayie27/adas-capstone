@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, func, or_, select
 
 from app.api.dependencies import get_current_user
@@ -25,6 +26,21 @@ router = APIRouter(
     tags=["Alerts & Accident Management"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+def _format_user_name(user: User | None) -> str | None:
+    if not user:
+        return None
+    full_name = f"{user.first_name} {user.last_name}".strip()
+    return full_name or user.username
+
+
+def _to_detection_log_read(log: DetectionLog) -> DetectionLogRead:
+    log_read = DetectionLogRead.model_validate(log)
+    log_read.camera_name = log.camera.camera_name if log.camera else None
+    log_read.verified_by_name = _format_user_name(log.verified_by)
+    log_read.closed_by_name = _format_user_name(log.closed_by)
+    return log_read
 
 
 async def _broadcast_camera_status(camera: Camera) -> None:
@@ -165,7 +181,11 @@ def get_alerts(
         user_id=user_id,
     )
 
-    query = select(DetectionLog)
+    query = select(DetectionLog).options(
+        selectinload(DetectionLog.camera),
+        selectinload(DetectionLog.verified_by),
+        selectinload(DetectionLog.closed_by),
+    )
     query = _apply_alert_filters(
         query,
         search=search,
@@ -182,12 +202,7 @@ def get_alerts(
     ).one()
     logs = session.exec(query.offset(offset).limit(limit)).all()
 
-    logs_with_names = []
-    for log in logs:
-        log_read = DetectionLogRead.model_validate(log)
-        if log.camera:
-            log_read.camera_name = log.camera.camera_name
-        logs_with_names.append(log_read)
+    logs_with_names = [_to_detection_log_read(log) for log in logs]
 
     return DetectionLogListResponse(
         total_filtered=total_filtered,
@@ -214,7 +229,11 @@ def export_alerts_csv(
         user_id=user_id,
     )
 
-    query = select(DetectionLog)
+    query = select(DetectionLog).options(
+        selectinload(DetectionLog.camera),
+        selectinload(DetectionLog.verified_by),
+        selectinload(DetectionLog.closed_by),
+    )
     query = _apply_alert_filters(
         query,
         search=search,
@@ -240,8 +259,10 @@ def export_alerts_csv(
             "Confidence",
             "Snapshot URL",
             "Verified By ID",
+            "Verified By Name",
             "Verified At",
             "Closed By ID",
+            "Closed By Name",
             "Closed At",
         ]
     )
@@ -258,8 +279,10 @@ def export_alerts_csv(
                 f"{log.confidence_score * 100:.1f}%",
                 snapshot_url,
                 log.verified_by_id or "N/A",
+                _format_user_name(log.verified_by) or "N/A",
                 log.verified_at.isoformat() if log.verified_at else "N/A",
                 log.closed_by_id or "N/A",
+                _format_user_name(log.closed_by) or "N/A",
                 log.closed_at.isoformat() if log.closed_at else "N/A",
             ]
         )
@@ -274,13 +297,18 @@ def export_alerts_csv(
 @router.get("/{log_id}", response_model=DetectionLogRead)
 def get_alert_details(log_id: int, session: Session = Depends(get_session)):
     """Retrieves the complete, detailed record when an operator clicks for full details."""
-    log = session.get(DetectionLog, log_id)
+    log = session.exec(
+        select(DetectionLog)
+        .where(DetectionLog.log_id == log_id)
+        .options(
+            selectinload(DetectionLog.camera),
+            selectinload(DetectionLog.verified_by),
+            selectinload(DetectionLog.closed_by),
+        )
+    ).first()
     if not log:
         raise HTTPException(status_code=404, detail="Incident log not found")
-    log_read = DetectionLogRead.model_validate(log)
-    if log.camera:
-        log_read.camera_name = log.camera.camera_name
-    return log_read
+    return _to_detection_log_read(log)
 
 
 # ---------------------------------------------------------
@@ -306,12 +334,13 @@ async def confirm_alert(
 
     log.detection_status = DetectionStatus.ONGOING
     log.verified_by_id = current_user.user_id
+    log.verified_by = current_user
     log.verified_at = datetime.now(timezone.utc)
 
     session.add(log)
     session.commit()
     session.refresh(log)
-    return log
+    return _to_detection_log_read(log)
 
 
 @router.post("/{log_id}/dismiss", response_model=DetectionLogRead)
@@ -341,6 +370,7 @@ async def dismiss_alert(
 
     log.detection_status = DetectionStatus.DISMISSED
     log.closed_by_id = current_user.user_id
+    log.closed_by = current_user
     log.closed_at = datetime.now(timezone.utc)
 
     session.add(log)
@@ -370,7 +400,7 @@ async def dismiss_alert(
             session.refresh(camera)
             await _broadcast_camera_status(camera)
 
-    return log
+    return _to_detection_log_read(log)
 
 
 @router.post("/{log_id}/resolve", response_model=DetectionLogRead)
@@ -390,6 +420,7 @@ async def resolve_alert(
 
     log.detection_status = DetectionStatus.RESOLVED
     log.closed_by_id = current_user.user_id
+    log.closed_by = current_user
     log.closed_at = datetime.now(timezone.utc)
 
     session.add(log)
@@ -406,4 +437,4 @@ async def resolve_alert(
         session.refresh(camera)
         await _broadcast_camera_status(camera)
 
-    return log
+    return _to_detection_log_read(log)
