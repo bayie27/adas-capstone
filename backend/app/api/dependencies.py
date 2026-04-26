@@ -5,9 +5,10 @@ from fastapi.security import OAuth2PasswordBearer
 import jwt
 from sqlmodel import Session, select
 from app.models import User, UserRole
+import secrets
 
 def verify_internal_api_key(x_api_key: str = Header(...)) -> str:
-    if x_api_key != settings.INTERNAL_API_KEY.get_secret_value():
+    if not secrets.compare_digest(x_api_key, settings.INTERNAL_API_KEY.get_secret_value()):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Internal API Key"

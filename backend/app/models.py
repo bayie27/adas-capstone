@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy import Column, DateTime
 from pydantic import field_validator
@@ -9,6 +9,17 @@ from pydantic import field_validator
 # -----------------------------------------
 # 1. USER MANAGEMENT (RBAC) - Table 4.0
 # -----------------------------------------
+class TokenResponse(SQLModel):
+    access_token: str
+    token_type: str
+
+
+class ApiError(SQLModel):
+    detail: str
+    code: str
+    errors: Optional[list[dict[str, Any]]] = None
+
+
 class UserRole(str, Enum):
     ADMIN = "Admin"
     OPERATOR = "Operator"

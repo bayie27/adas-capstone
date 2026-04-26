@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 from app.core.db import get_session
-from app.models import DetectionLog, DetectionLogCreate
+from app.models import DetectionLog, DetectionLogCreate, Camera
 from app.api.dependencies import verify_internal_api_key
 from app.ws_manager import manager
+import logging
+
+logger = logging.getLogger("uvicorn.error")
 
 # Router protected by the internal API key dependency
 router = APIRouter(
@@ -18,6 +21,13 @@ async def receive_ai_alert(
     session: Session = Depends(get_session)
 ) -> DetectionLog:
     try:
+        camera = session.get(Camera, alert_in.camera_id)
+        if not camera or not camera.is_active:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Camera with ID {alert_in.camera_id} not found or inactive."
+            )
+        
         db_alert = DetectionLog(**alert_in.model_dump())
         session.add(db_alert)
         session.commit()
@@ -36,6 +46,9 @@ async def receive_ai_alert(
         
         return db_alert
         
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception:
         session.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to process AI alert")
+        raise HTTPException(status_code=500, detail="Failed to process alert.")

@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel, Session, create_engine, select
 from sqlalchemy import event
 from app.core.config import settings
+from app.models import UserRole
 from passlib.context import CryptContext
 
 engine = create_engine(
@@ -38,8 +39,8 @@ def init_db() -> None:
                 username="admin",
                 first_name="System",
                 last_name="Administrator",
-                password_hash=pwd_context.hash("admin123"),  # Must be changed on first login!
-                role="Admin",
+                password_hash=pwd_context.hash(settings.DEFAULT_ADMIN_PASSWORD),  # Must be changed on first login!
+                role=UserRole.ADMIN,
                 is_active=True,
             )
             session.add(default_admin)
