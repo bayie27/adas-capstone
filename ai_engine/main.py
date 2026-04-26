@@ -24,7 +24,8 @@ def run_multi_camera_inference():
         active_cameras = []
 
         # Gather frames ONLY from cameras that are online and NOT paused
-        for cam in list(cameras.values()):
+        # Use .copy() to prevent Threading RuntimeError if sync.py modifies the dict
+        for cam in list(cameras.copy().values()):
             if not cam.is_paused:
                 frame = cam.read()
                 if frame is not None:
@@ -50,7 +51,7 @@ def run_multi_camera_inference():
 
     # Clean up operations
     print("Shutting down worker threads...")
-    for cam in list(cameras.values()):
+    for cam in list(cameras.copy().values()):
         cam.stop()
     cv2.destroyAllWindows()
     print("ADAS Edge Server safely powered down.")

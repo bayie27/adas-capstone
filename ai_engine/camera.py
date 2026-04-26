@@ -41,9 +41,10 @@ class CameraStream:
 
             # 2. Pause Bypass
             if self.is_paused:
-                # We do not read from the stream to let the buffer naturally drop frames,
-                # but we keep the TCP connection alive.
-                time.sleep(0.1)
+                # Grab frames to keep the OpenCV buffer empty and prevent stale frames
+                # when resumed, but do not decode them (saves CPU).
+                self.cap.grab()
+                time.sleep(0.01)
                 continue
 
             # 3. Read Loop
