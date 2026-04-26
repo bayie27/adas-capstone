@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from sqlmodel import Session, select, col
+from typing import Optional
+from pydantic import BaseModel
 from app.core.db import get_session
-from app.models import DetectionLog, DetectionLogCreate, Camera
+from app.models import DetectionLog, DetectionLogCreate, Camera, CameraRead, ConnectionStatus, AIStatus, CameraStatusUpdate
 from app.api.dependencies import verify_internal_api_key
 from app.ws_manager import manager
 import logging
@@ -28,11 +30,17 @@ async def receive_ai_alert(
                 detail=f"Camera with ID {alert_in.camera_id} not found or inactive."
             )
         
+        # Immediately mark camera as Paused in DB so FE reflects the self-blindfold
+        camera.ai_status = AIStatus.PAUSED.value
+        session.add(camera)
+
         db_alert = DetectionLog(**alert_in.model_dump())
         session.add(db_alert)
         session.commit()
         session.refresh(db_alert)
+        session.refresh(camera)
         
+        # Broadcast the new detection alert
         alert_payload = {
             "type": "NEW_DETECTION",
             "log_id": db_alert.log_id,
@@ -43,6 +51,15 @@ async def receive_ai_alert(
             "detection_status": db_alert.detection_status
         }
         await manager.broadcast_alert(alert_payload)
+
+        # Broadcast the camera status change so FE camera cards update live
+        camera_status_payload = {
+            "type": "CAMERA_STATUS_UPDATE",
+            "camera_id": camera.camera_id,
+            "connection_status": camera.connection_status,
+            "ai_status": camera.ai_status,
+        }
+        await manager.broadcast_alert(camera_status_payload)
         
         return db_alert
         
@@ -52,3 +69,55 @@ async def receive_ai_alert(
         session.rollback()
         logger.exception("Failed to process AI alert")
         raise HTTPException(status_code=500, detail="Failed to process alert.")
+
+@router.get("/cameras", response_model=list[CameraRead])
+def get_enabled_cameras(session: Session = Depends(get_session)) -> list[CameraRead]:
+    """
+    AI engine polls this every 3 seconds to get the list of cameras it should
+    be monitoring. Returns all is_enabled=True, is_active=True cameras with
+    their current statuses so the engine can reconcile its state on restart.
+    """
+    cameras = session.exec(
+        select(Camera).where(
+            col(Camera.is_enabled).is_(True),
+            col(Camera.is_active).is_(True),
+        )
+    ).all()
+    return [CameraRead.model_validate(c) for c in cameras]
+ 
+ 
+@router.patch("/cameras/{camera_id}/status", response_model=CameraRead)
+async def update_camera_status(
+    camera_id: int,
+    status_update: CameraStatusUpdate,
+    session: Session = Depends(get_session),
+) -> CameraRead:
+    """
+    AI engine calls this to report connection and/or AI status changes.
+    Updates DB and broadcasts to all connected FE clients.
+    """
+    camera = session.get(Camera, camera_id)
+    if not camera or not camera.is_active:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Camera with ID {camera_id} not found or inactive."
+        )
+ 
+    if status_update.connection_status is not None:
+        camera.connection_status = status_update.connection_status.value
+    if status_update.ai_status is not None:
+        camera.ai_status = status_update.ai_status.value
+ 
+    session.add(camera)
+    session.commit()
+    session.refresh(camera)
+ 
+    camera_status_payload = {
+        "type": "CAMERA_STATUS_UPDATE",
+        "camera_id": camera.camera_id,
+        "connection_status": camera.connection_status,
+        "ai_status": camera.ai_status,
+    }
+    await manager.broadcast_alert(camera_status_payload)
+ 
+    return CameraRead.model_validate(camera)

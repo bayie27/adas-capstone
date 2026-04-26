@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from fastapi.staticfiles import StaticFiles
 import os
-from app.core.db import init_db
+from sqlmodel import Session, select, col
+from app.core.db import init_db, engine
+from app.models import Camera, ConnectionStatus, AIStatus
 from app.ws_manager import manager
 from app.api.routes import internal, auth, cameras, alerts, users
 from app.models import ApiError
@@ -17,6 +19,26 @@ async def lifespan(app: FastAPI):
     # This runs exactly once when the server boots up
     print("Initializing Database...")
     init_db()
+
+    # On every server start, reset all enabled cameras to Disconnected/Inactive.
+    # This is a single bulk UPDATE — not taxing even for 400 cameras.
+    # The AI engine is responsible for updating statuses as it connects to each feed.
+    print("Resetting camera statuses to Disconnected/Inactive...")
+    with Session(engine) as session:
+        cameras_to_reset = session.exec(
+            select(Camera).where(
+                col(Camera.is_active).is_(True),
+                col(Camera.is_enabled).is_(True),
+            )
+        ).all()
+ 
+        for camera in cameras_to_reset:
+            camera.connection_status = ConnectionStatus.DISCONNECTED.value
+            camera.ai_status = AIStatus.INACTIVE.value
+            session.add(camera)
+ 
+        session.commit()
+        print(f"Reset {len(cameras_to_reset)} camera(s) to Disconnected/Inactive.")
     yield
     # Anything here runs when the server shuts down
     print("Server shutting down...")
@@ -43,7 +65,6 @@ SNAPSHOT_DIR = os.path.join(BASE_DIR, "..", "..", "ai_engine", "snapshots")
 os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 app.mount("/snapshots", StaticFiles(directory=SNAPSHOT_DIR), name="snapshots")
 
-
 app.include_router(internal.router)
 app.include_router(auth.router)
 app.include_router(cameras.router)
@@ -51,7 +72,6 @@ app.include_router(alerts.router)
 app.include_router(users.router)
 
 logger = logging.getLogger("uvicorn.error")
-
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
