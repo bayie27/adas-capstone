@@ -8,10 +8,13 @@ def camera_sync_job(cameras_dict):
     """Runs infinitely in the background to sync the AI Engine with the FastAPI Backend."""
     headers = {"x-api-key": INTERNAL_API_KEY}
     
+    print(f"[SYNC] Background thread successfully started. Targeting {SYNC_URL}")
     while True:
         try:
+            print("[SYNC] Polling backend for active cameras...")
             # 1. Fetch the absolute truth from the backend (pre-filtered for active cameras)
             response = requests.get(SYNC_URL, headers=headers, timeout=5)
+            print(f"[SYNC] Backend responded with status code: {response.status_code}")
             
             if response.status_code == 200:
                 db_cameras = response.json()
@@ -45,6 +48,8 @@ def camera_sync_job(cameras_dict):
                         print(f"[SYNC] Camera {cid} removed/disabled. Shutting down stream...")
                         cameras_dict[cid].stop()
                         del cameras_dict[cid]
+            else:
+                print(f"[SYNC] Backend returned status {response.status_code}: {response.text}")
                         
         except Exception as e:
             print(f"[SYNC] Failed to sync with backend: {e}")

@@ -19,6 +19,7 @@ dependencies = [
     "tensorrt>=10.16.1.11",
     "torch>=2.11.0",
     "torchvision>=0.26.0",
+    "ultralytics>=8.4.41",
 ]
 [[tool.uv.index]]
 name = "pytorch-cu130"

@@ -1,4 +1,5 @@
 import cv2
+import time
 from ultralytics import YOLO
 from accident import AccidentManager
 from config import CONFIDENCE_THRESHOLD
@@ -43,7 +44,11 @@ def run_multi_camera_inference():
                 # Hand it to the manager to check for accidents and trigger webhooks
                 alert_manager.process_detections(current_cam, r, annotated_frame)
 
-                cv2.imshow(f"ADAS Stream - Camera {current_cam.camera_id} (Ch. {current_cam.channel_id})", annotated_frame)
+                # cv2.imshow(f"ADAS Stream - Camera {current_cam.camera_id} (Ch. {current_cam.channel_id})", annotated_frame)
+                
+        else:
+            # Yield the CPU to prevent starving the background sync thread
+            time.sleep(0.05)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             print("Manual exit triggered.")
