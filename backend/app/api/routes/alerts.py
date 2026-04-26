@@ -359,14 +359,14 @@ async def dismiss_alert(
 
     else:
         # Human error correction on an Ongoing incident: resume immediately.
-        if camera and camera.is_active:
+        if camera and camera.is_active and camera.is_enabled:
             camera.ai_status = AIStatus.ACTIVE.value
             session.add(camera)
 
         session.commit()
         session.refresh(log)
 
-        if camera and camera.is_active:
+        if camera and camera.is_active and camera.is_enabled:
             session.refresh(camera)
             await _broadcast_camera_status(camera)
 
@@ -395,14 +395,14 @@ async def resolve_alert(
     session.add(log)
 
     camera = session.get(Camera, log.camera_id)
-    if camera and camera.is_active:
+    if camera and camera.is_active and camera.is_enabled:
         camera.ai_status = AIStatus.ACTIVE.value
         session.add(camera)
 
     session.commit()
     session.refresh(log)
 
-    if camera and camera.is_active:
+    if camera and camera.is_active and camera.is_enabled:
         session.refresh(camera)
         await _broadcast_camera_status(camera)
 
