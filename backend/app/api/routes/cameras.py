@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select, func, col
+from sqlalchemy.exc import IntegrityError
 from app.core.db import get_session
 from app.models import Camera, CameraCreate, CameraRead, CameraUpdate, CameraListResponse, ConnectionStatus, AIStatus
 from app.api.dependencies import get_current_user
@@ -153,11 +154,17 @@ def update_camera(
     for key, value in update_data.items():
         setattr(db_camera, key, value)
 
-    session.add(db_camera)
-    session.commit()
-    session.refresh(db_camera)
-    return db_camera
-
+    try:
+        session.add(db_camera)
+        session.commit()
+        session.refresh(db_camera)
+        return db_camera
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Camera with this Name or Channel ID already exists."
+        )
 
 @router.delete("/{camera_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_camera(camera_id: int, session: Session = Depends(get_session)):
