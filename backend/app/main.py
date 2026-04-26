@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 from app.core.db import init_db
 from app.ws_manager import manager
-from app.api.routes import internal, auth, cameras, alerts
+from app.api.routes import internal, auth, cameras, alerts, users
 from app.models import ApiError
 
 @asynccontextmanager
@@ -47,6 +47,7 @@ app.include_router(internal.router)
 app.include_router(auth.router)
 app.include_router(cameras.router)
 app.include_router(alerts.router)
+app.include_router(users.router)
 
 logger = logging.getLogger("uvicorn.error")
 
