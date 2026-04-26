@@ -1,8 +1,8 @@
 import cv2
 from ultralytics import YOLO
-from camera import CameraStream
 from accident import AccidentManager
 from config import CONFIDENCE_THRESHOLD
+from sync import start_sync_thread
 
 def run_multi_camera_inference():
     print("Initializing ADAS Edge Inference Server...")
@@ -11,27 +11,20 @@ def run_multi_camera_inference():
     model = YOLO("ai_engine/best.engine")
     alert_manager = AccidentManager()
 
-    # Initialize cameras with their exact Database IDs
-    cameras = [
-        # CameraStream("rtsp://localhost:8554/camera1", "jeep_motorcycle", camera_id=1),
-        # CameraStream("rtsp://localhost:8554/camera2", "car_car", camera_id=2),
-        # CameraStream("rtsp://localhost:8554/camera3", "defour", camera_id=3),
-        # CameraStream("rtsp://localhost:8554/camera4", "motor-to-motor", camera_id=4),
+    # Change cameras from a list to a dictionary for dynamic lookup by ID
+    cameras = {}
 
-        CameraStream("ai_engine/sample_vids/jeep_motorcycle.mp4", "jeep_motorcycle", camera_id=1),
-        CameraStream("ai_engine/sample_vids/car_car.mp4", "car_car", camera_id=2),
-        CameraStream("ai_engine/sample_vids/defour.mp4", "defour", camera_id=3),
-        CameraStream("ai_engine/sample_vids/motor-to-motor.mp4", "motor-to-motor", camera_id=4),
-    ]
+    # Start the background sync thread (polls every 3 seconds)
+    start_sync_thread(cameras)
 
-    print("Streams loaded. Press 'q' in any video window to quit.")
+    print("Waiting for backend sync... Press 'q' in any video window to quit.")
 
     while True:
         frames_to_process = []
         active_cameras = []
 
         # Gather frames ONLY from cameras that are online and NOT paused
-        for cam in cameras:
+        for cam in list(cameras.values()):
             if not cam.is_paused:
                 frame = cam.read()
                 if frame is not None:
@@ -49,7 +42,7 @@ def run_multi_camera_inference():
                 # Hand it to the manager to check for accidents and trigger webhooks
                 alert_manager.process_detections(current_cam, r, annotated_frame)
 
-                cv2.imshow(f"ADAS Stream {current_cam.camera_id}: {current_cam.name}", annotated_frame)
+                cv2.imshow(f"ADAS Stream - Camera {current_cam.camera_id} (Ch. {current_cam.channel_id})", annotated_frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             print("Manual exit triggered.")
@@ -57,7 +50,7 @@ def run_multi_camera_inference():
 
     # Clean up operations
     print("Shutting down worker threads...")
-    for cam in cameras:
+    for cam in list(cameras.values()):
         cam.stop()
     cv2.destroyAllWindows()
     print("ADAS Edge Server safely powered down.")

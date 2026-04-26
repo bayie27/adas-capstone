@@ -23,7 +23,7 @@ class AccidentManager:
         highest_confidence = max(accident_confs)
 
         print(
-            f"\n[ALERT] Accident detected on {camera.name} ({highest_confidence * 100:.1f}%)! Pausing inference..."
+            f"\n[ALERT] Accident detected on Channel {camera.channel_id} ({highest_confidence * 100:.1f}%)! Pausing inference..."
         )
 
         # 2. The Digital Blindfold: Instantly pause the camera to prevent backend spam
@@ -61,14 +61,14 @@ class AccidentManager:
 
             # 4. Transmit only the JSON data and the Security Key
             headers = {"x-api-key": INTERNAL_API_KEY}
-            print(f"[SYSTEM] Transmitting JSON payload to backend for {camera.name}...")
+            print(f"[SYSTEM] Transmitting JSON payload to backend for Channel {camera.channel_id}...")
             response = requests.post(WEBHOOK_URL, json=data, headers=headers, timeout=5)
 
             if response.status_code in [200, 201]:
                 print("[SYSTEM] Webhook delivered successfully! Database updated.")
             else:
                 print(f"[SYSTEM] Backend Error {response.status_code}: {response.text}")
-                print(f"[SYSTEM] Forcing {camera.name} to resume detection due to backend failure.")
+                print(f"[SYSTEM] Forcing Channel {camera.channel_id} to resume detection due to backend failure.")
 
         except Exception as e:
             print(f"[SYSTEM] Webhook network failure: {e}")

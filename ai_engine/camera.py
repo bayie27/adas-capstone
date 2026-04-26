@@ -1,13 +1,14 @@
 import cv2
 import threading
 import time
+from config import RTSP_BASE_URL
 
 class CameraStream:
     """A threaded camera reader with Auto-Reconnect and Pause capabilities."""
 
-    def __init__(self, url, name, camera_id):
-        self.url = url
-        self.name = name
+    def __init__(self, channel_id, camera_id):
+        self.channel_id = channel_id
+        self.url = f"{RTSP_BASE_URL}{self.channel_id}"
         self.camera_id = camera_id
         self.latest_frame = None
         self.frame_ready = False
@@ -23,7 +24,7 @@ class CameraStream:
         self.is_paused = True
 
     def resume(self):
-        print(f"[SYSTEM] Resuming AI ingestion for {self.name}...")
+        print(f"[SYSTEM] Resuming AI ingestion for Channel {self.channel_id}...")
         self.is_paused = False
 
     def _update(self):
@@ -31,7 +32,7 @@ class CameraStream:
         while self.running:
             # 1. Auto-Reconnect Loop
             if self.cap is None or not self.cap.isOpened():
-                print(f"[SYSTEM] {self.name} is offline. Attempting connection...")
+                print(f"[SYSTEM] Channel {self.channel_id} is offline. Attempting connection to {self.url}...")
                 self.cap = cv2.VideoCapture(self.url)
 
                 if not self.cap.isOpened():
@@ -51,7 +52,7 @@ class CameraStream:
                 self.latest_frame = frame
                 self.frame_ready = True
             else:
-                print(f"[SYSTEM] Stream dropped on {self.name}! Releasing socket...")
+                print(f"[SYSTEM] Stream dropped on Channel {self.channel_id}! Releasing socket...")
                 self.cap.release()
                 self.cap = None
                 time.sleep(1)

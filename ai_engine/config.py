@@ -6,7 +6,9 @@ os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 
 # Backend configuration
 WEBHOOK_URL = "http://127.0.0.1:8000/api/internal/alert"  # Update to your teammate's FastAPI endpoint
+SYNC_URL = "http://127.0.0.1:8000/api/internal/cameras"  # Endpoint for polling camera states
 INTERNAL_API_KEY = "adam-yolo-internal-secret-key-2026"  # Used to authenticate with FastAPI
+RTSP_BASE_URL = "rtsp://localhost:8554/channel="  # The base network path for your cameras
 
 # AI Configuration
 ACCIDENT_CLASS_ID = 0  # CHANGE THIS to your custom model's specific accident ID
