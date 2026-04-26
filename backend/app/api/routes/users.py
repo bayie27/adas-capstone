@@ -177,7 +177,6 @@ def update_user(
     user_id: int,
     update_in: UserAdminUpdate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
 ) -> UserRead:
     """Admin: edit a user's profile, role, or active status.
     Guards against demoting or deactivating the last active admin."""
