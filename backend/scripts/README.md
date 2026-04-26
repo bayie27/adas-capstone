@@ -9,12 +9,14 @@ From the repo root:
 
 ```powershell
 python backend\scripts\reseed_dev.py
+python backend\scripts\reseed_dev.py --profile analytics
 ```
 
 From the `backend` directory:
 
 ```powershell
 python scripts\reseed_dev.py
+python scripts\reseed_dev.py --profile edge
 ```
 
 That will:
@@ -54,21 +56,32 @@ Seeds a predictable local dataset for UI testing and demos.
 Includes:
 
 - default admin from `.env`
-- three operator accounts
-- three cameras
-- four alerts across different statuses
+- four operator accounts
+- six cameras in different connection/AI states
+- profile-driven alert presets
+- mixed verifier/closer combinations for exports and alert details
+- recent and historical timestamps spread across hours and days for analytics
 
 Usage:
 
 ```powershell
 python scripts\seed_dev_data.py
+python scripts\seed_dev_data.py --profile analytics
+python scripts\seed_dev_data.py --profile edge
 ```
+
+Profiles:
+
+- `demo`: balanced manual-testing dataset
+- `analytics`: denser, chart-friendly dataset with many more alerts across 14 days
+- `edge`: smaller dataset focused on unusual workflow combinations
 
 Seeded operator accounts:
 
-- `operator1 / Operator123`
-- `operator2 / Operator223`
-- `operator3 / Operator323`
+- `dsahagun / operator123`
+- `ealonzo / operator123`
+- `smeer / operator123`
+- `jtenorio / operator123`
 
 Admin account:
 
@@ -82,9 +95,11 @@ Usage:
 
 ```powershell
 python scripts\reseed_dev.py
+python scripts\reseed_dev.py --profile analytics
 ```
 
 Use this when you want to reset everything and start from a known state.
+This is the easiest way to switch profiles cleanly.
 
 ### `seed_alerts_via_api.py`
 
