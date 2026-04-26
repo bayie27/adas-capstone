@@ -212,6 +212,9 @@ class CameraUpdate(SQLModel):
             return v.strip()
         return v
 
+class CameraStatusUpdate(SQLModel):
+    connection_status: Optional[ConnectionStatus] = None
+    ai_status: Optional[AIStatus] = None
 
 # ==========================================
 # 3. DETECTION LOGS (HITL Workflow) - Table 6.0
