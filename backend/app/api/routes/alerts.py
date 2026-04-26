@@ -3,7 +3,7 @@ import io
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlmodel import Session, col, func, or_, select
 
 from app.api.dependencies import get_current_user
@@ -95,8 +95,8 @@ def _validate_common_filters(
 
 @router.get("/", response_model=DetectionLogListResponse)
 def get_alerts(
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: Optional[datetime] = Query(default=None, description="ISO 8601 format, e.g. 2026-01-01T00:00:00Z"),
+    end_date: Optional[datetime] = Query(default=None, description="ISO 8601 format, e.g. 2026-12-31T23:59:59Z"),
     status: list[DetectionStatus] | None = Query(
         default=None,
         description="Filter by status with repeated params, e.g. ?status=Unverified&status=Ongoing",
@@ -142,16 +142,24 @@ def get_alerts(
     ).one()
     logs = session.exec(query.offset(offset).limit(limit)).all()
 
+    logs_with_names = []
+    for log in logs:
+        log_read = DetectionLogRead.model_validate(log)
+        if log.camera:
+            log_read.camera_name = log.camera.camera_name
+        logs_with_names.append(log_read)
+
     return DetectionLogListResponse(
         total_filtered=total_filtered,
-        logs=[DetectionLogRead.model_validate(log) for log in logs],
+        logs=logs_with_names,
     )
 
 
 @router.get("/export")
 def export_alerts_csv(
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    request: Request,
+    start_date: Optional[datetime] = Query(default=None, description="ISO 8601 format, e.g. 2026-01-01T00:00:00Z"),
+    end_date: Optional[datetime] = Query(default=None, description="ISO 8601 format, e.g. 2026-12-31T23:59:59Z"),
     status: list[DetectionStatus] | None = Query(default=None),
     camera_id: list[int] | None = Query(default=None),
     user_id: list[int] | None = Query(default=None),
@@ -179,6 +187,7 @@ def export_alerts_csv(
     query = query.order_by(col(DetectionLog.detected_at).desc())
     logs = session.exec(query).all()
 
+    base_url = str(request.base_url).rstrip("/")
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(
@@ -186,23 +195,32 @@ def export_alerts_csv(
             "Log ID",
             "Detected At",
             "Camera ID",
+            "Camera Name",
             "Status",
             "Confidence",
+            "Snapshot URL",
             "Verified By ID",
+            "Verified At",
             "Closed By ID",
+            "Closed At",
         ]
     )
 
     for log in logs:
+        snapshot_url = f"{base_url}/snapshots/{log.snapshot_path}"
         writer.writerow(
             [
                 log.log_id,
                 log.detected_at.isoformat(),
                 log.camera_id,
+                log.camera.camera_name if log.camera else "N/A",
                 log.detection_status,
                 f"{log.confidence_score * 100:.1f}%",
+                snapshot_url,
                 log.verified_by_id or "N/A",
+                log.verified_at.isoformat() if log.verified_at else "N/A",
                 log.closed_by_id or "N/A",
+                log.closed_at.isoformat() if log.closed_at else "N/A",
             ]
         )
 
@@ -219,7 +237,10 @@ def get_alert_details(log_id: int, session: Session = Depends(get_session)):
     log = session.get(DetectionLog, log_id)
     if not log:
         raise HTTPException(status_code=404, detail="Incident log not found")
-    return log
+    log_read = DetectionLogRead.model_validate(log)
+    if log.camera:
+        log_read.camera_name = log.camera.camera_name
+    return log_read
 
 
 # ---------------------------------------------------------
@@ -262,7 +283,7 @@ def dismiss_alert(
     ):
         raise HTTPException(
             status_code=400,
-            detail="Cannot dismiss an already resolved or dismissed alert.",
+            detail="Only 'Unverified' or 'Ongoing' alerts can be dismissed.",
         )
 
     log.detection_status = DetectionStatus.DISMISSED
