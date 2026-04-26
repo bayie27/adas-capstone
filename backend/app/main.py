@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import logging
 from fastapi.staticfiles import StaticFiles
 import os
@@ -27,9 +28,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Mount the static snapshots directory so FE can display the images
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SNAPSHOT_DIR = os.path.join(BASE_DIR, "..", "..", "ai_engine", "snapshots")
+os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 app.mount("/snapshots", StaticFiles(directory=SNAPSHOT_DIR), name="snapshots")
 
 
