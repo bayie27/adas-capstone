@@ -100,12 +100,6 @@ DSS_PASS=your-vms-password
 ```bash
 uv sync
 
-# If you have an NVIDIA GPU, swap in the CUDA build of PyTorch
-uv pip uninstall torch torchvision
-uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-uv pip install tensorrt
-```
-
 **Frontend dependencies:**
 
 ```bash
@@ -122,7 +116,7 @@ All three components run in separate terminals.
 **1. Start the backend**
 
 ```bash
-uv run --no-sync fastapi dev backend/app/main.py
+uv run fastapi dev backend/app/main.py
 ```
 
 API available at `http://localhost:8000`. Interactive docs at `http://localhost:8000/docs`.
@@ -141,20 +135,18 @@ Dashboard available at `http://localhost:5173`.
 Start MediaMTX, then broadcast the sample videos:
 
 ```bash
-# Terminal A
-ffmpeg -re -stream_loop -1 -i "ai_engine/sample_vids/jeep_motorcycle.mp4" \
-  -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/camera1
-
-# Terminal B
-ffmpeg -re -stream_loop -1 -i "ai_engine/sample_vids/car_car.mp4" \
-  -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/camera2
+ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\car_car.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel1
+ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\car-motor-motor.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel2
+ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\defour.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel3
+ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\red-car-motorcycle.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel4
+ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\motor-to-motor.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel5
 ```
 
 **4. Start the AI engine**
 
 ```bash
 cd ai_engine
-uv run --no-sync python main.py
+uv run python main.py
 ```
 
 ---
