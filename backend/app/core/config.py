@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str
+    DEFAULT_ADMIN_PASSWORD: str
 
     # Dahua DSS Pro VMS Gateway Credentials
     DSS_IP: str
