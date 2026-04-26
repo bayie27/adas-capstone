@@ -266,8 +266,10 @@ class DetectionLogRead(DetectionLogBase):
     log_id: int
     detection_status: str
     verified_by_id: Optional[int] = None
+    verified_by_name: Optional[str] = None
     verified_at: Optional[datetime] = None
     closed_by_id: Optional[int] = None
+    closed_by_name: Optional[str] = None
     closed_at: Optional[datetime] = None
     camera_name: Optional[str] = None
 

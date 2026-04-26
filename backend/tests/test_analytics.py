@@ -211,8 +211,10 @@ class TestDashboardAnalytics:
         assert rows[0]["Camera Name"] == "Export Camera"
         assert rows[0]["Confidence"] == "65.0%"
         assert rows[0]["Closed By ID"] == str(operator.user_id)
+        assert rows[0]["Closed By Name"] == "Test Operator"
         assert rows[1]["Confidence"] == "87.0%"
         assert rows[1]["Verified By ID"] == str(operator.user_id)
+        assert rows[1]["Verified By Name"] == "Test Operator"
 
 
 class TestPerformanceAnalytics:
@@ -548,8 +550,10 @@ def test_export_dashboard_csv_returns_header_only_when_no_confirmed_logs(
         "Status",
         "Confidence",
         "Verified By ID",
+        "Verified By Name",
         "Verified At",
         "Closed By ID",
+        "Closed By Name",
         "Closed At",
     ]]
 

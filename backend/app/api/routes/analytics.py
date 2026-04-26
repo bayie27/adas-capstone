@@ -24,11 +24,12 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, func, select
 
 from app.api.dependencies import get_current_user
 from app.core.db import get_session
-from app.models import Camera, DetectionLog, DetectionStatus
+from app.models import Camera, DetectionLog, DetectionStatus, User
 
 router = APIRouter(
     prefix="/api/analytics",
@@ -94,6 +95,13 @@ def _compute_precision(confirmed: int, dismissed: int) -> float | None:
 def _format_pct(value: float | None) -> str:
     """Format a 0-1 float as a percentage string for CSV export, or 'N/A'."""
     return f"{value * 100:.1f}%" if value is not None else "N/A"
+
+
+def _format_user_name(user: User | None) -> str | None:
+    if not user:
+        return None
+    full_name = f"{user.first_name} {user.last_name}".strip()
+    return full_name or user.username
 
 
 # ---------------------------------------------------------------------------
@@ -246,8 +254,12 @@ def export_dashboard_csv(
     )
 
     logs_query = _apply_log_filters(
-        select(DetectionLog, Camera.camera_name)
-        .outerjoin(Camera, DetectionLog.camera_id == Camera.camera_id)
+        select(DetectionLog)
+        .options(
+            selectinload(DetectionLog.camera),
+            selectinload(DetectionLog.verified_by),
+            selectinload(DetectionLog.closed_by),
+        )
         .where(col(DetectionLog.detection_status).in_(_ACCIDENT_STATUSES))
         .order_by(col(DetectionLog.detected_at).desc()),
         start_date=start_date,
@@ -266,22 +278,26 @@ def export_dashboard_csv(
         "Status",
         "Confidence",
         "Verified By ID",
+        "Verified By Name",
         "Verified At",
         "Closed By ID",
+        "Closed By Name",
         "Closed At",
     ])
 
-    for log, camera_name in logs:
+    for log in logs:
         writer.writerow([
             log.log_id,
             log.detected_at.isoformat(),
             log.camera_id,
-            camera_name or "N/A",
+            log.camera.camera_name if log.camera else "N/A",
             log.detection_status,
             _format_pct(log.confidence_score),
             log.verified_by_id or "N/A",
+            _format_user_name(log.verified_by) or "N/A",
             log.verified_at.isoformat() if log.verified_at else "N/A",
             log.closed_by_id or "N/A",
+            _format_user_name(log.closed_by) or "N/A",
             log.closed_at.isoformat() if log.closed_at else "N/A",
         ])
 
