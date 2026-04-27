@@ -1,5 +1,5 @@
 import axios from "axios"
-import { API_BASE_URL } from "@/config/env"
+import { API_BASE_URL } from "@/utils/env"
 import api from "@/services/api"
 import type { CurrentUserResponse, LoginCredentials, LoginResponse } from "@/types/auth"
 

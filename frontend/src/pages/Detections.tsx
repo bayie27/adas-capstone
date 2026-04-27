@@ -1,6 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useAdasWebSocket } from "@/hooks/useAdasWebSocket"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
 import ArrowLeftSLineIcon from "remixicon-react/ArrowLeftSLineIcon"
@@ -10,7 +9,8 @@ import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
 import DownloadLineIcon from "remixicon-react/DownloadLineIcon"
 import UserLineIcon from "remixicon-react/UserLineIcon"
 import CameraLineIcon from "remixicon-react/CameraLineIcon"
-import { Modal } from "@/components/Modal"
+import { Modal } from "@/components/ui/Modal"
+import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import {
   confirmAlert,
   dismissAlert,
@@ -19,6 +19,10 @@ import {
   getAlerts,
   resolveAlert,
 } from "@/services/alerts"
+import { getCameras } from "@/services/cameras"
+import { getUsers } from "@/services/users"
+import { useAlertStore } from "@/store/useAlertStore"
+import { useAuthStore } from "@/store/useAuthStore"
 import type { AlertLog, AlertStatus } from "@/types/alerts"
 import {
   formatAlertCode,
@@ -29,7 +33,6 @@ import {
   getAlertLastHandledBy,
   getAlertLastUpdated,
   getAlertStatusTextClass,
-  getSnapshotUrl,
 } from "@/utils/alerts"
 import { getApiErrorMessage } from "@/utils/api"
 import { cn } from "@/utils"
@@ -42,14 +45,32 @@ type TabKey = "ongoing" | "logs"
 
 export default function Detections() {
   const queryClient = useQueryClient()
+  const removeAlert = useAlertStore((state) => state.removeAlert)
   const [activeTab, setActiveTab] = useState<TabKey>("ongoing")
   const [activePage, setActivePage] = useState(1)
   const [logsPage, setLogsPage] = useState(1)
   const [logSearch, setLogSearch] = useState("")
   const deferredLogSearch = useDeferredValue(logSearch.trim())
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [cameraId, setCameraId] = useState("")
+  const [userId, setUserId] = useState("")
+  
+  const role = useAuthStore((state) => state.role)
+  const hasFilters = Boolean(startDate || endDate || cameraId || userId)
+
+  const camerasQuery = useQuery({
+    queryKey: ["cameras", "all"],
+    queryFn: () => getCameras({ limit: 100 }),
+  })
+
+  const usersQuery = useQuery({
+    queryKey: ["users", "all"],
+    queryFn: () => getUsers({ limit: 100 }),
+    enabled: role === "Administrator",
+  })
   const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null)
   const [selectedAlertPreview, setSelectedAlertPreview] = useState<AlertLog | null>(null)
-  const [snapshotError, setSnapshotError] = useState(false)
 
   const activeOffset = (activePage - 1) * ALERTS_PAGE_SIZE
   const logsOffset = (logsPage - 1) * ALERTS_PAGE_SIZE
@@ -66,13 +87,17 @@ export default function Detections() {
   })
 
   const logsQuery = useQuery({
-    queryKey: ["alerts", "logs", deferredLogSearch, logsOffset],
+    queryKey: ["alerts", "logs", deferredLogSearch, logsOffset, startDate, endDate, cameraId, userId],
     queryFn: () =>
       getAlerts({
         status: LOG_ALERT_STATUSES,
         search: deferredLogSearch || undefined,
         limit: ALERTS_PAGE_SIZE,
         offset: logsOffset,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        camera_id: cameraId ? [Number(cameraId)] : undefined,
+        user_id: userId ? [Number(userId)] : undefined,
       }),
     placeholderData: (previousData) => previousData,
   })
@@ -88,12 +113,17 @@ export default function Detections() {
       exportAlertsCsv({
         status: LOG_ALERT_STATUSES,
         search: deferredLogSearch || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        camera_id: cameraId ? [Number(cameraId)] : undefined,
+        user_id: userId ? [Number(userId)] : undefined,
       }),
   })
 
   const handleMutationSuccess = (updatedAlert: AlertLog) => {
     queryClient.setQueryData(["alert-details", updatedAlert.log_id], updatedAlert)
     setSelectedAlertPreview(updatedAlert)
+    removeAlert(updatedAlert.log_id)
     queryClient.invalidateQueries({ queryKey: ["alerts"] })
   }
 
@@ -133,34 +163,13 @@ export default function Detections() {
     }
   }, [logsPage, logsTotalPages])
 
-  useEffect(() => {
-    setSnapshotError(false)
-  }, [selectedAlertId])
-
-  useAdasWebSocket((payload: any) => {
-    if (payload?.type === "NEW_ACCIDENT" || payload?.type === "NEW_ALERT") {
-      if (activeTab === "ongoing") {
-        queryClient.setQueriesData({ queryKey: ["alerts", "active"] }, (oldData: any) => {
-          if (!oldData) return oldData
-          
-          const newAlert = payload.alert || payload.data || payload
-
-          if (oldData.logs.some((log: any) => log.log_id === newAlert.log_id)) {
-            return oldData
-          }
-
-          return {
-            ...oldData,
-            logs: [newAlert, ...oldData.logs],
-            total_filtered: (oldData.total_filtered || 0) + 1,
-          }
-        })
-      }
-    }
-  })
-
   const currentQuery = activeTab === "ongoing" ? activeAlertsQuery : logsQuery
-  const currentRows = currentQuery.data?.logs ?? []
+  
+  const currentRows = useMemo(() => {
+    const rows = currentQuery.data?.logs ?? []
+    return [...rows].sort((a, b) => b.log_id - a.log_id)
+  }, [currentQuery.data?.logs])
+
   const currentPage = activeTab === "ongoing" ? activePage : logsPage
   const currentTotalPages = activeTab === "ongoing" ? activeTotalPages : logsTotalPages
   const currentTotalFiltered = currentQuery.data?.total_filtered ?? 0
@@ -168,7 +177,7 @@ export default function Detections() {
   const rangeEnd = currentTotalFiltered === 0 ? 0 : rangeStart + currentRows.length - 1
 
   const selectedAlert = alertDetailsQuery.data ?? selectedAlertPreview
-  const snapshotUrl = selectedAlert ? getSnapshotUrl(selectedAlert.snapshot_path) : null
+
   const isTransitionPending =
     confirmMutation.isPending || dismissMutation.isPending || resolveMutation.isPending
 
@@ -184,7 +193,6 @@ export default function Detections() {
   const closeModal = () => {
     setSelectedAlertId(null)
     setSelectedAlertPreview(null)
-    setSnapshotError(false)
     confirmMutation.reset()
     dismissMutation.reset()
     resolveMutation.reset()
@@ -193,7 +201,6 @@ export default function Detections() {
   const openAlertModal = (alert: AlertLog) => {
     setSelectedAlertPreview(alert)
     setSelectedAlertId(alert.log_id)
-    setSnapshotError(false)
     confirmMutation.reset()
     dismissMutation.reset()
     resolveMutation.reset()
@@ -254,22 +261,71 @@ export default function Detections() {
                 className="w-60 rounded-md border border-[#2A2A2A] bg-[#141414] py-1.5 pl-8 pr-4 text-xs text-white focus:border-[#52525B] focus:outline-none"
               />
             </div>
-            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
+            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
               <CalendarLineIcon size={13} className="text-[#737373]" />
-              All time
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => { setLogsPage(1); setStartDate(e.target.value) }}
+                className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
+              />
             </div>
-            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
+            <span className="text-xs text-[#555]">to</span>
+            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
+              <CalendarLineIcon size={13} className="text-[#737373]" />
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => { setLogsPage(1); setEndDate(e.target.value) }}
+                className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
+              />
+            </div>
+            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
               <CameraLineIcon size={13} className="text-[#737373]" />
-              All cameras
+              <select
+                value={cameraId}
+                onChange={(e) => { setLogsPage(1); setCameraId(e.target.value) }}
+                className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none"
+              >
+                <option value="">All cameras</option>
+                {camerasQuery.data?.cameras.map((c) => (
+                  <option key={c.camera_id} value={c.camera_id}>
+                    {c.camera_name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
               <ArrowRightSLineIcon size={13} className="text-[#737373]" />
               Dismissed & Resolved
             </div>
-            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
-              <UserLineIcon size={13} className="text-[#737373]" />
-              All operators
-            </div>
+            {role === "Administrator" ? (
+              <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
+                <UserLineIcon size={13} className="text-[#737373]" />
+                <select
+                  value={userId}
+                  onChange={(e) => { setLogsPage(1); setUserId(e.target.value) }}
+                  className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none"
+                >
+                  <option value="">All operators</option>
+                  {usersQuery.data?.users.map((u) => (
+                    <option key={u.user_id} value={u.user_id}>
+                      {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.username}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            {hasFilters ? (
+              <button
+                type="button"
+                onClick={() => { setStartDate(""); setEndDate(""); setCameraId(""); setUserId(""); setLogsPage(1) }}
+                className="flex items-center gap-1 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1.5 text-xs text-[#737373] transition-colors hover:text-white"
+              >
+                <CloseLineIcon size={12} />
+                Clear
+              </button>
+            ) : null}
           </div>
           <button
             type="button"
@@ -450,19 +506,15 @@ export default function Detections() {
           </div>
 
           <div className="flex aspect-video w-full items-center justify-center border-b border-[#2A2A2A] bg-[#111]">
-            {selectedAlert && snapshotUrl && !snapshotError ? (
-              <img
-                src={snapshotUrl}
+            {selectedAlert ? (
+              <SnapshotImage
+                snapshotPath={selectedAlert.snapshot_path}
                 alt={`${formatAlertCode(selectedAlert.log_id)} snapshot`}
                 className="h-full w-full object-contain"
-                onError={() => setSnapshotError(true)}
+                fallbackClassName="h-32 w-48 border border-[#333] bg-[#1A1A1A] text-[#555]"
               />
-            ) : selectedAlert && alertDetailsQuery.isFetching ? (
-              <div className="text-xs text-[#555]">Loading preview...</div>
             ) : (
-              <div className="flex h-32 w-48 items-center justify-center border border-[#333] bg-[#1A1A1A] text-xs text-[#555]">
-                Snapshot unavailable
-              </div>
+              <div className="text-xs text-[#555]">Loading preview...</div>
             )}
           </div>
 

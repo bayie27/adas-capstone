@@ -1,9 +1,11 @@
 import { Suspense, lazy } from "react"
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
-import AdminLayout from "@/components/AdminLayout"
-import UserLayout from "@/components/UserLayout"
-import AuthLayout from "@/components/AuthLayout"
+import AdminLayout from "@/components/layouts/AdminLayout"
+import UserLayout from "@/components/layouts/UserLayout"
+import AuthLayout from "@/components/layouts/AuthLayout"
+import { GlobalAlerts } from "@/components/GlobalAlerts"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
+import { RealtimeAlertsBridge } from "@/components/RealtimeAlertsBridge"
 
 const Login = lazy(() => import("@/pages/Login"))
 const Dashboard = lazy(() => import("@/pages/Dashboard"))
@@ -25,6 +27,8 @@ function RouteFallback() {
 function App() {
   return (
     <Router>
+      <RealtimeAlertsBridge />
+      <GlobalAlerts />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route element={<AuthLayout />}>

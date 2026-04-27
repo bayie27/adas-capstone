@@ -1,12 +1,4 @@
-import { API_BASE_URL } from "@/config/env"
 import type { AlertLog, AlertStatus } from "@/types/alerts"
-
-function encodeSnapshotPath(snapshotPath: string) {
-  return snapshotPath
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/")
-}
 
 export function formatAlertCode(logId: number) {
   return `ACC-${logId.toString().padStart(6, "0")}`
@@ -60,14 +52,6 @@ export function getAlertLastUpdated(alert: AlertLog) {
   }
 
   return "-"
-}
-
-export function getSnapshotUrl(snapshotPath: string | null | undefined) {
-  if (!snapshotPath) {
-    return null
-  }
-
-  return new URL(`/snapshots/${encodeSnapshotPath(snapshotPath)}`, API_BASE_URL).toString()
 }
 
 export function getAlertStatusTextClass(status: AlertStatus) {

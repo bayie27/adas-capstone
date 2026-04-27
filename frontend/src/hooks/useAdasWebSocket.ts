@@ -1,40 +1,82 @@
 import { useEffect, useRef } from "react"
-import { WS_BASE_URL } from "@/config/env"
+
+import { WS_BASE_URL } from "@/utils/env"
 
 const WS_URL = `${WS_BASE_URL}/ws/alerts`
 
-/**
- * Connects to the ADAS backend WebSocket alerts stream.
- *
- * @param onMessage - Called with every parsed JSON payload received from the server.
- */
-export function useAdasWebSocket(onMessage: (data: unknown) => void) {
-  // Keep a stable ref to the callback so the effect never needs to re-run
-  // when the consumer re-renders with an inline arrow function.
+interface UseAdasWebSocketOptions {
+  enabled?: boolean
+  reconnectDelayMs?: number
+}
+
+export function useAdasWebSocket(
+  onMessage: (data: unknown) => void,
+  { enabled = true, reconnectDelayMs = 1500 }: UseAdasWebSocketOptions = {},
+) {
   const onMessageRef = useRef(onMessage)
-  onMessageRef.current = onMessage
 
   useEffect(() => {
-    const ws = new WebSocket(WS_URL)
+    onMessageRef.current = onMessage
+  })
 
-    ws.onmessage = (event: MessageEvent) => {
-      try {
-        const parsed = JSON.parse(event.data as string)
-        onMessageRef.current(parsed)
-      } catch {
-        // Ignore non-JSON frames (e.g. heartbeat pings)
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+
+    let reconnectTimer: number | null = null
+    let websocket: WebSocket | null = null
+    let isDisposed = false
+
+    const connect = () => {
+      if (isDisposed) {
+        return
+      }
+
+      websocket = new WebSocket(WS_URL)
+
+      websocket.onmessage = (event: MessageEvent) => {
+        try {
+          const parsed = JSON.parse(event.data as string)
+          onMessageRef.current(parsed)
+        } catch {
+          return
+        }
+      }
+
+      websocket.onclose = () => {
+        if (isDisposed) {
+          return
+        }
+
+        reconnectTimer = window.setTimeout(connect, reconnectDelayMs)
+      }
+
+      websocket.onerror = (error) => {
+        if (isDisposed) {
+          return
+        }
+
+        console.error("[useAdasWebSocket] WebSocket error:", error)
+        websocket?.close()
       }
     }
 
-    ws.onerror = (err) => {
-      console.error("[useAdasWebSocket] WebSocket error:", err)
-    }
+    connect()
 
     return () => {
-      // Clean up: close connection when component unmounts
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close()
+      isDisposed = true
+
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer)
+      }
+
+      if (
+        websocket &&
+        (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING)
+      ) {
+        websocket.close()
       }
     }
-  }, []) // Empty deps – intentional; callback is accessed via ref
+  }, [enabled, reconnectDelayMs])
 }

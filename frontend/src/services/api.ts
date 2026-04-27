@@ -1,6 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from "axios"
 
-import { API_BASE_URL } from "@/config/env"
+import { API_BASE_URL } from "@/utils/env"
 import { useAuthStore } from "@/store/useAuthStore"
 
 const LOGIN_PATH = "/login"

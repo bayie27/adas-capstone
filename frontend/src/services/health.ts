@@ -1,4 +1,5 @@
 import api from "@/services/api"
+import type { SystemHealthHistoryResponse, SystemHealthLiveResponse } from "@/types/health"
 
 /**
  * Pings the backend root URL to verify server connectivity.
@@ -11,4 +12,18 @@ export async function getSystemHealth(): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+export async function getSystemHealthLive(): Promise<SystemHealthLiveResponse> {
+  const { data } = await api.get<SystemHealthLiveResponse>("/system/health/live")
+  return data
+}
+
+export async function getSystemHealthHistory(
+  range: "48h" | "30d",
+): Promise<SystemHealthHistoryResponse> {
+  const { data } = await api.get<SystemHealthHistoryResponse>("/system/health/history", {
+    params: { range },
+  })
+  return data
 }

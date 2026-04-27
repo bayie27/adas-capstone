@@ -57,7 +57,7 @@ export default function Login() {
         throw new Error("Your account role is not supported in this client.")
       }
 
-      setSession(access_token, mappedRole, currentUser.username)
+      setSession(access_token, mappedRole, currentUser.username, currentUser.user_id)
       navigate(getDefaultRouteForRole(mappedRole), { replace: true })
     } catch (error) {
       setStatusMessage(getApiErrorMessage(error, "Unable to log in. Please try again."))

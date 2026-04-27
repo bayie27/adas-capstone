@@ -11,10 +11,12 @@ import CloseCircleLineIcon from "remixicon-react/CloseCircleLineIcon"
 import Focus3LineIcon from "remixicon-react/Focus3LineIcon"
 import Dashboard3LineIcon from "remixicon-react/Dashboard3LineIcon"
 import CameraLineIcon from "remixicon-react/CameraLineIcon"
+import CloseLineIcon from "remixicon-react/CloseLineIcon"
 import {
   exportPerformanceAnalyticsCsv,
   getPerformanceAnalytics,
 } from "@/services/analytics"
+import { getCameras } from "@/services/cameras"
 import { getApiErrorMessage } from "@/utils/api"
 import { formatPercent } from "@/utils/analytics"
 
@@ -49,14 +51,27 @@ function PerfCard({ icon: Icon, title, value, subtext }: PerfCardProps) {
 
 export default function AiPerformance() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [cameraId, setCameraId] = useState("")
   const [page, setPage] = useState(1)
   const deferredSearchTerm = useDeferredValue(searchTerm.trim())
 
+  const hasDateFilter = Boolean(startDate || endDate || cameraId)
+
+  const camerasQuery = useQuery({
+    queryKey: ["cameras", "all"],
+    queryFn: () => getCameras({ limit: 100 }),
+  })
+
   const performanceQuery = useQuery({
-    queryKey: [...PERFORMANCE_QUERY_KEY, deferredSearchTerm],
+    queryKey: [...PERFORMANCE_QUERY_KEY, deferredSearchTerm, startDate, endDate, cameraId],
     queryFn: () =>
       getPerformanceAnalytics({
         search: deferredSearchTerm || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        camera_id: cameraId ? [Number(cameraId)] : undefined,
       }),
     placeholderData: (previousData) => previousData,
   })
@@ -65,6 +80,9 @@ export default function AiPerformance() {
     mutationFn: () =>
       exportPerformanceAnalyticsCsv({
         search: deferredSearchTerm || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        camera_id: cameraId ? [Number(cameraId)] : undefined,
       }),
   })
 
@@ -163,14 +181,50 @@ export default function AiPerformance() {
               className="w-60 rounded-md border border-[#2A2A2A] bg-[#141414] py-1.5 pl-8 pr-4 text-xs text-white focus:border-[#52525B] focus:outline-none"
             />
           </div>
-          <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
+          <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
             <CalendarLineIcon size={13} className="text-[#737373]" />
-            All time
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => { setPage(1); setStartDate(e.target.value) }}
+              className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
+            />
           </div>
-          <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
-            <CameraLineIcon size={13} className="text-[#737373]" />
-            All cameras
+          <span className="text-xs text-[#555]">to</span>
+          <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
+            <CalendarLineIcon size={13} className="text-[#737373]" />
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => { setPage(1); setEndDate(e.target.value) }}
+              className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
+            />
           </div>
+            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
+              <CameraLineIcon size={13} className="text-[#737373]" />
+              <select
+                value={cameraId}
+                onChange={(e) => { setPage(1); setCameraId(e.target.value) }}
+                className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none"
+              >
+                <option value="">All cameras</option>
+                {camerasQuery.data?.cameras.map((c) => (
+                  <option key={c.camera_id} value={c.camera_id}>
+                    {c.camera_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          {hasDateFilter ? (
+            <button
+              type="button"
+              onClick={() => { setStartDate(""); setEndDate(""); setCameraId(""); setPage(1) }}
+              className="flex items-center gap-1 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1.5 text-xs text-[#737373] transition-colors hover:text-white"
+            >
+              <CloseLineIcon size={12} />
+              Clear
+            </button>
+          ) : null}
         </div>
         <button
           type="button"

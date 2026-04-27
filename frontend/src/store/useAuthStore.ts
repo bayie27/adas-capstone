@@ -8,13 +8,15 @@ type StoredAuthSession = {
   token: string | null
   role: AppUserRole | null
   username: string | null
+  userId: number | null
 }
 
 interface AuthState {
   token: string | null
   role: AppUserRole | null
   username: string | null
-  setSession: (token: string, role: AppUserRole, username: string) => void
+  userId: number | null
+  setSession: (token: string, role: AppUserRole, username: string, userId: number) => void
   clearSession: () => void
 }
 
@@ -23,6 +25,7 @@ function createEmptySession(): StoredAuthSession {
     token: null,
     role: null,
     username: null,
+    userId: null,
   }
 }
 
@@ -76,13 +79,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: initialSession.token,
   role: initialSession.role,
   username: initialSession.username,
-  setSession: (token, role, username) => {
-    writeStoredSession({ token, role, username })
-    set({ token, role, username })
+  userId: initialSession.userId,
+  setSession: (token, role, username, userId) => {
+    writeStoredSession({ token, role, username, userId })
+    set({ token, role, username, userId })
   },
   clearSession: () => {
     const emptySession = createEmptySession()
-
     writeStoredSession(emptySession)
     set(emptySession)
   },

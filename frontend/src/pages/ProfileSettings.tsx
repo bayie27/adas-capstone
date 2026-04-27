@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import EyeOffLineIcon from "remixicon-react/EyeOffLineIcon"
 import LockLineIcon from "remixicon-react/LockLineIcon"
-import { Modal } from "@/components/Modal"
+import { Modal } from "@/components/ui/Modal"
 import {
   changeMyPassword,
   getMyProfile,
@@ -46,6 +46,7 @@ export default function ProfileSettings() {
   const token = useAuthStore((state) => state.token)
   const role = useAuthStore((state) => state.role)
   const username = useAuthStore((state) => state.username)
+  const userId = useAuthStore((state) => state.userId)
   const setSession = useAuthStore((state) => state.setSession)
   const clearSession = useAuthStore((state) => state.clearSession)
   const [profileForm, setProfileForm] = useState<ProfileFormState>(EMPTY_PROFILE_FORM)
@@ -94,7 +95,7 @@ export default function ProfileSettings() {
       }
 
       if (token && role) {
-        setSession(token, role, updatedProfile.username)
+        setSession(token, role, updatedProfile.username, userId ?? updatedProfile.user_id)
       }
 
       setProfileNotice("Profile updated successfully.")

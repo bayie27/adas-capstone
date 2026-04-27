@@ -13,7 +13,7 @@ import EyeOffLineIcon from "remixicon-react/EyeOffLineIcon"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import ArrowLeftSLineIcon from "remixicon-react/ArrowLeftSLineIcon"
 import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
-import { Modal } from "@/components/Modal"
+import { Modal } from "@/components/ui/Modal"
 import {
   createUser,
   deleteUser,
@@ -120,6 +120,7 @@ export default function Users() {
   const token = useAuthStore((state) => state.token)
   const currentRole = useAuthStore((state) => state.role)
   const currentUsername = useAuthStore((state) => state.username)
+  const currentUserId = useAuthStore((state) => state.userId)
   const setSession = useAuthStore((state) => state.setSession)
   const clearSession = useAuthStore((state) => state.clearSession)
   const [searchTerm, setSearchTerm] = useState("")
@@ -213,7 +214,7 @@ export default function Users() {
       const mappedRole = mapApiRoleToAppRole(updatedUser.role)
 
       if (token && mappedRole) {
-        setSession(token, mappedRole, updatedUser.username)
+        setSession(token, mappedRole, updatedUser.username, currentUserId ?? updatedUser.user_id)
 
         if (mappedRole !== currentRole) {
           navigate(getDefaultRouteForRole(mappedRole), { replace: true })

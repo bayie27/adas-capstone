@@ -11,13 +11,11 @@ import PencilLineIcon from "remixicon-react/PencilLineIcon"
 import RobotLineIcon from "remixicon-react/RobotLineIcon"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
 
-import { Modal } from "@/components/Modal"
-import { useAdasWebSocket } from "@/hooks/useAdasWebSocket"
+import { Modal } from "@/components/ui/Modal"
 import { createCamera, deleteCamera, getCameras, updateCamera } from "@/services/cameras"
 import type {
   CameraAiStatus,
   CameraConnectionStatus,
-  CameraListResponse,
   CameraRecord,
   CreateCameraInput,
   UpdateCameraInput,
@@ -56,13 +54,6 @@ type CameraFormState = {
 type FilterOption<T extends string> = {
   value: T
   label: string
-}
-
-type CameraStatusUpdateMessage = {
-  type: "CAMERA_STATUS_UPDATE"
-  camera_id: number
-  connection_status: CameraConnectionStatus
-  ai_status: CameraAiStatus
 }
 
 const EMPTY_FORM: CameraFormState = {
@@ -202,27 +193,13 @@ function parseChannelId(value: string) {
   return parsed
 }
 
-function isCameraStatusUpdateMessage(payload: unknown): payload is CameraStatusUpdateMessage {
-  if (!payload || typeof payload !== "object") {
-    return false
-  }
-
-  const message = payload as Partial<CameraStatusUpdateMessage>
-
-  return (
-    message.type === "CAMERA_STATUS_UPDATE" &&
-    typeof message.camera_id === "number" &&
-    typeof message.connection_status === "string" &&
-    typeof message.ai_status === "string"
-  )
-}
-
 export default function Cameras() {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState("")
   const [connectionFilter, setConnectionFilter] = useState<CameraConnectionStatus | "all">("all")
   const [aiFilter, setAiFilter] = useState<CameraAiStatus | "all">("all")
+  const [isEnabledFilter, setIsEnabledFilter] = useState<"all" | "true" | "false">("all")
   const [notice, setNotice] = useState<NoticeState | null>(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -237,12 +214,13 @@ export default function Cameras() {
   const offset = (page - 1) * CAMERAS_PAGE_SIZE
 
   const camerasQuery = useQuery({
-    queryKey: [...CAMERAS_QUERY_KEY, deferredSearchTerm, connectionFilter, aiFilter, offset],
+    queryKey: [...CAMERAS_QUERY_KEY, deferredSearchTerm, connectionFilter, aiFilter, isEnabledFilter, offset],
     queryFn: () =>
       getCameras({
         search: deferredSearchTerm || undefined,
         connection_status: connectionFilter === "all" ? undefined : [connectionFilter],
         ai_status: aiFilter === "all" ? undefined : [aiFilter],
+        is_enabled: isEnabledFilter === "all" ? undefined : isEnabledFilter === "true",
         limit: CAMERAS_PAGE_SIZE,
         offset,
       }),
@@ -319,32 +297,6 @@ export default function Cameras() {
 
     setPage(totalPages)
   }, [page, totalPages])
-
-  useAdasWebSocket((payload: unknown) => {
-    if (!isCameraStatusUpdateMessage(payload)) {
-      return
-    }
-
-    queryClient.setQueriesData<CameraListResponse>({ queryKey: CAMERAS_QUERY_KEY }, (oldData) => {
-      if (!oldData) {
-        return oldData
-      }
-
-      // Patch cached rows in place so live status updates do not reset the user's current filters or page.
-      return {
-        ...oldData,
-        cameras: oldData.cameras.map((camera) =>
-          camera.camera_id === payload.camera_id
-            ? {
-                ...camera,
-                connection_status: payload.connection_status,
-                ai_status: payload.ai_status,
-              }
-            : camera,
-        ),
-      }
-    })
-  })
 
   function updateAddForm(field: keyof CameraFormState, value: string) {
     setAddValidationError(null)
@@ -584,6 +536,19 @@ export default function Cameras() {
             onChange={(value) => {
               setPage(1)
               setAiFilter(value)
+            }}
+          />
+
+          <FilterSelect
+            value={isEnabledFilter}
+            options={[
+              { value: "all", label: "All Status" },
+              { value: "true", label: "Enabled Only" },
+              { value: "false", label: "Disabled Only" },
+            ]}
+            onChange={(value) => {
+              setPage(1)
+              setIsEnabledFilter(value as "all" | "true" | "false")
             }}
           />
         </div>
