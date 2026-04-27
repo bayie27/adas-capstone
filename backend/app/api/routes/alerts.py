@@ -340,6 +340,13 @@ async def confirm_alert(
     session.add(log)
     session.commit()
     session.refresh(log)
+
+    await manager.broadcast_alert({
+        "type": "ALERT_STATUS_UPDATE",
+        "log_id": log.log_id,
+        "detection_status": getattr(log.detection_status, "value", log.detection_status),
+    })
+
     return _to_detection_log_read(log)
 
 
@@ -400,6 +407,12 @@ async def dismiss_alert(
             session.refresh(camera)
             await _broadcast_camera_status(camera)
 
+    await manager.broadcast_alert({
+        "type": "ALERT_STATUS_UPDATE",
+        "log_id": log.log_id,
+        "detection_status": getattr(log.detection_status, "value", log.detection_status),
+    })
+
     return _to_detection_log_read(log)
 
 
@@ -436,5 +449,11 @@ async def resolve_alert(
     if camera and camera.is_active and camera.is_enabled:
         session.refresh(camera)
         await _broadcast_camera_status(camera)
+
+    await manager.broadcast_alert({
+        "type": "ALERT_STATUS_UPDATE",
+        "log_id": log.log_id,
+        "detection_status": getattr(log.detection_status, "value", log.detection_status),
+    })
 
     return _to_detection_log_read(log)
