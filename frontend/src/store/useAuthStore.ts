@@ -1,54 +1,73 @@
 import { create } from "zustand"
 
+import type { AppUserRole } from "@/types/auth"
+
 const AUTH_STORAGE_KEY = "adas-auth-session"
+
+type StoredAuthSession = {
+  token: string | null
+  role: AppUserRole | null
+  username: string | null
+}
 
 interface AuthState {
   token: string | null
-  role: "Administrator" | "Operator" | null
+  role: AppUserRole | null
   username: string | null
-  setSession: (token: string, role: "Administrator" | "Operator", username: string) => void
+  setSession: (token: string, role: AppUserRole, username: string) => void
   clearSession: () => void
 }
 
-interface StoredAuthSession {
-  token: string | null
-  role: AuthState["role"]
-  username: string | null
+function createEmptySession(): StoredAuthSession {
+  return {
+    token: null,
+    role: null,
+    username: null,
+  }
 }
 
-function emptySession(): StoredAuthSession {
-  return { token: null, role: null, username: null }
+function getAuthStorage() {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  return window.localStorage
 }
 
 function readStoredSession(): StoredAuthSession {
-  if (typeof window === "undefined") {
-    return emptySession()
+  const storage = getAuthStorage()
+
+  if (!storage) {
+    return createEmptySession()
   }
 
   try {
-    const rawSession = window.localStorage.getItem(AUTH_STORAGE_KEY)
+    const rawSession = storage.getItem(AUTH_STORAGE_KEY)
 
     if (!rawSession) {
-      return emptySession()
+      return createEmptySession()
     }
 
     return JSON.parse(rawSession) as StoredAuthSession
   } catch {
-    return emptySession()
+    return createEmptySession()
   }
 }
 
 function writeStoredSession(session: StoredAuthSession) {
-  if (typeof window === "undefined") {
+  const storage = getAuthStorage()
+
+  if (!storage) {
     return
   }
 
+  // Partial auth state is treated as logged out so route guards and API auth stay in sync.
   if (!session.token || !session.role || !session.username) {
-    window.localStorage.removeItem(AUTH_STORAGE_KEY)
+    storage.removeItem(AUTH_STORAGE_KEY)
     return
   }
 
-  window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session))
+  storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session))
 }
 
 const initialSession = readStoredSession()
@@ -62,7 +81,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ token, role, username })
   },
   clearSession: () => {
-    writeStoredSession(emptySession())
-    set(emptySession())
+    const emptySession = createEmptySession()
+
+    writeStoredSession(emptySession)
+    set(emptySession)
   },
 }))

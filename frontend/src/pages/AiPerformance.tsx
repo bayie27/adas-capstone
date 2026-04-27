@@ -1,184 +1,284 @@
 import type { ElementType } from "react"
+import { useDeferredValue, useEffect, useMemo, useState } from "react"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
 import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
-import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
 import ArrowLeftSLineIcon from "remixicon-react/ArrowLeftSLineIcon"
+import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
 import DownloadLineIcon from "remixicon-react/DownloadLineIcon"
 import CarLineIcon from "remixicon-react/CarLineIcon"
 import CloseCircleLineIcon from "remixicon-react/CloseCircleLineIcon"
 import Focus3LineIcon from "remixicon-react/Focus3LineIcon"
 import Dashboard3LineIcon from "remixicon-react/Dashboard3LineIcon"
-import ArrowUpLineIcon from "remixicon-react/ArrowUpLineIcon"
+import CameraLineIcon from "remixicon-react/CameraLineIcon"
+import {
+  exportPerformanceAnalyticsCsv,
+  getPerformanceAnalytics,
+} from "@/services/analytics"
+import { getApiErrorMessage } from "@/utils/api"
+import { formatPercent } from "@/utils/analytics"
 
-const mockData = [
-  { camera: "CROSSING - BANAY...", accidents: "10", dismissed: "5", precision: "50%", confidence: "81%", dismissedScore: "58%" },
-  { camera: "AIRBASE - INTERSE...", accidents: "10", dismissed: "5", precision: "50%", confidence: "81%", dismissedScore: "58%" },
-  { camera: "LTC - TAMBO", accidents: "10", dismissed: "5", precision: "50%", confidence: "81%", dismissedScore: "58%" },
-]
+const PERFORMANCE_QUERY_KEY = ["performance-analytics"] as const
+const ITEMS_PER_PAGE = 10
 
 interface PerfCardProps {
   icon: ElementType
   title: string
   value: string | number
   subtext?: string
-  trend?: string
-  trendUp?: boolean
 }
 
-function PerfCard({ icon: Icon, title, value, subtext, trend, trendUp = true }: PerfCardProps) {
+function PerfCard({ icon: Icon, title, value, subtext }: PerfCardProps) {
   return (
-    <div className="bg-[#111111] border border-[#2A2A2A] rounded-xl p-5 flex flex-col justify-between h-full min-h-[160px]">
+    <div className="flex h-full min-h-[160px] flex-col justify-between rounded-xl border border-[#2A2A2A] bg-[#111111] p-5">
       <div>
-        <div className="w-9 h-9 rounded-lg bg-[#1E1E1E] border border-[#2A2A2A] flex items-center justify-center mb-4">
+        <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#1E1E1E]">
           <Icon size={17} className="text-[#A1A1AA]" />
         </div>
-        <h4 className="text-[#737373] text-[11px] font-medium uppercase tracking-wider mb-2 min-h-[32px]">{title}</h4>
-        <div className="flex items-end gap-2.5 mb-1">
-          <div className="text-3xl font-semibold text-white tracking-tight leading-none">{value}</div>
-          {trend && (
-            <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold mb-0.5 ${
-              trendUp ? "text-[#ef4444] bg-[#ef4444]/10" : "text-emerald-500 bg-emerald-500/10"
-            }`}>
-              <ArrowUpLineIcon size={8} />
-              {trend}
-            </div>
-          )}
+        <h4 className="mb-2 min-h-[32px] text-[11px] font-medium uppercase tracking-wider text-[#737373]">
+          {title}
+        </h4>
+        <div className="flex items-end gap-2.5">
+          <div className="text-3xl font-semibold leading-none tracking-tight text-white">{value}</div>
         </div>
       </div>
-      {subtext && (
-        <div className="text-[#555] text-xs mt-4">{subtext}</div>
-      )}
+      {subtext ? <div className="mt-4 text-xs text-[#555]">{subtext}</div> : null}
     </div>
   )
 }
 
 export default function AiPerformance() {
+  const [searchTerm, setSearchTerm] = useState("")
+  const [page, setPage] = useState(1)
+  const deferredSearchTerm = useDeferredValue(searchTerm.trim())
+
+  const performanceQuery = useQuery({
+    queryKey: [...PERFORMANCE_QUERY_KEY, deferredSearchTerm],
+    queryFn: () =>
+      getPerformanceAnalytics({
+        search: deferredSearchTerm || undefined,
+      }),
+    placeholderData: (previousData) => previousData,
+  })
+
+  const exportMutation = useMutation({
+    mutationFn: () =>
+      exportPerformanceAnalyticsCsv({
+        search: deferredSearchTerm || undefined,
+      }),
+  })
+
+  const globalKpis = performanceQuery.data?.global_kpis
+  const perCamera = performanceQuery.data?.per_camera ?? []
+  const totalPages = Math.max(1, Math.ceil(perCamera.length / ITEMS_PER_PAGE))
+  const startIndex = (page - 1) * ITEMS_PER_PAGE
+
+  const visibleRows = useMemo(
+    () => perCamera.slice(startIndex, startIndex + ITEMS_PER_PAGE),
+    [perCamera, startIndex],
+  )
+
+  const rangeStart = perCamera.length === 0 ? 0 : startIndex + 1
+  const rangeEnd = perCamera.length === 0 ? 0 : startIndex + visibleRows.length
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages)
+    }
+  }, [page, totalPages])
+
   return (
-    <div className="p-8 max-w-[1400px] mx-auto">
-      {/* Header */}
+    <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white mb-0.5">AI Performance</h1>
-        <p className="text-[#737373] text-xs">Analyze confidence levels and track overall detection accuracy of cameras</p>
+        <h1 className="mb-0.5 text-xl font-semibold text-white">AI Performance</h1>
+        <p className="text-xs text-[#737373]">
+          Analyze confidence levels and track overall detection accuracy of cameras
+        </p>
       </div>
 
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+      {performanceQuery.isError ? (
+        <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3">
+          <p className="text-xs text-[#FCA5A5]">
+            {getApiErrorMessage(performanceQuery.error, "Unable to load AI performance analytics.")}
+          </p>
+          <button
+            type="button"
+            onClick={() => performanceQuery.refetch()}
+            className="rounded-md border border-[#333] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#1A1A1A]"
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
+
+      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-5">
         <PerfCard
           icon={CarLineIcon}
           title="Total Accidents"
-          value="446"
+          value={performanceQuery.isLoading ? "..." : globalKpis?.total_accidents ?? 0}
+          subtext="Confirmed accidents"
         />
         <PerfCard
           icon={CloseCircleLineIcon}
           title="Total Dismissed"
-          value="5"
-          trend="+12.5%"
-          trendUp={true}
-          subtext="Compared to last month"
+          value={performanceQuery.isLoading ? "..." : globalKpis?.total_dismissed ?? 0}
+          subtext="False positives"
         />
         <PerfCard
           icon={Focus3LineIcon}
           title="Avg Precision Score"
-          value="50%"
-          trend="+12.5%"
-          trendUp={true}
-          subtext="Compared to last month"
+          value={performanceQuery.isLoading ? "..." : formatPercent(globalKpis?.precision_score)}
+          subtext="Confirmed / total acted alerts"
         />
         <PerfCard
           icon={Dashboard3LineIcon}
           title="Avg Confidence Score"
-          value="81%"
-          trend="+12.5%"
-          trendUp={false}
-          subtext="Compared to last month"
+          value={
+            performanceQuery.isLoading ? "..." : formatPercent(globalKpis?.avg_accident_confidence)
+          }
+          subtext="Average accident confidence"
         />
         <PerfCard
           icon={CloseCircleLineIcon}
           title="Avg Dismissed Score"
-          value="58%"
-          trend="+12.5%"
-          trendUp={true}
-          subtext="Compared to last month"
+          value={
+            performanceQuery.isLoading ? "..." : formatPercent(globalKpis?.avg_dismissed_confidence)
+          }
+          subtext="Average dismissed confidence"
         />
       </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-2.5">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <div className="relative">
-            <SearchLineIcon size={14} className="text-[#555] absolute left-3 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text" 
-              placeholder="Search..." 
-              className="bg-[#141414] border border-[#2A2A2A] rounded-md text-xs text-white pl-8 pr-4 py-1.5 w-60 focus:outline-none focus:border-[#52525B]"
+            <SearchLineIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(event) => {
+                setPage(1)
+                setSearchTerm(event.target.value)
+              }}
+              placeholder="Search..."
+              className="w-60 rounded-md border border-[#2A2A2A] bg-[#141414] py-1.5 pl-8 pr-4 text-xs text-white focus:border-[#52525B] focus:outline-none"
             />
           </div>
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-[#141414] border border-[#2A2A2A] rounded-md text-xs text-[#D4D4D4] hover:bg-[#1A1A1A] transition-colors">
+          <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
             <CalendarLineIcon size={13} className="text-[#737373]" />
-            March 11, 2026 - March 14, 2026
-          </button>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[#141414] border border-[#2A2A2A] rounded-md text-xs text-[#D4D4D4] hover:bg-[#1A1A1A] transition-colors">
-            Camera Name
-            <ArrowRightSLineIcon size={13} className="text-[#737373]" />
-          </button>
+            All time
+          </div>
+          <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
+            <CameraLineIcon size={13} className="text-[#737373]" />
+            All cameras
+          </div>
         </div>
-        <button className="flex items-center gap-2 px-3 py-1.5 bg-white text-black font-semibold rounded-md text-xs hover:bg-gray-100 transition-colors">
+        <button
+          type="button"
+          disabled={exportMutation.isPending}
+          onClick={() => exportMutation.mutate()}
+          className="flex items-center gap-2 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
           <DownloadLineIcon size={13} />
-          Export
+          {exportMutation.isPending ? "Exporting..." : "Export"}
         </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-[#111111] border border-[#2A2A2A] rounded-xl overflow-hidden">
+      {exportMutation.isError ? (
+        <div className="mb-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3 text-xs text-[#FCA5A5]">
+          {getApiErrorMessage(exportMutation.error, "Unable to export AI performance CSV.")}
+        </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#111111]">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-[#2A2A2A] text-[#737373] bg-[#141414]">
-                <th className="px-6 py-4 font-medium text-xs">Camera Name</th>
-                <th className="px-6 py-4 font-medium text-xs text-center">Accidents</th>
-                <th className="px-6 py-4 font-medium text-xs text-center">Dismissed</th>
-                <th className="px-6 py-4 font-medium text-xs text-center">Precision Score</th>
-                <th className="px-6 py-4 font-medium text-xs text-center">Confidence Score</th>
-                <th className="px-6 py-4 font-medium text-xs text-center">Dismissed Score</th>
+              <tr className="border-b border-[#2A2A2A] bg-[#141414] text-[#737373]">
+                <th className="px-6 py-4 text-xs font-medium">Camera Name</th>
+                <th className="px-6 py-4 text-center text-xs font-medium">Accidents</th>
+                <th className="px-6 py-4 text-center text-xs font-medium">Dismissed</th>
+                <th className="px-6 py-4 text-center text-xs font-medium">Precision Score</th>
+                <th className="px-6 py-4 text-center text-xs font-medium">Confidence Score</th>
+                <th className="px-6 py-4 text-center text-xs font-medium">Dismissed Score</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2A2A2A]">
-              {mockData.map((item, index) => (
-                <tr key={index} className="text-[#D4D4D4] hover:bg-[#1A1A1A] transition-colors">
-                  <td className="px-6 py-4 font-medium text-xs">{item.camera}</td>
-                  <td className="px-6 py-4 text-xs text-center">{item.accidents}</td>
-                  <td className="px-6 py-4 text-xs text-center">{item.dismissed}</td>
-                  <td className="px-6 py-4 text-xs text-center text-[#ef4444] font-medium">{item.precision}</td>
-                  <td className="px-6 py-4 text-xs text-center text-emerald-500 font-medium">{item.confidence}</td>
-                  <td className="px-6 py-4 text-xs text-center text-[#ef4444] font-medium">{item.dismissedScore}</td>
+              {performanceQuery.isLoading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-xs text-[#A1A1AA]">
+                    Loading AI performance...
+                  </td>
                 </tr>
-              ))}
+              ) : visibleRows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-xs text-[#A1A1AA]">
+                    No camera statistics found for the current filters.
+                  </td>
+                </tr>
+              ) : (
+                visibleRows.map((item) => (
+                  <tr key={item.camera_id} className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]">
+                    <td className="px-6 py-4 text-xs font-medium">{item.camera_name}</td>
+                    <td className="px-6 py-4 text-center text-xs">{item.total_accidents}</td>
+                    <td className="px-6 py-4 text-center text-xs">{item.total_dismissed}</td>
+                    <td className="px-6 py-4 text-center text-xs font-medium text-[#ef4444]">
+                      {formatPercent(item.precision_score)}
+                    </td>
+                    <td
+                      className={`px-6 py-4 text-center text-xs font-medium ${
+                        item.avg_accident_confidence === null ? "text-[#737373]" : "text-emerald-500"
+                      }`}
+                    >
+                      {formatPercent(item.avg_accident_confidence)}
+                    </td>
+                    <td
+                      className={`px-6 py-4 text-center text-xs font-medium ${
+                        item.avg_dismissed_confidence === null ? "text-[#737373]" : "text-[#ef4444]"
+                      }`}
+                    >
+                      {formatPercent(item.avg_dismissed_confidence)}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-        
-        {/* Pagination */}
-        <div className="flex items-center justify-between px-6 py-3 border-t border-[#2A2A2A] text-xs text-[#737373]">
+
+        <div className="flex items-center justify-between border-t border-[#2A2A2A] px-6 py-3 text-xs text-[#737373]">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               Items per page
-              <button className="flex items-center gap-1 bg-[#141414] border border-[#2A2A2A] px-2 py-1 rounded text-white">
-                3 <ArrowRightSLineIcon size={12} />
-              </button>
+              <span className="flex items-center gap-1 rounded border border-[#2A2A2A] bg-[#141414] px-2 py-1 text-white">
+                {ITEMS_PER_PAGE}
+              </span>
             </div>
-            <span>1-10 of 446</span>
+            <span>
+              {rangeStart}-{rangeEnd} of {perCamera.length}
+            </span>
           </div>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1 hover:text-white transition-colors">
+            <button
+              type="button"
+              disabled={page === 1 || performanceQuery.isFetching}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
               <ArrowLeftSLineIcon size={14} /> Previous
             </button>
             <div className="flex items-center gap-1">
-              <button className="w-5 h-5 rounded bg-[#1E1E1E] text-white flex items-center justify-center font-medium">1</button>
-              <button className="w-5 h-5 rounded hover:bg-[#1A1A1A] flex items-center justify-center text-[#A1A1AA]">2</button>
-              <button className="w-5 h-5 rounded hover:bg-[#1A1A1A] flex items-center justify-center text-[#A1A1AA]">3</button>
-              <span className="text-[#555]">...</span>
+              <span className="flex h-6 min-w-6 items-center justify-center rounded bg-[#1E1E1E] px-2 font-medium text-white">
+                {page}
+              </span>
+              <span className="text-[#555]">of</span>
+              <span>{totalPages}</span>
             </div>
-            <button className="flex items-center gap-1 hover:text-white transition-colors">
+            <button
+              type="button"
+              disabled={page >= totalPages || performanceQuery.isFetching}
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
               Next <ArrowRightSLineIcon size={14} />
             </button>
           </div>

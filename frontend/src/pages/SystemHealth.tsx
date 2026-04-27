@@ -1,4 +1,5 @@
 import { useState, useEffect, type ElementType } from "react"
+import { getSystemHealth } from "@/services/health"
 import ServerLineIcon from "remixicon-react/ServerLineIcon"
 import TimerLineIcon from "remixicon-react/TimerLineIcon"
 import Dashboard3LineIcon from "remixicon-react/Dashboard3LineIcon"
@@ -106,6 +107,19 @@ function HealthChart({ title, data, dataKey, color }: HealthChartProps) {
 
 export default function SystemHealth() {
   const [uptime, setUptime] = useState("0d 00h 00m")
+  const [isOnline, setIsOnline] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    const checkHealth = async () => {
+      const status = await getSystemHealth()
+      setIsOnline(status)
+    }
+
+    checkHealth()
+    const interval = setInterval(checkHealth, 30000)
+
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     const start = new Date("2026-03-01T00:00:00")
@@ -124,9 +138,26 @@ export default function SystemHealth() {
 
   return (
     <div className="p-8 max-w-[1400px] mx-auto">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white mb-0.5">System Health</h1>
-        <p className="text-[#737373] text-xs">Oversee system diagnostics and hardware performance</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-white mb-0.5">System Health</h1>
+          <p className="text-[#737373] text-xs">Oversee system diagnostics and hardware performance</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isOnline === null ? (
+            <span className="text-xs text-[#737373]">Checking status...</span>
+          ) : isOnline ? (
+            <div className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
+              <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+              Online
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-full border border-[#F87171]/30 bg-[#F87171]/10 px-3 py-1 text-xs font-medium text-[#F87171]">
+              <span className="h-2 w-2 rounded-full bg-[#F87171]"></span>
+              Offline / Unreachable
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">

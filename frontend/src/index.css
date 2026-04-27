@@ -1,7 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=League+Spartan:wght@100..900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=League+Spartan:wght@100..900&display=swap");
+@import "tailwindcss";
+
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter";
-  --font-logo: "League Spartan";
+  --font-sans: "Inter", sans-serif;
+  --font-logo: "League Spartan", sans-serif;
 }

@@ -1,27 +1,69 @@
-import { useState, type FormEvent } from "react"
-import { useNavigate } from "react-router-dom"
+import { useEffect, useState, type FormEvent } from "react"
+import { Navigate, useLocation, useNavigate } from "react-router-dom"
 import EyeOffLineIcon from "remixicon-react/EyeOffLineIcon"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
+import { getCurrentUser, loginUser } from "@/services/auth"
 import { useAuthStore } from "@/store/useAuthStore"
+import { mapApiRoleToAppRole, getDefaultRouteForRole } from "@/utils/auth"
+import { getApiErrorMessage } from "@/utils/api"
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const token = useAuthStore((state) => state.token)
+  const role = useAuthStore((state) => state.role)
   const setSession = useAuthStore((state) => state.setSession)
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
-  const handleLogin = (e: FormEvent) => {
+  useEffect(() => {
+    const message = (location.state as { message?: string } | null)?.message
+
+    if (message) {
+      setStatusMessage(message)
+    }
+  }, [location.state])
+
+  if (token && role) {
+    return <Navigate to={getDefaultRouteForRole(role)} replace />
+  }
+
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault()
 
     const normalizedUsername = username.trim()
-    const role =
-      normalizedUsername === "admin" || normalizedUsername === "administrator"
-        ? "Administrator"
-        : "Operator"
 
-    setSession("mock-session-token", role, normalizedUsername || "operator")
-    navigate(role === "Administrator" ? "/admin" : "/user")
+    if (!normalizedUsername || !password) {
+      setStatusMessage("Enter both username and password.")
+      return
+    }
+
+    setIsSubmitting(true)
+    setStatusMessage(null)
+
+    try {
+      const { access_token } = await loginUser({
+        username: normalizedUsername,
+        password,
+      })
+
+      const currentUser = await getCurrentUser(access_token)
+      const mappedRole = mapApiRoleToAppRole(currentUser.role)
+
+      if (!mappedRole) {
+        throw new Error("Your account role is not supported in this client.")
+      }
+
+      setSession(access_token, mappedRole, currentUser.username)
+      navigate(getDefaultRouteForRole(mappedRole), { replace: true })
+    } catch (error) {
+      setStatusMessage(getApiErrorMessage(error, "Unable to log in. Please try again."))
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -44,7 +86,11 @@ export default function Login() {
               type="text"
               placeholder="username"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => {
+                setStatusMessage(null)
+                setUsername(e.target.value)
+              }}
+              autoComplete="username"
               className="w-full rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-2.5 text-sm text-white transition-colors placeholder-[#52525B] focus:border-[#555] focus:outline-none"
             />
           </div>
@@ -55,7 +101,11 @@ export default function Login() {
                 type={showPassword ? "text" : "password"}
                 placeholder="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setStatusMessage(null)
+                  setPassword(e.target.value)
+                }}
+                autoComplete="current-password"
                 className="w-full rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-2.5 pr-10 text-sm tracking-widest text-white transition-colors placeholder-[#52525B] focus:border-[#555] focus:outline-none"
               />
               <button
@@ -69,10 +119,22 @@ export default function Login() {
           </div>
           <button
             type="submit"
+            disabled={isSubmitting}
             className="mt-2 w-full rounded-md bg-white py-2.5 text-sm font-semibold text-black transition-colors hover:bg-gray-100"
           >
-            Login
+            {isSubmitting ? "Signing in..." : "Login"}
           </button>
+          {statusMessage ? (
+            <p
+              className={`text-center text-xs ${
+                statusMessage.toLowerCase().includes("sign in again")
+                  ? "text-emerald-400"
+                  : "text-[#F87171]"
+              }`}
+            >
+              {statusMessage}
+            </p>
+          ) : null}
         </form>
       </div>
     </div>

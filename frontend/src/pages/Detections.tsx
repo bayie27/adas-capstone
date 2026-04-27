@@ -1,4 +1,6 @@
-import { useState } from "react"
+import { useDeferredValue, useEffect, useMemo, useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useAdasWebSocket } from "@/hooks/useAdasWebSocket"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
 import ArrowLeftSLineIcon from "remixicon-react/ArrowLeftSLineIcon"
@@ -6,195 +8,424 @@ import CloseLineIcon from "remixicon-react/CloseLineIcon"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
 import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
 import DownloadLineIcon from "remixicon-react/DownloadLineIcon"
+import UserLineIcon from "remixicon-react/UserLineIcon"
+import CameraLineIcon from "remixicon-react/CameraLineIcon"
 import { Modal } from "@/components/Modal"
+import {
+  confirmAlert,
+  dismissAlert,
+  exportAlertsCsv,
+  getAlertDetails,
+  getAlerts,
+  resolveAlert,
+} from "@/services/alerts"
+import type { AlertLog, AlertStatus } from "@/types/alerts"
+import {
+  formatAlertCode,
+  formatAlertConfidence,
+  formatAlertDateTime,
+  getAlertBadgeClass,
+  getAlertBorderClass,
+  getAlertLastHandledBy,
+  getAlertLastUpdated,
+  getAlertStatusTextClass,
+  getSnapshotUrl,
+} from "@/utils/alerts"
+import { getApiErrorMessage } from "@/utils/api"
 import { cn } from "@/utils"
 
-const mockOngoing = [
-  {
-    id: "ACC-000002",
-    timestamp: "2026-03-12 01:17:09",
-    camera: "AIR BASE - INTERSECTION",
-    status: "Ongoing",
-    handler: "Juan De La Cruz",
-    updated: "2026-03-12 01:17:10",
-    confidence: "63%"
-  }
-]
+const ALERTS_PAGE_SIZE = 10
+const ACTIVE_ALERT_STATUSES: AlertStatus[] = ["Unverified", "Ongoing"]
+const LOG_ALERT_STATUSES: AlertStatus[] = ["Dismissed", "Resolved"]
 
-const mockLogs = [
-  {
-    id: "ACC-000002",
-    timestamp: "2026-03-12 01:17:09",
-    camera: "AIR BASE - INTERSECTION",
-    status: "Resolved",
-    handler: "Jose Del Pilar",
-    updated: "2026-03-12 02:11:03",
-    confidence: "63%",
-    closedBy: "Jose Del Pilar",
-    timeResolved: "2026-03-12 02:11:03"
-  },
-  {
-    id: "ACC-000001",
-    timestamp: "2026-03-11 07:03:12",
-    camera: "LIPA TOWN CENTER",
-    status: "Dismissed",
-    handler: "Juan De La Cruz",
-    updated: "-",
-    confidence: "42%",
-    closedBy: "Juan De La Cruz",
-    timeResolved: "2026-03-11 07:05:00"
-  }
-]
-
-interface Accident {
-  id: string
-  timestamp: string
-  camera: string
-  status: string
-  handler: string
-  updated: string
-  confidence: string
-  closedBy?: string
-  timeResolved?: string
-}
+type TabKey = "ongoing" | "logs"
 
 export default function Detections() {
-  const [activeTab, setActiveTab] = useState<"ongoing" | "logs">("ongoing")
-  const [selectedAccident, setSelectedAccident] = useState<Accident | null>(null)
+  const queryClient = useQueryClient()
+  const [activeTab, setActiveTab] = useState<TabKey>("ongoing")
+  const [activePage, setActivePage] = useState(1)
+  const [logsPage, setLogsPage] = useState(1)
+  const [logSearch, setLogSearch] = useState("")
+  const deferredLogSearch = useDeferredValue(logSearch.trim())
+  const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null)
+  const [selectedAlertPreview, setSelectedAlertPreview] = useState<AlertLog | null>(null)
+  const [snapshotError, setSnapshotError] = useState(false)
 
-  const currentData = activeTab === "ongoing" ? mockOngoing : mockLogs
+  const activeOffset = (activePage - 1) * ALERTS_PAGE_SIZE
+  const logsOffset = (logsPage - 1) * ALERTS_PAGE_SIZE
+
+  const activeAlertsQuery = useQuery({
+    queryKey: ["alerts", "active", activeOffset],
+    queryFn: () =>
+      getAlerts({
+        status: ACTIVE_ALERT_STATUSES,
+        limit: ALERTS_PAGE_SIZE,
+        offset: activeOffset,
+      }),
+    placeholderData: (previousData) => previousData,
+  })
+
+  const logsQuery = useQuery({
+    queryKey: ["alerts", "logs", deferredLogSearch, logsOffset],
+    queryFn: () =>
+      getAlerts({
+        status: LOG_ALERT_STATUSES,
+        search: deferredLogSearch || undefined,
+        limit: ALERTS_PAGE_SIZE,
+        offset: logsOffset,
+      }),
+    placeholderData: (previousData) => previousData,
+  })
+
+  const alertDetailsQuery = useQuery({
+    queryKey: ["alert-details", selectedAlertId],
+    queryFn: () => getAlertDetails(selectedAlertId as number),
+    enabled: selectedAlertId !== null,
+  })
+
+  const exportMutation = useMutation({
+    mutationFn: () =>
+      exportAlertsCsv({
+        status: LOG_ALERT_STATUSES,
+        search: deferredLogSearch || undefined,
+      }),
+  })
+
+  const handleMutationSuccess = (updatedAlert: AlertLog) => {
+    queryClient.setQueryData(["alert-details", updatedAlert.log_id], updatedAlert)
+    setSelectedAlertPreview(updatedAlert)
+    queryClient.invalidateQueries({ queryKey: ["alerts"] })
+  }
+
+  const confirmMutation = useMutation({
+    mutationFn: confirmAlert,
+    onSuccess: handleMutationSuccess,
+  })
+
+  const dismissMutation = useMutation({
+    mutationFn: dismissAlert,
+    onSuccess: handleMutationSuccess,
+  })
+
+  const resolveMutation = useMutation({
+    mutationFn: resolveAlert,
+    onSuccess: handleMutationSuccess,
+  })
+
+  const activeTotalPages = Math.max(
+    1,
+    Math.ceil((activeAlertsQuery.data?.total_filtered ?? 0) / ALERTS_PAGE_SIZE),
+  )
+  const logsTotalPages = Math.max(
+    1,
+    Math.ceil((logsQuery.data?.total_filtered ?? 0) / ALERTS_PAGE_SIZE),
+  )
+
+  useEffect(() => {
+    if (activePage > activeTotalPages) {
+      setActivePage(activeTotalPages)
+    }
+  }, [activePage, activeTotalPages])
+
+  useEffect(() => {
+    if (logsPage > logsTotalPages) {
+      setLogsPage(logsTotalPages)
+    }
+  }, [logsPage, logsTotalPages])
+
+  useEffect(() => {
+    setSnapshotError(false)
+  }, [selectedAlertId])
+
+  useAdasWebSocket((payload: any) => {
+    if (payload?.type === "NEW_ACCIDENT" || payload?.type === "NEW_ALERT") {
+      if (activeTab === "ongoing") {
+        queryClient.setQueriesData({ queryKey: ["alerts", "active"] }, (oldData: any) => {
+          if (!oldData) return oldData
+          
+          const newAlert = payload.alert || payload.data || payload
+
+          if (oldData.logs.some((log: any) => log.log_id === newAlert.log_id)) {
+            return oldData
+          }
+
+          return {
+            ...oldData,
+            logs: [newAlert, ...oldData.logs],
+            total_filtered: (oldData.total_filtered || 0) + 1,
+          }
+        })
+      }
+    }
+  })
+
+  const currentQuery = activeTab === "ongoing" ? activeAlertsQuery : logsQuery
+  const currentRows = currentQuery.data?.logs ?? []
+  const currentPage = activeTab === "ongoing" ? activePage : logsPage
+  const currentTotalPages = activeTab === "ongoing" ? activeTotalPages : logsTotalPages
+  const currentTotalFiltered = currentQuery.data?.total_filtered ?? 0
+  const rangeStart = currentTotalFiltered === 0 ? 0 : (currentPage - 1) * ALERTS_PAGE_SIZE + 1
+  const rangeEnd = currentTotalFiltered === 0 ? 0 : rangeStart + currentRows.length - 1
+
+  const selectedAlert = alertDetailsQuery.data ?? selectedAlertPreview
+  const snapshotUrl = selectedAlert ? getSnapshotUrl(selectedAlert.snapshot_path) : null
+  const isTransitionPending =
+    confirmMutation.isPending || dismissMutation.isPending || resolveMutation.isPending
+
+  const transitionError = useMemo(() => {
+    const firstError =
+      confirmMutation.error ?? dismissMutation.error ?? resolveMutation.error ?? null
+
+    return firstError
+      ? getApiErrorMessage(firstError, "Unable to update alert status.")
+      : null
+  }, [confirmMutation.error, dismissMutation.error, resolveMutation.error])
+
+  const closeModal = () => {
+    setSelectedAlertId(null)
+    setSelectedAlertPreview(null)
+    setSnapshotError(false)
+    confirmMutation.reset()
+    dismissMutation.reset()
+    resolveMutation.reset()
+  }
+
+  const openAlertModal = (alert: AlertLog) => {
+    setSelectedAlertPreview(alert)
+    setSelectedAlertId(alert.log_id)
+    setSnapshotError(false)
+    confirmMutation.reset()
+    dismissMutation.reset()
+    resolveMutation.reset()
+  }
+
+  const closedTimeLabel =
+    selectedAlert?.detection_status === "Resolved" ? "TIME RESOLVED" : "TIME CLOSED"
 
   return (
-    <div className="p-8 max-w-[1400px] mx-auto">
+    <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white mb-0.5">Detections</h1>
-        <p className="text-[#737373] text-xs">Monitor ongoing AI detections and review historical logs to verify reported incidents</p>
+        <h1 className="mb-0.5 text-xl font-semibold text-white">Detections</h1>
+        <p className="text-xs text-[#737373]">
+          Monitor ongoing AI detections and review historical logs to verify reported incidents
+        </p>
       </div>
 
-      <div className="flex items-center gap-2 bg-[#141414] border border-[#2A2A2A] rounded-md p-1 w-fit mb-6">
+      <div className="mb-6 flex w-fit items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] p-1">
         <button
+          type="button"
           onClick={() => setActiveTab("ongoing")}
           className={cn(
-            "px-5 py-1.5 rounded text-xs font-medium transition-all duration-200",
-            activeTab === "ongoing" ? "bg-[#1A1A1A] text-white shadow-sm border border-[#333]" : "text-[#737373] hover:text-[#D4D4D4]"
+            "rounded px-5 py-1.5 text-xs font-medium transition-all duration-200",
+            activeTab === "ongoing"
+              ? "border border-[#333] bg-[#1A1A1A] text-white shadow-sm"
+              : "text-[#737373] hover:text-[#D4D4D4]",
           )}
         >
           Ongoing
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab("logs")}
           className={cn(
-            "px-5 py-1.5 rounded text-xs font-medium transition-all duration-200",
-            activeTab === "logs" ? "bg-[#1A1A1A] text-white shadow-sm border border-[#333]" : "text-[#737373] hover:text-[#D4D4D4]"
+            "rounded px-5 py-1.5 text-xs font-medium transition-all duration-200",
+            activeTab === "logs"
+              ? "border border-[#333] bg-[#1A1A1A] text-white shadow-sm"
+              : "text-[#737373] hover:text-[#D4D4D4]",
           )}
         >
           Logs
         </button>
       </div>
 
-      {activeTab === "logs" && (
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div className="flex items-center gap-2.5">
+      {activeTab === "logs" ? (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <div className="relative">
-              <SearchLineIcon size={14} className="text-[#555] absolute left-3 top-1/2 -translate-y-1/2" />
+              <SearchLineIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
               <input
                 type="text"
-                placeholder="Search..."
-                className="bg-[#141414] border border-[#2A2A2A] rounded-md text-xs text-white pl-8 pr-4 py-1.5 w-60 focus:outline-none focus:border-[#52525B]"
+                value={logSearch}
+                onChange={(event) => {
+                  setLogsPage(1)
+                  setLogSearch(event.target.value)
+                }}
+                placeholder="Search accident no. or camera..."
+                className="w-60 rounded-md border border-[#2A2A2A] bg-[#141414] py-1.5 pl-8 pr-4 text-xs text-white focus:border-[#52525B] focus:outline-none"
               />
             </div>
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-[#141414] border border-[#2A2A2A] rounded-md text-xs text-[#D4D4D4] hover:bg-[#1A1A1A] transition-colors">
+            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
               <CalendarLineIcon size={13} className="text-[#737373]" />
-              March 11, 2026 - March 14, 2026
-            </button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[#141414] border border-[#2A2A2A] rounded-md text-xs text-[#D4D4D4] hover:bg-[#1A1A1A] transition-colors">
-              Camera Name
+              All time
+            </div>
+            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
+              <CameraLineIcon size={13} className="text-[#737373]" />
+              All cameras
+            </div>
+            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
               <ArrowRightSLineIcon size={13} className="text-[#737373]" />
-            </button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[#141414] border border-[#2A2A2A] rounded-md text-xs text-[#D4D4D4] hover:bg-[#1A1A1A] transition-colors">
-              Status
-              <ArrowRightSLineIcon size={13} className="text-[#737373]" />
-            </button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[#141414] border border-[#2A2A2A] rounded-md text-xs text-[#D4D4D4] hover:bg-[#1A1A1A] transition-colors">
-              Operator
-              <ArrowRightSLineIcon size={13} className="text-[#737373]" />
-            </button>
+              Dismissed & Resolved
+            </div>
+            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
+              <UserLineIcon size={13} className="text-[#737373]" />
+              All operators
+            </div>
           </div>
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-white text-black font-semibold rounded-md text-xs hover:bg-gray-100 transition-colors">
+          <button
+            type="button"
+            disabled={exportMutation.isPending}
+            onClick={() => exportMutation.mutate()}
+            className="flex items-center gap-2 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
             <DownloadLineIcon size={13} />
-            Export
+            {exportMutation.isPending ? "Exporting..." : "Export"}
           </button>
+        </div>
+      ) : (
+        <div className="mb-6 flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
+            <ArrowRightSLineIcon size={13} className="text-[#737373]" />
+            Unverified & Ongoing
+          </div>
+          <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
+            <CalendarLineIcon size={13} className="text-[#737373]" />
+            Live queue
+          </div>
         </div>
       )}
 
-      <div className="bg-[#111111] border border-[#2A2A2A] rounded-xl overflow-hidden">
+      {activeTab === "logs" && exportMutation.isError ? (
+        <div className="mb-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3 text-xs text-[#FCA5A5]">
+          {getApiErrorMessage(exportMutation.error, "Unable to export logs CSV.")}
+        </div>
+      ) : null}
+
+      {currentQuery.isError ? (
+        <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3">
+          <p className="text-xs text-[#FCA5A5]">
+            {getApiErrorMessage(
+              currentQuery.error,
+              activeTab === "ongoing" ? "Unable to load active alerts." : "Unable to load historical logs.",
+            )}
+          </p>
+          <button
+            type="button"
+            onClick={() => currentQuery.refetch()}
+            className="rounded-md border border-[#333] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#1A1A1A]"
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#111111]">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-[#2A2A2A] text-[#737373] bg-[#141414]">
-                <th className="px-6 py-4 font-medium text-xs">Accident No.</th>
-                <th className="px-6 py-4 font-medium text-xs">Timestamp</th>
-                <th className="px-6 py-4 font-medium text-xs">Camera Name</th>
-                <th className="px-6 py-4 font-medium text-xs">Status</th>
-                <th className="px-6 py-4 font-medium text-xs">Last Handled By</th>
-                <th className="px-6 py-4 font-medium text-xs">Last Updated</th>
-                <th className="px-6 py-4 font-medium text-xs text-right">Actions</th>
+              <tr className="border-b border-[#2A2A2A] bg-[#141414] text-[#737373]">
+                <th className="px-6 py-4 text-xs font-medium">Accident No.</th>
+                <th className="px-6 py-4 text-xs font-medium">Timestamp</th>
+                <th className="px-6 py-4 text-xs font-medium">Camera Name</th>
+                <th className="px-6 py-4 text-xs font-medium">Status</th>
+                <th className="px-6 py-4 text-xs font-medium">Last Handled By</th>
+                <th className="px-6 py-4 text-xs font-medium">Last Updated</th>
+                <th className="px-6 py-4 text-right text-xs font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2A2A2A]">
-              {currentData.map((item) => (
-                <tr key={item.id} className="text-[#D4D4D4] hover:bg-[#1A1A1A] transition-colors">
-                  <td className="px-6 py-4 text-xs font-medium">{item.id}</td>
-                  <td className="px-6 py-4 text-xs text-[#737373]">{item.timestamp}</td>
-                  <td className="px-6 py-4 text-xs">{item.camera}</td>
-                  <td className="px-6 py-4 text-xs">
-                    <span className={cn(
-                      "font-medium",
-                      item.status === "Ongoing" ? "text-amber-500" :
-                        item.status === "Resolved" ? "text-emerald-500" : "text-[#737373]"
-                    )}>
-                      {item.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-xs text-[#737373]">{item.handler}</td>
-                  <td className="px-6 py-4 text-xs text-[#737373]">{item.updated}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-end">
-                      <button
-                        onClick={() => setSelectedAccident(item)}
-                        className="w-7 h-7 rounded border border-[#333] flex items-center justify-center bg-[#1A1A1A] hover:bg-[#2A2A2A] transition-colors"
-                      >
-                        <EyeLineIcon size={14} className="text-white" />
-                      </button>
-                    </div>
+              {currentQuery.isLoading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-xs text-[#A1A1AA]">
+                    {activeTab === "ongoing" ? "Loading active alerts..." : "Loading logs..."}
                   </td>
                 </tr>
-              ))}
+              ) : currentRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-xs text-[#A1A1AA]">
+                    {activeTab === "ongoing"
+                      ? "No active alerts in the queue."
+                      : "No historical logs found for the current filters."}
+                  </td>
+                </tr>
+              ) : (
+                currentRows.map((item) => (
+                  <tr key={item.log_id} className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]">
+                    <td className="px-6 py-4 text-xs font-medium">{formatAlertCode(item.log_id)}</td>
+                    <td className="px-6 py-4 text-xs text-[#737373]">{formatAlertDateTime(item.detected_at)}</td>
+                    <td className="px-6 py-4 text-xs">{item.camera_name ?? "Unknown Camera"}</td>
+                    <td className="px-6 py-4 text-xs">
+                      <span className={cn("font-medium", getAlertStatusTextClass(item.detection_status))}>
+                        {item.detection_status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-xs text-[#737373]">{getAlertLastHandledBy(item)}</td>
+                    <td className="px-6 py-4 text-xs text-[#737373]">{getAlertLastUpdated(item)}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() => openAlertModal(item)}
+                          className="flex h-7 w-7 items-center justify-center rounded border border-[#333] bg-[#1A1A1A] transition-colors hover:bg-[#2A2A2A]"
+                        >
+                          <EyeLineIcon size={14} className="text-white" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
-        <div className="flex items-center justify-between px-6 py-3 border-t border-[#2A2A2A] text-xs text-[#737373]">
+        <div className="flex items-center justify-between border-t border-[#2A2A2A] px-6 py-3 text-xs text-[#737373]">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               Items per page
-              <button className="flex items-center gap-1 bg-[#141414] border border-[#2A2A2A] px-2 py-1 rounded text-white">
-                {currentData.length} <ArrowRightSLineIcon size={12} />
-              </button>
+              <span className="flex items-center gap-1 rounded border border-[#2A2A2A] bg-[#141414] px-2 py-1 text-white">
+                {ALERTS_PAGE_SIZE}
+              </span>
             </div>
-            <span>1-10 of {currentData.length}</span>
+            <span>
+              {rangeStart}-{rangeEnd} of {currentTotalFiltered}
+            </span>
           </div>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1 hover:text-white transition-colors">
+            <button
+              type="button"
+              disabled={currentPage === 1 || currentQuery.isFetching}
+              onClick={() => {
+                if (activeTab === "ongoing") {
+                  setActivePage((page) => Math.max(1, page - 1))
+                  return
+                }
+
+                setLogsPage((page) => Math.max(1, page - 1))
+              }}
+              className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
               <ArrowLeftSLineIcon size={14} /> Previous
             </button>
             <div className="flex items-center gap-1">
-              <button className="w-5 h-5 rounded bg-[#1E1E1E] text-white flex items-center justify-center font-medium">1</button>
-              <button className="w-5 h-5 rounded hover:bg-[#1A1A1A] flex items-center justify-center text-[#A1A1AA]">2</button>
-              <button className="w-5 h-5 rounded hover:bg-[#1A1A1A] flex items-center justify-center text-[#A1A1AA]">3</button>
-              <span className="text-[#555]">...</span>
+              <span className="flex h-6 min-w-6 items-center justify-center rounded bg-[#1E1E1E] px-2 font-medium text-white">
+                {currentPage}
+              </span>
+              <span className="text-[#555]">of</span>
+              <span>{currentTotalPages}</span>
             </div>
-            <button className="flex items-center gap-1 hover:text-white transition-colors">
+            <button
+              type="button"
+              disabled={currentPage >= currentTotalPages || currentQuery.isFetching}
+              onClick={() => {
+                if (activeTab === "ongoing") {
+                  setActivePage((page) => Math.min(currentTotalPages, page + 1))
+                  return
+                }
+
+                setLogsPage((page) => Math.min(currentTotalPages, page + 1))
+              }}
+              className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
               Next <ArrowRightSLineIcon size={14} />
             </button>
           </div>
@@ -202,91 +433,153 @@ export default function Detections() {
       </div>
 
       <Modal
-        isOpen={!!selectedAccident}
-        onClose={() => setSelectedAccident(null)}
+        isOpen={selectedAlertId !== null}
+        onClose={closeModal}
+        hideClose
         className={cn(
-          "p-0 overflow-hidden max-w-lg border-t-4",
-          selectedAccident?.status === "Ongoing" ? "border-t-amber-500" : "border-t-[#E4E4E7]"
+          "max-w-lg overflow-hidden border-t-4 p-0",
+          selectedAlert ? getAlertBorderClass(selectedAlert.detection_status) : "border-t-white",
         )}
       >
-        <div className="bg-[#18181B] flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#27272A]">
-            <h2 className="text-white font-semibold tracking-wider text-xs uppercase">ACCIDENT DETAILS</h2>
-            <button onClick={() => setSelectedAccident(null)} className="text-[#737373] hover:text-white transition-colors">
+        <div className="flex flex-col bg-[#18181B]">
+          <div className="flex items-center justify-between border-b border-[#27272A] px-6 py-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-white">ACCIDENT DETAILS</h2>
+            <button type="button" onClick={closeModal} className="text-[#737373] transition-colors hover:text-white">
               <CloseLineIcon size={18} />
             </button>
           </div>
 
-          <div className="bg-[#111] aspect-video w-full flex items-center justify-center border-b border-[#2A2A2A]">
-            <div className="w-48 h-32 border border-[#333] bg-[#1A1A1A] flex items-center justify-center text-xs text-[#555]">Preview</div>
+          <div className="flex aspect-video w-full items-center justify-center border-b border-[#2A2A2A] bg-[#111]">
+            {selectedAlert && snapshotUrl && !snapshotError ? (
+              <img
+                src={snapshotUrl}
+                alt={`${formatAlertCode(selectedAlert.log_id)} snapshot`}
+                className="h-full w-full object-contain"
+                onError={() => setSnapshotError(true)}
+              />
+            ) : selectedAlert && alertDetailsQuery.isFetching ? (
+              <div className="text-xs text-[#555]">Loading preview...</div>
+            ) : (
+              <div className="flex h-32 w-48 items-center justify-center border border-[#333] bg-[#1A1A1A] text-xs text-[#555]">
+                Snapshot unavailable
+              </div>
+            )}
           </div>
 
           <div className="p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <span className="text-xl font-semibold text-white">{selectedAccident?.id}</span>
-              <span className={cn(
-                "text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wider",
-                selectedAccident?.status === "Ongoing" ? "bg-amber-500 text-black" : "bg-[#E4E4E7] text-black"
-              )}>
-                {selectedAccident?.status === "Ongoing" ? "ONGOING" : "RESOLVED"}
-              </span>
-            </div>
-
-            <div className="space-y-3.5 mb-6">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-[#737373] font-medium tracking-wider">TIMESTAMP</span>
-                <span className="text-[#D4D4D4] font-medium">{selectedAccident?.timestamp}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-[#737373] font-medium tracking-wider">CAMERA NAME</span>
-                <span className="text-[#D4D4D4] font-medium">{selectedAccident?.camera}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-[#737373] font-medium tracking-wider">AI-CONFIDENCE SCORE</span>
-                <span className="text-[#ef4444] font-bold bg-[#ef4444]/10 px-1.5 py-0.5 rounded">{selectedAccident?.confidence}</span>
-              </div>
-            </div>
-
-            <div className="border-t border-[#27272A] pt-5 mb-6">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <div className="text-[#555] text-[10px] font-bold tracking-widest mb-1.5 uppercase">VERIFIED BY</div>
-                  <div className="text-[#D4D4D4] text-xs font-medium">Juan De La Cruz</div>
+            {selectedAlert ? (
+              <>
+                <div className="mb-5 flex items-center gap-3">
+                  <span className="text-xl font-semibold text-white">{formatAlertCode(selectedAlert.log_id)}</span>
+                  <span
+                    className={cn(
+                      "rounded-sm px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                      getAlertBadgeClass(selectedAlert.detection_status),
+                    )}
+                  >
+                    {selectedAlert.detection_status}
+                  </span>
                 </div>
-                <div className="text-right">
-                  <div className="text-[#555] text-[10px] font-bold tracking-widest mb-1.5 uppercase">TIME VERIFIED</div>
-                  <div className="text-[#D4D4D4] text-xs">2026-03-12 01:17:10</div>
-                </div>
-              </div>
 
-              {selectedAccident?.status !== "Ongoing" && (
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="text-[#555] text-[10px] font-bold tracking-widest mb-1.5 uppercase">CLOSED BY</div>
-                    <div className="text-[#D4D4D4] text-xs font-medium">{selectedAccident?.closedBy}</div>
+                <div className="mb-6 space-y-3.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium tracking-wider text-[#737373]">TIMESTAMP</span>
+                    <span className="font-medium text-[#D4D4D4]">{formatAlertDateTime(selectedAlert.detected_at)}</span>
                   </div>
-                  <div className="text-right">
-                    <div className="text-[#555] text-[10px] font-bold tracking-widest mb-1.5 uppercase">TIME RESOLVED</div>
-                    <div className="text-[#D4D4D4] text-xs">{selectedAccident?.timeResolved}</div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium tracking-wider text-[#737373]">CAMERA NAME</span>
+                    <span className="font-medium text-[#D4D4D4]">{selectedAlert.camera_name ?? "Unknown Camera"}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium tracking-wider text-[#737373]">AI-CONFIDENCE SCORE</span>
+                    <span className="rounded bg-[#ef4444]/10 px-1.5 py-0.5 font-bold text-[#ef4444]">
+                      {formatAlertConfidence(selectedAlert.confidence_score)}
+                    </span>
                   </div>
                 </div>
-              )}
-            </div>
 
-            {selectedAccident?.status === "Ongoing" && (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setSelectedAccident(null)}
-                  className="flex-1 bg-[#1A1A1A] hover:bg-[#2A2A2A] border border-[#333] text-white text-xs font-medium py-2.5 rounded-md transition-colors uppercase tracking-wider"
-                >
-                  Dismiss Accident
-                </button>
-                <button
-                  className="flex-1 bg-white hover:bg-gray-100 text-black text-xs font-semibold py-2.5 rounded-md transition-colors uppercase tracking-wider"
-                >
-                  Resolve Accident
-                </button>
-              </div>
+                <div className="mb-6 border-t border-[#27272A] pt-5">
+                  <div className="mb-4 flex items-start justify-between">
+                    <div>
+                      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">VERIFIED BY</div>
+                      <div className="text-xs font-medium text-[#D4D4D4]">{selectedAlert.verified_by_name ?? "-"}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">TIME VERIFIED</div>
+                      <div className="text-xs text-[#D4D4D4]">{formatAlertDateTime(selectedAlert.verified_at)}</div>
+                    </div>
+                  </div>
+
+                  {(selectedAlert.detection_status === "Dismissed" || selectedAlert.detection_status === "Resolved") ? (
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">CLOSED BY</div>
+                        <div className="text-xs font-medium text-[#D4D4D4]">{selectedAlert.closed_by_name ?? "-"}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">{closedTimeLabel}</div>
+                        <div className="text-xs text-[#D4D4D4]">{formatAlertDateTime(selectedAlert.closed_at)}</div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                {alertDetailsQuery.isError ? (
+                  <div className="mb-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-3 py-2 text-xs text-[#FCA5A5]">
+                    {getApiErrorMessage(alertDetailsQuery.error, "Unable to refresh alert details.")}
+                  </div>
+                ) : null}
+
+                {transitionError ? (
+                  <div className="mb-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-3 py-2 text-xs text-[#FCA5A5]">
+                    {transitionError}
+                  </div>
+                ) : null}
+
+                {selectedAlert.detection_status === "Unverified" ? (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={isTransitionPending}
+                      onClick={() => dismissMutation.mutate(selectedAlert.log_id)}
+                      className="flex-1 rounded-md border border-[#333] bg-[#1A1A1A] py-2.5 text-xs font-medium uppercase tracking-wider text-white transition-colors hover:bg-[#2A2A2A] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {dismissMutation.isPending ? "Dismissing..." : "Dismiss Alert"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isTransitionPending}
+                      onClick={() => confirmMutation.mutate(selectedAlert.log_id)}
+                      className="flex-1 rounded-md bg-white py-2.5 text-xs font-semibold uppercase tracking-wider text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {confirmMutation.isPending ? "Confirming..." : "Confirm Alert"}
+                    </button>
+                  </div>
+                ) : null}
+
+                {selectedAlert.detection_status === "Ongoing" ? (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={isTransitionPending}
+                      onClick={() => dismissMutation.mutate(selectedAlert.log_id)}
+                      className="flex-1 rounded-md border border-[#333] bg-[#1A1A1A] py-2.5 text-xs font-medium uppercase tracking-wider text-white transition-colors hover:bg-[#2A2A2A] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {dismissMutation.isPending ? "Dismissing..." : "Dismiss Accident"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isTransitionPending}
+                      onClick={() => resolveMutation.mutate(selectedAlert.log_id)}
+                      className="flex-1 rounded-md bg-white py-2.5 text-xs font-semibold uppercase tracking-wider text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {resolveMutation.isPending ? "Resolving..." : "Resolve Accident"}
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="py-12 text-center text-sm text-[#A1A1AA]">Loading alert details...</div>
             )}
           </div>
         </div>
