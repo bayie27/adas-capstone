@@ -44,7 +44,6 @@ class CameraStream:
                 # Grab frames to keep the OpenCV buffer empty and prevent stale frames
                 # when resumed, but do not decode them (saves CPU).
                 self.cap.grab()
-                time.sleep(0.01)
                 continue
 
             # 3. Read Loop
@@ -57,8 +56,6 @@ class CameraStream:
                 self.cap.release()
                 self.cap = None
                 time.sleep(1)
-
-            time.sleep(0.01)
 
     def read(self):
         """Returns the latest frame if it's new; otherwise returns None."""

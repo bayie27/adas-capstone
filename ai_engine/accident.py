@@ -1,6 +1,6 @@
 import os
 import cv2
-import threading
+from concurrent.futures import ThreadPoolExecutor
 import datetime
 import requests
 
@@ -12,6 +12,10 @@ from config import (
 
 class AccidentManager:
     """Handles alert logic, payload formatting, and backend communication."""
+
+    def __init__(self):
+        # Limit to 5 concurrent webhook uploads to prevent network congestion
+        self.webhook_pool = ThreadPoolExecutor(max_workers=5)
 
     def process_detections(self, camera, results, frame):
         # 1. YOLO already filtered by CONFIDENCE_THRESHOLD, so we just check for the class ID
@@ -30,11 +34,7 @@ class AccidentManager:
         camera.pause()
 
         # 3. Fire the webhook in a background thread to prevent video lag
-        threading.Thread(
-            target=self._send_payload,
-            args=(camera, frame, highest_confidence),
-            daemon=True,
-        ).start()
+        self.webhook_pool.submit(self._send_payload, camera, frame, highest_confidence)
 
     def _send_payload(self, camera, frame, confidence):
         try:
@@ -55,7 +55,7 @@ class AccidentManager:
             data = {
                 "camera_id": camera.camera_id,
                 "detected_at": iso_time,
-                "snapshot_path": local_path,
+                "snapshot_path": safe_filename,
                 "confidence_score": round(confidence, 4),
             }
 
@@ -69,6 +69,9 @@ class AccidentManager:
             else:
                 print(f"[SYSTEM] Backend Error {response.status_code}: {response.text}")
                 print(f"[SYSTEM] Forcing Channel {camera.channel_id} to resume detection due to backend failure.")
+                camera.resume()
 
         except Exception as e:
             print(f"[SYSTEM] Webhook network failure: {e}")
+            print(f"[SYSTEM] Forcing Channel {camera.channel_id} to resume detection due to network failure.")
+            camera.resume()
