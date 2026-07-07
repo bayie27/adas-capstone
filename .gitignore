@@ -207,6 +207,11 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Local agent/skill metadata
+.agents/
+skills-lock.json
+.uv-cache/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
@@ -259,3 +264,4 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
