@@ -119,9 +119,18 @@ export function Sidebar() {
       <div className="border-t border-[#2A2A2A] p-3 space-y-0.5">
         <button
           type="button"
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-[#555] transition-colors hover:bg-[#1A1A1A] hover:text-[#D4D4D4]"
+          onClick={() => navigate(`${basePath}/help`)}
+          className={cn(
+            "flex w-full items-center gap-3 rounded-md px-3 py-2 transition-colors",
+            location.pathname === `${basePath}/help`
+              ? "bg-[#1E1E1E] text-white"
+              : "text-[#555] hover:bg-[#1A1A1A] hover:text-[#D4D4D4]",
+          )}
         >
-          <QuestionLineIcon size={16} className="text-[#555]" />
+          <QuestionLineIcon
+            size={16}
+            className={location.pathname === `${basePath}/help` ? "text-white" : "text-[#555]"}
+          />
           <span className="text-[13px] font-medium">Help Center</span>
         </button>
 
