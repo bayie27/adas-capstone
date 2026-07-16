@@ -84,6 +84,11 @@ export function GlobalAlerts() {
           <p className="text-xl font-black uppercase tracking-widest text-[#1a1a1a]">
             {isOngoing ? "Ongoing Accident" : "Accident Detected"}
           </p>
+          {alerts.length > 1 && (
+            <p className="mt-1 text-xs font-semibold text-[#1a1a1a]/70">
+              +{alerts.length - 1} more alert{alerts.length > 2 ? "s" : ""} queued
+            </p>
+          )}
         </div>
 
         {/* snapshot area */}

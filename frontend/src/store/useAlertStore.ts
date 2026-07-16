@@ -2,7 +2,6 @@ import { create } from "zustand"
 
 import type { RealtimeAlertPayload } from "@/types/realtime"
 
-const MAX_ACTIVE_ALERTS = 5
 const HANDLED_IDS_KEY = "adas-handled-alert-ids"
 
 function readHandledIds(): Set<number> {
@@ -68,9 +67,11 @@ export const useAlertStore = create<AlertState>((set) => ({
         return { alerts: nextAlerts }
       }
 
-      // Truly new alert: prepend and cap
+      // Truly new alert: prepend. The queue only holds unhandled alerts and
+      // every operator action removes one, so it is self-limiting — never cap
+      // it, or a genuine accident alert could be silently discarded.
       return {
-        alerts: [alert, ...state.alerts].slice(0, MAX_ACTIVE_ALERTS),
+        alerts: [alert, ...state.alerts],
       }
     }),
   removeAlert: (logId) =>
