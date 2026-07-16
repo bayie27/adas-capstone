@@ -16,6 +16,11 @@ import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/users"
 
 const PROFILE_QUERY_KEY = ["my-profile"] as const
 
+type NoticeState = {
+  tone: "success" | "error"
+  message: string
+}
+
 type ProfileFormState = {
   first_name: string
   last_name: string
@@ -51,8 +56,8 @@ export default function ProfileSettings() {
   const clearSession = useAuthStore((state) => state.clearSession)
   const [profileForm, setProfileForm] = useState<ProfileFormState>(EMPTY_PROFILE_FORM)
   const [passwordForm, setPasswordForm] = useState<PasswordFormState>(EMPTY_PASSWORD_FORM)
-  const [profileNotice, setProfileNotice] = useState<string | null>(null)
-  const [passwordNotice, setPasswordNotice] = useState<string | null>(null)
+  const [profileNotice, setProfileNotice] = useState<NoticeState | null>(null)
+  const [passwordNotice, setPasswordNotice] = useState<NoticeState | null>(null)
   const [isPasswordOpen, setIsPasswordOpen] = useState(false)
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
@@ -98,7 +103,7 @@ export default function ProfileSettings() {
         setSession(token, role, updatedProfile.username, userId ?? updatedProfile.user_id)
       }
 
-      setProfileNotice("Profile updated successfully.")
+      setProfileNotice({ tone: "success", message: "Profile updated successfully." })
     },
   })
 
@@ -107,7 +112,7 @@ export default function ProfileSettings() {
     onSuccess: () => {
       setPasswordForm(EMPTY_PASSWORD_FORM)
       setPasswordNotice(null)
-      setProfileNotice("Password updated successfully.")
+      setProfileNotice({ tone: "success", message: "Password updated successfully." })
       setShowCurrentPassword(false)
       setShowNewPassword(false)
       setShowConfirmPassword(false)
@@ -151,7 +156,7 @@ export default function ProfileSettings() {
     const nextUsername = profileForm.username.trim()
 
     if (!nextFirstName || !nextLastName || !nextUsername) {
-      setProfileNotice("First name, last name, and username are required.")
+      setProfileNotice({ tone: "error", message: "First name, last name, and username are required." })
       return
     }
 
@@ -166,7 +171,7 @@ export default function ProfileSettings() {
       payload.last_name === profile.last_name &&
       payload.username === profile.username
     ) {
-      setProfileNotice("No profile changes to save.")
+      setProfileNotice({ tone: "error", message: "No profile changes to save." })
       return
     }
 
@@ -182,12 +187,12 @@ export default function ProfileSettings() {
       !passwordForm.new_password ||
       !passwordForm.confirm_password
     ) {
-      setPasswordNotice("Complete all password fields.")
+      setPasswordNotice({ tone: "error", message: "Complete all password fields." })
       return
     }
 
     if (passwordForm.new_password !== passwordForm.confirm_password) {
-      setPasswordNotice("New password and confirmation do not match.")
+      setPasswordNotice({ tone: "error", message: "New password and confirmation do not match." })
       return
     }
 
@@ -284,12 +289,10 @@ export default function ProfileSettings() {
               {profileNotice ? (
                 <p
                   className={`text-xs ${
-                    profileNotice.toLowerCase().includes("successfully")
-                      ? "text-emerald-400"
-                      : "text-[#F87171]"
+                    profileNotice.tone === "success" ? "text-emerald-400" : "text-[#F87171]"
                   }`}
                 >
-                  {profileNotice}
+                  {profileNotice.message}
                 </p>
               ) : null}
 
@@ -419,12 +422,10 @@ export default function ProfileSettings() {
           {passwordNotice ? (
             <p
               className={`text-xs ${
-                passwordNotice.toLowerCase().includes("successfully")
-                  ? "text-emerald-400"
-                  : "text-[#F87171]"
+                passwordNotice.tone === "success" ? "text-emerald-400" : "text-[#F87171]"
               }`}
             >
-              {passwordNotice}
+              {passwordNotice.message}
             </p>
           ) : null}
 

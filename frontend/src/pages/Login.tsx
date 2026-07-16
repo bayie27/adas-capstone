@@ -7,6 +7,11 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { mapApiRoleToAppRole, getDefaultRouteForRole } from "@/utils/auth"
 import { getApiErrorMessage } from "@/utils/api"
 
+type NoticeState = {
+  tone: "success" | "error"
+  message: string
+}
+
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -17,13 +22,15 @@ export default function Login() {
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [statusMessage, setStatusMessage] = useState<NoticeState | null>(null)
 
   useEffect(() => {
     const message = (location.state as { message?: string } | null)?.message
 
     if (message) {
-      setStatusMessage(message)
+      // Messages routed here via navigation state are post-action confirmations
+      // (e.g. "username updated, please sign in again"), so they read as success.
+      setStatusMessage({ tone: "success", message })
     }
   }, [location.state])
 
@@ -37,7 +44,7 @@ export default function Login() {
     const normalizedUsername = username.trim()
 
     if (!normalizedUsername || !password) {
-      setStatusMessage("Enter both username and password.")
+      setStatusMessage({ tone: "error", message: "Enter both username and password." })
       return
     }
 
@@ -60,7 +67,10 @@ export default function Login() {
       setSession(access_token, mappedRole, currentUser.username, currentUser.user_id)
       navigate(getDefaultRouteForRole(mappedRole), { replace: true })
     } catch (error) {
-      setStatusMessage(getApiErrorMessage(error, "Unable to log in. Please try again."))
+      setStatusMessage({
+        tone: "error",
+        message: getApiErrorMessage(error, "Unable to log in. Please try again."),
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -127,12 +137,10 @@ export default function Login() {
           {statusMessage ? (
             <p
               className={`text-center text-xs ${
-                statusMessage.toLowerCase().includes("sign in again")
-                  ? "text-emerald-400"
-                  : "text-[#F87171]"
+                statusMessage.tone === "success" ? "text-emerald-400" : "text-[#F87171]"
               }`}
             >
-              {statusMessage}
+              {statusMessage.message}
             </p>
           ) : null}
         </form>
