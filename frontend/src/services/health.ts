@@ -1,5 +1,11 @@
 import api from "@/services/api"
 import type { SystemHealthHistoryResponse, SystemHealthLiveResponse } from "@/types/health"
+import { API_BASE_URL } from "@/utils/env"
+
+// `api`'s baseURL is `http://host:8000/api`, but the backend's health route is
+// served at the origin root (`GET /`), not under `/api`. Strip the `/api`
+// suffix so the ping targets the URL the docstring actually claims.
+const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api$/, "")
 
 /**
  * Pings the backend root URL to verify server connectivity.
@@ -7,7 +13,7 @@ import type { SystemHealthHistoryResponse, SystemHealthLiveResponse } from "@/ty
  */
 export async function getSystemHealth(): Promise<boolean> {
   try {
-    await api.get("/")
+    await api.get("/", { baseURL: BACKEND_ORIGIN })
     return true
   } catch {
     return false
