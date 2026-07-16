@@ -28,7 +28,7 @@ export function RealtimeAlertsBridge() {
     if (recoveryRanRef.current) return
     recoveryRanRef.current = true
 
-    getAlerts({ status: ["Unverified"], limit: 100 })
+    getAlerts({ status: ["Unverified", "Ongoing"], limit: 100 })
       .then((response) => {
         // Add in reverse order so the most recent ends up at the front of the queue
         for (const log of [...response.logs].reverse()) {
