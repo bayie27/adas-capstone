@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"
 import CloseLineIcon from "remixicon-react/CloseLineIcon"
 import { cn } from "@/utils/cn"
 
@@ -10,22 +11,57 @@ interface ModalProps {
   children: React.ReactNode
   className?: string
   hideClose?: boolean
+  closeOnBackdrop?: boolean
 }
 
-export function Modal({ isOpen, onClose, title, subtitle, icon, children, className, hideClose }: ModalProps) {
+export function Modal({ isOpen, onClose, title, subtitle, icon, children, className, hideClose, closeOnBackdrop = true }: ModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    // Focus the dialog on open
+    dialogRef.current?.focus()
+
+    // Lock scroll
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+
+    // Handle Escape key
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose()
+      }
+    }
+
+    document.addEventListener("keydown", handleEscape)
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape)
+      document.body.style.overflow = originalOverflow
+    }
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/60 transition-opacity"
-        onClick={onClose}
+        onClick={closeOnBackdrop ? onClose : undefined}
       />
 
-      <div className={cn(
-        "relative bg-[#111111] border border-[#2A2A2A] rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200",
-        className
-      )}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        className={cn(
+          "relative bg-[#111111] border border-[#2A2A2A] rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200",
+          className
+        )}
+      >
 
         {(title || icon) && (
           <div className="px-6 pt-6 pb-4 flex items-start justify-between">
