@@ -1,4 +1,4 @@
-import { useState, type ElementType, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import AddLineIcon from "remixicon-react/AddLineIcon"
 import AlertLineIcon from "remixicon-react/AlertLineIcon"
@@ -14,6 +14,7 @@ import { Modal } from "@/components/ui/Modal"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
+import { StatCard } from "@/components/ui/StatCard"
 import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
@@ -61,13 +62,6 @@ const EMPTY_FORM: CameraFormState = {
   channel_id: "",
 }
 
-interface MetricCardProps {
-  icon: ElementType
-  title: string
-  value: string | number
-  subtext?: string
-}
-
 interface FilterSelectProps<T extends string> {
   value: T
   options: FilterOption<T>[]
@@ -79,23 +73,6 @@ interface CameraFormFieldsProps {
   cameraNamePlaceholder?: string
   channelPlaceholder?: string
   onChange: (field: keyof CameraFormState, value: string) => void
-}
-
-function MetricCard({ icon: Icon, title, value, subtext }: MetricCardProps) {
-  return (
-    <div className="flex h-[160px] flex-col justify-between rounded-xl border border-[#2A2A2A] bg-[#111111] p-5">
-      <div>
-        <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#1E1E1E]">
-          <Icon size={17} className="text-[#A1A1AA]" />
-        </div>
-        <div className="mb-1.5 flex items-center justify-between">
-          <h4 className="text-xs text-[#737373]">{title}</h4>
-        </div>
-        <div className="text-[28px] font-semibold leading-none tracking-tight text-white">{value}</div>
-      </div>
-      {subtext ? <div className="mt-3 text-xs text-[#555]">{subtext}</div> : null}
-    </div>
-  )
 }
 
 function Switch({
@@ -457,19 +434,19 @@ export default function Cameras() {
       ) : null}
 
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
-        <MetricCard
+        <StatCard
           icon={CameraLineIcon}
           title="Total Cameras"
           value={camerasQuery.isLoading ? "..." : camerasQuery.data?.total_cameras ?? 0}
           subtext="All active camera records"
         />
-        <MetricCard
+        <StatCard
           icon={GlobalLineIcon}
           title="Network Connected Cameras"
           value={camerasQuery.isLoading ? "..." : camerasQuery.data?.network_connected ?? 0}
           subtext="Currently connected to the network"
         />
-        <MetricCard
+        <StatCard
           icon={RobotLineIcon}
           title="Active Detection Cameras"
           value={camerasQuery.isLoading ? "..." : camerasQuery.data?.active_detection ?? 0}

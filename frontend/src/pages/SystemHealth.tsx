@@ -1,4 +1,4 @@
-import { useState, type ElementType } from "react"
+import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import ServerLineIcon from "remixicon-react/ServerLineIcon"
 import TimerLineIcon from "remixicon-react/TimerLineIcon"
@@ -14,6 +14,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
+import { StatCard } from "@/components/ui/StatCard"
 import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/services/health"
 import type { SystemHealthDataPoint } from "@/types/health"
 
@@ -50,30 +51,6 @@ function formatTimestamp(value: string, range: "48h" | "30d"): string {
 }
 
 // ─── sub-components ──────────────────────────────────────────────────────────
-
-interface HealthCardProps {
-  icon: ElementType
-  title: string
-  value: string
-  subtext?: string
-}
-
-function HealthCard({ icon: Icon, title, value, subtext }: HealthCardProps) {
-  return (
-    <div className="flex h-full min-h-[160px] flex-col justify-between rounded-xl border border-[#2A2A2A] bg-[#111111] p-5">
-      <div>
-        <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#1E1E1E]">
-          <Icon size={17} className="text-[#A1A1AA]" />
-        </div>
-        <h4 className="mb-2 min-h-[32px] text-[11px] font-medium uppercase tracking-wider text-[#737373]">
-          {title}
-        </h4>
-        <div className="text-3xl font-semibold leading-none tracking-tight text-white">{value}</div>
-      </div>
-      {subtext ? <div className="mt-4 text-xs text-[#555]">{subtext}</div> : null}
-    </div>
-  )
-}
 
 interface HealthChartProps {
   title: string
@@ -218,24 +195,24 @@ export default function SystemHealth() {
       ) : null}
 
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
-        <HealthCard
+        <StatCard
           icon={ServerLineIcon}
           title="Server Uptime"
           value={liveQuery.isLoading ? "..." : live ? formatUptime(live.uptime_seconds) : "N/A"}
         />
-        <HealthCard
+        <StatCard
           icon={TimerLineIcon}
           title="Inference Latency"
           value={liveQuery.isLoading ? "..." : formatMs(live?.avg_inference_latency_ms)}
           subtext="Average AI inference time"
         />
-        <HealthCard
+        <StatCard
           icon={Dashboard3LineIcon}
           title="Processing Speed"
           value={liveQuery.isLoading ? "..." : formatFps(live?.avg_fps)}
           subtext="Average frames per second"
         />
-        <HealthCard
+        <StatCard
           icon={HardDrive2LineIcon}
           title="Disk Storage Usage"
           value={liveQuery.isLoading ? "..." : formatPercent(live?.disk_usage_percent)}
