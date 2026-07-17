@@ -1,4 +1,4 @@
-import type { AlertListResponse, AlertLog, AlertStatus } from "@/types/alerts"
+import type { AlertStatus } from "@/types/alerts"
 import type { CameraAiStatus, CameraConnectionStatus } from "@/types/cameras"
 import type { RealtimeAlertEventType, RealtimeAlertPayload, RealtimeCameraStatusPayload } from "@/types/realtime"
 
@@ -92,42 +92,5 @@ export function normalizeRealtimeCameraStatus(payload: unknown): RealtimeCameraS
     camera_id: payload.camera_id,
     connection_status: payload.connection_status,
     ai_status: payload.ai_status,
-  }
-}
-
-export function createAlertLogFromRealtimeAlert(alert: RealtimeAlertPayload): AlertLog {
-  return {
-    log_id: alert.log_id,
-    camera_id: alert.camera_id,
-    detected_at: alert.detected_at,
-    snapshot_path: alert.snapshot_path,
-    confidence_score: alert.confidence_score,
-    detection_status: alert.detection_status,
-    verified_by_id: null,
-    verified_by_name: null,
-    verified_at: null,
-    closed_by_id: null,
-    closed_by_name: null,
-    closed_at: null,
-    camera_name: alert.camera_name ?? null,
-  }
-}
-
-export function prependRealtimeAlert(existingResponse: AlertListResponse | undefined, alert: RealtimeAlertPayload) {
-  if (!existingResponse) {
-    return existingResponse
-  }
-
-  if (existingResponse.logs.some((existingAlert) => existingAlert.log_id === alert.log_id)) {
-    return existingResponse
-  }
-
-  return {
-    ...existingResponse,
-    total_filtered: existingResponse.total_filtered + 1,
-    logs: [createAlertLogFromRealtimeAlert(alert), ...existingResponse.logs].slice(
-      0,
-      Math.max(existingResponse.logs.length, 1),
-    ),
   }
 }
