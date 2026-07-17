@@ -24,7 +24,7 @@ import {
   exportDashboardAnalyticsCsv,
   getDashboardAnalytics,
 } from "@/services/analytics"
-import { getCameras } from "@/services/cameras"
+import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { getApiErrorMessage } from "@/utils/api"
 import { formatHourLabel, truncateLabel } from "@/utils/analytics"
 import type { AnalyticsFilters } from "@/types/analytics"
@@ -73,10 +73,7 @@ export default function Dashboard() {
 
   const hasFilters = Boolean(startDate || endDate || cameraId)
 
-  const camerasQuery = useQuery({
-    queryKey: ["cameras", "all"],
-    queryFn: () => getCameras({ limit: 100 }),
-  })
+  const camerasQuery = useCameraOptions()
 
   const dashboardQuery = useQuery({
     queryKey: ["dashboard-analytics", filters],

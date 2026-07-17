@@ -16,7 +16,7 @@ import {
   exportPerformanceAnalyticsCsv,
   getPerformanceAnalytics,
 } from "@/services/analytics"
-import { getCameras } from "@/services/cameras"
+import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { getApiErrorMessage } from "@/utils/api"
 import { formatPercent } from "@/utils/analytics"
 
@@ -59,10 +59,7 @@ export default function AiPerformance() {
 
   const hasDateFilter = Boolean(startDate || endDate || cameraId)
 
-  const camerasQuery = useQuery({
-    queryKey: ["cameras", "all"],
-    queryFn: () => getCameras({ limit: 100 }),
-  })
+  const camerasQuery = useCameraOptions()
 
   const performanceQuery = useQuery({
     queryKey: [...PERFORMANCE_QUERY_KEY, deferredSearchTerm, startDate, endDate, cameraId],
