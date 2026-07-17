@@ -3,12 +3,33 @@ import { create } from "zustand"
 import type { AppUserRole } from "@/types/auth"
 
 const AUTH_STORAGE_KEY = "adas-auth-session"
+const VALID_ROLES = ["Administrator", "Operator"] as const
 
 type StoredAuthSession = {
   token: string | null
   role: AppUserRole | null
   username: string | null
   userId: number | null
+}
+
+function isValidRole(value: unknown): value is AppUserRole {
+  return typeof value === "string" && VALID_ROLES.includes(value as AppUserRole)
+}
+
+function isTokenExpired(token: string): boolean {
+  try {
+    const parts = token.split(".")
+    if (parts.length !== 3) return true
+
+    const payload = JSON.parse(atob(parts[1]))
+    const exp = payload.exp
+
+    if (typeof exp !== "number") return true
+
+    return Date.now() >= exp * 1000
+  } catch {
+    return true
+  }
 }
 
 interface AuthState {
@@ -51,7 +72,24 @@ function readStoredSession(): StoredAuthSession {
       return createEmptySession()
     }
 
-    return JSON.parse(rawSession) as StoredAuthSession
+    const parsed = JSON.parse(rawSession)
+
+    // Validate stored session shape
+    if (typeof parsed !== "object" || parsed === null) {
+      return createEmptySession()
+    }
+
+    const token = typeof parsed.token === "string" ? parsed.token : null
+    const username = typeof parsed.username === "string" ? parsed.username : null
+    const userId = typeof parsed.userId === "number" ? parsed.userId : null
+    const role = isValidRole(parsed.role) ? parsed.role : null
+
+    // If token is present, check expiration
+    if (token && isTokenExpired(token)) {
+      return createEmptySession()
+    }
+
+    return { token, role, username, userId }
   } catch {
     return createEmptySession()
   }

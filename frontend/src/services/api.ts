@@ -26,7 +26,11 @@ function attachAuthorizationHeader(config: InternalAxiosRequestConfig) {
   return config
 }
 
-function redirectToLogin() {
+function redirectToLogin(message?: string) {
+  if (typeof window !== "undefined" && message) {
+    window.sessionStorage.setItem("auth-message", message)
+  }
+
   if (window.location.pathname !== LOGIN_PATH) {
     window.location.replace(LOGIN_PATH)
   }
@@ -38,9 +42,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // A single 401 policy keeps token expiry/logout behavior consistent across the app.
       useAuthStore.getState().clearSession()
-      redirectToLogin()
+      redirectToLogin("Your session expired. Please sign in again.")
     }
 
     return Promise.reject(error)

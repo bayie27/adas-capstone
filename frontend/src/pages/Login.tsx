@@ -43,12 +43,20 @@ export default function Login() {
   })
 
   useEffect(() => {
-    const message = (location.state as { message?: string } | null)?.message
+    // Check for message from navigation state (post-action confirmations)
+    const navigationMessage = (location.state as { message?: string } | null)?.message
 
-    if (message) {
-      // Messages routed here via navigation state are post-action confirmations
-      // (e.g. "username updated, please sign in again"), so they read as success.
-      setStatusMessage({ tone: "success", message })
+    if (navigationMessage) {
+      setStatusMessage({ tone: "success", message: navigationMessage })
+      return
+    }
+
+    // Check for message from 401 redirect (session expiry)
+    const sessionMessage = typeof window !== "undefined" ? window.sessionStorage.getItem("auth-message") : null
+
+    if (sessionMessage) {
+      setStatusMessage({ tone: "error", message: sessionMessage })
+      window.sessionStorage.removeItem("auth-message")
     }
   }, [location.state])
 
