@@ -9,11 +9,10 @@ import DeleteBinLineIcon from "remixicon-react/DeleteBinLineIcon"
 import UserAddLineIcon from "remixicon-react/UserAddLineIcon"
 import LockLineIcon from "remixicon-react/LockLineIcon"
 import AlertLineIcon from "remixicon-react/AlertLineIcon"
-import EyeOffLineIcon from "remixicon-react/EyeOffLineIcon"
-import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import { Modal } from "@/components/ui/Modal"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
+import { PasswordInput } from "@/components/ui/PasswordInput"
 import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
@@ -81,37 +80,6 @@ const EMPTY_RESET_PASSWORD_FORM: ResetPasswordFormState = {
   confirm_password: "",
 }
 
-type PasswordInputProps = {
-  label: string
-  value: string
-  visible: boolean
-  onToggle: () => void
-  onChange: (value: string) => void
-}
-
-function PasswordInput({ label, value, visible, onToggle, onChange }: PasswordInputProps) {
-  return (
-    <div>
-      <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">{label}</label>
-      <div className="relative">
-        <input
-          type={visible ? "text" : "password"}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="w-full rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-2 pr-10 text-sm text-white focus:border-[#555] focus:outline-none"
-        />
-        <button
-          type="button"
-          onClick={onToggle}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#555] transition-colors hover:text-white"
-        >
-          {visible ? <EyeLineIcon size={14} /> : <EyeOffLineIcon size={14} />}
-        </button>
-      </div>
-    </div>
-  )
-}
-
 export default function Users() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -135,10 +103,6 @@ export default function Users() {
   const [addValidationError, setAddValidationError] = useState<string | null>(null)
   const [editValidationError, setEditValidationError] = useState<string | null>(null)
   const [passwordValidationError, setPasswordValidationError] = useState<string | null>(null)
-  const [showAddPassword, setShowAddPassword] = useState(false)
-  const [showAddConfirmPassword, setShowAddConfirmPassword] = useState(false)
-  const [showResetPassword, setShowResetPassword] = useState(false)
-  const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false)
 
   // usePagination derives `page`/`offset` from the total, but the query supplies
   // the total — so mirror it into state and sync during render (placeholderData
@@ -257,8 +221,6 @@ export default function Users() {
   function closeAddModal() {
     setAddForm(EMPTY_CREATE_FORM)
     setAddValidationError(null)
-    setShowAddPassword(false)
-    setShowAddConfirmPassword(false)
     createUserMutation.reset()
     setIsAddOpen(false)
   }
@@ -274,8 +236,6 @@ export default function Users() {
   function closePasswordModal() {
     setResetPasswordForm(EMPTY_RESET_PASSWORD_FORM)
     setPasswordValidationError(null)
-    setShowResetPassword(false)
-    setShowResetConfirmPassword(false)
     resetPasswordMutation.reset()
     setSelectedUser(null)
     setIsPasswordOpen(false)
@@ -307,8 +267,6 @@ export default function Users() {
     setPasswordValidationError(null)
     resetPasswordMutation.reset()
     setResetPasswordForm(EMPTY_RESET_PASSWORD_FORM)
-    setShowResetPassword(false)
-    setShowResetConfirmPassword(false)
     setIsPasswordOpen(true)
   }
 
@@ -641,8 +599,6 @@ export default function Users() {
               <PasswordInput
                 label="Password"
                 value={addForm.password}
-                visible={showAddPassword}
-                onToggle={() => setShowAddPassword((current) => !current)}
                 onChange={(value) => {
                   setAddValidationError(null)
                   createUserMutation.reset()
@@ -652,8 +608,6 @@ export default function Users() {
               <PasswordInput
                 label="Confirm Password"
                 value={addForm.confirm_password}
-                visible={showAddConfirmPassword}
-                onToggle={() => setShowAddConfirmPassword((current) => !current)}
                 onChange={(value) => {
                   setAddValidationError(null)
                   createUserMutation.reset()
@@ -829,8 +783,6 @@ export default function Users() {
             <PasswordInput
               label="New Password"
               value={resetPasswordForm.new_password}
-              visible={showResetPassword}
-              onToggle={() => setShowResetPassword((current) => !current)}
               onChange={(value) => {
                 setPasswordValidationError(null)
                 resetPasswordMutation.reset()
@@ -840,8 +792,6 @@ export default function Users() {
             <PasswordInput
               label="Confirm New Password"
               value={resetPasswordForm.confirm_password}
-              visible={showResetConfirmPassword}
-              onToggle={() => setShowResetConfirmPassword((current) => !current)}
               onChange={(value) => {
                 setPasswordValidationError(null)
                 resetPasswordMutation.reset()
