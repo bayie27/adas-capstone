@@ -6,6 +6,7 @@ import AuthLayout from "@/components/layouts/AuthLayout"
 import { GlobalAlerts } from "@/components/GlobalAlerts"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { RealtimeAlertsBridge } from "@/components/RealtimeAlertsBridge"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
 
 const Login = lazy(() => import("@/pages/Login"))
 const Dashboard = lazy(() => import("@/pages/Dashboard"))
@@ -30,9 +31,10 @@ function App() {
     <Router>
       <RealtimeAlertsBridge />
       <GlobalAlerts />
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route element={<AuthLayout />}>
+      <ErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route element={<AuthLayout />}>
             <Route path="/login" element={<Login />} />
           </Route>
           <Route path="/" element={<Navigate to="/login" replace />} />
@@ -74,7 +76,8 @@ function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Suspense>
+        </Suspense>
+      </ErrorBoundary>
     </Router>
   )
 }
