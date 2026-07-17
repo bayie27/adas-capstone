@@ -10,6 +10,7 @@ import UserLineIcon from "remixicon-react/UserLineIcon"
 import CameraLineIcon from "remixicon-react/CameraLineIcon"
 import { Modal } from "@/components/ui/Modal"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
+import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
@@ -336,27 +337,17 @@ export default function Detections() {
       )}
 
       {activeTab === "logs" && exportMutation.isError ? (
-        <div className="mb-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3 text-xs text-[#FCA5A5]">
-          {getApiErrorMessage(exportMutation.error, "Unable to export logs CSV.")}
-        </div>
+        <QueryErrorBanner error={exportMutation.error} fallback="Unable to export logs CSV." />
       ) : null}
 
       {currentQuery.isError ? (
-        <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3">
-          <p className="text-xs text-[#FCA5A5]">
-            {getApiErrorMessage(
-              currentQuery.error,
-              activeTab === "ongoing" ? "Unable to load active alerts." : "Unable to load historical logs.",
-            )}
-          </p>
-          <button
-            type="button"
-            onClick={() => currentQuery.refetch()}
-            className="rounded-md border border-[#333] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#1A1A1A]"
-          >
-            Retry
-          </button>
-        </div>
+        <QueryErrorBanner
+          error={currentQuery.error}
+          fallback={
+            activeTab === "ongoing" ? "Unable to load active alerts." : "Unable to load historical logs."
+          }
+          onRetry={() => currentQuery.refetch()}
+        />
       ) : null}
 
       <div className="overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#111111]">

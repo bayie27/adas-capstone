@@ -12,6 +12,7 @@ import AlertLineIcon from "remixicon-react/AlertLineIcon"
 import EyeOffLineIcon from "remixicon-react/EyeOffLineIcon"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import { Modal } from "@/components/ui/Modal"
+import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
@@ -37,11 +38,6 @@ import {
 
 const USERS_QUERY_KEY = ["users"] as const
 const USERS_PAGE_SIZE = 10
-
-type NoticeState = {
-  tone: "success" | "error"
-  message: string
-}
 
 type CreateUserFormState = {
   first_name: string
@@ -442,17 +438,7 @@ export default function Users() {
         <p className="text-xs text-[#737373]">Manage user accounts & system access roles</p>
       </div>
 
-      {notice ? (
-        <div
-          className={`mb-4 rounded-md border px-4 py-3 text-xs ${
-            notice.tone === "success"
-              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-              : "border-[#F87171]/30 bg-[#F87171]/10 text-[#FCA5A5]"
-          }`}
-        >
-          {notice.message}
-        </div>
-      ) : null}
+      {notice ? <NoticeBanner notice={notice} /> : null}
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="relative">

@@ -13,9 +13,9 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
+import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/services/health"
 import type { SystemHealthDataPoint } from "@/types/health"
-import { getApiErrorMessage } from "@/utils/api"
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -210,18 +210,11 @@ export default function SystemHealth() {
       </div>
 
       {liveQuery.isError ? (
-        <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3">
-          <p className="text-xs text-[#FCA5A5]">
-            {getApiErrorMessage(liveQuery.error, "Live health metrics unavailable.")}
-          </p>
-          <button
-            type="button"
-            onClick={() => liveQuery.refetch()}
-            className="rounded-md border border-[#333] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#1A1A1A]"
-          >
-            Retry
-          </button>
-        </div>
+        <QueryErrorBanner
+          error={liveQuery.error}
+          fallback="Live health metrics unavailable."
+          onRetry={() => liveQuery.refetch()}
+        />
       ) : null}
 
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
@@ -280,18 +273,11 @@ export default function SystemHealth() {
       </div>
 
       {historyQuery.isError ? (
-        <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3">
-          <p className="text-xs text-[#FCA5A5]">
-            {getApiErrorMessage(historyQuery.error, "Historical health data unavailable.")}
-          </p>
-          <button
-            type="button"
-            onClick={() => historyQuery.refetch()}
-            className="rounded-md border border-[#333] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#1A1A1A]"
-          >
-            Retry
-          </button>
-        </div>
+        <QueryErrorBanner
+          error={historyQuery.error}
+          fallback="Historical health data unavailable."
+          onRetry={() => historyQuery.refetch()}
+        />
       ) : null}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
