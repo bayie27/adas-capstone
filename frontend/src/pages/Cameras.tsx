@@ -2,7 +2,6 @@ import { useState, type ElementType, type FormEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import AddLineIcon from "remixicon-react/AddLineIcon"
 import AlertLineIcon from "remixicon-react/AlertLineIcon"
-import ArrowLeftSLineIcon from "remixicon-react/ArrowLeftSLineIcon"
 import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
 import CameraLineIcon from "remixicon-react/CameraLineIcon"
 import DeleteBinLineIcon from "remixicon-react/DeleteBinLineIcon"
@@ -12,6 +11,7 @@ import RobotLineIcon from "remixicon-react/RobotLineIcon"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
 
 import { Modal } from "@/components/ui/Modal"
+import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { createCamera, deleteCamera, getCameras, updateCamera } from "@/services/cameras"
@@ -643,44 +643,17 @@ export default function Cameras() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-[#2A2A2A] px-6 py-3 text-xs text-[#737373]">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              Items per page
-              <span className="flex items-center gap-1 rounded border border-[#2A2A2A] bg-[#141414] px-2 py-1 text-white">
-                {CAMERAS_PAGE_SIZE}
-              </span>
-            </div>
-            <span>
-              {rangeStart}-{rangeEndValue} of {totalFiltered}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={page === 1 || camerasQuery.isFetching}
-              onClick={prev}
-              className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <ArrowLeftSLineIcon size={14} /> Previous
-            </button>
-            <div className="flex items-center gap-1">
-              <span className="flex h-6 min-w-6 items-center justify-center rounded bg-[#1E1E1E] px-2 font-medium text-white">
-                {page}
-              </span>
-              <span className="text-[#555]">of</span>
-              <span>{totalPages}</span>
-            </div>
-            <button
-              type="button"
-              disabled={page >= totalPages || camerasQuery.isFetching}
-              onClick={next}
-              className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next <ArrowRightSLineIcon size={14} />
-            </button>
-          </div>
-        </div>
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEndValue}
+          totalFiltered={totalFiltered}
+          pageSize={CAMERAS_PAGE_SIZE}
+          isFetching={camerasQuery.isFetching}
+          onPrev={prev}
+          onNext={next}
+        />
       </div>
 
       <Modal

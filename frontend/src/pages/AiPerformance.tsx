@@ -3,8 +3,6 @@ import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
 import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
-import ArrowLeftSLineIcon from "remixicon-react/ArrowLeftSLineIcon"
-import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
 import DownloadLineIcon from "remixicon-react/DownloadLineIcon"
 import CarLineIcon from "remixicon-react/CarLineIcon"
 import CloseCircleLineIcon from "remixicon-react/CloseCircleLineIcon"
@@ -16,6 +14,7 @@ import {
   exportPerformanceAnalyticsCsv,
   getPerformanceAnalytics,
 } from "@/services/analytics"
+import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
@@ -294,44 +293,17 @@ export default function AiPerformance() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-[#2A2A2A] px-6 py-3 text-xs text-[#737373]">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              Items per page
-              <span className="flex items-center gap-1 rounded border border-[#2A2A2A] bg-[#141414] px-2 py-1 text-white">
-                {ITEMS_PER_PAGE}
-              </span>
-            </div>
-            <span>
-              {rangeStart}-{rangeEndValue} of {perCamera.length}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={page === 1 || performanceQuery.isFetching}
-              onClick={prev}
-              className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <ArrowLeftSLineIcon size={14} /> Previous
-            </button>
-            <div className="flex items-center gap-1">
-              <span className="flex h-6 min-w-6 items-center justify-center rounded bg-[#1E1E1E] px-2 font-medium text-white">
-                {page}
-              </span>
-              <span className="text-[#555]">of</span>
-              <span>{totalPages}</span>
-            </div>
-            <button
-              type="button"
-              disabled={page >= totalPages || performanceQuery.isFetching}
-              onClick={next}
-              className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next <ArrowRightSLineIcon size={14} />
-            </button>
-          </div>
-        </div>
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEndValue}
+          totalFiltered={perCamera.length}
+          pageSize={ITEMS_PER_PAGE}
+          isFetching={performanceQuery.isFetching}
+          onPrev={prev}
+          onNext={next}
+        />
       </div>
     </div>
   )
