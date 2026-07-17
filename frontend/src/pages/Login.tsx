@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { Navigate, useLocation, useNavigate } from "react-router-dom"
+import { useMutation } from "@tanstack/react-query"
 import EyeOffLineIcon from "remixicon-react/EyeOffLineIcon"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import { getCurrentUser, loginUser } from "@/services/auth"
@@ -21,8 +22,31 @@ export default function Login() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [statusMessage, setStatusMessage] = useState<NoticeState | null>(null)
+
+  const loginMutation = useMutation({
+    mutationFn: async (credentials: { username: string; password: string }) => {
+      const { access_token } = await loginUser(credentials)
+      const currentUser = await getCurrentUser(access_token)
+      const mappedRole = mapApiRoleToAppRole(currentUser.role)
+
+      if (!mappedRole) {
+        throw new Error("Your account role is not supported in this client.")
+      }
+
+      return { access_token, mappedRole, currentUser }
+    },
+    onSuccess: ({ access_token, mappedRole, currentUser }) => {
+      setSession(access_token, mappedRole, currentUser.username, currentUser.user_id)
+      navigate(getDefaultRouteForRole(mappedRole), { replace: true })
+    },
+    onError: (error) => {
+      setStatusMessage({
+        tone: "error",
+        message: getApiErrorMessage(error, "Unable to log in. Please try again."),
+      })
+    },
+  })
 
   useEffect(() => {
     const message = (location.state as { message?: string } | null)?.message
@@ -38,7 +62,7 @@ export default function Login() {
     return <Navigate to={getDefaultRouteForRole(role)} replace />
   }
 
-  const handleLogin = async (e: FormEvent) => {
+  const handleLogin = (e: FormEvent) => {
     e.preventDefault()
 
     const normalizedUsername = username.trim()
@@ -48,32 +72,8 @@ export default function Login() {
       return
     }
 
-    setIsSubmitting(true)
     setStatusMessage(null)
-
-    try {
-      const { access_token } = await loginUser({
-        username: normalizedUsername,
-        password,
-      })
-
-      const currentUser = await getCurrentUser(access_token)
-      const mappedRole = mapApiRoleToAppRole(currentUser.role)
-
-      if (!mappedRole) {
-        throw new Error("Your account role is not supported in this client.")
-      }
-
-      setSession(access_token, mappedRole, currentUser.username, currentUser.user_id)
-      navigate(getDefaultRouteForRole(mappedRole), { replace: true })
-    } catch (error) {
-      setStatusMessage({
-        tone: "error",
-        message: getApiErrorMessage(error, "Unable to log in. Please try again."),
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
+    loginMutation.mutate({ username: normalizedUsername, password })
   }
 
   return (
@@ -129,10 +129,10 @@ export default function Login() {
           </div>
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={loginMutation.isPending}
             className="mt-2 w-full rounded-md bg-white py-2.5 text-sm font-semibold text-black transition-colors hover:bg-gray-100"
           >
-            {isSubmitting ? "Signing in..." : "Login"}
+            {loginMutation.isPending ? "Signing in..." : "Login"}
           </button>
           {statusMessage ? (
             <p
