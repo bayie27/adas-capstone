@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import EyeLineIcon from "remixicon-react/EyeLineIcon"
-import EyeOffLineIcon from "remixicon-react/EyeOffLineIcon"
 import LockLineIcon from "remixicon-react/LockLineIcon"
 import { Modal } from "@/components/ui/Modal"
 import type { NoticeState } from "@/components/ui/NoticeBanner"
+import { PasswordInput } from "@/components/ui/PasswordInput"
 import {
   changeMyPassword,
   getMyProfile,
@@ -55,9 +54,6 @@ export default function ProfileSettings() {
   const [profileNotice, setProfileNotice] = useState<NoticeState | null>(null)
   const [passwordNotice, setPasswordNotice] = useState<NoticeState | null>(null)
   const [isPasswordOpen, setIsPasswordOpen] = useState(false)
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
-  const [showNewPassword, setShowNewPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const profileQuery = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -109,9 +105,6 @@ export default function ProfileSettings() {
       setPasswordForm(EMPTY_PASSWORD_FORM)
       setPasswordNotice(null)
       setProfileNotice({ tone: "success", message: "Password updated successfully." })
-      setShowCurrentPassword(false)
-      setShowNewPassword(false)
-      setShowConfirmPassword(false)
       setIsPasswordOpen(false)
     },
   })
@@ -201,9 +194,6 @@ export default function ProfileSettings() {
   const closePasswordModal = () => {
     setPasswordForm(EMPTY_PASSWORD_FORM)
     setPasswordNotice(null)
-    setShowCurrentPassword(false)
-    setShowNewPassword(false)
-    setShowConfirmPassword(false)
     setIsPasswordOpen(false)
   }
 
@@ -335,80 +325,33 @@ export default function ProfileSettings() {
       >
         <form onSubmit={handlePasswordSubmit} className="mt-4 flex flex-col gap-6">
           <div className="space-y-4">
-            <div>
-              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">Current Password</label>
-              <div className="relative">
-                <input
-                  type={showCurrentPassword ? "text" : "password"}
-                  value={passwordForm.old_password}
-                  onChange={(event) => {
-                    setPasswordNotice(null)
-                    setPasswordForm((current) => ({
-                      ...current,
-                      old_password: event.target.value,
-                    }))
-                  }}
-                  className="w-full rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-2 pr-10 text-sm text-white focus:border-[#555] focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrentPassword((current) => !current)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#555] transition-colors hover:text-white"
-                >
-                  {showCurrentPassword ? <EyeLineIcon size={14} /> : <EyeOffLineIcon size={14} />}
-                </button>
-              </div>
-            </div>
+            <PasswordInput
+              label="Current Password"
+              value={passwordForm.old_password}
+              autoComplete="current-password"
+              onChange={(value) => {
+                setPasswordNotice(null)
+                setPasswordForm((current) => ({ ...current, old_password: value }))
+              }}
+            />
 
-            <div>
-              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">New Password</label>
-              <div className="relative">
-                <input
-                  type={showNewPassword ? "text" : "password"}
-                  value={passwordForm.new_password}
-                  onChange={(event) => {
-                    setPasswordNotice(null)
-                    setPasswordForm((current) => ({
-                      ...current,
-                      new_password: event.target.value,
-                    }))
-                  }}
-                  className="w-full rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-2 pr-10 text-sm text-white focus:border-[#555] focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword((current) => !current)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#555] transition-colors hover:text-white"
-                >
-                  {showNewPassword ? <EyeLineIcon size={14} /> : <EyeOffLineIcon size={14} />}
-                </button>
-              </div>
-            </div>
+            <PasswordInput
+              label="New Password"
+              value={passwordForm.new_password}
+              onChange={(value) => {
+                setPasswordNotice(null)
+                setPasswordForm((current) => ({ ...current, new_password: value }))
+              }}
+            />
 
-            <div>
-              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">Confirm New Password</label>
-              <div className="relative">
-                <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  value={passwordForm.confirm_password}
-                  onChange={(event) => {
-                    setPasswordNotice(null)
-                    setPasswordForm((current) => ({
-                      ...current,
-                      confirm_password: event.target.value,
-                    }))
-                  }}
-                  className="w-full rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-2 pr-10 text-sm text-white focus:border-[#555] focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword((current) => !current)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#555] transition-colors hover:text-white"
-                >
-                  {showConfirmPassword ? <EyeLineIcon size={14} /> : <EyeOffLineIcon size={14} />}
-                </button>
-              </div>
-            </div>
+            <PasswordInput
+              label="Confirm New Password"
+              value={passwordForm.confirm_password}
+              onChange={(value) => {
+                setPasswordNotice(null)
+                setPasswordForm((current) => ({ ...current, confirm_password: value }))
+              }}
+            />
 
             <p className="text-[10px] text-[#737373]">
               Must be at least 8 characters long and contain at least 1 number.
