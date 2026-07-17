@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import SearchLineIcon from "remixicon-react/SearchLineIcon"
 import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
 import DownloadLineIcon from "remixicon-react/DownloadLineIcon"
 import CarLineIcon from "remixicon-react/CarLineIcon"
@@ -15,6 +14,7 @@ import {
 } from "@/services/analytics"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
+import { SearchInput } from "@/components/ui/SearchInput"
 import { StatCard } from "@/components/ui/StatCard"
 import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
@@ -130,19 +130,14 @@ export default function AiPerformance() {
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="relative">
-            <SearchLineIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(event) => {
-                reset()
-                setSearchTerm(event.target.value)
-              }}
-              placeholder="Search..."
-              className="w-60 rounded-md border border-[#2A2A2A] bg-[#141414] py-1.5 pl-8 pr-4 text-xs text-white focus:border-[#52525B] focus:outline-none"
-            />
-          </div>
+          <SearchInput
+            value={searchTerm}
+            onChange={(value) => {
+              reset()
+              setSearchTerm(value)
+            }}
+            placeholder="Search..."
+          />
           <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
             <CalendarLineIcon size={13} className="text-[#737373]" />
             <input
