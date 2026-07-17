@@ -1,6 +1,7 @@
 import { create } from "zustand"
 
 import type { RealtimeAlertPayload } from "@/types/realtime"
+import { playDetectionSound, stopDetectionSound } from "@/utils/detectionSound"
 
 const HANDLED_IDS_KEY = "adas-handled-alert-ids"
 
@@ -39,10 +40,21 @@ interface AlertState {
   clearAlerts: () => void
 }
 
-export const useAlertStore = create<AlertState>((set) => ({
+// Drive the alarm off the single fact that matters — whether the active queue
+// is non-empty. Playing/stopping on the 0<->non-0 edge means the siren starts
+// once when the first alert arrives and stops the moment the queue empties,
+// regardless of whether the removal came from a REST action, a WS broadcast,
+// or logout.
+const syncSound = (before: number, after: number) => {
+  if (after > 0 && before === 0) playDetectionSound()
+  if (after === 0 && before > 0) stopDetectionSound()
+}
+
+export const useAlertStore = create<AlertState>((set, get) => ({
   alerts: [],
   handledIds: readHandledIds(),
-  addAlert: (alert) =>
+  addAlert: (alert) => {
+    const before = get().alerts.length
     set((state) => {
       // If the alert is now Dismissed or Resolved, it should definitely be removed
       // from the active queue and marked as handled.
@@ -73,8 +85,11 @@ export const useAlertStore = create<AlertState>((set) => ({
       return {
         alerts: [alert, ...state.alerts],
       }
-    }),
-  removeAlert: (logId) =>
+    })
+    syncSound(before, get().alerts.length)
+  },
+  removeAlert: (logId) => {
+    const before = get().alerts.length
     set((state) => {
       const next = new Set([...state.handledIds, logId])
       writeHandledIds(next)
@@ -82,8 +97,11 @@ export const useAlertStore = create<AlertState>((set) => ({
         alerts: state.alerts.filter((alert) => alert.log_id !== logId),
         handledIds: next,
       }
-    }),
+    })
+    syncSound(before, get().alerts.length)
+  },
   clearAlerts: () => {
+    stopDetectionSound()
     clearHandledIds()
     set({ alerts: [], handledIds: new Set() })
   },
