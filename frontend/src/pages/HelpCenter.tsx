@@ -1,27 +1,20 @@
-import ArrowRightLineIcon from "remixicon-react/ArrowRightLineIcon"
-import BookOpenLineIcon from "remixicon-react/BookOpenLineIcon"
-import CustomerService2LineIcon from "remixicon-react/CustomerService2LineIcon"
-import FileList3LineIcon from "remixicon-react/FileList3LineIcon"
-import LifebuoyLineIcon from "remixicon-react/LifebuoyLineIcon"
-import ShieldCheckLineIcon from "remixicon-react/ShieldCheckLineIcon"
-import SignalTowerLineIcon from "remixicon-react/SignalTowerLineIcon"
-import TimeLineIcon from "remixicon-react/TimeLineIcon"
+﻿import { RiArrowRightLine, RiBookOpenLine, RiCustomerService2Line, RiFileList3Line, RiLifebuoyLine, RiShieldCheckLine, RiSignalTowerLine, RiTimeLine } from "@remixicon/react"
 
 const quickLinks = [
   {
     title: "Alert workflow",
     detail: "Confirm, dismiss, resolve, and audit detection records.",
-    icon: ShieldCheckLineIcon,
+    icon: RiShieldCheckLine,
   },
   {
     title: "Camera issues",
     detail: "Check stream status, AI status, and channel assignments.",
-    icon: SignalTowerLineIcon,
+    icon: RiSignalTowerLine,
   },
   {
     title: "Account access",
     detail: "Reset passwords, manage roles, and recover operator access.",
-    icon: LifebuoyLineIcon,
+    icon: RiLifebuoyLine,
   },
 ]
 
@@ -48,7 +41,7 @@ export default function HelpCenter() {
           </div>
           <div className="rounded-lg border border-[#2A2A2A] bg-[#111111] px-4 py-3 text-sm">
             <div className="flex items-center gap-2 text-white">
-              <TimeLineIcon size={16} className="text-[#A1A1AA]" />
+              <RiTimeLine size={16} className="text-[#A1A1AA]" />
               Response target
             </div>
             <p className="mt-1 text-xs text-[#737373]">Critical system issues: within 15 minutes</p>
@@ -64,7 +57,7 @@ export default function HelpCenter() {
               <h2 className="text-base font-semibold text-white">{item.title}</h2>
               <p className="mt-2 min-h-[44px] text-sm leading-6 text-[#737373]">{item.detail}</p>
               <button className="mt-5 flex items-center gap-2 text-sm font-medium text-white">
-                View guide <ArrowRightLineIcon size={16} />
+                View guide <RiArrowRightLine size={16} />
               </button>
             </article>
           ))}
@@ -73,7 +66,7 @@ export default function HelpCenter() {
         <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-xl border border-[#2A2A2A] bg-[#111111] p-6">
             <div className="mb-5 flex items-center gap-3">
-              <BookOpenLineIcon size={18} className="text-[#A1A1AA]" />
+              <RiBookOpenLine size={18} className="text-[#A1A1AA]" />
               <h2 className="text-lg font-semibold text-white">Operator procedure</h2>
             </div>
             <div className="space-y-3">
@@ -90,14 +83,14 @@ export default function HelpCenter() {
 
           <aside className="rounded-xl border border-[#2A2A2A] bg-[#111111] p-6">
             <div className="mb-5 flex items-center gap-3">
-              <CustomerService2LineIcon size={18} className="text-[#A1A1AA]" />
+              <RiCustomerService2Line size={18} className="text-[#A1A1AA]" />
               <h2 className="text-lg font-semibold text-white">Contact support</h2>
             </div>
             <div className="space-y-4 text-sm text-[#A1A1AA]">
               <p>For urgent detection or camera failures, contact the system administrator with the page, camera, and time observed.</p>
               <div className="rounded-lg border border-[#242424] bg-[#151515] p-4">
                 <div className="flex items-center gap-2 text-white">
-                  <FileList3LineIcon size={16} className="text-[#A1A1AA]" />
+                  <RiFileList3Line size={16} className="text-[#A1A1AA]" />
                   Include in report
                 </div>
                 <p className="mt-2 text-xs leading-5 text-[#737373]">

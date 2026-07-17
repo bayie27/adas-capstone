@@ -1,12 +1,14 @@
-import { useState, type FormEvent } from "react"
+﻿import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
-import UserAddLineIcon from "remixicon-react/UserAddLineIcon"
+
 import { Modal } from "@/components/ui/Modal"
 import { PasswordInput } from "@/components/ui/PasswordInput"
 import { createUser } from "@/services/users"
 import type { ApiUserRole } from "@/types/auth"
 import type { CreateUserInput, UserRecord } from "@/types/users"
 import { getApiErrorMessage } from "@/utils/api"
+import { RiUserAddLine } from "@remixicon/react"
+
 
 type CreateUserFormState = {
   first_name: string
@@ -82,7 +84,7 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
       subtitle="Create a new user & assign an access role"
       icon={
         <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#333] bg-transparent">
-          <UserAddLineIcon size={20} className="text-white" />
+          <RiUserAddLine size={20} className="text-white" />
         </div>
       }
     >
@@ -191,3 +193,4 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
     </Modal>
   )
 }
+

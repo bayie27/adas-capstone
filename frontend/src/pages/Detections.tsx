@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react"
+﻿import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import EyeLineIcon from "remixicon-react/EyeLineIcon"
-import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
-import CloseLineIcon from "remixicon-react/CloseLineIcon"
-import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
-import DownloadLineIcon from "remixicon-react/DownloadLineIcon"
-import UserLineIcon from "remixicon-react/UserLineIcon"
-import CameraLineIcon from "remixicon-react/CameraLineIcon"
+
+
+
+
+
+
+
 import { Modal } from "@/components/ui/Modal"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
@@ -40,6 +40,8 @@ import {
 import { getApiErrorMessage } from "@/utils/api"
 import { formatFullDateTime } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
+import { RiArrowRightSLine, RiCalendarLine, RiCameraLine, RiCloseLine, RiDownloadLine, RiEyeLine, RiUserLine } from "@remixicon/react"
+
 
 const ALERTS_PAGE_SIZE = 10
 const ACTIVE_ALERT_STATUSES: AlertStatus[] = ["Unverified", "Ongoing"]
@@ -243,7 +245,7 @@ export default function Detections() {
               placeholder="Search accident no. or camera..."
             />
             <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-              <CalendarLineIcon size={13} className="text-[#737373]" />
+              <RiCalendarLine size={13} className="text-[#737373]" />
               <input
                 type="date"
                 value={startDate}
@@ -253,7 +255,7 @@ export default function Detections() {
             </div>
             <span className="text-xs text-[#555]">to</span>
             <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-              <CalendarLineIcon size={13} className="text-[#737373]" />
+              <RiCalendarLine size={13} className="text-[#737373]" />
               <input
                 type="date"
                 value={endDate}
@@ -262,7 +264,7 @@ export default function Detections() {
               />
             </div>
             <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-              <CameraLineIcon size={13} className="text-[#737373]" />
+              <RiCameraLine size={13} className="text-[#737373]" />
               <select
                 value={cameraId}
                 onChange={(e) => { logsPagination.reset(); setCameraId(e.target.value) }}
@@ -277,12 +279,12 @@ export default function Detections() {
               </select>
             </div>
             <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
-              <ArrowRightSLineIcon size={13} className="text-[#737373]" />
+              <RiArrowRightSLine size={13} className="text-[#737373]" />
               Dismissed & Resolved
             </div>
             {role === "Administrator" ? (
               <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-                <UserLineIcon size={13} className="text-[#737373]" />
+                <RiUserLine size={13} className="text-[#737373]" />
                 <select
                   value={userId}
                   onChange={(e) => { logsPagination.reset(); setUserId(e.target.value) }}
@@ -303,7 +305,7 @@ export default function Detections() {
                 onClick={() => { setStartDate(""); setEndDate(""); setCameraId(""); setUserId(""); logsPagination.reset() }}
                 className="flex items-center gap-1 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1.5 text-xs text-[#737373] transition-colors hover:text-white"
               >
-                <CloseLineIcon size={12} />
+                <RiCloseLine size={12} />
                 Clear
               </button>
             ) : null}
@@ -314,18 +316,18 @@ export default function Detections() {
             onClick={() => exportMutation.mutate()}
             className="flex items-center gap-2 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <DownloadLineIcon size={13} />
+            <RiDownloadLine size={13} />
             {exportMutation.isPending ? "Exporting..." : "Export"}
           </button>
         </div>
       ) : (
         <div className="mb-6 flex flex-wrap items-center gap-2.5">
           <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
-            <ArrowRightSLineIcon size={13} className="text-[#737373]" />
+            <RiArrowRightSLine size={13} className="text-[#737373]" />
             Unverified & Ongoing
           </div>
           <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 text-xs text-[#D4D4D4]">
-            <CalendarLineIcon size={13} className="text-[#737373]" />
+            <RiCalendarLine size={13} className="text-[#737373]" />
             Live queue
           </div>
         </div>
@@ -390,7 +392,7 @@ export default function Detections() {
                           onClick={() => openAlertModal(item)}
                           className="flex h-7 w-7 items-center justify-center rounded border border-[#333] bg-[#1A1A1A] transition-colors hover:bg-[#2A2A2A]"
                         >
-                          <EyeLineIcon size={14} className="text-white" />
+                          <RiEyeLine size={14} className="text-white" />
                         </button>
                       </div>
                     </td>
@@ -427,7 +429,7 @@ export default function Detections() {
           <div className="flex items-center justify-between border-b border-[#27272A] px-6 py-4">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-white">ACCIDENT DETAILS</h2>
             <button type="button" onClick={closeModal} className="text-[#737373] transition-colors hover:text-white">
-              <CloseLineIcon size={18} />
+              <RiCloseLine size={18} />
             </button>
           </div>
 
@@ -565,3 +567,4 @@ export default function Detections() {
     </div>
   )
 }
+

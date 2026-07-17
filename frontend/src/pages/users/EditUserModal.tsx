@@ -1,12 +1,14 @@
-import { useState, type FormEvent } from "react"
+﻿import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
-import PencilLineIcon from "remixicon-react/PencilLineIcon"
+
 import { Modal } from "@/components/ui/Modal"
 import { updateUser } from "@/services/users"
 import type { ApiUserRole } from "@/types/auth"
 import type { UpdateUserInput, UserRecord } from "@/types/users"
 import { getApiErrorMessage } from "@/utils/api"
 import { formatShortDateTime } from "@/utils/datetime"
+import { RiPencilLine } from "@remixicon/react"
+
 
 type EditUserFormState = {
   first_name: string
@@ -84,7 +86,7 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
       subtitle="Update the user's account details and access role"
       icon={
         <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#333] bg-transparent">
-          <PencilLineIcon size={20} className="text-white" />
+          <RiPencilLine size={20} className="text-white" />
         </div>
       }
     >
@@ -178,3 +180,4 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
     </Modal>
   )
 }
+

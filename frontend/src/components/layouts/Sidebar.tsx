@@ -1,21 +1,23 @@
-import { Link, useLocation, useNavigate } from "react-router-dom"
-import LayoutGridLineIcon from "remixicon-react/LayoutGridLineIcon"
-import CameraLineIcon from "remixicon-react/CameraLineIcon"
-import Scan2LineIcon from "remixicon-react/Scan2LineIcon"
-import PulseLineIcon from "remixicon-react/PulseLineIcon"
-import DashboardLineIcon from "remixicon-react/DashboardLineIcon"
-import UserLineIcon from "remixicon-react/UserLineIcon"
-import QuestionLineIcon from "remixicon-react/QuestionLineIcon"
-import ArrowUpSLineIcon from "remixicon-react/ArrowUpSLineIcon"
-import LogoutBoxRLineIcon from "remixicon-react/LogoutBoxRLineIcon"
+﻿import { Link, useLocation, useNavigate } from "react-router-dom"
+
+
+
+
+
+
+
+
+
 import { useAuthStore } from "@/store/useAuthStore"
 import { getUserInitials } from "@/utils/users"
 import { cn } from "@/utils/cn"
+import { RiArrowUpSLine, RiCameraLine, RiDashboardLine, RiLayoutGridLine, RiLogoutBoxRLine, RiPulseLine, RiQuestionLine, RiScan2Line, RiUserLine } from "@remixicon/react"
+
 
 type NavLinkItem = {
   name: string
   to: string
-  icon: typeof LayoutGridLineIcon
+  icon: typeof RiLayoutGridLine
 }
 
 export function Sidebar() {
@@ -31,22 +33,22 @@ export function Sidebar() {
     {
       title: "OPERATIONS",
       links: [
-        { name: "Dashboard", to: basePath, icon: LayoutGridLineIcon },
-        { name: "Cameras", to: `${basePath}/cameras`, icon: CameraLineIcon },
-        { name: "Detections", to: `${basePath}/detections`, icon: Scan2LineIcon },
+        { name: "Dashboard", to: basePath, icon: RiLayoutGridLine },
+        { name: "Cameras", to: `${basePath}/cameras`, icon: RiCameraLine },
+        { name: "Detections", to: `${basePath}/detections`, icon: RiScan2Line },
       ],
     },
     {
       title: "MONITORING",
       links: [
-        { name: "System Health", to: `${basePath}/health`, icon: PulseLineIcon },
-        { name: "AI Performance", to: `${basePath}/ai`, icon: DashboardLineIcon },
+        { name: "System Health", to: `${basePath}/health`, icon: RiPulseLine },
+        { name: "AI Performance", to: `${basePath}/ai`, icon: RiDashboardLine },
       ],
     },
     {
       title: "ADMINISTRATION",
       links: role === "Administrator"
-        ? [{ name: "Users", to: "/admin/users", icon: UserLineIcon }]
+        ? [{ name: "Users", to: "/admin/users", icon: RiUserLine }]
         : [],
     },
   ]
@@ -124,7 +126,7 @@ export function Sidebar() {
               : "text-[#555] hover:bg-[#1A1A1A] hover:text-[#D4D4D4]",
           )}
         >
-          <QuestionLineIcon
+          <RiQuestionLine
             size={16}
             className={location.pathname === `${basePath}/help` ? "text-white" : "text-[#555]"}
           />
@@ -134,7 +136,7 @@ export function Sidebar() {
         <div className="group flex cursor-pointer items-center justify-between rounded-md px-3 py-2 transition-colors hover:bg-[#1A1A1A]">
           <div className="flex items-center gap-2.5">
             <div className="flex h-7 w-7 items-center justify-center rounded-full border border-[#333] bg-[#222] text-[10px] font-bold text-[#A1A1AA]">
-              {initials || <UserLineIcon size={14} className="text-[#A1A1AA]" />}
+              {initials || <RiUserLine size={14} className="text-[#A1A1AA]" />}
             </div>
             <div className="flex flex-col">
               <span className="text-[13px] font-medium leading-tight text-[#D4D4D4] group-hover:text-white">
@@ -143,7 +145,7 @@ export function Sidebar() {
               <span className="text-[11px] text-[#555]">{displayRole}</span>
             </div>
           </div>
-          <ArrowUpSLineIcon size={16} className="text-[#555]" />
+          <RiArrowUpSLine size={16} className="text-[#555]" />
         </div>
 
         <button
@@ -151,10 +153,11 @@ export function Sidebar() {
           onClick={handleLogout}
           className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-[#555] transition-colors hover:bg-[#1A1A1A] hover:text-[#D4D4D4]"
         >
-          <LogoutBoxRLineIcon size={16} className="text-[#555]" />
+          <RiLogoutBoxRLine size={16} className="text-[#555]" />
           <span className="text-[13px] font-medium">Log Out</span>
         </button>
       </div>
     </aside>
   )
 }
+

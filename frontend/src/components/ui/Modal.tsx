@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react"
-import CloseLineIcon from "remixicon-react/CloseLineIcon"
+﻿import { useEffect, useRef } from "react"
+import { RiCloseLine } from "@remixicon/react"
 import { cn } from "@/utils/cn"
 
 interface ModalProps {
@@ -77,7 +77,7 @@ export function Modal({ isOpen, onClose, title, subtitle, icon, children, classN
                 onClick={onClose}
                 className="text-[#71717A] hover:text-white transition-colors"
               >
-                <CloseLineIcon size={20} />
+                <RiCloseLine size={20} />
               </button>
             )}
           </div>
@@ -88,7 +88,7 @@ export function Modal({ isOpen, onClose, title, subtitle, icon, children, classN
             onClick={onClose}
             className="absolute right-4 top-4 text-[#71717A] hover:text-white transition-colors z-10"
           >
-            <CloseLineIcon size={20} />
+            <RiCloseLine size={20} />
           </button>
         )}
 

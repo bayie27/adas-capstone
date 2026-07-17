@@ -1,9 +1,9 @@
-import { useState } from "react"
+﻿import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import ServerLineIcon from "remixicon-react/ServerLineIcon"
-import TimerLineIcon from "remixicon-react/TimerLineIcon"
-import Dashboard3LineIcon from "remixicon-react/Dashboard3LineIcon"
-import HardDrive2LineIcon from "remixicon-react/HardDrive2LineIcon"
+
+
+
+
 import {
   AreaChart,
   Area,
@@ -17,8 +17,10 @@ import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/services/health"
 import type { SystemHealthDataPoint } from "@/types/health"
+import { RiDashboard3Line, RiHardDrive2Line, RiServerLine, RiTimerLine } from "@remixicon/react"
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+
+// â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)
@@ -50,7 +52,7 @@ function formatTimestamp(value: string, range: "48h" | "30d"): string {
   return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
 }
 
-// ─── sub-components ──────────────────────────────────────────────────────────
+// â”€â”€â”€ sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface HealthChartProps {
   title: string
@@ -132,7 +134,7 @@ function HealthChart({ title, data, dataKey, color, range, unit = "%", isLoading
   )
 }
 
-// ─── page ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function SystemHealth() {
   const [activeTab, setActiveTab] = useState<"48h" | "30d">("48h")
@@ -196,24 +198,24 @@ export default function SystemHealth() {
 
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          icon={ServerLineIcon}
+          icon={RiServerLine}
           title="Server Uptime"
           value={liveQuery.isLoading ? "..." : live ? formatUptime(live.uptime_seconds) : "N/A"}
         />
         <StatCard
-          icon={TimerLineIcon}
+          icon={RiTimerLine}
           title="Inference Latency"
           value={liveQuery.isLoading ? "..." : formatMs(live?.avg_inference_latency_ms)}
           subtext="Average AI inference time"
         />
         <StatCard
-          icon={Dashboard3LineIcon}
+          icon={RiDashboard3Line}
           title="Processing Speed"
           value={liveQuery.isLoading ? "..." : formatFps(live?.avg_fps)}
           subtext="Average frames per second"
         />
         <StatCard
-          icon={HardDrive2LineIcon}
+          icon={RiHardDrive2Line}
           title="Disk Storage Usage"
           value={liveQuery.isLoading ? "..." : formatPercent(live?.disk_usage_percent)}
           subtext={
@@ -280,7 +282,7 @@ export default function SystemHealth() {
           dataKey="gpu_temperature"
           color="#ef4444"
           range={activeTab}
-          unit="°C"
+          unit="Â°C"
           isLoading={historyQuery.isLoading}
         />
         <HealthChart
@@ -295,3 +297,4 @@ export default function SystemHealth() {
     </div>
   )
 }
+

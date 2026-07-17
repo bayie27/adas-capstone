@@ -1,4 +1,4 @@
-/** Shared shape for success/error notices. This is the one home for the type. */
+﻿/** Shared shape for success/error notices. This is the one home for the type. */
 export type NoticeState = { tone: "success" | "error"; message: string }
 
 export function NoticeBanner({ notice }: { notice: NoticeState }) {

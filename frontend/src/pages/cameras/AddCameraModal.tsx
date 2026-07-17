@@ -1,10 +1,12 @@
-import { useState, type FormEvent } from "react"
+﻿import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
-import CameraLineIcon from "remixicon-react/CameraLineIcon"
+
 import { Modal } from "@/components/ui/Modal"
 import { createCamera } from "@/services/cameras"
 import type { CameraRecord, CreateCameraInput } from "@/types/cameras"
 import { getApiErrorMessage } from "@/utils/api"
+import { RiCameraLine } from "@remixicon/react"
+
 
 type CameraFormState = {
   camera_name: string
@@ -128,7 +130,7 @@ export function AddCameraModal({ onClose, onSuccess }: AddCameraModalProps) {
       subtitle="Assign a name and channel number for the camera."
       icon={
         <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#333] bg-transparent">
-          <CameraLineIcon size={20} className="text-white" />
+          <RiCameraLine size={20} className="text-white" />
         </div>
       }
     >
@@ -152,3 +154,4 @@ export function AddCameraModal({ onClose, onSuccess }: AddCameraModalProps) {
     </Modal>
   )
 }
+
