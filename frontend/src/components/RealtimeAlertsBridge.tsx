@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+﻿import { useEffect, useRef } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 
 import { useAdasWebSocket } from "@/hooks/useAdasWebSocket"
@@ -44,7 +44,7 @@ export function RealtimeAlertsBridge() {
         }
       })
       .catch(() => {
-        // Non-fatal — live WebSocket events will still populate the queue
+        // Non-fatal â€” live WebSocket events will still populate the queue
       })
   }, [token, addAlert, clearAlerts])
 

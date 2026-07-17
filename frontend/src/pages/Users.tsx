@@ -1,10 +1,7 @@
-import { useState } from "react"
+﻿import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import AddLineIcon from "remixicon-react/AddLineIcon"
-import PencilLineIcon from "remixicon-react/PencilLineIcon"
-import Key2LineIcon from "remixicon-react/Key2LineIcon"
-import DeleteBinLineIcon from "remixicon-react/DeleteBinLineIcon"
+import { RiAddLine, RiPencilLine, RiKey2Line, RiDeleteBinLine } from "@remixicon/react"
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
@@ -49,7 +46,7 @@ export default function Users() {
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
 
   // usePagination derives `page`/`offset` from the total, but the query supplies
-  // the total — so mirror it into state and sync during render (placeholderData
+  // the total â€” so mirror it into state and sync during render (placeholderData
   // keeps it stable across refetches). This clamps the page without an effect.
   const [seenTotal, setSeenTotal] = useState(0)
   const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
@@ -121,7 +118,7 @@ export default function Users() {
           }}
           className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-gray-100"
         >
-          <AddLineIcon size={14} />
+          <RiAddLine size={14} />
           Add User
         </button>
       </div>
@@ -164,7 +161,7 @@ export default function Users() {
                           }}
                           className="rounded p-1.5 text-[#737373] transition-colors hover:bg-[#252525] hover:text-white"
                         >
-                          <PencilLineIcon size={14} />
+                          <RiPencilLine size={14} />
                         </button>
                         <button
                           type="button"
@@ -174,7 +171,7 @@ export default function Users() {
                           }}
                           className="rounded p-1.5 text-[#737373] transition-colors hover:bg-[#252525] hover:text-white"
                         >
-                          <Key2LineIcon size={14} />
+                          <RiKey2Line size={14} />
                         </button>
                         <button
                           type="button"
@@ -184,7 +181,7 @@ export default function Users() {
                           }}
                           className="rounded p-1.5 text-[#737373] transition-colors hover:bg-[#252525] hover:text-white"
                         >
-                          <DeleteBinLineIcon size={14} />
+                          <RiDeleteBinLine size={14} />
                         </button>
                       </div>
                     </td>
@@ -301,3 +298,4 @@ export default function Users() {
     </div>
   )
 }
+

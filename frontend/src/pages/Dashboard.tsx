@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react"
+﻿import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
-import DownloadLineIcon from "remixicon-react/DownloadLineIcon"
-import RefreshLineIcon from "remixicon-react/RefreshLineIcon"
-import CarLineIcon from "remixicon-react/CarLineIcon"
-import CheckboxLineIcon from "remixicon-react/CheckboxLineIcon"
-import CameraLineIcon from "remixicon-react/CameraLineIcon"
-import CloseLineIcon from "remixicon-react/CloseLineIcon"
+
+
+
+
+
+
+
 import {
   XAxis,
   YAxis,
@@ -28,6 +28,8 @@ import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { formatHourLabel, truncateLabel } from "@/utils/analytics"
 import type { AnalyticsFilters } from "@/types/analytics"
+import { RiCalendarLine, RiCameraLine, RiCarLine, RiCheckboxLine, RiCloseLine, RiDownloadLine, RiRefreshLine } from "@remixicon/react"
+
 
 export default function Dashboard() {
   const [startDate, setStartDate] = useState("")
@@ -98,7 +100,7 @@ export default function Dashboard() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-              <CalendarLineIcon size={13} className="text-[#737373]" />
+              <RiCalendarLine size={13} className="text-[#737373]" />
               <input
                 type="date"
                 value={startDate}
@@ -109,7 +111,7 @@ export default function Dashboard() {
             </div>
             <span className="text-xs text-[#555]">to</span>
             <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-              <CalendarLineIcon size={13} className="text-[#737373]" />
+              <RiCalendarLine size={13} className="text-[#737373]" />
               <input
                 type="date"
                 value={endDate}
@@ -119,7 +121,7 @@ export default function Dashboard() {
               />
             </div>
             <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-              <CameraLineIcon size={13} className="text-[#737373]" />
+              <RiCameraLine size={13} className="text-[#737373]" />
               <select
                 value={cameraId}
                 onChange={(e) => setCameraId(e.target.value)}
@@ -139,7 +141,7 @@ export default function Dashboard() {
                 onClick={() => { setStartDate(""); setEndDate(""); setCameraId("") }}
                 className="flex items-center gap-1 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1.5 text-xs text-[#737373] transition-colors hover:text-white"
               >
-                <CloseLineIcon size={12} />
+                <RiCloseLine size={12} />
                 Clear
               </button>
             ) : null}
@@ -150,7 +152,7 @@ export default function Dashboard() {
             onClick={() => exportMutation.mutate()}
             className="flex items-center gap-2 rounded-md border border-[#333] bg-[#1A1A1A] px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <DownloadLineIcon size={13} />
+            <RiDownloadLine size={13} />
             {exportMutation.isPending ? "Exporting..." : "Export"}
           </button>
         </div>
@@ -164,7 +166,7 @@ export default function Dashboard() {
           {/* Charts column */}
           <div className="flex flex-col gap-5 lg:col-span-3">
 
-            {/* Peak Accident Hours — Area chart with gradient fill */}
+            {/* Peak Accident Hours â€” Area chart with gradient fill */}
             <div className="flex h-[270px] flex-col rounded-xl border border-[#222] bg-linear-to-b from-[#161616] to-[#0f0f0f] p-5 shadow-lg">
               <h3 className="mb-4 text-xs font-medium text-[#D4D4D4]">Peak Accident Hours (24H)</h3>
               {dashboardQuery.isLoading ? (
@@ -227,7 +229,7 @@ export default function Dashboard() {
               ) : null}
             </div>
 
-            {/* Accident Frequency by Location — gradient bars */}
+            {/* Accident Frequency by Location â€” gradient bars */}
             <div className="flex h-[340px] flex-col rounded-xl border border-[#222] bg-linear-to-b from-[#161616] to-[#0f0f0f] p-5 shadow-lg">
               <h3 className="mb-4 text-xs font-medium text-[#D4D4D4]">Accident Frequency by Location</h3>
               {dashboardQuery.isLoading ? (
@@ -299,7 +301,7 @@ export default function Dashboard() {
           <div className="flex flex-col gap-5">
             <div className="h-[195px]">
               <StatCard
-                icon={RefreshLineIcon}
+                icon={RiRefreshLine}
                 title="Ongoing Accidents"
                 value={dashboardQuery.isLoading ? "..." : kpis?.ongoing ?? 0}
                 subtext="Live incident queue"
@@ -307,7 +309,7 @@ export default function Dashboard() {
             </div>
             <div className="h-[195px]">
               <StatCard
-                icon={CarLineIcon}
+                icon={RiCarLine}
                 title="Total Accidents"
                 value={dashboardQuery.isLoading ? "..." : kpis?.total_accidents ?? 0}
                 subtext="Compared to last month"
@@ -315,7 +317,7 @@ export default function Dashboard() {
             </div>
             <div className="h-[195px]">
               <StatCard
-                icon={CheckboxLineIcon}
+                icon={RiCheckboxLine}
                 title="Total Resolved"
                 value={dashboardQuery.isLoading ? "..." : kpis?.total_resolved ?? 0}
                 subtext="Compared to last month"
@@ -327,3 +329,4 @@ export default function Dashboard() {
     </div>
   )
 }
+

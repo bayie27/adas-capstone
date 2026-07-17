@@ -1,6 +1,8 @@
-import AlertLineIcon from "remixicon-react/AlertLineIcon"
+﻿
 import { Modal } from "@/components/ui/Modal"
 import { getApiErrorMessage } from "@/utils/api"
+import { RiAlertLine } from "@remixicon/react"
+
 
 interface ConfirmDeleteModalProps {
   isOpen: boolean
@@ -26,7 +28,7 @@ export function ConfirmDeleteModal({
   return (
     <Modal isOpen onClose={onClose} hideClose>
       <div className="flex flex-col items-center pt-6 text-center">
-        <AlertLineIcon size={36} className="mb-4 text-[#ef4444]" />
+        <RiAlertLine size={36} className="mb-4 text-[#ef4444]" />
         <h3 className="mb-2 text-[15px] font-bold text-white">{title}</h3>
         <p className="mb-6 px-4 text-[11px] leading-relaxed text-[#A1A1AA]">{description}</p>
         {error ? <p className="mb-4 text-xs text-[#F87171]">{getApiErrorMessage(error, "Action failed.")}</p> : null}
@@ -51,3 +53,4 @@ export function ConfirmDeleteModal({
     </Modal>
   )
 }
+

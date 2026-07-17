@@ -1,4 +1,4 @@
-import { getApiErrorMessage } from "@/utils/api"
+﻿import { getApiErrorMessage } from "@/utils/api"
 
 export function QueryErrorBanner({
   error,

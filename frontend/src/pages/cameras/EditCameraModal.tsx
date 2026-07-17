@@ -1,11 +1,13 @@
-import { useState, type FormEvent } from "react"
+﻿import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
-import PencilLineIcon from "remixicon-react/PencilLineIcon"
+
 import { Modal } from "@/components/ui/Modal"
 import { updateCamera } from "@/services/cameras"
 import type { CameraRecord, UpdateCameraInput } from "@/types/cameras"
 import { getApiErrorMessage } from "@/utils/api"
 import { formatShortDateTime } from "@/utils/datetime"
+import { RiPencilLine } from "@remixicon/react"
+
 
 type CameraFormState = {
   camera_name: string
@@ -137,7 +139,7 @@ export function EditCameraModal({ camera, onClose, onSuccess }: EditCameraModalP
       subtitle="Update the camera name and channel number."
       icon={
         <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#333] bg-transparent">
-          <PencilLineIcon size={20} className="text-white" />
+          <RiPencilLine size={20} className="text-white" />
         </div>
       }
     >
@@ -164,3 +166,4 @@ export function EditCameraModal({ camera, onClose, onSuccess }: EditCameraModalP
     </Modal>
   )
 }
+

@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from "react"
+﻿import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
-import LockLineIcon from "remixicon-react/LockLineIcon"
+
 import { Modal } from "@/components/ui/Modal"
 import { PasswordInput } from "@/components/ui/PasswordInput"
 import { resetUserPassword } from "@/services/users"
@@ -8,6 +8,8 @@ import type { UserRecord } from "@/types/users"
 import { getApiErrorMessage } from "@/utils/api"
 import { formatShortDateTime } from "@/utils/datetime"
 import { getUserFullName } from "@/utils/users"
+import { RiLockLine } from "@remixicon/react"
+
 
 type ResetPasswordFormState = {
   new_password: string
@@ -72,7 +74,7 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
       subtitle="Update a user's password"
       icon={
         <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#333] bg-transparent">
-          <LockLineIcon size={20} className="text-white" />
+          <RiLockLine size={20} className="text-white" />
         </div>
       }
     >
@@ -124,3 +126,4 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
     </Modal>
   )
 }
+

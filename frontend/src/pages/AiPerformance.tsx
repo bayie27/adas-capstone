@@ -1,13 +1,13 @@
-import { useMemo, useState } from "react"
+﻿import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
-import DownloadLineIcon from "remixicon-react/DownloadLineIcon"
-import CarLineIcon from "remixicon-react/CarLineIcon"
-import CloseCircleLineIcon from "remixicon-react/CloseCircleLineIcon"
-import Focus3LineIcon from "remixicon-react/Focus3LineIcon"
-import Dashboard3LineIcon from "remixicon-react/Dashboard3LineIcon"
-import CameraLineIcon from "remixicon-react/CameraLineIcon"
-import CloseLineIcon from "remixicon-react/CloseLineIcon"
+
+
+
+
+
+
+
+
 import {
   exportPerformanceAnalyticsCsv,
   getPerformanceAnalytics,
@@ -21,6 +21,8 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { formatPercent } from "@/utils/analytics"
+import { RiCalendarLine, RiCameraLine, RiCarLine, RiCloseCircleLine, RiCloseLine, RiDashboard3Line, RiDownloadLine, RiFocus3Line } from "@remixicon/react"
+
 
 const PERFORMANCE_QUERY_KEY = ["performance-analytics"] as const
 const ITEMS_PER_PAGE = 10
@@ -93,25 +95,25 @@ export default function AiPerformance() {
 
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-5">
         <StatCard
-          icon={CarLineIcon}
+          icon={RiCarLine}
           title="Total Accidents"
           value={performanceQuery.isLoading ? "..." : globalKpis?.total_accidents ?? 0}
           subtext="Confirmed accidents"
         />
         <StatCard
-          icon={CloseCircleLineIcon}
+          icon={RiCloseCircleLine}
           title="Total Dismissed"
           value={performanceQuery.isLoading ? "..." : globalKpis?.total_dismissed ?? 0}
           subtext="False positives"
         />
         <StatCard
-          icon={Focus3LineIcon}
+          icon={RiFocus3Line}
           title="Avg Precision Score"
           value={performanceQuery.isLoading ? "..." : formatPercent(globalKpis?.precision_score)}
           subtext="Confirmed / total acted alerts"
         />
         <StatCard
-          icon={Dashboard3LineIcon}
+          icon={RiDashboard3Line}
           title="Avg Confidence Score"
           value={
             performanceQuery.isLoading ? "..." : formatPercent(globalKpis?.avg_accident_confidence)
@@ -119,7 +121,7 @@ export default function AiPerformance() {
           subtext="Average accident confidence"
         />
         <StatCard
-          icon={CloseCircleLineIcon}
+          icon={RiCloseCircleLine}
           title="Avg Dismissed Score"
           value={
             performanceQuery.isLoading ? "..." : formatPercent(globalKpis?.avg_dismissed_confidence)
@@ -139,7 +141,7 @@ export default function AiPerformance() {
             placeholder="Search..."
           />
           <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-            <CalendarLineIcon size={13} className="text-[#737373]" />
+            <RiCalendarLine size={13} className="text-[#737373]" />
             <input
               type="date"
               value={startDate}
@@ -149,7 +151,7 @@ export default function AiPerformance() {
           </div>
           <span className="text-xs text-[#555]">to</span>
           <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-            <CalendarLineIcon size={13} className="text-[#737373]" />
+            <RiCalendarLine size={13} className="text-[#737373]" />
             <input
               type="date"
               value={endDate}
@@ -158,7 +160,7 @@ export default function AiPerformance() {
             />
           </div>
             <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-              <CameraLineIcon size={13} className="text-[#737373]" />
+              <RiCameraLine size={13} className="text-[#737373]" />
               <select
                 value={cameraId}
                 onChange={(e) => { reset(); setCameraId(e.target.value) }}
@@ -178,7 +180,7 @@ export default function AiPerformance() {
               onClick={() => { setStartDate(""); setEndDate(""); setCameraId(""); reset() }}
               className="flex items-center gap-1 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1.5 text-xs text-[#737373] transition-colors hover:text-white"
             >
-              <CloseLineIcon size={12} />
+              <RiCloseLine size={12} />
               Clear
             </button>
           ) : null}
@@ -189,7 +191,7 @@ export default function AiPerformance() {
           onClick={() => exportMutation.mutate()}
           className="flex items-center gap-2 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <DownloadLineIcon size={13} />
+          <RiDownloadLine size={13} />
           {exportMutation.isPending ? "Exporting..." : "Export"}
         </button>
       </div>
@@ -263,3 +265,4 @@ export default function AiPerformance() {
     </div>
   )
 }
+

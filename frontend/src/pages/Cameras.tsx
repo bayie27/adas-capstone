@@ -1,11 +1,11 @@
-import { useState } from "react"
+﻿import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import AddLineIcon from "remixicon-react/AddLineIcon"
-import CameraLineIcon from "remixicon-react/CameraLineIcon"
-import DeleteBinLineIcon from "remixicon-react/DeleteBinLineIcon"
-import GlobalLineIcon from "remixicon-react/GlobalLineIcon"
-import PencilLineIcon from "remixicon-react/PencilLineIcon"
-import RobotLineIcon from "remixicon-react/RobotLineIcon"
+
+
+
+
+
+
 
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
 import { FilterSelect } from "@/components/ui/FilterSelect"
@@ -29,6 +29,8 @@ import {
 import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"
+import { RiAddLine, RiCameraLine, RiDeleteBinLine, RiGlobalLine, RiPencilLine, RiRobotLine } from "@remixicon/react"
+
 
 const CAMERAS_PAGE_SIZE = 8
 const CAMERAS_QUERY_KEY = ["cameras"] as const
@@ -113,19 +115,19 @@ export default function Cameras() {
 
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
         <StatCard
-          icon={CameraLineIcon}
+          icon={RiCameraLine}
           title="Total Cameras"
           value={camerasQuery.isLoading ? "..." : camerasQuery.data?.total_cameras ?? 0}
           subtext="All active camera records"
         />
         <StatCard
-          icon={GlobalLineIcon}
+          icon={RiGlobalLine}
           title="Network Connected Cameras"
           value={camerasQuery.isLoading ? "..." : camerasQuery.data?.network_connected ?? 0}
           subtext="Currently connected to the network"
         />
         <StatCard
-          icon={RobotLineIcon}
+          icon={RiRobotLine}
           title="Active Detection Cameras"
           value={camerasQuery.isLoading ? "..." : camerasQuery.data?.active_detection ?? 0}
           subtext="AI detection running"
@@ -191,7 +193,7 @@ export default function Cameras() {
           }}
           className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-gray-100"
         >
-          <AddLineIcon size={14} />
+          <RiAddLine size={14} />
           Add Camera
         </button>
       </div>
@@ -241,7 +243,7 @@ export default function Cameras() {
                           }}
                           className="text-[#737373] transition-colors hover:text-white"
                         >
-                          <PencilLineIcon size={14} />
+                          <RiPencilLine size={14} />
                         </button>
                         <button
                           type="button"
@@ -251,7 +253,7 @@ export default function Cameras() {
                           }}
                           className="text-[#737373] transition-colors hover:text-white"
                         >
-                          <DeleteBinLineIcon size={14} />
+                          <RiDeleteBinLine size={14} />
                         </button>
                       </div>
                     </td>
@@ -326,3 +328,4 @@ export default function Cameras() {
     </div>
   )
 }
+
