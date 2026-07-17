@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
@@ -14,6 +14,7 @@ import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import ArrowLeftSLineIcon from "remixicon-react/ArrowLeftSLineIcon"
 import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
 import { Modal } from "@/components/ui/Modal"
+import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import {
   createUser,
   deleteUser,
@@ -124,7 +125,7 @@ export default function Users() {
   const setSession = useAuthStore((state) => state.setSession)
   const clearSession = useAuthStore((state) => state.clearSession)
   const [searchTerm, setSearchTerm] = useState("")
-  const deferredSearchTerm = useDeferredValue(searchTerm.trim())
+  const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
   const [page, setPage] = useState(1)
   const [notice, setNotice] = useState<NoticeState | null>(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
@@ -146,10 +147,10 @@ export default function Users() {
   const offset = (page - 1) * USERS_PAGE_SIZE
 
   const usersQuery = useQuery({
-    queryKey: [...USERS_QUERY_KEY, deferredSearchTerm, USERS_PAGE_SIZE, offset],
+    queryKey: [...USERS_QUERY_KEY, debouncedSearchTerm, USERS_PAGE_SIZE, offset],
     queryFn: () =>
       getUsers({
-        search: deferredSearchTerm || undefined,
+        search: debouncedSearchTerm || undefined,
         limit: USERS_PAGE_SIZE,
         offset,
       }),

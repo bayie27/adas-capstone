@@ -1,5 +1,5 @@
 import type { ElementType } from "react"
-import { useDeferredValue, useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
 import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
@@ -17,6 +17,7 @@ import {
   getPerformanceAnalytics,
 } from "@/services/analytics"
 import { getCameras } from "@/services/cameras"
+import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { getApiErrorMessage } from "@/utils/api"
 import { formatPercent } from "@/utils/analytics"
 
@@ -55,7 +56,7 @@ export default function AiPerformance() {
   const [endDate, setEndDate] = useState("")
   const [cameraId, setCameraId] = useState("")
   const [page, setPage] = useState(1)
-  const deferredSearchTerm = useDeferredValue(searchTerm.trim())
+  const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
 
   const hasDateFilter = Boolean(startDate || endDate || cameraId)
 
@@ -65,10 +66,10 @@ export default function AiPerformance() {
   })
 
   const performanceQuery = useQuery({
-    queryKey: [...PERFORMANCE_QUERY_KEY, deferredSearchTerm, startDate, endDate, cameraId],
+    queryKey: [...PERFORMANCE_QUERY_KEY, debouncedSearchTerm, startDate, endDate, cameraId],
     queryFn: () =>
       getPerformanceAnalytics({
-        search: deferredSearchTerm || undefined,
+        search: debouncedSearchTerm || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         camera_id: cameraId ? [Number(cameraId)] : undefined,
@@ -79,7 +80,7 @@ export default function AiPerformance() {
   const exportMutation = useMutation({
     mutationFn: () =>
       exportPerformanceAnalyticsCsv({
-        search: deferredSearchTerm || undefined,
+        search: debouncedSearchTerm || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         camera_id: cameraId ? [Number(cameraId)] : undefined,
