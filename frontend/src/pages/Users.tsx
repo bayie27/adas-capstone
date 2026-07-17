@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
@@ -15,6 +15,7 @@ import ArrowLeftSLineIcon from "remixicon-react/ArrowLeftSLineIcon"
 import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
 import { Modal } from "@/components/ui/Modal"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
+import { usePagination } from "@/hooks/usePagination"
 import {
   createUser,
   deleteUser,
@@ -126,7 +127,6 @@ export default function Users() {
   const clearSession = useAuthStore((state) => state.clearSession)
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
-  const [page, setPage] = useState(1)
   const [notice, setNotice] = useState<NoticeState | null>(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -144,7 +144,14 @@ export default function Users() {
   const [showResetPassword, setShowResetPassword] = useState(false)
   const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false)
 
-  const offset = (page - 1) * USERS_PAGE_SIZE
+  // usePagination derives `page`/`offset` from the total, but the query supplies
+  // the total — so mirror it into state and sync during render (placeholderData
+  // keeps it stable across refetches). This clamps the page without an effect.
+  const [seenTotal, setSeenTotal] = useState(0)
+  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
+    seenTotal,
+    USERS_PAGE_SIZE,
+  )
 
   const usersQuery = useQuery({
     queryKey: [...USERS_QUERY_KEY, debouncedSearchTerm, USERS_PAGE_SIZE, offset],
@@ -159,15 +166,10 @@ export default function Users() {
 
   const users = usersQuery.data?.users ?? []
   const totalUsers = usersQuery.data?.total_filtered ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalUsers / USERS_PAGE_SIZE))
-  const rangeStart = totalUsers === 0 ? 0 : offset + 1
-  const rangeEnd = totalUsers === 0 ? 0 : offset + users.length
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages)
-    }
-  }, [page, totalPages])
+  if (totalUsers !== seenTotal) {
+    setSeenTotal(totalUsers)
+  }
+  const rangeEndValue = rangeEnd(users.length)
 
   const createUserMutation = useMutation({
     mutationFn: createUser,
@@ -176,7 +178,7 @@ export default function Users() {
         tone: "success",
         message: `${createdUser.username} was created successfully.`,
       })
-      setPage(1)
+      reset()
       closeAddModal()
       queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY })
     },
@@ -248,7 +250,7 @@ export default function Users() {
       })
 
       if (users.length === 1 && page > 1) {
-        setPage((current) => current - 1)
+        prev()
       }
 
       closeDeleteModal()
@@ -460,7 +462,7 @@ export default function Users() {
             value={searchTerm}
             onChange={(event) => {
               setNotice(null)
-              setPage(1)
+              reset()
               setSearchTerm(event.target.value)
             }}
             placeholder="Search..."
@@ -553,13 +555,13 @@ export default function Users() {
 
         <div className="flex items-center justify-between border-t border-[#2A2A2A] px-6 py-3 text-xs text-[#737373]">
           <span>
-            {rangeStart}-{rangeEnd} of {totalUsers}
+            {rangeStart}-{rangeEndValue} of {totalUsers}
           </span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               disabled={page === 1 || usersQuery.isFetching}
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              onClick={prev}
               className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ArrowLeftSLineIcon size={14} />
@@ -571,7 +573,7 @@ export default function Users() {
             <button
               type="button"
               disabled={page >= totalPages || usersQuery.isFetching}
-              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              onClick={next}
               className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next

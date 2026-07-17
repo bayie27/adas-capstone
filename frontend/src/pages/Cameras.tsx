@@ -1,4 +1,4 @@
-import { useEffect, useState, type ElementType, type FormEvent } from "react"
+import { useState, type ElementType, type FormEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import AddLineIcon from "remixicon-react/AddLineIcon"
 import AlertLineIcon from "remixicon-react/AlertLineIcon"
@@ -13,6 +13,7 @@ import SearchLineIcon from "remixicon-react/SearchLineIcon"
 
 import { Modal } from "@/components/ui/Modal"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
+import { usePagination } from "@/hooks/usePagination"
 import { createCamera, deleteCamera, getCameras, updateCamera } from "@/services/cameras"
 import type {
   CameraAiStatus,
@@ -196,7 +197,6 @@ function parseChannelId(value: string) {
 
 export default function Cameras() {
   const queryClient = useQueryClient()
-  const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState("")
   const [connectionFilter, setConnectionFilter] = useState<CameraConnectionStatus | "all">("all")
   const [aiFilter, setAiFilter] = useState<CameraAiStatus | "all">("all")
@@ -212,7 +212,13 @@ export default function Cameras() {
   const [editValidationError, setEditValidationError] = useState<string | null>(null)
 
   const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
-  const offset = (page - 1) * CAMERAS_PAGE_SIZE
+  // See Users.tsx: mirror the query total into state so usePagination can clamp
+  // the page at read time without an effect.
+  const [seenTotal, setSeenTotal] = useState(0)
+  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
+    seenTotal,
+    CAMERAS_PAGE_SIZE,
+  )
 
   const camerasQuery = useQuery({
     queryKey: [...CAMERAS_QUERY_KEY, debouncedSearchTerm, connectionFilter, aiFilter, isEnabledFilter, offset],
@@ -237,7 +243,7 @@ export default function Cameras() {
         tone: "success",
         message: `${camera.camera_name} was added successfully.`,
       })
-      setPage(1)
+      reset()
       closeAddModal()
       invalidateCameraQueries()
     },
@@ -277,7 +283,7 @@ export default function Cameras() {
       })
 
       if ((camerasQuery.data?.cameras.length ?? 0) === 1 && page > 1) {
-        setPage((current) => current - 1)
+        prev()
       }
 
       closeDeleteModal()
@@ -287,17 +293,10 @@ export default function Cameras() {
 
   const cameras = camerasQuery.data?.cameras ?? []
   const totalFiltered = camerasQuery.data?.total_filtered ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / CAMERAS_PAGE_SIZE))
-  const rangeStart = totalFiltered === 0 ? 0 : offset + 1
-  const rangeEnd = totalFiltered === 0 ? 0 : offset + cameras.length
-
-  useEffect(() => {
-    if (page <= totalPages) {
-      return
-    }
-
-    setPage(totalPages)
-  }, [page, totalPages])
+  if (totalFiltered !== seenTotal) {
+    setSeenTotal(totalFiltered)
+  }
+  const rangeEndValue = rangeEnd(cameras.length)
 
   function updateAddForm(field: keyof CameraFormState, value: string) {
     setAddValidationError(null)
@@ -514,7 +513,7 @@ export default function Cameras() {
               type="text"
               value={searchTerm}
               onChange={(event) => {
-                setPage(1)
+                reset()
                 setSearchTerm(event.target.value)
               }}
               placeholder="Search camera..."
@@ -526,7 +525,7 @@ export default function Cameras() {
             value={connectionFilter}
             options={CAMERA_CONNECTION_STATUS_OPTIONS}
             onChange={(value) => {
-              setPage(1)
+              reset()
               setConnectionFilter(value)
             }}
           />
@@ -535,7 +534,7 @@ export default function Cameras() {
             value={aiFilter}
             options={CAMERA_AI_STATUS_OPTIONS}
             onChange={(value) => {
-              setPage(1)
+              reset()
               setAiFilter(value)
             }}
           />
@@ -548,7 +547,7 @@ export default function Cameras() {
               { value: "false", label: "Disabled Only" },
             ]}
             onChange={(value) => {
-              setPage(1)
+              reset()
               setIsEnabledFilter(value as "all" | "true" | "false")
             }}
           />
@@ -653,14 +652,14 @@ export default function Cameras() {
               </span>
             </div>
             <span>
-              {rangeStart}-{rangeEnd} of {totalFiltered}
+              {rangeStart}-{rangeEndValue} of {totalFiltered}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               disabled={page === 1 || camerasQuery.isFetching}
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              onClick={prev}
               className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ArrowLeftSLineIcon size={14} /> Previous
@@ -675,7 +674,7 @@ export default function Cameras() {
             <button
               type="button"
               disabled={page >= totalPages || camerasQuery.isFetching}
-              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              onClick={next}
               className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next <ArrowRightSLineIcon size={14} />

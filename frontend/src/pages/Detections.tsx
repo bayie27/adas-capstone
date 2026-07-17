@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
@@ -12,6 +12,7 @@ import CameraLineIcon from "remixicon-react/CameraLineIcon"
 import { Modal } from "@/components/ui/Modal"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
+import { usePagination } from "@/hooks/usePagination"
 import {
   confirmAlert,
   dismissAlert,
@@ -48,8 +49,6 @@ export default function Detections() {
   const queryClient = useQueryClient()
   const removeAlert = useAlertStore((state) => state.removeAlert)
   const [activeTab, setActiveTab] = useState<TabKey>("ongoing")
-  const [activePage, setActivePage] = useState(1)
-  const [logsPage, setLogsPage] = useState(1)
   const [logSearch, setLogSearch] = useState("")
   const debouncedLogSearch = useDebouncedValue(logSearch.trim(), 300)
   const [startDate, setStartDate] = useState("")
@@ -66,28 +65,32 @@ export default function Detections() {
   const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null)
   const [selectedAlertPreview, setSelectedAlertPreview] = useState<AlertLog | null>(null)
 
-  const activeOffset = (activePage - 1) * ALERTS_PAGE_SIZE
-  const logsOffset = (logsPage - 1) * ALERTS_PAGE_SIZE
+  // Two independent paginations (one per tab). See Users.tsx for why the total
+  // is mirrored into state and synced during render.
+  const [seenActiveTotal, setSeenActiveTotal] = useState(0)
+  const activePagination = usePagination(seenActiveTotal, ALERTS_PAGE_SIZE)
+  const [seenLogsTotal, setSeenLogsTotal] = useState(0)
+  const logsPagination = usePagination(seenLogsTotal, ALERTS_PAGE_SIZE)
 
   const activeAlertsQuery = useQuery({
-    queryKey: ["alerts", "active", activeOffset],
+    queryKey: ["alerts", "active", activePagination.offset],
     queryFn: () =>
       getAlerts({
         status: ACTIVE_ALERT_STATUSES,
         limit: ALERTS_PAGE_SIZE,
-        offset: activeOffset,
+        offset: activePagination.offset,
       }),
     placeholderData: (previousData) => previousData,
   })
 
   const logsQuery = useQuery({
-    queryKey: ["alerts", "logs", debouncedLogSearch, logsOffset, startDate, endDate, cameraId, userId],
+    queryKey: ["alerts", "logs", debouncedLogSearch, logsPagination.offset, startDate, endDate, cameraId, userId],
     queryFn: () =>
       getAlerts({
         status: LOG_ALERT_STATUSES,
         search: debouncedLogSearch || undefined,
         limit: ALERTS_PAGE_SIZE,
-        offset: logsOffset,
+        offset: logsPagination.offset,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         camera_id: cameraId ? [Number(cameraId)] : undefined,
@@ -136,39 +139,26 @@ export default function Detections() {
     onSuccess: handleMutationSuccess,
   })
 
-  const activeTotalPages = Math.max(
-    1,
-    Math.ceil((activeAlertsQuery.data?.total_filtered ?? 0) / ALERTS_PAGE_SIZE),
-  )
-  const logsTotalPages = Math.max(
-    1,
-    Math.ceil((logsQuery.data?.total_filtered ?? 0) / ALERTS_PAGE_SIZE),
-  )
-
-  useEffect(() => {
-    if (activePage > activeTotalPages) {
-      setActivePage(activeTotalPages)
-    }
-  }, [activePage, activeTotalPages])
-
-  useEffect(() => {
-    if (logsPage > logsTotalPages) {
-      setLogsPage(logsTotalPages)
-    }
-  }, [logsPage, logsTotalPages])
+  const activeTotal = activeAlertsQuery.data?.total_filtered ?? 0
+  if (activeTotal !== seenActiveTotal) {
+    setSeenActiveTotal(activeTotal)
+  }
+  const logsTotal = logsQuery.data?.total_filtered ?? 0
+  if (logsTotal !== seenLogsTotal) {
+    setSeenLogsTotal(logsTotal)
+  }
 
   const currentQuery = activeTab === "ongoing" ? activeAlertsQuery : logsQuery
-  
+  const currentPagination = activeTab === "ongoing" ? activePagination : logsPagination
+
   // Render rows in the server's order. The server paginates (limit/offset), so
   // it defines the total order; re-sorting a single page by a different key
   // would make page boundaries and visible order disagree.
   const currentRows = currentQuery.data?.logs ?? []
 
-  const currentPage = activeTab === "ongoing" ? activePage : logsPage
-  const currentTotalPages = activeTab === "ongoing" ? activeTotalPages : logsTotalPages
   const currentTotalFiltered = currentQuery.data?.total_filtered ?? 0
-  const rangeStart = currentTotalFiltered === 0 ? 0 : (currentPage - 1) * ALERTS_PAGE_SIZE + 1
-  const rangeEnd = currentTotalFiltered === 0 ? 0 : rangeStart + currentRows.length - 1
+  const rangeStart = currentPagination.rangeStart
+  const rangeEndValue = currentPagination.rangeEnd(currentRows.length)
 
   const selectedAlert = alertDetailsQuery.data ?? selectedAlertPreview
 
@@ -248,7 +238,7 @@ export default function Detections() {
                 type="text"
                 value={logSearch}
                 onChange={(event) => {
-                  setLogsPage(1)
+                  logsPagination.reset()
                   setLogSearch(event.target.value)
                 }}
                 placeholder="Search accident no. or camera..."
@@ -260,7 +250,7 @@ export default function Detections() {
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => { setLogsPage(1); setStartDate(e.target.value) }}
+                onChange={(e) => { logsPagination.reset(); setStartDate(e.target.value) }}
                 className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
               />
             </div>
@@ -270,7 +260,7 @@ export default function Detections() {
               <input
                 type="date"
                 value={endDate}
-                onChange={(e) => { setLogsPage(1); setEndDate(e.target.value) }}
+                onChange={(e) => { logsPagination.reset(); setEndDate(e.target.value) }}
                 className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
               />
             </div>
@@ -278,7 +268,7 @@ export default function Detections() {
               <CameraLineIcon size={13} className="text-[#737373]" />
               <select
                 value={cameraId}
-                onChange={(e) => { setLogsPage(1); setCameraId(e.target.value) }}
+                onChange={(e) => { logsPagination.reset(); setCameraId(e.target.value) }}
                 className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none"
               >
                 <option value="">All cameras</option>
@@ -298,7 +288,7 @@ export default function Detections() {
                 <UserLineIcon size={13} className="text-[#737373]" />
                 <select
                   value={userId}
-                  onChange={(e) => { setLogsPage(1); setUserId(e.target.value) }}
+                  onChange={(e) => { logsPagination.reset(); setUserId(e.target.value) }}
                   className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none"
                 >
                   <option value="">All operators</option>
@@ -313,7 +303,7 @@ export default function Detections() {
             {hasFilters ? (
               <button
                 type="button"
-                onClick={() => { setStartDate(""); setEndDate(""); setCameraId(""); setUserId(""); setLogsPage(1) }}
+                onClick={() => { setStartDate(""); setEndDate(""); setCameraId(""); setUserId(""); logsPagination.reset() }}
                 className="flex items-center gap-1 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1.5 text-xs text-[#737373] transition-colors hover:text-white"
               >
                 <CloseLineIcon size={12} />
@@ -437,43 +427,29 @@ export default function Detections() {
               </span>
             </div>
             <span>
-              {rangeStart}-{rangeEnd} of {currentTotalFiltered}
+              {rangeStart}-{rangeEndValue} of {currentTotalFiltered}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={currentPage === 1 || currentQuery.isFetching}
-              onClick={() => {
-                if (activeTab === "ongoing") {
-                  setActivePage((page) => Math.max(1, page - 1))
-                  return
-                }
-
-                setLogsPage((page) => Math.max(1, page - 1))
-              }}
+              disabled={currentPagination.page === 1 || currentQuery.isFetching}
+              onClick={currentPagination.prev}
               className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ArrowLeftSLineIcon size={14} /> Previous
             </button>
             <div className="flex items-center gap-1">
               <span className="flex h-6 min-w-6 items-center justify-center rounded bg-[#1E1E1E] px-2 font-medium text-white">
-                {currentPage}
+                {currentPagination.page}
               </span>
               <span className="text-[#555]">of</span>
-              <span>{currentTotalPages}</span>
+              <span>{currentPagination.totalPages}</span>
             </div>
             <button
               type="button"
-              disabled={currentPage >= currentTotalPages || currentQuery.isFetching}
-              onClick={() => {
-                if (activeTab === "ongoing") {
-                  setActivePage((page) => Math.min(currentTotalPages, page + 1))
-                  return
-                }
-
-                setLogsPage((page) => Math.min(currentTotalPages, page + 1))
-              }}
+              disabled={currentPagination.page >= currentPagination.totalPages || currentQuery.isFetching}
+              onClick={currentPagination.next}
               className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next <ArrowRightSLineIcon size={14} />

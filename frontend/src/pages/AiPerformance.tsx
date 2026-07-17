@@ -1,5 +1,5 @@
 import type { ElementType } from "react"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
 import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
@@ -17,6 +17,7 @@ import {
   getPerformanceAnalytics,
 } from "@/services/analytics"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
+import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { getApiErrorMessage } from "@/utils/api"
 import { formatPercent } from "@/utils/analytics"
@@ -55,7 +56,6 @@ export default function AiPerformance() {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   const [cameraId, setCameraId] = useState("")
-  const [page, setPage] = useState(1)
   const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
 
   const hasDateFilter = Boolean(startDate || endDate || cameraId)
@@ -86,22 +86,19 @@ export default function AiPerformance() {
 
   const globalKpis = performanceQuery.data?.global_kpis
   const perCamera = performanceQuery.data?.per_camera ?? []
-  const totalPages = Math.max(1, Math.ceil(perCamera.length / ITEMS_PER_PAGE))
-  const startIndex = (page - 1) * ITEMS_PER_PAGE
-
-  const visibleRows = useMemo(
-    () => perCamera.slice(startIndex, startIndex + ITEMS_PER_PAGE),
-    [perCamera, startIndex],
+  // Client-side pagination: the total is `perCamera.length`, available in the
+  // same render, so usePagination clamps the page directly (no state mirror).
+  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
+    perCamera.length,
+    ITEMS_PER_PAGE,
   )
 
-  const rangeStart = perCamera.length === 0 ? 0 : startIndex + 1
-  const rangeEnd = perCamera.length === 0 ? 0 : startIndex + visibleRows.length
+  const visibleRows = useMemo(
+    () => perCamera.slice(offset, offset + ITEMS_PER_PAGE),
+    [perCamera, offset],
+  )
 
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages)
-    }
-  }, [page, totalPages])
+  const rangeEndValue = rangeEnd(visibleRows.length)
 
   return (
     <div className="mx-auto max-w-[1400px] p-8">
@@ -172,7 +169,7 @@ export default function AiPerformance() {
               type="text"
               value={searchTerm}
               onChange={(event) => {
-                setPage(1)
+                reset()
                 setSearchTerm(event.target.value)
               }}
               placeholder="Search..."
@@ -184,7 +181,7 @@ export default function AiPerformance() {
             <input
               type="date"
               value={startDate}
-              onChange={(e) => { setPage(1); setStartDate(e.target.value) }}
+              onChange={(e) => { reset(); setStartDate(e.target.value) }}
               className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
             />
           </div>
@@ -194,7 +191,7 @@ export default function AiPerformance() {
             <input
               type="date"
               value={endDate}
-              onChange={(e) => { setPage(1); setEndDate(e.target.value) }}
+              onChange={(e) => { reset(); setEndDate(e.target.value) }}
               className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
             />
           </div>
@@ -202,7 +199,7 @@ export default function AiPerformance() {
               <CameraLineIcon size={13} className="text-[#737373]" />
               <select
                 value={cameraId}
-                onChange={(e) => { setPage(1); setCameraId(e.target.value) }}
+                onChange={(e) => { reset(); setCameraId(e.target.value) }}
                 className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none"
               >
                 <option value="">All cameras</option>
@@ -216,7 +213,7 @@ export default function AiPerformance() {
           {hasDateFilter ? (
             <button
               type="button"
-              onClick={() => { setStartDate(""); setEndDate(""); setCameraId(""); setPage(1) }}
+              onClick={() => { setStartDate(""); setEndDate(""); setCameraId(""); reset() }}
               className="flex items-center gap-1 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1.5 text-xs text-[#737373] transition-colors hover:text-white"
             >
               <CloseLineIcon size={12} />
@@ -306,14 +303,14 @@ export default function AiPerformance() {
               </span>
             </div>
             <span>
-              {rangeStart}-{rangeEnd} of {perCamera.length}
+              {rangeStart}-{rangeEndValue} of {perCamera.length}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               disabled={page === 1 || performanceQuery.isFetching}
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              onClick={prev}
               className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ArrowLeftSLineIcon size={14} /> Previous
@@ -328,7 +325,7 @@ export default function AiPerformance() {
             <button
               type="button"
               disabled={page >= totalPages || performanceQuery.isFetching}
-              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              onClick={next}
               className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               Next <ArrowRightSLineIcon size={14} />
