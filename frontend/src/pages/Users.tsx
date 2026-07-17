@@ -13,6 +13,7 @@ import EyeOffLineIcon from "remixicon-react/EyeOffLineIcon"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import { Modal } from "@/components/ui/Modal"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
+import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import {
@@ -496,23 +497,13 @@ export default function Users() {
             </thead>
             <tbody className="divide-y divide-[#2A2A2A]">
               {usersQuery.isLoading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-xs text-[#A1A1AA]">
-                    Loading users...
-                  </td>
-                </tr>
+                <TableStateRow colSpan={5}>Loading users...</TableStateRow>
               ) : usersQuery.isError ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-xs text-[#F87171]">
-                    {getApiErrorMessage(usersQuery.error, "Unable to load users.")}
-                  </td>
-                </tr>
+                <TableStateRow colSpan={5} tone="error">
+                  {getApiErrorMessage(usersQuery.error, "Unable to load users.")}
+                </TableStateRow>
               ) : users.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-xs text-[#A1A1AA]">
-                    No users found.
-                  </td>
-                </tr>
+                <TableStateRow colSpan={5}>No users found.</TableStateRow>
               ) : (
                 users.map((user) => (
                   <tr key={user.user_id} className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]">

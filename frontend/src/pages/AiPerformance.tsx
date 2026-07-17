@@ -15,6 +15,7 @@ import {
   getPerformanceAnalytics,
 } from "@/services/analytics"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
+import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
@@ -252,17 +253,11 @@ export default function AiPerformance() {
             </thead>
             <tbody className="divide-y divide-[#2A2A2A]">
               {performanceQuery.isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-xs text-[#A1A1AA]">
-                    Loading AI performance...
-                  </td>
-                </tr>
+                <TableStateRow colSpan={6}>Loading AI performance...</TableStateRow>
               ) : visibleRows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-xs text-[#A1A1AA]">
-                    No camera statistics found for the current filters.
-                  </td>
-                </tr>
+                <TableStateRow colSpan={6}>
+                  No camera statistics found for the current filters.
+                </TableStateRow>
               ) : (
                 visibleRows.map((item) => (
                   <tr key={item.camera_id} className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]">
