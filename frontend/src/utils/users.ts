@@ -17,7 +17,17 @@ export function getUserInitials(firstName: string, lastName: string, username?: 
     return initials
   }
 
-  return username?.slice(0, 2).toUpperCase() ?? "US"
+  if (username) {
+    // No first/last name: derive from the username, splitting on whitespace and
+    // underscores so e.g. "john_doe" → "JD".
+    return username
+      .split(/[\s_]+/)
+      .map((word) => word[0]?.toUpperCase() ?? "")
+      .slice(0, 2)
+      .join("")
+  }
+
+  return "US"
 }
 
 export function formatUserRole(role: ApiUserRole) {

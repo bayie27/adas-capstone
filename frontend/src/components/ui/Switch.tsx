@@ -1,4 +1,4 @@
-import { cn } from "@/utils"
+import { cn } from "@/utils/cn"
 
 export function Switch({
   checked,
