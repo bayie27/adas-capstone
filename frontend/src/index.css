@@ -1,9 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=League+Spartan:wght@100..900&display=swap");
 @import "tailwindcss";
 
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", sans-serif;
+  /* Inter is self-hosted via @fontsource-variable/inter, which registers the
+     family as "Inter Variable"; keep "Inter" as a fallback. */
+  --font-sans: "Inter Variable", "Inter", sans-serif;
   --font-logo: "League Spartan", sans-serif;
 }
