@@ -1,4 +1,3 @@
-import type { ElementType } from "react"
 import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
@@ -16,6 +15,7 @@ import {
 } from "@/services/analytics"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
+import { StatCard } from "@/components/ui/StatCard"
 import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
@@ -24,32 +24,6 @@ import { formatPercent } from "@/utils/analytics"
 
 const PERFORMANCE_QUERY_KEY = ["performance-analytics"] as const
 const ITEMS_PER_PAGE = 10
-
-interface PerfCardProps {
-  icon: ElementType
-  title: string
-  value: string | number
-  subtext?: string
-}
-
-function PerfCard({ icon: Icon, title, value, subtext }: PerfCardProps) {
-  return (
-    <div className="flex h-full min-h-[160px] flex-col justify-between rounded-xl border border-[#2A2A2A] bg-[#111111] p-5">
-      <div>
-        <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#1E1E1E]">
-          <Icon size={17} className="text-[#A1A1AA]" />
-        </div>
-        <h4 className="mb-2 min-h-[32px] text-[11px] font-medium uppercase tracking-wider text-[#737373]">
-          {title}
-        </h4>
-        <div className="flex items-end gap-2.5">
-          <div className="text-3xl font-semibold leading-none tracking-tight text-white">{value}</div>
-        </div>
-      </div>
-      {subtext ? <div className="mt-4 text-xs text-[#555]">{subtext}</div> : null}
-    </div>
-  )
-}
 
 export default function AiPerformance() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -118,25 +92,25 @@ export default function AiPerformance() {
       ) : null}
 
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-5">
-        <PerfCard
+        <StatCard
           icon={CarLineIcon}
           title="Total Accidents"
           value={performanceQuery.isLoading ? "..." : globalKpis?.total_accidents ?? 0}
           subtext="Confirmed accidents"
         />
-        <PerfCard
+        <StatCard
           icon={CloseCircleLineIcon}
           title="Total Dismissed"
           value={performanceQuery.isLoading ? "..." : globalKpis?.total_dismissed ?? 0}
           subtext="False positives"
         />
-        <PerfCard
+        <StatCard
           icon={Focus3LineIcon}
           title="Avg Precision Score"
           value={performanceQuery.isLoading ? "..." : formatPercent(globalKpis?.precision_score)}
           subtext="Confirmed / total acted alerts"
         />
-        <PerfCard
+        <StatCard
           icon={Dashboard3LineIcon}
           title="Avg Confidence Score"
           value={
@@ -144,7 +118,7 @@ export default function AiPerformance() {
           }
           subtext="Average accident confidence"
         />
-        <PerfCard
+        <StatCard
           icon={CloseCircleLineIcon}
           title="Avg Dismissed Score"
           value={

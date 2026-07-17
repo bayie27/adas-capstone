@@ -1,4 +1,3 @@
-import type { ElementType } from "react"
 import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
@@ -26,39 +25,9 @@ import {
 } from "@/services/analytics"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
+import { StatCard } from "@/components/ui/StatCard"
 import { formatHourLabel, truncateLabel } from "@/utils/analytics"
 import type { AnalyticsFilters } from "@/types/analytics"
-
-interface MetricCardProps {
-  icon: ElementType
-  title: string
-  value: string | number
-  subtext?: string
-  delta?: string
-  deltaPositive?: boolean
-}
-
-function MetricCard({ icon: Icon, title, value, subtext, delta, deltaPositive }: MetricCardProps) {
-  return (
-    <div className="flex h-full flex-col justify-between rounded-xl border border-[#222] bg-linear-to-b from-[#1a1a1a] to-[#111] p-5 shadow-lg">
-      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#1E1E1E]">
-        <Icon size={18} className="text-[#A1A1AA]" />
-      </div>
-      <div>
-        <h4 className="mb-2 text-xs text-[#737373]">{title}</h4>
-        <div className="flex items-end gap-3">
-          <span className="text-[32px] font-semibold leading-none tracking-tight text-white">{value}</span>
-          {delta ? (
-            <span className={`mb-1 text-xs font-medium ${deltaPositive ? "text-emerald-400" : "text-red-400"}`}>
-              {delta}
-            </span>
-          ) : null}
-        </div>
-        {subtext ? <p className="mt-2 text-xs text-[#555]">{subtext}</p> : null}
-      </div>
-    </div>
-  )
-}
 
 export default function Dashboard() {
   const [startDate, setStartDate] = useState("")
@@ -329,7 +298,7 @@ export default function Dashboard() {
           {/* KPI cards column */}
           <div className="flex flex-col gap-5">
             <div className="h-[195px]">
-              <MetricCard
+              <StatCard
                 icon={RefreshLineIcon}
                 title="Ongoing Accidents"
                 value={dashboardQuery.isLoading ? "..." : kpis?.ongoing ?? 0}
@@ -337,7 +306,7 @@ export default function Dashboard() {
               />
             </div>
             <div className="h-[195px]">
-              <MetricCard
+              <StatCard
                 icon={CarLineIcon}
                 title="Total Accidents"
                 value={dashboardQuery.isLoading ? "..." : kpis?.total_accidents ?? 0}
@@ -345,7 +314,7 @@ export default function Dashboard() {
               />
             </div>
             <div className="h-[195px]">
-              <MetricCard
+              <StatCard
                 icon={CheckboxLineIcon}
                 title="Total Resolved"
                 value={dashboardQuery.isLoading ? "..." : kpis?.total_resolved ?? 0}
