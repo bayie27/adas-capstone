@@ -1,18 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import LockLineIcon from "remixicon-react/LockLineIcon"
-import { Modal } from "@/components/ui/Modal"
 import type { NoticeState } from "@/components/ui/NoticeBanner"
-import { PasswordInput } from "@/components/ui/PasswordInput"
-import {
-  changeMyPassword,
-  getMyProfile,
-  updateMyProfile,
-} from "@/services/users"
+import { getMyProfile, updateMyProfile } from "@/services/users"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getApiErrorMessage } from "@/utils/api"
 import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/users"
+import { ChangePasswordModal } from "@/pages/profile/ChangePasswordModal"
 
 const PROFILE_QUERY_KEY = ["my-profile"] as const
 
@@ -22,22 +16,12 @@ type ProfileFormState = {
   username: string
 }
 
-type PasswordFormState = {
-  old_password: string
-  new_password: string
-  confirm_password: string
-}
+type ModalState = { kind: "closed" } | { kind: "password" }
 
 const EMPTY_PROFILE_FORM: ProfileFormState = {
   first_name: "",
   last_name: "",
   username: "",
-}
-
-const EMPTY_PASSWORD_FORM: PasswordFormState = {
-  old_password: "",
-  new_password: "",
-  confirm_password: "",
 }
 
 export default function ProfileSettings() {
@@ -50,10 +34,8 @@ export default function ProfileSettings() {
   const setSession = useAuthStore((state) => state.setSession)
   const clearSession = useAuthStore((state) => state.clearSession)
   const [profileForm, setProfileForm] = useState<ProfileFormState>(EMPTY_PROFILE_FORM)
-  const [passwordForm, setPasswordForm] = useState<PasswordFormState>(EMPTY_PASSWORD_FORM)
   const [profileNotice, setProfileNotice] = useState<NoticeState | null>(null)
-  const [passwordNotice, setPasswordNotice] = useState<NoticeState | null>(null)
-  const [isPasswordOpen, setIsPasswordOpen] = useState(false)
+  const [modal, setModal] = useState<ModalState>({ kind: "closed" })
 
   const profileQuery = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -96,16 +78,6 @@ export default function ProfileSettings() {
       }
 
       setProfileNotice({ tone: "success", message: "Profile updated successfully." })
-    },
-  })
-
-  const changePasswordMutation = useMutation({
-    mutationFn: changeMyPassword,
-    onSuccess: () => {
-      setPasswordForm(EMPTY_PASSWORD_FORM)
-      setPasswordNotice(null)
-      setProfileNotice({ tone: "success", message: "Password updated successfully." })
-      setIsPasswordOpen(false)
     },
   })
 
@@ -165,36 +137,6 @@ export default function ProfileSettings() {
     }
 
     updateProfileMutation.mutate(payload)
-  }
-
-  const handlePasswordSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setPasswordNotice(null)
-
-    if (
-      !passwordForm.old_password ||
-      !passwordForm.new_password ||
-      !passwordForm.confirm_password
-    ) {
-      setPasswordNotice({ tone: "error", message: "Complete all password fields." })
-      return
-    }
-
-    if (passwordForm.new_password !== passwordForm.confirm_password) {
-      setPasswordNotice({ tone: "error", message: "New password and confirmation do not match." })
-      return
-    }
-
-    changePasswordMutation.mutate({
-      old_password: passwordForm.old_password,
-      new_password: passwordForm.new_password,
-    })
-  }
-
-  const closePasswordModal = () => {
-    setPasswordForm(EMPTY_PASSWORD_FORM)
-    setPasswordNotice(null)
-    setIsPasswordOpen(false)
   }
 
   return (
@@ -298,10 +240,7 @@ export default function ProfileSettings() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setPasswordNotice(null)
-                    setIsPasswordOpen(true)
-                  }}
+                  onClick={() => setModal({ kind: "password" })}
                   className="rounded-md border border-[#333] px-4 py-2 text-sm font-medium text-[#E4E4E7] transition-colors hover:bg-[#1A1A1A] hover:text-white"
                 >
                   Change Password
@@ -312,86 +251,15 @@ export default function ProfileSettings() {
         )}
       </div>
 
-      <Modal
-        isOpen={isPasswordOpen}
-        onClose={closePasswordModal}
-        title="Change Password"
-        subtitle="Update your account password."
-        icon={
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#333] bg-transparent">
-            <LockLineIcon size={20} className="text-white" />
-          </div>
-        }
-      >
-        <form onSubmit={handlePasswordSubmit} className="mt-4 flex flex-col gap-6">
-          <div className="space-y-4">
-            <PasswordInput
-              label="Current Password"
-              value={passwordForm.old_password}
-              autoComplete="current-password"
-              onChange={(value) => {
-                setPasswordNotice(null)
-                setPasswordForm((current) => ({ ...current, old_password: value }))
-              }}
-            />
-
-            <PasswordInput
-              label="New Password"
-              value={passwordForm.new_password}
-              onChange={(value) => {
-                setPasswordNotice(null)
-                setPasswordForm((current) => ({ ...current, new_password: value }))
-              }}
-            />
-
-            <PasswordInput
-              label="Confirm New Password"
-              value={passwordForm.confirm_password}
-              onChange={(value) => {
-                setPasswordNotice(null)
-                setPasswordForm((current) => ({ ...current, confirm_password: value }))
-              }}
-            />
-
-            <p className="text-[10px] text-[#737373]">
-              Must be at least 8 characters long and contain at least 1 number.
-            </p>
-          </div>
-
-          {passwordNotice ? (
-            <p
-              className={`text-xs ${
-                passwordNotice.tone === "success" ? "text-emerald-400" : "text-[#F87171]"
-              }`}
-            >
-              {passwordNotice.message}
-            </p>
-          ) : null}
-
-          {changePasswordMutation.isError ? (
-            <p className="text-xs text-[#F87171]">
-              {getApiErrorMessage(changePasswordMutation.error, "Unable to update your password.")}
-            </p>
-          ) : null}
-
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={closePasswordModal}
-              className="rounded-md border border-[#333] bg-transparent px-4 py-2 text-xs font-medium text-[#E4E4E7] transition-colors hover:text-white"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={changePasswordMutation.isPending}
-              className="rounded-md bg-white px-4 py-2 text-xs font-medium text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {changePasswordMutation.isPending ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
-        </form>
-      </Modal>
+      {modal.kind === "password" && (
+        <ChangePasswordModal
+          onClose={() => setModal({ kind: "closed" })}
+          onSuccess={() => {
+            setProfileNotice({ tone: "success", message: "Password updated successfully." })
+            setModal({ kind: "closed" })
+          }}
+        />
+      )}
     </div>
   )
 }
