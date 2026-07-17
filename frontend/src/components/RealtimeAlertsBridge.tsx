@@ -5,9 +5,8 @@ import { useAdasWebSocket } from "@/hooks/useAdasWebSocket"
 import { getAlerts, getAlertDetails } from "@/services/alerts"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
-import type { AlertListResponse } from "@/types/alerts"
 import type { CameraListResponse } from "@/types/cameras"
-import { normalizeRealtimeAlert, normalizeRealtimeCameraStatus, prependRealtimeAlert } from "@/utils/realtime"
+import { normalizeRealtimeAlert, normalizeRealtimeCameraStatus } from "@/utils/realtime"
 
 export function RealtimeAlertsBridge() {
   const queryClient = useQueryClient()
@@ -56,9 +55,9 @@ export function RealtimeAlertsBridge() {
       if (alert) {
         // Add immediately with whatever data we have (camera_name may be null)
         addAlert(alert)
-        queryClient.setQueryData<AlertListResponse>(["alerts", "active", 0], (existingResponse) =>
-          prependRealtimeAlert(existingResponse, alert),
-        )
+        // The WS payload lacks the verified_by/closed_by fields the table shows,
+        // so invalidate to refetch complete rows rather than optimistically
+        // writing an incomplete one that a refetch would immediately replace.
         queryClient.invalidateQueries({ queryKey: ["alerts", "active"] })
 
         // Enrich with camera_name if the broadcast didn't include it
@@ -99,7 +98,10 @@ export function RealtimeAlertsBridge() {
           ),
         }
       })
-      queryClient.invalidateQueries({ queryKey: ["cameras"] })
+      // No invalidate: the WS payload carries the complete new camera status,
+      // so patching every cameras query in place is sufficient. Invalidating
+      // here would refetch the list plus the dropdown copies on other pages on
+      // every status flap of any camera.
     },
     { enabled: Boolean(token) },
   )
