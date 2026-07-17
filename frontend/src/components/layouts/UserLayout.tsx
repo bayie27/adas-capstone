@@ -5,7 +5,7 @@ export default function UserLayout() {
   return (
     <div className="flex h-screen bg-[#0A0A0A] overflow-hidden">
       <Sidebar />
-      <main className="flex-1 ml-64 overflow-y-auto">
+      <main className="flex-1 ml-60 overflow-y-auto">
         <Outlet />
       </main>
     </div>
