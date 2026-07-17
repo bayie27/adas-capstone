@@ -20,8 +20,8 @@ import {
   getAlerts,
   resolveAlert,
 } from "@/services/alerts"
-import { getCameras } from "@/services/cameras"
-import { getUsers } from "@/services/users"
+import { useCameraOptions } from "@/hooks/useCameraOptions"
+import { useUserOptions } from "@/hooks/useUserOptions"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
 import type { AlertLog, AlertStatus } from "@/types/alerts"
@@ -60,16 +60,9 @@ export default function Detections() {
   const role = useAuthStore((state) => state.role)
   const hasFilters = Boolean(startDate || endDate || cameraId || userId)
 
-  const camerasQuery = useQuery({
-    queryKey: ["cameras", "all"],
-    queryFn: () => getCameras({ limit: 100 }),
-  })
+  const camerasQuery = useCameraOptions()
 
-  const usersQuery = useQuery({
-    queryKey: ["users", "all"],
-    queryFn: () => getUsers({ limit: 100 }),
-    enabled: role === "Administrator",
-  })
+  const usersQuery = useUserOptions({ enabled: role === "Administrator" })
   const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null)
   const [selectedAlertPreview, setSelectedAlertPreview] = useState<AlertLog | null>(null)
 
