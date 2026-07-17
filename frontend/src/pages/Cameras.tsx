@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useState, type ElementType, type FormEvent } from "react"
+import { useEffect, useState, type ElementType, type FormEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import AddLineIcon from "remixicon-react/AddLineIcon"
 import AlertLineIcon from "remixicon-react/AlertLineIcon"
@@ -12,6 +12,7 @@ import RobotLineIcon from "remixicon-react/RobotLineIcon"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
 
 import { Modal } from "@/components/ui/Modal"
+import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { createCamera, deleteCamera, getCameras, updateCamera } from "@/services/cameras"
 import type {
   CameraAiStatus,
@@ -210,14 +211,14 @@ export default function Cameras() {
   const [addValidationError, setAddValidationError] = useState<string | null>(null)
   const [editValidationError, setEditValidationError] = useState<string | null>(null)
 
-  const deferredSearchTerm = useDeferredValue(searchTerm.trim())
+  const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
   const offset = (page - 1) * CAMERAS_PAGE_SIZE
 
   const camerasQuery = useQuery({
-    queryKey: [...CAMERAS_QUERY_KEY, deferredSearchTerm, connectionFilter, aiFilter, isEnabledFilter, offset],
+    queryKey: [...CAMERAS_QUERY_KEY, debouncedSearchTerm, connectionFilter, aiFilter, isEnabledFilter, offset],
     queryFn: () =>
       getCameras({
-        search: deferredSearchTerm || undefined,
+        search: debouncedSearchTerm || undefined,
         connection_status: connectionFilter === "all" ? undefined : [connectionFilter],
         ai_status: aiFilter === "all" ? undefined : [aiFilter],
         is_enabled: isEnabledFilter === "all" ? undefined : isEnabledFilter === "true",

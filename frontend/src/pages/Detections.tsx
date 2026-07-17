@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
@@ -11,6 +11,7 @@ import UserLineIcon from "remixicon-react/UserLineIcon"
 import CameraLineIcon from "remixicon-react/CameraLineIcon"
 import { Modal } from "@/components/ui/Modal"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
+import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import {
   confirmAlert,
   dismissAlert,
@@ -50,7 +51,7 @@ export default function Detections() {
   const [activePage, setActivePage] = useState(1)
   const [logsPage, setLogsPage] = useState(1)
   const [logSearch, setLogSearch] = useState("")
-  const deferredLogSearch = useDeferredValue(logSearch.trim())
+  const debouncedLogSearch = useDebouncedValue(logSearch.trim(), 300)
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   const [cameraId, setCameraId] = useState("")
@@ -87,11 +88,11 @@ export default function Detections() {
   })
 
   const logsQuery = useQuery({
-    queryKey: ["alerts", "logs", deferredLogSearch, logsOffset, startDate, endDate, cameraId, userId],
+    queryKey: ["alerts", "logs", debouncedLogSearch, logsOffset, startDate, endDate, cameraId, userId],
     queryFn: () =>
       getAlerts({
         status: LOG_ALERT_STATUSES,
-        search: deferredLogSearch || undefined,
+        search: debouncedLogSearch || undefined,
         limit: ALERTS_PAGE_SIZE,
         offset: logsOffset,
         start_date: startDate || undefined,
@@ -112,7 +113,7 @@ export default function Detections() {
     mutationFn: () =>
       exportAlertsCsv({
         status: LOG_ALERT_STATUSES,
-        search: deferredLogSearch || undefined,
+        search: debouncedLogSearch || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         camera_id: cameraId ? [Number(cameraId)] : undefined,
