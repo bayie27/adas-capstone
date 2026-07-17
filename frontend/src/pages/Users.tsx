@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import SearchLineIcon from "remixicon-react/SearchLineIcon"
 import AddLineIcon from "remixicon-react/AddLineIcon"
 import PencilLineIcon from "remixicon-react/PencilLineIcon"
 import Key2LineIcon from "remixicon-react/Key2LineIcon"
@@ -13,6 +12,7 @@ import { Modal } from "@/components/ui/Modal"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { PasswordInput } from "@/components/ui/PasswordInput"
+import { SearchInput } from "@/components/ui/SearchInput"
 import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
@@ -399,20 +399,15 @@ export default function Users() {
       {notice ? <NoticeBanner notice={notice} /> : null}
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="relative">
-          <SearchLineIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(event) => {
-              setNotice(null)
-              reset()
-              setSearchTerm(event.target.value)
-            }}
-            placeholder="Search..."
-            className="w-64 rounded-md border border-[#2A2A2A] bg-[#141414] py-1.5 pl-8 pr-4 text-xs text-white focus:border-[#52525B] focus:outline-none"
-          />
-        </div>
+        <SearchInput
+          value={searchTerm}
+          onChange={(value) => {
+            setNotice(null)
+            reset()
+            setSearchTerm(value)
+          }}
+          placeholder="Search..."
+        />
         <button
           type="button"
           onClick={() => {

@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
 import CloseLineIcon from "remixicon-react/CloseLineIcon"
-import SearchLineIcon from "remixicon-react/SearchLineIcon"
 import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
 import DownloadLineIcon from "remixicon-react/DownloadLineIcon"
 import UserLineIcon from "remixicon-react/UserLineIcon"
@@ -11,6 +10,7 @@ import CameraLineIcon from "remixicon-react/CameraLineIcon"
 import { Modal } from "@/components/ui/Modal"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
+import { SearchInput } from "@/components/ui/SearchInput"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
@@ -234,19 +234,14 @@ export default function Detections() {
       {activeTab === "logs" ? (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5">
-            <div className="relative">
-              <SearchLineIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
-              <input
-                type="text"
-                value={logSearch}
-                onChange={(event) => {
-                  logsPagination.reset()
-                  setLogSearch(event.target.value)
-                }}
-                placeholder="Search accident no. or camera..."
-                className="w-60 rounded-md border border-[#2A2A2A] bg-[#141414] py-1.5 pl-8 pr-4 text-xs text-white focus:border-[#52525B] focus:outline-none"
-              />
-            </div>
+            <SearchInput
+              value={logSearch}
+              onChange={(value) => {
+                logsPagination.reset()
+                setLogSearch(value)
+              }}
+              placeholder="Search accident no. or camera..."
+            />
             <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
               <CalendarLineIcon size={13} className="text-[#737373]" />
               <input

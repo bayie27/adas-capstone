@@ -2,19 +2,20 @@ import { useState, type FormEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import AddLineIcon from "remixicon-react/AddLineIcon"
 import AlertLineIcon from "remixicon-react/AlertLineIcon"
-import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
 import CameraLineIcon from "remixicon-react/CameraLineIcon"
 import DeleteBinLineIcon from "remixicon-react/DeleteBinLineIcon"
 import GlobalLineIcon from "remixicon-react/GlobalLineIcon"
 import PencilLineIcon from "remixicon-react/PencilLineIcon"
 import RobotLineIcon from "remixicon-react/RobotLineIcon"
-import SearchLineIcon from "remixicon-react/SearchLineIcon"
 
+import { FilterSelect } from "@/components/ui/FilterSelect"
 import { Modal } from "@/components/ui/Modal"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
+import { SearchInput } from "@/components/ui/SearchInput"
 import { StatCard } from "@/components/ui/StatCard"
+import { Switch } from "@/components/ui/Switch"
 import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
@@ -52,20 +53,9 @@ type CameraFormState = {
   channel_id: string
 }
 
-type FilterOption<T extends string> = {
-  value: T
-  label: string
-}
-
 const EMPTY_FORM: CameraFormState = {
   camera_name: "",
   channel_id: "",
-}
-
-interface FilterSelectProps<T extends string> {
-  value: T
-  options: FilterOption<T>[]
-  onChange: (value: T) => void
 }
 
 interface CameraFormFieldsProps {
@@ -73,59 +63,6 @@ interface CameraFormFieldsProps {
   cameraNamePlaceholder?: string
   channelPlaceholder?: string
   onChange: (field: keyof CameraFormState, value: string) => void
-}
-
-function Switch({
-  checked,
-  disabled,
-  onChange,
-}: {
-  checked: boolean
-  disabled?: boolean
-  onChange?: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onChange}
-      disabled={disabled}
-      aria-pressed={checked}
-      className={cn(
-        "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-        checked ? "bg-white" : "bg-[#3f3f46]",
-        disabled ? "cursor-not-allowed opacity-60" : "",
-      )}
-    >
-      <span
-        className={cn(
-          "inline-block h-3.5 w-3.5 transform rounded-full bg-[#18181b] transition-transform",
-          checked ? "translate-x-4" : "translate-x-1",
-        )}
-      />
-    </button>
-  )
-}
-
-function FilterSelect<T extends string>({ value, options, onChange }: FilterSelectProps<T>) {
-  return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value as T)}
-        className="appearance-none rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 pr-8 text-xs text-[#D4D4D4] focus:border-[#52525B] focus:outline-none"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <ArrowRightSLineIcon
-        size={13}
-        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[#737373]"
-      />
-    </div>
-  )
 }
 
 function CameraFormFields({
@@ -464,19 +401,14 @@ export default function Cameras() {
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="relative">
-            <SearchLineIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(event) => {
-                reset()
-                setSearchTerm(event.target.value)
-              }}
-              placeholder="Search camera..."
-              className="w-60 rounded-md border border-[#2A2A2A] bg-[#141414] py-1.5 pl-8 pr-4 text-xs text-white focus:border-[#52525B] focus:outline-none"
-            />
-          </div>
+          <SearchInput
+            value={searchTerm}
+            onChange={(value) => {
+              reset()
+              setSearchTerm(value)
+            }}
+            placeholder="Search camera..."
+          />
 
           <FilterSelect
             value={connectionFilter}
