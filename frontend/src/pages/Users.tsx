@@ -28,9 +28,8 @@ import type { ApiUserRole } from "@/types/auth"
 import type { CreateUserInput, UpdateUserInput, UserRecord } from "@/types/users"
 import { getDefaultRouteForRole, mapApiRoleToAppRole } from "@/utils/auth"
 import { getApiErrorMessage } from "@/utils/api"
+import { formatRelativeDateTime, formatShortDateTime } from "@/utils/datetime"
 import {
-  formatRelativeDateTime,
-  formatShortDateTime,
   formatUserRole,
   getUserFullName,
 } from "@/utils/users"

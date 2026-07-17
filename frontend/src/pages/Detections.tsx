@@ -31,7 +31,6 @@ import type { AlertLog, AlertStatus } from "@/types/alerts"
 import {
   formatAlertCode,
   formatAlertConfidence,
-  formatAlertDateTime,
   getAlertBadgeClass,
   getAlertBorderClass,
   getAlertLastHandledBy,
@@ -39,6 +38,7 @@ import {
   getAlertStatusTextClass,
 } from "@/utils/alerts"
 import { getApiErrorMessage } from "@/utils/api"
+import { formatFullDateTime } from "@/utils/datetime"
 import { cn } from "@/utils"
 
 const ALERTS_PAGE_SIZE = 10
@@ -374,7 +374,7 @@ export default function Detections() {
                 currentRows.map((item) => (
                   <tr key={item.log_id} className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]">
                     <td className="px-6 py-4 text-xs font-medium">{formatAlertCode(item.log_id)}</td>
-                    <td className="px-6 py-4 text-xs text-[#737373]">{formatAlertDateTime(item.detected_at)}</td>
+                    <td className="px-6 py-4 text-xs text-[#737373]">{formatFullDateTime(item.detected_at)}</td>
                     <td className="px-6 py-4 text-xs">{item.camera_name ?? "Unknown Camera"}</td>
                     <td className="px-6 py-4 text-xs">
                       <span className={cn("font-medium", getAlertStatusTextClass(item.detection_status))}>
@@ -462,7 +462,7 @@ export default function Detections() {
                 <div className="mb-6 space-y-3.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium tracking-wider text-[#737373]">TIMESTAMP</span>
-                    <span className="font-medium text-[#D4D4D4]">{formatAlertDateTime(selectedAlert.detected_at)}</span>
+                    <span className="font-medium text-[#D4D4D4]">{formatFullDateTime(selectedAlert.detected_at)}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium tracking-wider text-[#737373]">CAMERA NAME</span>
@@ -484,7 +484,7 @@ export default function Detections() {
                     </div>
                     <div className="text-right">
                       <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">TIME VERIFIED</div>
-                      <div className="text-xs text-[#D4D4D4]">{formatAlertDateTime(selectedAlert.verified_at)}</div>
+                      <div className="text-xs text-[#D4D4D4]">{formatFullDateTime(selectedAlert.verified_at)}</div>
                     </div>
                   </div>
 
@@ -496,7 +496,7 @@ export default function Detections() {
                       </div>
                       <div className="text-right">
                         <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">{closedTimeLabel}</div>
-                        <div className="text-xs text-[#D4D4D4]">{formatAlertDateTime(selectedAlert.closed_at)}</div>
+                        <div className="text-xs text-[#D4D4D4]">{formatFullDateTime(selectedAlert.closed_at)}</div>
                       </div>
                     </div>
                   ) : null}

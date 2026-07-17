@@ -50,26 +50,6 @@ export function getCameraAiClass(status: CameraAiStatus) {
   return "text-[#ef4444]"
 }
 
-export function formatCameraDateTime(value: string | null | undefined) {
-  if (!value) {
-    return "-"
-  }
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return "-"
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date)
-}
-
 export function buildCameraUpdatePayload(
   current: CameraRecord,
   next: { camera_name: string; channel_id: number; is_enabled?: boolean },

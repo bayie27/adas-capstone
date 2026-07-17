@@ -1,29 +1,8 @@
 import type { AlertLog, AlertStatus } from "@/types/alerts"
+import { formatFullDateTime } from "@/utils/datetime"
 
 export function formatAlertCode(logId: number) {
   return `ACC-${logId.toString().padStart(6, "0")}`
-}
-
-export function formatAlertDateTime(value: string | null | undefined) {
-  if (!value) {
-    return "-"
-  }
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return "-"
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(date)
 }
 
 export function formatAlertConfidence(score: number) {
@@ -44,11 +23,11 @@ export function getAlertLastHandledBy(alert: AlertLog) {
 
 export function getAlertLastUpdated(alert: AlertLog) {
   if (alert.closed_at) {
-    return formatAlertDateTime(alert.closed_at)
+    return formatFullDateTime(alert.closed_at)
   }
 
   if (alert.verified_at) {
-    return formatAlertDateTime(alert.verified_at)
+    return formatFullDateTime(alert.verified_at)
   }
 
   return "-"
