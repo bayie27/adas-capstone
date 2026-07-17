@@ -1,6 +1,7 @@
 import { useState } from "react"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import EyeOffLineIcon from "remixicon-react/EyeOffLineIcon"
+import { cn } from "@/utils/cn"
 
 /**
  * Label + password field + eye-toggle. Owns its own visibility state (pure
@@ -14,31 +15,50 @@ export function PasswordInput({
   value,
   onChange,
   autoComplete = "new-password",
+  placeholder,
+  labelClassName,
+  inputClassName,
+  toggleClassName,
+  iconSize = 14,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
   autoComplete?: string
+  placeholder?: string
+  labelClassName?: string
+  inputClassName?: string
+  toggleClassName?: string
+  iconSize?: number
 }) {
   const [visible, setVisible] = useState(false)
 
   return (
     <div>
-      <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">{label}</label>
+      <label className={cn("mb-2 block text-[11px] font-semibold text-[#E4E4E7]", labelClassName)}>
+        {label}
+      </label>
       <div className="relative">
         <input
           type={visible ? "text" : "password"}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           autoComplete={autoComplete}
-          className="w-full rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-2 pr-10 text-sm text-white focus:border-[#555] focus:outline-none"
+          placeholder={placeholder}
+          className={cn(
+            "w-full rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-2 pr-10 text-sm text-white focus:border-[#555] focus:outline-none",
+            inputClassName,
+          )}
         />
         <button
           type="button"
           onClick={() => setVisible((current) => !current)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#555] transition-colors hover:text-white"
+          className={cn(
+            "absolute right-3 top-1/2 -translate-y-1/2 text-[#555] transition-colors hover:text-white",
+            toggleClassName,
+          )}
         >
-          {visible ? <EyeLineIcon size={14} /> : <EyeOffLineIcon size={14} />}
+          {visible ? <EyeLineIcon size={iconSize} /> : <EyeOffLineIcon size={iconSize} />}
         </button>
       </div>
     </div>
