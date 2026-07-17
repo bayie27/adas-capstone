@@ -36,7 +36,7 @@ import {
   getCameraConnectionClass,
 } from "@/utils/cameras"
 import { formatShortDateTime } from "@/utils/datetime"
-import { cn } from "@/utils"
+import { cn } from "@/utils/cn"
 
 const CAMERAS_PAGE_SIZE = 8
 const CAMERAS_QUERY_KEY = ["cameras"] as const
@@ -161,27 +161,24 @@ export default function Cameras() {
     },
   })
 
-  const editCameraMutation = useMutation({
+  // Edit and enable/disable both PATCH the camera; one mutation, message built
+  // from what changed (a toggle's payload carries `is_enabled`).
+  const updateCameraMutation = useMutation({
     mutationFn: ({ cameraId, input }: { cameraId: number; input: UpdateCameraInput }) =>
       updateCamera(cameraId, input),
-    onSuccess: (camera) => {
-      setNotice({
-        tone: "success",
-        message: `${camera.camera_name} was updated successfully.`,
-      })
-      closeEditModal()
-      invalidateCameraQueries()
-    },
-  })
-
-  const toggleCameraMutation = useMutation({
-    mutationFn: ({ cameraId, input }: { cameraId: number; input: UpdateCameraInput }) =>
-      updateCamera(cameraId, input),
-    onSuccess: (camera) => {
-      setNotice({
-        tone: "success",
-        message: `${camera.camera_name} was ${camera.is_enabled ? "enabled" : "disabled"}.`,
-      })
+    onSuccess: (camera, variables) => {
+      if ("is_enabled" in variables.input) {
+        setNotice({
+          tone: "success",
+          message: `${camera.camera_name} was ${camera.is_enabled ? "enabled" : "disabled"}.`,
+        })
+      } else {
+        setNotice({
+          tone: "success",
+          message: `${camera.camera_name} was updated successfully.`,
+        })
+        closeEditModal()
+      }
       invalidateCameraQueries()
     },
   })
@@ -218,7 +215,7 @@ export default function Cameras() {
 
   function updateEditForm(field: keyof CameraFormState, value: string) {
     setEditValidationError(null)
-    editCameraMutation.reset()
+    updateCameraMutation.reset()
     setEditForm((current) => ({ ...current, [field]: value }))
   }
 
@@ -232,7 +229,7 @@ export default function Cameras() {
   function closeEditModal() {
     setEditForm(EMPTY_FORM)
     setEditValidationError(null)
-    editCameraMutation.reset()
+    updateCameraMutation.reset()
     setSelectedCamera(null)
     setIsEditOpen(false)
   }
@@ -253,7 +250,7 @@ export default function Cameras() {
     setNotice(null)
     setSelectedCamera(camera)
     setEditValidationError(null)
-    editCameraMutation.reset()
+    updateCameraMutation.reset()
     setEditForm({
       camera_name: camera.camera_name,
       channel_id: String(camera.channel_id),
@@ -327,7 +324,7 @@ export default function Cameras() {
       return
     }
 
-    editCameraMutation.mutate({
+    updateCameraMutation.mutate({
       cameraId: selectedCamera.camera_id,
       input: payload,
     })
@@ -341,16 +338,16 @@ export default function Cameras() {
 
   const editErrorMessage =
     editValidationError ??
-    (editCameraMutation.isError
-      ? getApiErrorMessage(editCameraMutation.error, "Unable to update camera.")
+    (updateCameraMutation.isError
+      ? getApiErrorMessage(updateCameraMutation.error, "Unable to update camera.")
       : null)
 
   const deleteErrorMessage = deleteCameraMutation.isError
     ? getApiErrorMessage(deleteCameraMutation.error, "Unable to delete camera.")
     : null
 
-  const toggleErrorMessage = toggleCameraMutation.isError
-    ? getApiErrorMessage(toggleCameraMutation.error, "Unable to update camera status.")
+  const toggleErrorMessage = updateCameraMutation.isError
+    ? getApiErrorMessage(updateCameraMutation.error, "Unable to update camera status.")
     : null
 
   return (
@@ -491,13 +488,13 @@ export default function Cameras() {
                         <Switch
                           checked={camera.is_enabled}
                           disabled={
-                            toggleCameraMutation.isPending &&
-                            toggleCameraMutation.variables?.cameraId === camera.camera_id
+                            updateCameraMutation.isPending &&
+                            updateCameraMutation.variables?.cameraId === camera.camera_id
                           }
                           onChange={() => {
                             setNotice(null)
-                            toggleCameraMutation.reset()
-                            toggleCameraMutation.mutate({
+                            updateCameraMutation.reset()
+                            updateCameraMutation.mutate({
                               cameraId: camera.camera_id,
                               input: { is_enabled: !camera.is_enabled },
                             })
@@ -594,8 +591,8 @@ export default function Cameras() {
               <button type="button" onClick={closeEditModal} className={SECONDARY_BUTTON_CLASS}>
                 Cancel
               </button>
-              <button type="submit" disabled={editCameraMutation.isPending} className={PRIMARY_BUTTON_CLASS}>
-                {editCameraMutation.isPending ? "Saving..." : "Save Changes"}
+              <button type="submit" disabled={updateCameraMutation.isPending} className={PRIMARY_BUTTON_CLASS}>
+                {updateCameraMutation.isPending ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>

@@ -39,7 +39,7 @@ import {
 } from "@/utils/alerts"
 import { getApiErrorMessage } from "@/utils/api"
 import { formatFullDateTime } from "@/utils/datetime"
-import { cn } from "@/utils"
+import { cn } from "@/utils/cn"
 
 const ALERTS_PAGE_SIZE = 10
 const ACTIVE_ALERT_STATUSES: AlertStatus[] = ["Unverified", "Ongoing"]

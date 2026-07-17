@@ -1,5 +1,5 @@
 import CloseLineIcon from "remixicon-react/CloseLineIcon"
-import { cn } from "@/utils"
+import { cn } from "@/utils/cn"
 
 interface ModalProps {
   isOpen: boolean

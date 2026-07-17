@@ -9,7 +9,8 @@ import QuestionLineIcon from "remixicon-react/QuestionLineIcon"
 import ArrowUpSLineIcon from "remixicon-react/ArrowUpSLineIcon"
 import LogoutBoxRLineIcon from "remixicon-react/LogoutBoxRLineIcon"
 import { useAuthStore } from "@/store/useAuthStore"
-import { cn } from "@/utils"
+import { getUserInitials } from "@/utils/users"
+import { cn } from "@/utils/cn"
 
 type NavLinkItem = {
   name: string
@@ -53,11 +54,7 @@ export function Sidebar() {
   const displayName = username || "guest"
   const displayRole = role ?? "Unknown Role"
 
-  const initials = displayName
-    .split(/[\s_]+/)
-    .map((w: string) => w[0]?.toUpperCase() ?? "")
-    .slice(0, 2)
-    .join("")
+  const initials = getUserInitials("", "", displayName)
 
   const handleLogout = () => {
     clearSession()

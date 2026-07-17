@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 
 import { API_BASE_URL } from "@/utils/env"
-import { cn } from "@/utils"
+import { cn } from "@/utils/cn"
 
 const BACKEND_HTTP_ORIGIN = API_BASE_URL.replace(/\/+$/, "").replace(/\/api$/, "")
 const KNOWN_IMAGE_EXTENSION_PATTERN = /\.(jpg|jpeg|png|webp)$/i
