@@ -12,6 +12,7 @@ import SearchLineIcon from "remixicon-react/SearchLineIcon"
 
 import { Modal } from "@/components/ui/Modal"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
+import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { createCamera, deleteCamera, getCameras, updateCamera } from "@/services/cameras"
@@ -577,17 +578,11 @@ export default function Cameras() {
             </thead>
             <tbody className="divide-y divide-[#2A2A2A]">
               {camerasQuery.isLoading ? (
-                <tr>
-                  <td colSpan={TABLE_COLUMN_COUNT} className="px-6 py-8 text-center text-xs text-[#A1A1AA]">
-                    Loading cameras...
-                  </td>
-                </tr>
+                <TableStateRow colSpan={TABLE_COLUMN_COUNT}>Loading cameras...</TableStateRow>
               ) : cameras.length === 0 ? (
-                <tr>
-                  <td colSpan={TABLE_COLUMN_COUNT} className="px-6 py-8 text-center text-xs text-[#A1A1AA]">
-                    No cameras found for the current filters.
-                  </td>
-                </tr>
+                <TableStateRow colSpan={TABLE_COLUMN_COUNT}>
+                  No cameras found for the current filters.
+                </TableStateRow>
               ) : (
                 cameras.map((camera) => (
                   <tr key={camera.camera_id} className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]">

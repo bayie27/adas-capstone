@@ -11,6 +11,7 @@ import CameraLineIcon from "remixicon-react/CameraLineIcon"
 import { Modal } from "@/components/ui/Modal"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
+import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import {
@@ -374,19 +375,15 @@ export default function Detections() {
             </thead>
             <tbody className="divide-y divide-[#2A2A2A]">
               {currentQuery.isLoading ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-xs text-[#A1A1AA]">
-                    {activeTab === "ongoing" ? "Loading active alerts..." : "Loading logs..."}
-                  </td>
-                </tr>
+                <TableStateRow colSpan={7}>
+                  {activeTab === "ongoing" ? "Loading active alerts..." : "Loading logs..."}
+                </TableStateRow>
               ) : currentRows.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-xs text-[#A1A1AA]">
-                    {activeTab === "ongoing"
-                      ? "No active alerts in the queue."
-                      : "No historical logs found for the current filters."}
-                  </td>
-                </tr>
+                <TableStateRow colSpan={7}>
+                  {activeTab === "ongoing"
+                    ? "No active alerts in the queue."
+                    : "No historical logs found for the current filters."}
+                </TableStateRow>
               ) : (
                 currentRows.map((item) => (
                   <tr key={item.log_id} className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]">
