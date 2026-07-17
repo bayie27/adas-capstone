@@ -27,6 +27,7 @@ export function useAdasWebSocket(
     let reconnectTimer: number | null = null
     let websocket: WebSocket | null = null
     let isDisposed = false
+    let attempt = 0
 
     const connect = () => {
       if (isDisposed) {
@@ -34,6 +35,10 @@ export function useAdasWebSocket(
       }
 
       websocket = new WebSocket(WS_URL)
+
+      websocket.onopen = () => {
+        attempt = 0
+      }
 
       websocket.onmessage = (event: MessageEvent) => {
         try {
@@ -49,7 +54,13 @@ export function useAdasWebSocket(
           return
         }
 
-        reconnectTimer = window.setTimeout(connect, reconnectDelayMs)
+        // Capped exponential backoff with jitter: exponential stops the
+        // reconnect hammering while the backend is down, the 30s cap keeps
+        // recovery prompt for an ops console, and the jitter de-synchronizes
+        // multiple open tabs so they don't reconnect in the same instant.
+        const backoff = Math.min(30_000, reconnectDelayMs * 2 ** attempt) + Math.random() * 500
+        attempt += 1
+        reconnectTimer = window.setTimeout(connect, backoff)
       }
 
       websocket.onerror = (error) => {
