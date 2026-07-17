@@ -32,10 +32,10 @@ import {
   buildCameraUpdatePayload,
   CAMERA_AI_STATUS_OPTIONS,
   CAMERA_CONNECTION_STATUS_OPTIONS,
-  formatCameraDateTime,
   getCameraAiClass,
   getCameraConnectionClass,
 } from "@/utils/cameras"
+import { formatShortDateTime } from "@/utils/datetime"
 import { cn } from "@/utils"
 
 const CAMERAS_PAGE_SIZE = 8
@@ -587,8 +587,8 @@ export default function Cameras() {
 
           <div className="mt-8 flex items-end justify-between">
             <div className="space-y-1 text-[10px] text-[#71717A]">
-              <div>Date Added: {formatCameraDateTime(selectedCamera?.created_at)}</div>
-              <div>Last Changes: {formatCameraDateTime(selectedCamera?.updated_at)}</div>
+              <div>Date Added: {formatShortDateTime(selectedCamera?.created_at)}</div>
+              <div>Last Changes: {formatShortDateTime(selectedCamera?.updated_at)}</div>
             </div>
             <div className="flex items-center gap-3">
               <button type="button" onClick={closeEditModal} className={SECONDARY_BUTTON_CLASS}>

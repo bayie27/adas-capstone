@@ -3,7 +3,8 @@ import { useQueryClient } from "@tanstack/react-query"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { useAlertStore } from "@/store/useAlertStore"
 import { confirmAlert, dismissAlert, resolveAlert } from "@/services/alerts"
-import { formatAlertConfidence, formatAlertDateTime } from "@/utils/alerts"
+import { formatAlertConfidence } from "@/utils/alerts"
+import { formatFullDateTime } from "@/utils/datetime"
 import { getApiErrorMessage } from "@/utils/api"
 
 export function GlobalAlerts() {
@@ -106,7 +107,7 @@ export function GlobalAlerts() {
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-widest text-[#737373]">Timestamp</span>
             <span className="tabular-nums text-sm font-semibold text-white">
-              {formatAlertDateTime(alert.detected_at)}
+              {formatFullDateTime(alert.detected_at)}
             </span>
           </div>
           <div className="flex items-center justify-between">
