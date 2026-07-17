@@ -165,10 +165,10 @@ export default function Detections() {
 
   const currentQuery = activeTab === "ongoing" ? activeAlertsQuery : logsQuery
   
-  const currentRows = useMemo(() => {
-    const rows = currentQuery.data?.logs ?? []
-    return [...rows].sort((a, b) => b.log_id - a.log_id)
-  }, [currentQuery.data?.logs])
+  // Render rows in the server's order. The server paginates (limit/offset), so
+  // it defines the total order; re-sorting a single page by a different key
+  // would make page boundaries and visible order disagree.
+  const currentRows = currentQuery.data?.logs ?? []
 
   const currentPage = activeTab === "ongoing" ? activePage : logsPage
   const currentTotalPages = activeTab === "ongoing" ? activeTotalPages : logsTotalPages
