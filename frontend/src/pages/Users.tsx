@@ -11,9 +11,8 @@ import LockLineIcon from "remixicon-react/LockLineIcon"
 import AlertLineIcon from "remixicon-react/AlertLineIcon"
 import EyeOffLineIcon from "remixicon-react/EyeOffLineIcon"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
-import ArrowLeftSLineIcon from "remixicon-react/ArrowLeftSLineIcon"
-import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
 import { Modal } from "@/components/ui/Modal"
+import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import {
@@ -553,34 +552,17 @@ export default function Users() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-[#2A2A2A] px-6 py-3 text-xs text-[#737373]">
-          <span>
-            {rangeStart}-{rangeEndValue} of {totalUsers}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={page === 1 || usersQuery.isFetching}
-              onClick={prev}
-              className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <ArrowLeftSLineIcon size={14} />
-              Previous
-            </button>
-            <span className="rounded bg-[#1E1E1E] px-2 py-1 text-white">
-              {page}/{totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={page >= totalPages || usersQuery.isFetching}
-              onClick={next}
-              className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next
-              <ArrowRightSLineIcon size={14} />
-            </button>
-          </div>
-        </div>
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEndValue}
+          totalFiltered={totalUsers}
+          pageSize={USERS_PAGE_SIZE}
+          isFetching={usersQuery.isFetching}
+          onPrev={prev}
+          onNext={next}
+        />
       </div>
 
       <Modal

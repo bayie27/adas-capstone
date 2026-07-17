@@ -2,7 +2,6 @@ import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import ArrowRightSLineIcon from "remixicon-react/ArrowRightSLineIcon"
-import ArrowLeftSLineIcon from "remixicon-react/ArrowLeftSLineIcon"
 import CloseLineIcon from "remixicon-react/CloseLineIcon"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
 import CalendarLineIcon from "remixicon-react/CalendarLineIcon"
@@ -10,6 +9,7 @@ import DownloadLineIcon from "remixicon-react/DownloadLineIcon"
 import UserLineIcon from "remixicon-react/UserLineIcon"
 import CameraLineIcon from "remixicon-react/CameraLineIcon"
 import { Modal } from "@/components/ui/Modal"
+import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
@@ -418,44 +418,17 @@ export default function Detections() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-[#2A2A2A] px-6 py-3 text-xs text-[#737373]">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              Items per page
-              <span className="flex items-center gap-1 rounded border border-[#2A2A2A] bg-[#141414] px-2 py-1 text-white">
-                {ALERTS_PAGE_SIZE}
-              </span>
-            </div>
-            <span>
-              {rangeStart}-{rangeEndValue} of {currentTotalFiltered}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={currentPagination.page === 1 || currentQuery.isFetching}
-              onClick={currentPagination.prev}
-              className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <ArrowLeftSLineIcon size={14} /> Previous
-            </button>
-            <div className="flex items-center gap-1">
-              <span className="flex h-6 min-w-6 items-center justify-center rounded bg-[#1E1E1E] px-2 font-medium text-white">
-                {currentPagination.page}
-              </span>
-              <span className="text-[#555]">of</span>
-              <span>{currentPagination.totalPages}</span>
-            </div>
-            <button
-              type="button"
-              disabled={currentPagination.page >= currentPagination.totalPages || currentQuery.isFetching}
-              onClick={currentPagination.next}
-              className="flex items-center gap-1 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next <ArrowRightSLineIcon size={14} />
-            </button>
-          </div>
-        </div>
+        <PaginationFooter
+          page={currentPagination.page}
+          totalPages={currentPagination.totalPages}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEndValue}
+          totalFiltered={currentTotalFiltered}
+          pageSize={ALERTS_PAGE_SIZE}
+          isFetching={currentQuery.isFetching}
+          onPrev={currentPagination.prev}
+          onNext={currentPagination.next}
+        />
       </div>
 
       <Modal
