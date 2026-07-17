@@ -25,7 +25,7 @@ import {
   getDashboardAnalytics,
 } from "@/services/analytics"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
-import { getApiErrorMessage } from "@/utils/api"
+import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { formatHourLabel, truncateLabel } from "@/utils/analytics"
 import type { AnalyticsFilters } from "@/types/analytics"
 
@@ -118,18 +118,11 @@ export default function Dashboard() {
         </div>
 
         {dashboardQuery.isError ? (
-          <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3">
-            <p className="text-xs text-[#FCA5A5]">
-              {getApiErrorMessage(dashboardQuery.error, "Unable to load dashboard analytics.")}
-            </p>
-            <button
-              type="button"
-              onClick={() => dashboardQuery.refetch()}
-              className="rounded-md border border-[#333] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#1A1A1A]"
-            >
-              Retry
-            </button>
-          </div>
+          <QueryErrorBanner
+            error={dashboardQuery.error}
+            fallback="Unable to load dashboard analytics."
+            onRetry={() => dashboardQuery.refetch()}
+          />
         ) : null}
 
         {/* Toolbar */}
@@ -194,9 +187,7 @@ export default function Dashboard() {
         </div>
 
         {exportMutation.isError ? (
-          <div className="mb-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3 text-xs text-[#FCA5A5]">
-            {getApiErrorMessage(exportMutation.error, "Unable to export dashboard CSV.")}
-          </div>
+          <QueryErrorBanner error={exportMutation.error} fallback="Unable to export dashboard CSV." />
         ) : null}
 
         {/* Main grid */}

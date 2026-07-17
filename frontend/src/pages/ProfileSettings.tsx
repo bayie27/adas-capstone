@@ -5,6 +5,7 @@ import EyeLineIcon from "remixicon-react/EyeLineIcon"
 import EyeOffLineIcon from "remixicon-react/EyeOffLineIcon"
 import LockLineIcon from "remixicon-react/LockLineIcon"
 import { Modal } from "@/components/ui/Modal"
+import type { NoticeState } from "@/components/ui/NoticeBanner"
 import {
   changeMyPassword,
   getMyProfile,
@@ -15,11 +16,6 @@ import { getApiErrorMessage } from "@/utils/api"
 import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/users"
 
 const PROFILE_QUERY_KEY = ["my-profile"] as const
-
-type NoticeState = {
-  tone: "success" | "error"
-  message: string
-}
 
 type ProfileFormState = {
   first_name: string

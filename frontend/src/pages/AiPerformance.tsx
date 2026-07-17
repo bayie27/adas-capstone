@@ -15,11 +15,11 @@ import {
   getPerformanceAnalytics,
 } from "@/services/analytics"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
+import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
-import { getApiErrorMessage } from "@/utils/api"
 import { formatPercent } from "@/utils/analytics"
 
 const PERFORMANCE_QUERY_KEY = ["performance-analytics"] as const
@@ -110,18 +110,11 @@ export default function AiPerformance() {
       </div>
 
       {performanceQuery.isError ? (
-        <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3">
-          <p className="text-xs text-[#FCA5A5]">
-            {getApiErrorMessage(performanceQuery.error, "Unable to load AI performance analytics.")}
-          </p>
-          <button
-            type="button"
-            onClick={() => performanceQuery.refetch()}
-            className="rounded-md border border-[#333] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#1A1A1A]"
-          >
-            Retry
-          </button>
-        </div>
+        <QueryErrorBanner
+          error={performanceQuery.error}
+          fallback="Unable to load AI performance analytics."
+          onRetry={() => performanceQuery.refetch()}
+        />
       ) : null}
 
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-5">
@@ -233,9 +226,7 @@ export default function AiPerformance() {
       </div>
 
       {exportMutation.isError ? (
-        <div className="mb-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3 text-xs text-[#FCA5A5]">
-          {getApiErrorMessage(exportMutation.error, "Unable to export AI performance CSV.")}
-        </div>
+        <QueryErrorBanner error={exportMutation.error} fallback="Unable to export AI performance CSV." />
       ) : null}
 
       <div className="overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#111111]">

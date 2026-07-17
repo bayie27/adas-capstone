@@ -7,11 +7,7 @@ import { getCurrentUser, loginUser } from "@/services/auth"
 import { useAuthStore } from "@/store/useAuthStore"
 import { mapApiRoleToAppRole, getDefaultRouteForRole } from "@/utils/auth"
 import { getApiErrorMessage } from "@/utils/api"
-
-type NoticeState = {
-  tone: "success" | "error"
-  message: string
-}
+import type { NoticeState } from "@/components/ui/NoticeBanner"
 
 export default function Login() {
   const navigate = useNavigate()

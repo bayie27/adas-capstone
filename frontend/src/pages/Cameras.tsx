@@ -11,7 +11,9 @@ import RobotLineIcon from "remixicon-react/RobotLineIcon"
 import SearchLineIcon from "remixicon-react/SearchLineIcon"
 
 import { Modal } from "@/components/ui/Modal"
+import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
+import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
@@ -43,11 +45,6 @@ const SECONDARY_BUTTON_CLASS =
   "rounded-md border border-[#333] bg-transparent px-4 py-2 text-sm font-medium text-[#E4E4E7] transition-colors hover:text-white"
 const PRIMARY_BUTTON_CLASS =
   "rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-
-type NoticeState = {
-  tone: "success" | "error"
-  message: string
-}
 
 type CameraFormState = {
   camera_name: string
@@ -451,18 +448,7 @@ export default function Cameras() {
         </p>
       </div>
 
-      {notice ? (
-        <div
-          className={cn(
-            "mb-4 rounded-md border px-4 py-3 text-xs",
-            notice.tone === "success"
-              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-              : "border-[#F87171]/30 bg-[#F87171]/10 text-[#FCA5A5]",
-          )}
-        >
-          {notice.message}
-        </div>
-      ) : null}
+      {notice ? <NoticeBanner notice={notice} /> : null}
 
       {toggleErrorMessage ? (
         <div className="mb-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3 text-xs text-[#FCA5A5]">
@@ -492,18 +478,11 @@ export default function Cameras() {
       </div>
 
       {camerasQuery.isError ? (
-        <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-4 py-3">
-          <p className="text-xs text-[#FCA5A5]">
-            {getApiErrorMessage(camerasQuery.error, "Unable to load camera records.")}
-          </p>
-          <button
-            type="button"
-            onClick={() => camerasQuery.refetch()}
-            className="rounded-md border border-[#333] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#1A1A1A]"
-          >
-            Retry
-          </button>
-        </div>
+        <QueryErrorBanner
+          error={camerasQuery.error}
+          fallback="Unable to load camera records."
+          onRetry={() => camerasQuery.refetch()}
+        />
       ) : null}
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
