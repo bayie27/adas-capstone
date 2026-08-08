@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import cv2
 import time
 from ultralytics import YOLO
@@ -5,11 +7,30 @@ from accident import AccidentManager
 from config import CONFIDENCE_THRESHOLD
 from sync import start_sync_thread
 
+MODEL_DIR = Path(__file__).resolve().parent
+ENGINE_PATH = MODEL_DIR / "best.engine"
+WEIGHTS_PATH = MODEL_DIR / "best.pt"
+
+
+def load_model():
+    """Prefer the TensorRT engine; fall back to portable .pt weights.
+
+    best.engine is built for one specific GPU + driver + TensorRT version and
+    will not load elsewhere, so a failure here is expected on other machines.
+    """
+    if ENGINE_PATH.exists():
+        try:
+            return YOLO(str(ENGINE_PATH))
+        except Exception as exc:
+            print(f"TensorRT engine failed to load ({exc}); falling back to {WEIGHTS_PATH.name}")
+    return YOLO(str(WEIGHTS_PATH))
+
+
 def run_multi_camera_inference():
     print("Initializing ADAS Edge Inference Server...")
 
-    # Load the optimized TensorRT Engine
-    model = YOLO("ai_engine/best.engine")
+    # Load the optimized TensorRT Engine, falling back to portable weights
+    model = load_model()
     alert_manager = AccidentManager()
 
     # Change cameras from a list to a dictionary for dynamic lookup by ID
