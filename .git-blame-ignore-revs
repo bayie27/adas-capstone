@@ -1,0 +1,11 @@
+# Commits listed here are skipped by `git blame` (once configured — see
+# CONTRIBUTING.md) because they are pure, mechanical reformatting with no
+# semantic change, so blaming through them to find who actually wrote a line
+# is more useful than blaming the formatter run.
+#
+# Do NOT add commits here that mix formatting with a real code change (e.g.
+# exception-chaining fixes, enum base-class changes) — those need normal
+# blame/review.
+
+# style: apply ruff and prettier formatting
+ba393ff09d290873f4cb28b96b6ec3aeca1caca6

@@ -14,6 +14,14 @@ cp .env.example .env
 - `pnpm install` — **run this at the repo root**, not inside `frontend/`. This is a pnpm workspace, and running install at the root is what triggers husky's `prepare` script and activates the git hooks below. Running it only inside `frontend/` will leave your hooks inert.
 - `cp .env.example .env` — then fill in real values. The backend hard-fails on startup if any of the 10 keys are missing.
 
+Also run this once, locally (it's a personal git config, not something that can be committed):
+
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+Without it, `git blame` will stop at the repo's one bulk formatting commit (`style: apply ruff and prettier formatting`) instead of the commit that actually introduced a line.
+
 ## The one command
 
 Run `pnpm check` before pushing. Run `pnpm full:check` before opening a PR — it's everything `pnpm check` does, plus a production build and the E2E suite.
