@@ -5,17 +5,35 @@ from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models import UserRole
 
+
+def install_sqlite_pragmas(target_engine) -> None:
+    """D-005 connection policy, applied on every new DBAPI connection.
+
+    foreign_keys=ON is the important one — SQLite defaults it off, so none
+    of the existing foreign keys were enforced. Guarded by a dialect check
+    so a non-SQLite DATABASE_URL doesn't blow up at connect time.
+    """
+
+    @event.listens_for(target_engine, "connect")
+    def _configure_sqlite(dbapi_connection, connection_record):
+        if target_engine.dialect.name != "sqlite":
+            return
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=FULL")
+        cursor.execute(f"PRAGMA busy_timeout={settings.SQLITE_BUSY_TIMEOUT_MS}")
+        cursor.close()
+
+
+_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+
 engine = create_engine(
-    settings.DATABASE_URL, echo=True, connect_args={"check_same_thread": False}
+    settings.DATABASE_URL,
+    echo=settings.SQL_ECHO,
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
 )
-
-
-# Enable WAL mode for concurrent read/write support
-@event.listens_for(engine, "connect")
-def set_wal_mode(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.close()
+install_sqlite_pragmas(engine)
 
 
 def init_db() -> None:
@@ -36,7 +54,7 @@ def init_db() -> None:
                 first_name="System",
                 last_name="Administrator",
                 password_hash=get_password_hash(
-                    settings.DEFAULT_ADMIN_PASSWORD
+                    settings.DEFAULT_ADMIN_PASSWORD.get_secret_value()
                 ),  # Must be changed on first login!
                 role=UserRole.ADMIN,
                 is_active=True,
