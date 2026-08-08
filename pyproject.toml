@@ -8,19 +8,32 @@ dependencies = [
     "bcrypt==4.0.1",
     "fastapi[standard]>=0.136.1",
     "gputil>=1.4.0",
-    "opencv-python>=4.13.0.92",
     "passlib[bcrypt]>=1.7.4",
     "psutil>=7.2.2",
+    "pydantic-settings>=2.0",
     "pyjwt>=2.12.1",
-    "pytest>=9.0.3",
+    "python-dotenv>=1.0",
     "python-multipart>=0.0.26",
     "requests>=2.33.1",
     "sqlmodel>=0.0.38",
+]
+
+[project.optional-dependencies]
+ai = [
+    "opencv-python>=4.13.0.92",
     "tensorrt>=10.16.1.11",
     "torch>=2.11.0",
     "torchvision>=0.26.0",
     "ultralytics>=8.4.41",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.9",
+]
+
 [[tool.uv.index]]
 name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/cu130"
@@ -33,3 +46,29 @@ torchvision = { index = "pytorch-cu130" }
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 cache_dir = "backend/.pytest_cache"
+addopts = "-q"
+markers = [
+    "slow: marks tests as slow",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+# Ruff formats fenced ```python code blocks inside Markdown by default. This repo
+# uses Ruff for Python only (Prettier owns Markdown), and several working docs at
+# the repo root are untracked notes that must not be touched — so keep Ruff off
+# Markdown entirely.
+extend-exclude = ["ai_engine/snapshots", "ai_engine/sample_vids", ".venv", "*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # formatter owns line length
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's Depends()/Query()/etc. in argument defaults is the framework's
+# documented pattern, not the mutable-default bug B008 looks for.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts must call bootstrap_backend() before importing app.* — imports cannot be at top.
+"backend/scripts/*.py" = ["E402"]
