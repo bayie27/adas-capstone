@@ -97,7 +97,7 @@ DSS_PASS=your-vms-password
 
 **Python dependencies (backend + AI engine):**
 
-```bash
+````bash
 uv sync
 
 **Frontend dependencies:**
@@ -105,7 +105,7 @@ uv sync
 ```bash
 cd frontend
 pnpm install
-```
+````
 
 ---
 
@@ -132,15 +132,61 @@ Dashboard available at `http://localhost:5173`.
 
 **3. Simulate camera streams (development)**
 
-Start MediaMTX, then broadcast the sample videos:
+The AI engine expects RTSP feeds at `rtsp://localhost:8554/channel1` through `channel5`. There are three ways to produce them; pick whichever fits what you're doing. All three need `ai_engine/sample_vids/` populated first — see [Obtaining the sample clips](#obtaining-the-sample-clips) below.
+
+Channel → clip mapping:
+
+| Path       | Clip                     |
+| ---------- | ------------------------ |
+| `channel1` | `car_car.mp4`            |
+| `channel2` | `car-motor-motor.mp4`    |
+| `channel3` | `defour.mp4`             |
+| `channel4` | `red-car-motorcycle.mp4` |
+| `channel5` | `motor-to-motor.mp4`     |
+
+**Method 1 — `mediamtx.yml` (default, recommended).** One command, all 5 channels, run from the repo root:
 
 ```bash
-ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\car_car.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel1
-ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\car-motor-motor.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel2
-ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\defour.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel3
-ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\red-car-motorcycle.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel4
-ffmpeg -re -stream_loop -1 -i "ai_engine\sample_vids\motor-to-motor.mp4" -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel5
+mediamtx mediamtx.yml
 ```
+
+`runOnInit` starts an `ffmpeg` per channel automatically and restarts it if it dies. One Ctrl+C in the MediaMTX terminal cleans up MediaMTX and every child `ffmpeg` process. `scripts/start-sim.ps1` wraps this with preflight checks (ffmpeg/mediamtx on PATH, `sample_vids/` populated) and clearer errors if something's missing:
+
+```powershell
+.\scripts\start-sim.ps1
+```
+
+**Method 2 — manual ffmpeg per channel.** One terminal per channel, blocking. Useful if you only need one or two streams up. Run from the repo root (the paths below are root-relative). `-rtsp_transport tcp` matters, not just style — with the default UDP transport, publishing several channels at once over loopback drops RTP packets constantly:
+
+```powershell
+ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\car_car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel1
+ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\car-motor-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel2
+ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\defour.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel3
+ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\red-car-motorcycle.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel4
+ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\motor-to-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel5
+```
+
+**Method 3 — OBS Studio via RTMP (interactive playback control).** Use this when you want to scrub/pause/restart a clip live during a demo — Methods 1 and 2 just loop blindly.
+
+1. OBS → Settings → Stream → Service: **Custom...**, Server: `rtmp://localhost:1935/channel1`, Stream Key: leave empty. (Equivalently, Server `rtmp://localhost:1935` + Stream Key `channel1` — MediaMTX's docs recommend putting the path in the server URL.)
+2. Add a **Media Source** pointing at a clip in `ai_engine/sample_vids/`, tick **Loop**. The Media Source exposes Restart/Pause/Play hotkeys for interactive control.
+3. Click **Start Streaming**. MediaMTX auto-creates the path and republishes it as `rtsp://localhost:8554/channel1` — no AI engine changes needed.
+
+**Limitation:** one OBS instance publishes exactly one stream. Simulating all 5 channels via OBS needs 5 OBS instances/profiles or the `obs-multi-rtmp` plugin — use OBS for an interactive demo of one or two channels, and Method 1 for bulk background simulation.
+
+MediaMTX's default ports: RTSP `8554`, RTMP `1935`, HLS `8888`, WebRTC `8889`, SRT `8890`.
+
+#### Obtaining the sample clips
+
+`.gitignore` excludes `*.mp4`, so `ai_engine/sample_vids/` is not in the repo — a fresh clone has no clips and can't run the simulation until you add them. Expected filenames:
+
+- `car_car.mp4`
+- `car-motor-motor.mp4`
+- `defour.mp4`
+- `red-car-motorcycle.mp4`
+- `motor-to-motor.mp4`
+
+> **TODO(team):** paste the shared-drive link for `sample_vids/` here.
 
 **4. Start the AI engine**
 
