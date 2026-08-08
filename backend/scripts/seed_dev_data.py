@@ -3,13 +3,11 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from _bootstrap import bootstrap_backend
 
 bootstrap_backend()
-
-from sqlmodel import Session, select
 
 from app.core.db import engine, init_db
 from app.core.security import get_password_hash
@@ -22,6 +20,7 @@ from app.models import (
     User,
     UserRole,
 )
+from sqlmodel import Session, select
 
 DEFAULT_SEED_PROFILE = "demo"
 SEED_PROFILES = ("demo", "analytics", "edge")
@@ -61,7 +60,7 @@ def ensure_user(
         role=role,
         password_hash=get_password_hash(password),
         is_active=is_active,
-        password_changed_at=datetime.now(timezone.utc),
+        password_changed_at=datetime.now(UTC),
     )
     session.add(user)
     session.commit()
@@ -80,7 +79,9 @@ def ensure_camera(
     is_enabled: bool = True,
     is_active: bool = True,
 ) -> Camera:
-    camera = session.exec(select(Camera).where(Camera.camera_name == camera_name)).first()
+    camera = session.exec(
+        select(Camera).where(Camera.camera_name == camera_name)
+    ).first()
     if camera:
         return camera
 
@@ -162,7 +163,9 @@ def seeded_timestamp(
     return candidate
 
 
-def seed_sample_cameras(session: Session) -> tuple[Camera, Camera, Camera, Camera, Camera, Camera]:
+def seed_sample_cameras(
+    session: Session,
+) -> tuple[Camera, Camera, Camera, Camera, Camera, Camera]:
     camera_1 = ensure_camera(
         session,
         camera_name="Ayala Highway Cam",
@@ -601,7 +604,9 @@ def build_alert_specs(profile: str, now: datetime) -> list[SeedAlertSpec]:
         return PROFILE_BUILDERS[profile](now)
     except KeyError as exc:
         valid_profiles = ", ".join(SEED_PROFILES)
-        raise ValueError(f"Unknown seed profile '{profile}'. Expected one of: {valid_profiles}.") from exc
+        raise ValueError(
+            f"Unknown seed profile '{profile}'. Expected one of: {valid_profiles}."
+        ) from exc
 
 
 def seed_cameras_only() -> None:
@@ -614,7 +619,7 @@ def seed_cameras_only() -> None:
 def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
     init_db()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     with Session(engine) as session:
         admin = session.exec(select(User).where(User.username == "admin")).first()
@@ -654,7 +659,9 @@ def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
             password="operator123",
         )
 
-        camera_1, camera_2, camera_3, camera_4, camera_5, camera_6 = seed_sample_cameras(session)
+        camera_1, camera_2, camera_3, camera_4, camera_5, camera_6 = (
+            seed_sample_cameras(session)
+        )
 
         operators = {
             "dsahagun": operator_1,
@@ -684,15 +691,21 @@ def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
             try:
                 camera = cameras[spec.camera_key]
             except KeyError as exc:
-                raise RuntimeError(f"Unknown camera key in seed spec: {spec.camera_key}") from exc
+                raise RuntimeError(
+                    f"Unknown camera key in seed spec: {spec.camera_key}"
+                ) from exc
 
             if camera.camera_id is None:
                 raise RuntimeError(
                     f"Camera {camera.camera_name} was expected to have a database ID."
                 )
 
-            verified_by = operators.get(spec.verified_by_key) if spec.verified_by_key else None
-            closed_by = operators.get(spec.closed_by_key) if spec.closed_by_key else None
+            verified_by = (
+                operators.get(spec.verified_by_key) if spec.verified_by_key else None
+            )
+            closed_by = (
+                operators.get(spec.closed_by_key) if spec.closed_by_key else None
+            )
 
             if spec.verified_after_minutes is not None and verified_by is None:
                 raise RuntimeError(
@@ -706,7 +719,9 @@ def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
             ensure_alert(
                 session,
                 camera_id=camera.camera_id,
-                snapshot_path=make_snapshot(camera.camera_id, spec.detected_at, spec.label),
+                snapshot_path=make_snapshot(
+                    camera.camera_id, spec.detected_at, spec.label
+                ),
                 detected_at=spec.detected_at,
                 confidence_score=spec.confidence_score,
                 detection_status=spec.detection_status,

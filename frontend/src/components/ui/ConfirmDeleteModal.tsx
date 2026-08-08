@@ -1,8 +1,6 @@
-﻿
-import { Modal } from "@/components/ui/Modal"
+﻿import { Modal } from "@/components/ui/Modal"
 import { getApiErrorMessage } from "@/utils/api"
 import { RiAlertLine } from "@remixicon/react"
-
 
 interface ConfirmDeleteModalProps {
   isOpen: boolean
@@ -31,7 +29,11 @@ export function ConfirmDeleteModal({
         <RiAlertLine size={36} className="mb-4 text-[#ef4444]" />
         <h3 className="mb-2 text-[15px] font-bold text-white">{title}</h3>
         <p className="mb-6 px-4 text-[11px] leading-relaxed text-[#A1A1AA]">{description}</p>
-        {error ? <p className="mb-4 text-xs text-[#F87171]">{getApiErrorMessage(error, "Action failed.")}</p> : null}
+        {error ? (
+          <p className="mb-4 text-xs text-[#F87171]">
+            {getApiErrorMessage(error, "Action failed.")}
+          </p>
+        ) : null}
         <div className="flex w-full items-center justify-end gap-3">
           <button
             type="button"
@@ -53,4 +55,3 @@ export function ConfirmDeleteModal({
     </Modal>
   )
 }
-

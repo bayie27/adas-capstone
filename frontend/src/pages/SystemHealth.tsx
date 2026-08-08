@@ -1,9 +1,6 @@
 ﻿import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 
-
-
-
 import {
   AreaChart,
   Area,
@@ -18,7 +15,6 @@ import { StatCard } from "@/components/ui/StatCard"
 import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/services/health"
 import type { SystemHealthDataPoint } from "@/types/health"
 import { RiDashboard3Line, RiHardDrive2Line, RiServerLine, RiTimerLine } from "@remixicon/react"
-
 
 // â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -64,7 +60,15 @@ interface HealthChartProps {
   isLoading: boolean
 }
 
-function HealthChart({ title, data, dataKey, color, range, unit = "%", isLoading }: HealthChartProps) {
+function HealthChart({
+  title,
+  data,
+  dataKey,
+  color,
+  range,
+  unit = "%",
+  isLoading,
+}: HealthChartProps) {
   const chartData = data.map((point) => ({
     time: formatTimestamp(point.timestamp, range),
     value: point[dataKey] as number,
@@ -74,15 +78,25 @@ function HealthChart({ title, data, dataKey, color, range, unit = "%", isLoading
     <div className="flex h-[260px] flex-col rounded-xl border border-[#2A2A2A] bg-[#111111] p-5">
       <h3 className="mb-4 text-xs font-medium text-[#D4D4D4]">{title}</h3>
       {isLoading ? (
-        <div className="flex flex-1 items-center justify-center text-xs text-[#555]">Loading...</div>
+        <div className="flex flex-1 items-center justify-center text-xs text-[#555]">
+          Loading...
+        </div>
       ) : data.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center text-xs text-[#555]">No data available</div>
+        <div className="flex flex-1 items-center justify-center text-xs text-[#555]">
+          No data available
+        </div>
       ) : (
         <div className="flex-1 -ml-4">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
               <defs>
-                <linearGradient id={`grad-${title.replace(/\s+/g, "")}`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient
+                  id={`grad-${title.replace(/\s+/g, "")}`}
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
                   <stop offset="5%" stopColor={color} stopOpacity={0.15} />
                   <stop offset="95%" stopColor={color} stopOpacity={0} />
                 </linearGradient>
@@ -169,7 +183,9 @@ export default function SystemHealth() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="mb-0.5 text-xl font-semibold text-white">System Health</h1>
-          <p className="text-xs text-[#737373]">Oversee system diagnostics and hardware performance</p>
+          <p className="text-xs text-[#737373]">
+            Oversee system diagnostics and hardware performance
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {isOnline === null ? (
@@ -297,4 +313,3 @@ export default function SystemHealth() {
     </div>
   )
 }
-

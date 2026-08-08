@@ -21,7 +21,6 @@ Precision formula (Use Case 7 / paper §Precision Calibration):
 import csv
 import io
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import selectinload
@@ -49,6 +48,7 @@ _DISMISSED_STATUSES = [DetectionStatus.DISMISSED.value]
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
 
 def _validate_common_filters(
     *,
@@ -108,13 +108,14 @@ def _format_user_name(user: User | None) -> str | None:
 # Module 1 — Dashboard Analytics  (FR-15)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/dashboard")
 def get_dashboard_analytics(
-    start_date: Optional[datetime] = Query(
+    start_date: datetime | None = Query(
         default=None,
         description="ISO 8601 start of window, e.g. 2026-01-01T00:00:00Z",
     ),
-    end_date: Optional[datetime] = Query(
+    end_date: datetime | None = Query(
         default=None,
         description="ISO 8601 end of window, e.g. 2026-12-31T23:59:59Z",
     ),
@@ -162,8 +163,7 @@ def get_dashboard_analytics(
     )
 
     status_counts: dict[str, int] = {
-        row[0]: row[1]
-        for row in session.exec(status_counts_query).all()
+        row[0]: row[1] for row in session.exec(status_counts_query).all()
     }
 
     ongoing_count = status_counts.get(DetectionStatus.ONGOING.value, 0)
@@ -216,14 +216,12 @@ def get_dashboard_analytics(
     hour_map: dict[int, int] = {
         int(row[0]): row[1]
         for row in session.exec(hour_query).all()
-        if row[0] is not None  # guard against NULL detected_at (schema forbids it, but be safe)
+        if row[0]
+        is not None  # guard against NULL detected_at (schema forbids it, but be safe)
     }
 
     # Always emit all 24 buckets so the chart has a stable x-axis
-    peak_accident_times = [
-        {"hour": h, "count": hour_map.get(h, 0)}
-        for h in range(24)
-    ]
+    peak_accident_times = [{"hour": h, "count": hour_map.get(h, 0)} for h in range(24)]
 
     return {
         "kpis": {
@@ -238,8 +236,8 @@ def get_dashboard_analytics(
 
 @router.get("/export/dashboard")
 def export_dashboard_csv(
-    start_date: Optional[datetime] = Query(default=None),
-    end_date: Optional[datetime] = Query(default=None),
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
     camera_id: list[int] | None = Query(default=None),
     session: Session = Depends(get_session),
 ):
@@ -270,36 +268,40 @@ def export_dashboard_csv(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "Log ID",
-        "Detected At",
-        "Camera ID",
-        "Camera Name",
-        "Status",
-        "Confidence",
-        "Verified By ID",
-        "Verified By Name",
-        "Verified At",
-        "Closed By ID",
-        "Closed By Name",
-        "Closed At",
-    ])
+    writer.writerow(
+        [
+            "Log ID",
+            "Detected At",
+            "Camera ID",
+            "Camera Name",
+            "Status",
+            "Confidence",
+            "Verified By ID",
+            "Verified By Name",
+            "Verified At",
+            "Closed By ID",
+            "Closed By Name",
+            "Closed At",
+        ]
+    )
 
     for log in logs:
-        writer.writerow([
-            log.log_id,
-            log.detected_at.isoformat(),
-            log.camera_id,
-            log.camera.camera_name if log.camera else "N/A",
-            log.detection_status,
-            _format_pct(log.confidence_score),
-            log.verified_by_id or "N/A",
-            _format_user_name(log.verified_by) or "N/A",
-            log.verified_at.isoformat() if log.verified_at else "N/A",
-            log.closed_by_id or "N/A",
-            _format_user_name(log.closed_by) or "N/A",
-            log.closed_at.isoformat() if log.closed_at else "N/A",
-        ])
+        writer.writerow(
+            [
+                log.log_id,
+                log.detected_at.isoformat(),
+                log.camera_id,
+                log.camera.camera_name if log.camera else "N/A",
+                log.detection_status,
+                _format_pct(log.confidence_score),
+                log.verified_by_id or "N/A",
+                _format_user_name(log.verified_by) or "N/A",
+                log.verified_at.isoformat() if log.verified_at else "N/A",
+                log.closed_by_id or "N/A",
+                _format_user_name(log.closed_by) or "N/A",
+                log.closed_at.isoformat() if log.closed_at else "N/A",
+            ]
+        )
 
     response = Response(content=output.getvalue(), media_type="text/csv")
     response.headers["Content-Disposition"] = (
@@ -311,6 +313,7 @@ def export_dashboard_csv(
 # ---------------------------------------------------------------------------
 # Module 2 — AI Performance  (FR-14)
 # ---------------------------------------------------------------------------
+
 
 def _fetch_per_camera_stats(
     session: Session,
@@ -364,11 +367,11 @@ def _weighted_avg(stat_map: dict[int, tuple[int, float | None]]) -> float | None
 
 @router.get("/performance")
 def get_ai_performance(
-    start_date: Optional[datetime] = Query(
+    start_date: datetime | None = Query(
         default=None,
         description="ISO 8601 start of window, e.g. 2026-01-01T00:00:00Z",
     ),
-    end_date: Optional[datetime] = Query(
+    end_date: datetime | None = Query(
         default=None,
         description="ISO 8601 end of window, e.g. 2026-12-31T23:59:59Z",
     ),
@@ -376,7 +379,7 @@ def get_ai_performance(
         default=None,
         description="Filter by camera ID(s), e.g. ?camera_id=1&camera_id=2",
     ),
-    search: Optional[str] = Query(
+    search: str | None = Query(
         default=None,
         min_length=1,
         max_length=100,
@@ -452,19 +455,21 @@ def get_ai_performance(
         conf_count, acc_avg = confirmed_map.get(cam_id, (0, None))
         dis_count, dis_avg = dismissed_map.get(cam_id, (0, None))
 
-        per_camera.append({
-            "camera_id": cam_id,
-            "camera_name": cam_name,
-            "total_accidents": conf_count,
-            "total_dismissed": dis_count,
-            "precision_score": _compute_precision(conf_count, dis_count),
-            "avg_accident_confidence": (
-                round(acc_avg, 4) if acc_avg is not None else None
-            ),
-            "avg_dismissed_confidence": (
-                round(dis_avg, 4) if dis_avg is not None else None
-            ),
-        })
+        per_camera.append(
+            {
+                "camera_id": cam_id,
+                "camera_name": cam_name,
+                "total_accidents": conf_count,
+                "total_dismissed": dis_count,
+                "precision_score": _compute_precision(conf_count, dis_count),
+                "avg_accident_confidence": (
+                    round(acc_avg, 4) if acc_avg is not None else None
+                ),
+                "avg_dismissed_confidence": (
+                    round(dis_avg, 4) if dis_avg is not None else None
+                ),
+            }
+        )
 
     # Sort by total activity descending — most active cameras first in the table
     per_camera.sort(
@@ -489,10 +494,10 @@ def get_ai_performance(
 
 @router.get("/export/performance")
 def export_performance_csv(
-    start_date: Optional[datetime] = Query(default=None),
-    end_date: Optional[datetime] = Query(default=None),
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
     camera_id: list[int] | None = Query(default=None),
-    search: Optional[str] = Query(default=None, min_length=1, max_length=100),
+    search: str | None = Query(default=None, min_length=1, max_length=100),
     session: Session = Depends(get_session),
 ):
     """
@@ -512,26 +517,30 @@ def export_performance_csv(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "Camera ID",
-        "Camera Name",
-        "Total Accidents",
-        "Total Dismissed",
-        "Precision Score",
-        "Avg Accident Confidence",
-        "Avg Dismissed Confidence",
-    ])
+    writer.writerow(
+        [
+            "Camera ID",
+            "Camera Name",
+            "Total Accidents",
+            "Total Dismissed",
+            "Precision Score",
+            "Avg Accident Confidence",
+            "Avg Dismissed Confidence",
+        ]
+    )
 
     for row in data["per_camera"]:
-        writer.writerow([
-            row["camera_id"],
-            row["camera_name"],
-            row["total_accidents"],
-            row["total_dismissed"],
-            _format_pct(row["precision_score"]),
-            _format_pct(row["avg_accident_confidence"]),
-            _format_pct(row["avg_dismissed_confidence"]),
-        ])
+        writer.writerow(
+            [
+                row["camera_id"],
+                row["camera_name"],
+                row["total_accidents"],
+                row["total_dismissed"],
+                _format_pct(row["precision_score"]),
+                _format_pct(row["avg_accident_confidence"]),
+                _format_pct(row["avg_dismissed_confidence"]),
+            ]
+        )
 
     response = Response(content=output.getvalue(), media_type="text/csv")
     response.headers["Content-Disposition"] = (

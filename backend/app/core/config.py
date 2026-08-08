@@ -1,8 +1,11 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import SecretStr
 from pathlib import Path
 
-ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+from pydantic import SecretStr, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+ROOT_ENV_FILE = REPO_ROOT / ".env"
+
 
 class Settings(BaseSettings):
     # Security
@@ -25,5 +28,21 @@ class Settings(BaseSettings):
 
     # Automatically load from the .env file in the root directory
     model_config = SettingsConfigDict(env_file=ROOT_ENV_FILE, extra="ignore")
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def resolve_sqlite_path(cls, v: str) -> str:
+        """Anchor a relative SQLite path to REPO_ROOT so it no longer depends on CWD."""
+        prefix = "sqlite:///"
+        if not v.startswith(prefix):
+            return v
+
+        path_str = v[len(prefix) :]
+        if path_str == ":memory:" or Path(path_str).is_absolute():
+            return v
+
+        resolved = (REPO_ROOT / path_str).resolve()
+        return f"{prefix}{resolved.as_posix()}"
+
 
 settings = Settings()

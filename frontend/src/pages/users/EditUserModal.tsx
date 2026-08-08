@@ -9,7 +9,6 @@ import { getApiErrorMessage } from "@/utils/api"
 import { formatShortDateTime } from "@/utils/datetime"
 import { RiPencilLine } from "@remixicon/react"
 
-
 type EditUserFormState = {
   first_name: string
   last_name: string
@@ -33,7 +32,8 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
   const [validationError, setValidationError] = useState<string | null>(null)
 
   const mutation = useMutation({
-    mutationFn: ({ userId, input }: { userId: number; input: UpdateUserInput }) => updateUser(userId, input),
+    mutationFn: ({ userId, input }: { userId: number; input: UpdateUserInput }) =>
+      updateUser(userId, input),
     onSuccess: (updatedUser) => onSuccess(updatedUser),
   })
 
@@ -76,7 +76,8 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
   }
 
   const errorMessage =
-    validationError ?? (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to update user.") : null)
+    validationError ??
+    (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to update user.") : null)
 
   return (
     <Modal
@@ -121,7 +122,9 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
             </div>
 
             <div>
-              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">First Name</label>
+              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">
+                First Name
+              </label>
               <input
                 type="text"
                 value={form.first_name}
@@ -130,7 +133,9 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
               />
             </div>
             <div>
-              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">Last Name</label>
+              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">
+                Last Name
+              </label>
               <input
                 type="text"
                 value={form.last_name}
@@ -139,7 +144,9 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
               />
             </div>
             <div>
-              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">Username</label>
+              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">
+                Username
+              </label>
               <input
                 type="text"
                 value={form.username}
@@ -180,4 +187,3 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
     </Modal>
   )
 }
-

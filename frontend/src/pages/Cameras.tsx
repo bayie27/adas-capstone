@@ -1,12 +1,6 @@
 ﻿import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-
-
-
-
-
-
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
@@ -29,8 +23,14 @@ import {
 import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"
-import { RiAddLine, RiCameraLine, RiDeleteBinLine, RiGlobalLine, RiPencilLine, RiRobotLine } from "@remixicon/react"
-
+import {
+  RiAddLine,
+  RiCameraLine,
+  RiDeleteBinLine,
+  RiGlobalLine,
+  RiPencilLine,
+  RiRobotLine,
+} from "@remixicon/react"
 
 const CAMERAS_PAGE_SIZE = 8
 const CAMERAS_QUERY_KEY = ["cameras"] as const
@@ -61,7 +61,14 @@ export default function Cameras() {
   )
 
   const camerasQuery = useQuery({
-    queryKey: [...CAMERAS_QUERY_KEY, debouncedSearchTerm, connectionFilter, aiFilter, isEnabledFilter, offset],
+    queryKey: [
+      ...CAMERAS_QUERY_KEY,
+      debouncedSearchTerm,
+      connectionFilter,
+      aiFilter,
+      isEnabledFilter,
+      offset,
+    ],
     queryFn: () =>
       getCameras({
         search: debouncedSearchTerm || undefined,
@@ -74,7 +81,8 @@ export default function Cameras() {
     placeholderData: (previousData) => previousData,
   })
 
-  const invalidateCameraQueries = () => queryClient.invalidateQueries({ queryKey: CAMERAS_QUERY_KEY })
+  const invalidateCameraQueries = () =>
+    queryClient.invalidateQueries({ queryKey: CAMERAS_QUERY_KEY })
 
   const deleteCameraMutation = useMutation({
     mutationFn: deleteCamera,
@@ -117,19 +125,19 @@ export default function Cameras() {
         <StatCard
           icon={RiCameraLine}
           title="Total Cameras"
-          value={camerasQuery.isLoading ? "..." : camerasQuery.data?.total_cameras ?? 0}
+          value={camerasQuery.isLoading ? "..." : (camerasQuery.data?.total_cameras ?? 0)}
           subtext="All active camera records"
         />
         <StatCard
           icon={RiGlobalLine}
           title="Network Connected Cameras"
-          value={camerasQuery.isLoading ? "..." : camerasQuery.data?.network_connected ?? 0}
+          value={camerasQuery.isLoading ? "..." : (camerasQuery.data?.network_connected ?? 0)}
           subtext="Currently connected to the network"
         />
         <StatCard
           icon={RiRobotLine}
           title="Active Detection Cameras"
-          value={camerasQuery.isLoading ? "..." : camerasQuery.data?.active_detection ?? 0}
+          value={camerasQuery.isLoading ? "..." : (camerasQuery.data?.active_detection ?? 0)}
           subtext="AI detection running"
         />
       </div>
@@ -219,11 +227,19 @@ export default function Cameras() {
                 </TableStateRow>
               ) : (
                 cameras.map((camera) => (
-                  <tr key={camera.camera_id} className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]">
+                  <tr
+                    key={camera.camera_id}
+                    className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]"
+                  >
                     <td className="px-6 py-4 text-xs font-medium">{camera.camera_name}</td>
                     <td className="px-6 py-4 text-xs text-[#737373]">{camera.channel_id}</td>
                     <td className="px-6 py-4 text-xs">
-                      <span className={cn("font-medium", getCameraConnectionClass(camera.connection_status))}>
+                      <span
+                        className={cn(
+                          "font-medium",
+                          getCameraConnectionClass(camera.connection_status),
+                        )}
+                      >
                         {camera.connection_status}
                       </span>
                     </td>
@@ -328,4 +344,3 @@ export default function Cameras() {
     </div>
   )
 }
-

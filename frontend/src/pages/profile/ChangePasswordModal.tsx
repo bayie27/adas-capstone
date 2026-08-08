@@ -8,7 +8,6 @@ import type { NoticeState } from "@/components/ui/NoticeBanner"
 import { getApiErrorMessage } from "@/utils/api"
 import { RiLockLine } from "@remixicon/react"
 
-
 type PasswordFormState = {
   old_password: string
   new_password: string
@@ -61,7 +60,13 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
   }
 
   const currentNotice =
-    notice ?? (mutation.isError ? { tone: "error" as const, message: getApiErrorMessage(mutation.error, "Unable to update your password.") } : null)
+    notice ??
+    (mutation.isError
+      ? {
+          tone: "error" as const,
+          message: getApiErrorMessage(mutation.error, "Unable to update your password."),
+        }
+      : null)
 
   return (
     <Modal
@@ -102,7 +107,9 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
         </div>
 
         {currentNotice ? (
-          <p className={`text-xs ${currentNotice.tone === "success" ? "text-emerald-400" : "text-[#F87171]"}`}>
+          <p
+            className={`text-xs ${currentNotice.tone === "success" ? "text-emerald-400" : "text-[#F87171]"}`}
+          >
             {currentNotice.message}
           </p>
         ) : null}
@@ -127,4 +134,3 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
     </Modal>
   )
 }
-

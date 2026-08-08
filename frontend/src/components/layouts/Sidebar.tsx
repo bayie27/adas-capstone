@@ -1,18 +1,19 @@
 ﻿import { Link, useLocation, useNavigate } from "react-router-dom"
 
-
-
-
-
-
-
-
-
 import { useAuthStore } from "@/store/useAuthStore"
 import { getUserInitials } from "@/utils/users"
 import { cn } from "@/utils/cn"
-import { RiArrowUpSLine, RiCameraLine, RiDashboardLine, RiLayoutGridLine, RiLogoutBoxRLine, RiPulseLine, RiQuestionLine, RiScan2Line, RiUserLine } from "@remixicon/react"
-
+import {
+  RiArrowUpSLine,
+  RiCameraLine,
+  RiDashboardLine,
+  RiLayoutGridLine,
+  RiLogoutBoxRLine,
+  RiPulseLine,
+  RiQuestionLine,
+  RiScan2Line,
+  RiUserLine,
+} from "@remixicon/react"
 
 type NavLinkItem = {
   name: string
@@ -47,9 +48,8 @@ export function Sidebar() {
     },
     {
       title: "ADMINISTRATION",
-      links: role === "Administrator"
-        ? [{ name: "Users", to: "/admin/users", icon: RiUserLine }]
-        : [],
+      links:
+        role === "Administrator" ? [{ name: "Users", to: "/admin/users", icon: RiUserLine }] : [],
     },
   ]
 
@@ -68,7 +68,9 @@ export function Sidebar() {
       <div className="flex h-16 items-center px-5 border-b border-[#2A2A2A]">
         <div className="flex items-center gap-2.5">
           <img src="/adas-logo.png" alt="ADAS Logo" className="h-auto w-7 object-contain" />
-          <span className="font-logo text-base font-semibold tracking-[0.25em] text-white">ADAS</span>
+          <span className="font-logo text-base font-semibold tracking-[0.25em] text-white">
+            ADAS
+          </span>
         </div>
       </div>
 
@@ -101,10 +103,7 @@ export function Sidebar() {
                         {isActive && (
                           <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[3px] rounded-r-full bg-white" />
                         )}
-                        <link.icon
-                          size={16}
-                          className={isActive ? "text-white" : "text-[#555]"}
-                        />
+                        <link.icon size={16} className={isActive ? "text-white" : "text-[#555]"} />
                         <span className="text-[13px] font-medium">{link.name}</span>
                       </Link>
                     </li>
@@ -160,4 +159,3 @@ export function Sidebar() {
     </aside>
   )
 }
-

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type ReactNode } from "react"
+﻿import { useMemo, useState, type ReactNode } from "react"
 
 import { API_BASE_URL } from "@/utils/env"
 import { cn } from "@/utils/cn"
@@ -81,9 +81,15 @@ export function SnapshotImage({
   const snapshotUrls = useMemo(() => resolveSnapshotUrls(snapshotPath), [snapshotPath])
   const [candidateIndex, setCandidateIndex] = useState(0)
 
-  useEffect(() => {
+  // Reset the candidate index whenever the resolved URL list changes identity
+  // (i.e. snapshotPath changed). Adjusting state during render instead of in
+  // an effect avoids the extra "stale index, then reset" render pass.
+  const [prevSnapshotUrls, setPrevSnapshotUrls] = useState(snapshotUrls)
+
+  if (snapshotUrls !== prevSnapshotUrls) {
+    setPrevSnapshotUrls(snapshotUrls)
     setCandidateIndex(0)
-  }, [snapshotUrls])
+  }
 
   const currentSnapshotUrl = snapshotUrls[candidateIndex] ?? null
 

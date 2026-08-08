@@ -1,10 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlmodel import Session, select, func, col
 from sqlalchemy.exc import IntegrityError
-from app.core.db import get_session
-from app.models import Camera, CameraCreate, CameraRead, CameraUpdate, CameraListResponse, ConnectionStatus, AIStatus
+from sqlmodel import Session, col, func, select
+
 from app.api.dependencies import get_current_user
-from typing import Optional
+from app.core.db import get_session
+from app.models import (
+    AIStatus,
+    Camera,
+    CameraCreate,
+    CameraListResponse,
+    CameraRead,
+    CameraUpdate,
+    ConnectionStatus,
+)
 
 router = APIRouter(
     prefix="/api/cameras",
@@ -25,19 +33,14 @@ def _apply_camera_filters(
         query = query.where(col(Camera.camera_name).icontains(search))
     if connection_statuses:
         query = query.where(
-            col(Camera.connection_status).in_(
-                [s.value for s in connection_statuses]
-            )
+            col(Camera.connection_status).in_([s.value for s in connection_statuses])
         )
     if ai_statuses:
-        query = query.where(
-            col(Camera.ai_status).in_(
-                [s.value for s in ai_statuses]
-            )
-        )
+        query = query.where(col(Camera.ai_status).in_([s.value for s in ai_statuses]))
     if is_enabled is not None:
         query = query.where(col(Camera.is_enabled).is_(is_enabled))
     return query
+
 
 @router.get("/", response_model=CameraListResponse)
 def get_all_cameras(
@@ -49,8 +52,8 @@ def get_all_cameras(
         default=None,
         description="Filter by one or more AI statuses, e.g. ?ai_status=Active&ai_status=Paused",
     ),
-    is_enabled: Optional[bool] = Query(default=None),
-    search: Optional[str] = Query(default=None, min_length=1, max_length=100),
+    is_enabled: bool | None = Query(default=None),
+    search: str | None = Query(default=None, min_length=1, max_length=100),
     limit: int = Query(default=5, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
@@ -61,9 +64,7 @@ def get_all_cameras(
     # 1. GLOBAL KPIs (always unfiltered)
     # ---------------------------------------------------------
     total_cameras = session.exec(
-        select(func.count())
-        .select_from(Camera)
-        .where(col(Camera.is_active).is_(True))
+        select(func.count()).select_from(Camera).where(col(Camera.is_active).is_(True))
     ).one()
 
     network_connected = session.exec(
@@ -159,12 +160,13 @@ def update_camera(
         session.commit()
         session.refresh(db_camera)
         return db_camera
-    except IntegrityError:
+    except IntegrityError as exc:
         session.rollback()
         raise HTTPException(
             status_code=400,
-            detail="Camera with this Name or Channel ID already exists."
-        )
+            detail="Camera with this Name or Channel ID already exists.",
+        ) from exc
+
 
 @router.delete("/{camera_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_camera(camera_id: int, session: Session = Depends(get_session)):

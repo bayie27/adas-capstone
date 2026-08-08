@@ -8,7 +8,6 @@ import { getApiErrorMessage } from "@/utils/api"
 import { formatShortDateTime } from "@/utils/datetime"
 import { RiPencilLine } from "@remixicon/react"
 
-
 type CameraFormState = {
   camera_name: string
   channel_id: string
@@ -129,7 +128,8 @@ export function EditCameraModal({ camera, onClose, onSuccess }: EditCameraModalP
   }
 
   const errorMessage =
-    validationError ?? (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to update camera.") : null)
+    validationError ??
+    (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to update camera.") : null)
 
   return (
     <Modal
@@ -166,4 +166,3 @@ export function EditCameraModal({ camera, onClose, onSuccess }: EditCameraModalP
     </Modal>
   )
 }
-

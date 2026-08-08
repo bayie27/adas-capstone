@@ -12,6 +12,8 @@ from app.core.db import init_db
 
 
 def resolve_sqlite_db_path() -> Path:
+    """Settings.DATABASE_URL is already anchored to REPO_ROOT (see app.core.config),
+    so this just parses it rather than re-resolving it against CWD."""
     database_url = settings.DATABASE_URL
     sqlite_prefix = "sqlite:///"
 
@@ -24,10 +26,7 @@ def resolve_sqlite_db_path() -> Path:
     if not path_str or path_str == ":memory:":
         raise ValueError("reset_db.py requires a file-based SQLite database path.")
 
-    db_path = Path(path_str)
-    if not db_path.is_absolute():
-        db_path = (Path.cwd() / db_path).resolve()
-    return db_path
+    return Path(path_str)
 
 
 def reset_sqlite_db(*, initialize: bool = True) -> Path:

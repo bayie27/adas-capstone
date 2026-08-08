@@ -1,0 +1,42 @@
+{
+  "name": "adas-capstone",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "prepare": "husky",
+    "format": "run-p format:prettier format:ruff",
+    "format:prettier": "prettier --write .",
+    "format:ruff": "uv run ruff format .",
+    "format:check": "run-p format:check:prettier format:check:ruff",
+    "format:check:prettier": "prettier --check .",
+    "format:check:ruff": "uv run ruff format --check .",
+    "lint": "run-p lint:frontend lint:ruff",
+    "lint:frontend": "pnpm --filter frontend lint",
+    "lint:ruff": "uv run ruff check .",
+    "lint:fix": "run-p lint:fix:frontend lint:fix:ruff",
+    "lint:fix:frontend": "pnpm --filter frontend lint:fix",
+    "lint:fix:ruff": "uv run ruff check --fix .",
+    "typecheck": "pnpm --filter frontend typecheck",
+    "build": "pnpm --filter frontend build",
+    "test:fe": "pnpm --filter frontend test:run",
+    "test:be": "uv run pytest",
+    "test": "run-s test:be test:fe",
+    "test:e2e": "playwright test",
+    "check": "run-s format:check lint typecheck test",
+    "full:check": "run-s check build test:e2e"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "@playwright/test": "^1.56.1",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
+    "npm-run-all2": "^8.0.4",
+    "prettier": "^3.6.2"
+  }
+}

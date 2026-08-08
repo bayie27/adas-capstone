@@ -7,7 +7,6 @@ import type { CameraRecord, CreateCameraInput } from "@/types/cameras"
 import { getApiErrorMessage } from "@/utils/api"
 import { RiCameraLine } from "@remixicon/react"
 
-
 type CameraFormState = {
   camera_name: string
   channel_id: string
@@ -120,7 +119,8 @@ export function AddCameraModal({ onClose, onSuccess }: AddCameraModalProps) {
   }
 
   const errorMessage =
-    validationError ?? (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to create camera.") : null)
+    validationError ??
+    (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to create camera.") : null)
 
   return (
     <Modal
@@ -154,4 +154,3 @@ export function AddCameraModal({ onClose, onSuccess }: AddCameraModalProps) {
     </Modal>
   )
 }
-

@@ -1,0 +1,18 @@
+pnpm-lock.yaml
+uv.lock
+dist/
+node_modules/
+.venv/
+ai_engine/snapshots/
+ai_engine/sample_vids/
+
+# Untracked team working docs — never touch these
+*.pdf
+final_paper_text.txt
+be_masterplan_text.txt
+*_review.md
+*_decisions.md
+ai_engine_detection_pipeline_handoff.md
+backend_assessment.md
+backup_restore_explained.md
+dx_ci_tooling_plan.md

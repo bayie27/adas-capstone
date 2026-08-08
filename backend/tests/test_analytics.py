@@ -1,13 +1,12 @@
 import csv
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import StringIO
 
+import app.api.routes.analytics as analytics_routes
 import pytest
+from app.models import DetectionLog, DetectionStatus
 from fastapi.testclient import TestClient
 from sqlmodel import Session
-
-import app.api.routes.analytics as analytics_routes
-from app.models import DetectionLog, DetectionStatus
 
 from .conftest import auth_headers, make_camera, make_operator
 
@@ -67,28 +66,28 @@ class TestDashboardAnalytics:
         make_analytics_log(
             session,
             alpha,
-            detected_at=datetime(2026, 1, 1, 8, 15, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 1, 1, 8, 15, tzinfo=UTC),
             status=DetectionStatus.ONGOING,
             confidence_score=0.91,
         )
         make_analytics_log(
             session,
             beta,
-            detected_at=datetime(2026, 1, 1, 14, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 1, 1, 14, 0, tzinfo=UTC),
             status=DetectionStatus.RESOLVED,
             confidence_score=0.88,
         )
         make_analytics_log(
             session,
             gamma,
-            detected_at=datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
             status=DetectionStatus.DISMISSED,
             confidence_score=0.22,
         )
         make_analytics_log(
             session,
             delta,
-            detected_at=datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 1, 1, 10, 0, tzinfo=UTC),
             status=DetectionStatus.UNVERIFIED,
             confidence_score=0.99,
         )
@@ -122,21 +121,21 @@ class TestDashboardAnalytics:
         make_analytics_log(
             session,
             north,
-            detected_at=datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
             status=DetectionStatus.ONGOING,
             confidence_score=0.80,
         )
         target = make_analytics_log(
             session,
             north,
-            detected_at=datetime(2026, 1, 2, 9, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 1, 2, 9, 0, tzinfo=UTC),
             status=DetectionStatus.RESOLVED,
             confidence_score=0.83,
         )
         make_analytics_log(
             session,
             south,
-            detected_at=datetime(2026, 1, 2, 10, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 1, 2, 10, 0, tzinfo=UTC),
             status=DetectionStatus.RESOLVED,
             confidence_score=0.77,
         )
@@ -172,31 +171,31 @@ class TestDashboardAnalytics:
         make_analytics_log(
             session,
             camera,
-            detected_at=datetime(2026, 2, 1, 11, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 2, 1, 11, 0, tzinfo=UTC),
             status=DetectionStatus.ONGOING,
             confidence_score=0.87,
             verified_by_id=operator.user_id,
-            verified_at=datetime(2026, 2, 1, 11, 5, tzinfo=timezone.utc),
+            verified_at=datetime(2026, 2, 1, 11, 5, tzinfo=UTC),
         )
         make_analytics_log(
             session,
             camera,
-            detected_at=datetime(2026, 2, 2, 12, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 2, 2, 12, 0, tzinfo=UTC),
             status=DetectionStatus.RESOLVED,
             confidence_score=0.65,
             verified_by_id=operator.user_id,
-            verified_at=datetime(2026, 2, 2, 12, 5, tzinfo=timezone.utc),
+            verified_at=datetime(2026, 2, 2, 12, 5, tzinfo=UTC),
             closed_by_id=operator.user_id,
-            closed_at=datetime(2026, 2, 2, 12, 10, tzinfo=timezone.utc),
+            closed_at=datetime(2026, 2, 2, 12, 10, tzinfo=UTC),
         )
         make_analytics_log(
             session,
             camera,
-            detected_at=datetime(2026, 2, 3, 13, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 2, 3, 13, 0, tzinfo=UTC),
             status=DetectionStatus.DISMISSED,
             confidence_score=0.10,
             closed_by_id=operator.user_id,
-            closed_at=datetime(2026, 2, 3, 13, 10, tzinfo=timezone.utc),
+            closed_at=datetime(2026, 2, 3, 13, 10, tzinfo=UTC),
         )
 
         resp = client.get("/api/analytics/export/dashboard", headers=headers)
@@ -230,49 +229,49 @@ class TestPerformanceAnalytics:
         make_analytics_log(
             session,
             north,
-            detected_at=datetime(2026, 3, 1, 8, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 3, 1, 8, 0, tzinfo=UTC),
             status=DetectionStatus.ONGOING,
             confidence_score=0.90,
         )
         make_analytics_log(
             session,
             north,
-            detected_at=datetime(2026, 3, 1, 8, 30, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 3, 1, 8, 30, tzinfo=UTC),
             status=DetectionStatus.RESOLVED,
             confidence_score=0.60,
         )
         make_analytics_log(
             session,
             north,
-            detected_at=datetime(2026, 3, 1, 9, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 3, 1, 9, 0, tzinfo=UTC),
             status=DetectionStatus.DISMISSED,
             confidence_score=0.30,
         )
         make_analytics_log(
             session,
             south,
-            detected_at=datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 3, 1, 10, 0, tzinfo=UTC),
             status=DetectionStatus.DISMISSED,
             confidence_score=0.20,
         )
         make_analytics_log(
             session,
             south,
-            detected_at=datetime(2026, 3, 1, 10, 30, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 3, 1, 10, 30, tzinfo=UTC),
             status=DetectionStatus.DISMISSED,
             confidence_score=0.40,
         )
         make_analytics_log(
             session,
             east,
-            detected_at=datetime(2026, 3, 1, 11, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 3, 1, 11, 0, tzinfo=UTC),
             status=DetectionStatus.RESOLVED,
             confidence_score=0.75,
         )
         make_analytics_log(
             session,
             ignored,
-            detected_at=datetime(2026, 3, 1, 12, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
             status=DetectionStatus.UNVERIFIED,
             confidence_score=0.99,
         )
@@ -328,14 +327,14 @@ class TestPerformanceAnalytics:
         make_analytics_log(
             session,
             alpha,
-            detected_at=datetime(2026, 4, 1, 8, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 4, 1, 8, 0, tzinfo=UTC),
             status=DetectionStatus.DISMISSED,
             confidence_score=0.25,
         )
         make_analytics_log(
             session,
             zulu,
-            detected_at=datetime(2026, 4, 1, 9, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 4, 1, 9, 0, tzinfo=UTC),
             status=DetectionStatus.ONGOING,
             confidence_score=0.95,
         )
@@ -376,14 +375,14 @@ class TestPerformanceAnalytics:
         make_analytics_log(
             session,
             alpha,
-            detected_at=datetime(2026, 4, 2, 8, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 4, 2, 8, 0, tzinfo=UTC),
             status=DetectionStatus.DISMISSED,
             confidence_score=0.25,
         )
         make_analytics_log(
             session,
             zulu,
-            detected_at=datetime(2026, 4, 2, 9, 0, tzinfo=timezone.utc),
+            detected_at=datetime(2026, 4, 2, 9, 0, tzinfo=UTC),
             status=DetectionStatus.RESOLVED,
             confidence_score=0.95,
         )
@@ -430,7 +429,10 @@ def test_analytics_endpoints_reject_invalid_camera_ids(
     resp = client.get(f"{path}?camera_id=0", headers=headers)
 
     assert resp.status_code == 422
-    assert resp.json()["detail"] == "Invalid `camera_id` value(s): values must be positive integers."
+    assert (
+        resp.json()["detail"]
+        == "Invalid `camera_id` value(s): values must be positive integers."
+    )
 
 
 @pytest.mark.parametrize(
@@ -506,7 +508,7 @@ def test_dashboard_ignores_unverified_logs_and_returns_empty_state(
     make_analytics_log(
         session,
         camera,
-        detected_at=datetime(2026, 6, 1, 8, 0, tzinfo=timezone.utc),
+        detected_at=datetime(2026, 6, 1, 8, 0, tzinfo=UTC),
         status=DetectionStatus.UNVERIFIED,
         confidence_score=0.99,
     )
@@ -533,7 +535,7 @@ def test_export_dashboard_csv_returns_header_only_when_no_confirmed_logs(
     make_analytics_log(
         session,
         camera,
-        detected_at=datetime(2026, 6, 2, 8, 0, tzinfo=timezone.utc),
+        detected_at=datetime(2026, 6, 2, 8, 0, tzinfo=UTC),
         status=DetectionStatus.UNVERIFIED,
         confidence_score=0.55,
     )
@@ -542,20 +544,22 @@ def test_export_dashboard_csv_returns_header_only_when_no_confirmed_logs(
 
     assert resp.status_code == 200
     rows = list(csv.reader(StringIO(resp.text)))
-    assert rows == [[
-        "Log ID",
-        "Detected At",
-        "Camera ID",
-        "Camera Name",
-        "Status",
-        "Confidence",
-        "Verified By ID",
-        "Verified By Name",
-        "Verified At",
-        "Closed By ID",
-        "Closed By Name",
-        "Closed At",
-    ]]
+    assert rows == [
+        [
+            "Log ID",
+            "Detected At",
+            "Camera ID",
+            "Camera Name",
+            "Status",
+            "Confidence",
+            "Verified By ID",
+            "Verified By Name",
+            "Verified At",
+            "Closed By ID",
+            "Closed By Name",
+            "Closed At",
+        ]
+    ]
 
 
 def test_performance_ignores_unverified_logs_and_returns_empty_state(
@@ -566,7 +570,7 @@ def test_performance_ignores_unverified_logs_and_returns_empty_state(
     make_analytics_log(
         session,
         camera,
-        detected_at=datetime(2026, 6, 3, 8, 0, tzinfo=timezone.utc),
+        detected_at=datetime(2026, 6, 3, 8, 0, tzinfo=UTC),
         status=DetectionStatus.UNVERIFIED,
         confidence_score=0.77,
     )
@@ -594,7 +598,7 @@ def test_export_performance_csv_returns_header_only_when_no_analytics_rows(
     make_analytics_log(
         session,
         camera,
-        detected_at=datetime(2026, 6, 4, 8, 0, tzinfo=timezone.utc),
+        detected_at=datetime(2026, 6, 4, 8, 0, tzinfo=UTC),
         status=DetectionStatus.UNVERIFIED,
         confidence_score=0.66,
     )
@@ -603,12 +607,14 @@ def test_export_performance_csv_returns_header_only_when_no_analytics_rows(
 
     assert resp.status_code == 200
     rows = list(csv.reader(StringIO(resp.text)))
-    assert rows == [[
-        "Camera ID",
-        "Camera Name",
-        "Total Accidents",
-        "Total Dismissed",
-        "Precision Score",
-        "Avg Accident Confidence",
-        "Avg Dismissed Confidence",
-    ]]
+    assert rows == [
+        [
+            "Camera ID",
+            "Camera Name",
+            "Total Accidents",
+            "Total Dismissed",
+            "Precision Score",
+            "Avg Accident Confidence",
+            "Avg Dismissed Confidence",
+        ]
+    ]

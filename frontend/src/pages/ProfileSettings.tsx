@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type FormEvent } from "react"
+﻿import { useMemo, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { NoticeState } from "@/components/ui/NoticeBanner"
@@ -36,23 +36,25 @@ export default function ProfileSettings() {
   const [profileForm, setProfileForm] = useState<ProfileFormState>(EMPTY_PROFILE_FORM)
   const [profileNotice, setProfileNotice] = useState<NoticeState | null>(null)
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
+  const [hasHydratedProfileForm, setHasHydratedProfileForm] = useState(false)
 
   const profileQuery = useQuery({
     queryKey: PROFILE_QUERY_KEY,
     queryFn: getMyProfile,
   })
 
-  useEffect(() => {
-    if (!profileQuery.data) {
-      return
-    }
-
+  // Seed the editable form once the profile loads. Adjusting state during
+  // render (instead of an effect) makes this fire exactly once, the moment
+  // profileQuery.data first becomes available — later background refetches
+  // (e.g. window refocus) won't stomp on in-progress edits.
+  if (profileQuery.data && !hasHydratedProfileForm) {
+    setHasHydratedProfileForm(true)
     setProfileForm({
       first_name: profileQuery.data.first_name,
       last_name: profileQuery.data.last_name,
       username: profileQuery.data.username,
     })
-  }, [profileQuery.data])
+  }
 
   const updateProfileMutation = useMutation({
     mutationFn: updateMyProfile,
@@ -94,8 +96,12 @@ export default function ProfileSettings() {
     })
   }, [profile, profileForm.first_name, profileForm.last_name])
 
-  const displayRole = profile ? formatUserRole(profile.role) : role ?? "Unknown Role"
-  const initials = getUserInitials(profileForm.first_name, profileForm.last_name, profileForm.username)
+  const displayRole = profile ? formatUserRole(profile.role) : (role ?? "Unknown Role")
+  const initials = getUserInitials(
+    profileForm.first_name,
+    profileForm.last_name,
+    profileForm.username,
+  )
 
   const isProfileDirty = profile
     ? profileForm.first_name.trim() !== profile.first_name ||
@@ -117,7 +123,10 @@ export default function ProfileSettings() {
     const nextUsername = profileForm.username.trim()
 
     if (!nextFirstName || !nextLastName || !nextUsername) {
-      setProfileNotice({ tone: "error", message: "First name, last name, and username are required." })
+      setProfileNotice({
+        tone: "error",
+        message: "First name, last name, and username are required.",
+      })
       return
     }
 
@@ -169,7 +178,9 @@ export default function ProfileSettings() {
                 {initials}
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-white">{displayName || "Unnamed User"}</h2>
+                <h2 className="text-xl font-semibold text-white">
+                  {displayName || "Unnamed User"}
+                </h2>
                 <p className="text-[#A1A1AA]">
                   {profileForm.username || "username"} ({displayRole})
                 </p>
@@ -178,7 +189,9 @@ export default function ProfileSettings() {
 
             <form onSubmit={handleProfileSubmit} className="max-w-sm space-y-6">
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-[#E4E4E7]">First Name</label>
+                <label className="mb-1.5 block text-sm font-medium text-[#E4E4E7]">
+                  First Name
+                </label>
                 <input
                   type="text"
                   value={profileForm.first_name}
@@ -226,7 +239,10 @@ export default function ProfileSettings() {
 
               {updateProfileMutation.isError ? (
                 <p className="text-xs text-[#F87171]">
-                  {getApiErrorMessage(updateProfileMutation.error, "Unable to update your profile.")}
+                  {getApiErrorMessage(
+                    updateProfileMutation.error,
+                    "Unable to update your profile.",
+                  )}
                 </p>
               ) : null}
 

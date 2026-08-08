@@ -10,7 +10,6 @@ import { formatShortDateTime } from "@/utils/datetime"
 import { getUserFullName } from "@/utils/users"
 import { RiLockLine } from "@remixicon/react"
 
-
 type ResetPasswordFormState = {
   new_password: string
   confirm_password: string
@@ -37,7 +36,10 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
     onSuccess,
   })
 
-  function updateField<K extends keyof ResetPasswordFormState>(field: K, value: ResetPasswordFormState[K]) {
+  function updateField<K extends keyof ResetPasswordFormState>(
+    field: K,
+    value: ResetPasswordFormState[K],
+  ) {
     setValidationError(null)
     mutation.reset()
     setForm((current) => ({ ...current, [field]: value }))
@@ -64,7 +66,8 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
   }
 
   const errorMessage =
-    validationError ?? (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to reset password.") : null)
+    validationError ??
+    (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to reset password.") : null)
 
   return (
     <Modal
@@ -81,7 +84,9 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
       <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-6">
         <div className="h-px w-full bg-[#2A2A2A]" />
         <div className="space-y-4">
-          <p className="mb-4 text-xs text-[#A1A1AA]">Changing {getUserFullName(user)}'s account password...</p>
+          <p className="mb-4 text-xs text-[#A1A1AA]">
+            Changing {getUserFullName(user)}'s account password...
+          </p>
           <PasswordInput
             label="New Password"
             value={form.new_password}
@@ -126,4 +131,3 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
     </Modal>
   )
 }
-

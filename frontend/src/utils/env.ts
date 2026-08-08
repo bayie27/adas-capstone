@@ -1,8 +1,8 @@
-function trimTrailingSlash(value: string) {
+export function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "")
 }
 
-function getBrowserHostname() {
+export function getBrowserHostname() {
   if (typeof window === "undefined") {
     return "localhost"
   }
@@ -18,5 +18,9 @@ function getDefaultWsBaseUrl() {
   return `ws://${getBrowserHostname()}:8000`
 }
 
-export const API_BASE_URL = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL ?? getDefaultApiBaseUrl())
-export const WS_BASE_URL = trimTrailingSlash(import.meta.env.VITE_WS_BASE_URL ?? getDefaultWsBaseUrl())
+export const API_BASE_URL = trimTrailingSlash(
+  import.meta.env.VITE_API_BASE_URL ?? getDefaultApiBaseUrl(),
+)
+export const WS_BASE_URL = trimTrailingSlash(
+  import.meta.env.VITE_WS_BASE_URL ?? getDefaultWsBaseUrl(),
+)

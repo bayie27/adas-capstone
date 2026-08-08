@@ -1,0 +1,18 @@
+# Normalize line endings to LF in the repository and on checkout, regardless
+# of a contributor's local core.autocrlf setting. Without this, Windows
+# clones with core.autocrlf=true get CRLF working-tree files that Prettier
+# (which defaults to LF) immediately flags as unformatted — breaking
+# `pnpm check` / the pre-push hook / CI's format job on a fresh clone.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF since that's their native convention.
+*.ps1 text eol=crlf
+
+# Binary — never touch these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.woff binary
+*.woff2 binary
+*.pt binary
+*.engine binary

@@ -1,18 +1,20 @@
-from contextlib import asynccontextmanager
 import json
+import logging
+import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-import logging
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-import os
-from sqlmodel import Session, select, col
-from app.core.db import init_db, engine
-from app.models import Camera, ConnectionStatus, AIStatus
+from sqlmodel import Session, col, select
+
+from app.api.routes import alerts, analytics, auth, cameras, internal, users
+from app.core.db import engine, init_db
+from app.models import AIStatus, ApiError, Camera, ConnectionStatus
 from app.ws_manager import manager
-from app.api.routes import internal, auth, cameras, alerts, users, analytics
-from app.models import ApiError
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,12 +33,12 @@ async def lifespan(app: FastAPI):
                 col(Camera.is_enabled).is_(True),
             )
         ).all()
- 
+
         for camera in cameras_to_reset:
             camera.connection_status = ConnectionStatus.DISCONNECTED.value
             camera.ai_status = AIStatus.INACTIVE.value
             session.add(camera)
- 
+
         session.commit()
         print(f"Reset {len(cameras_to_reset)} camera(s) to Disconnected/Inactive.")
     yield
@@ -74,6 +76,7 @@ app.include_router(analytics.router)
 
 logger = logging.getLogger("uvicorn.error")
 
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
@@ -110,14 +113,19 @@ async def global_exception_handler(request: Request, exc: Exception):
         ).model_dump(),
     )
 
+
 @app.websocket("/ws/alerts")
 async def websocket_alerts(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            data = await websocket.receive_text()
+            # Received messages are unused — this just blocks until the client
+            # disconnects (or sends a ping/keepalive), since alerts are only
+            # ever pushed server -> client.
+            await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
 
 @app.get("/")
 def health_check() -> dict[str, str]:

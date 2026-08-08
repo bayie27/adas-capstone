@@ -1,6 +1,10 @@
 import type { AlertStatus } from "@/types/alerts"
 import type { CameraAiStatus, CameraConnectionStatus } from "@/types/cameras"
-import type { RealtimeAlertEventType, RealtimeAlertPayload, RealtimeCameraStatusPayload } from "@/types/realtime"
+import type {
+  RealtimeAlertEventType,
+  RealtimeAlertPayload,
+  RealtimeCameraStatusPayload,
+} from "@/types/realtime"
 
 const ALERT_EVENT_TYPES: RealtimeAlertEventType[] = ["NEW_DETECTION", "NEW_ALERT", "NEW_ACCIDENT"]
 const ALERT_STATUS_VALUES: AlertStatus[] = ["Unverified", "Ongoing", "Dismissed", "Resolved"]
@@ -25,7 +29,10 @@ function isAlertStatus(value: unknown): value is AlertStatus {
 }
 
 function isCameraConnectionStatus(value: unknown): value is CameraConnectionStatus {
-  return typeof value === "string" && CAMERA_CONNECTION_STATUS_VALUES.includes(value as CameraConnectionStatus)
+  return (
+    typeof value === "string" &&
+    CAMERA_CONNECTION_STATUS_VALUES.includes(value as CameraConnectionStatus)
+  )
 }
 
 function isCameraAiStatus(value: unknown): value is CameraAiStatus {
@@ -74,7 +81,9 @@ export function normalizeRealtimeAlert(payload: unknown): RealtimeAlertPayload |
   }
 }
 
-export function normalizeRealtimeCameraStatus(payload: unknown): RealtimeCameraStatusPayload | null {
+export function normalizeRealtimeCameraStatus(
+  payload: unknown,
+): RealtimeCameraStatusPayload | null {
   if (!isRecord(payload) || payload.type !== "CAMERA_STATUS_UPDATE") {
     return null
   }

@@ -1,0 +1,9 @@
+{
+  "frontend/**/*.{ts,tsx,js,jsx}": [
+    "prettier --write",
+    "eslint --fix --config frontend/eslint.config.js"
+  ],
+  "*.{json,css,md,yml,yaml}": ["prettier --write"],
+  "commitlint.config.js": ["prettier --write"],
+  "*.py": ["uv run ruff format", "uv run ruff check --fix"]
+}

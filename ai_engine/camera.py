@@ -1,8 +1,11 @@
-import cv2
+import contextlib
 import threading
 import time
+
+import cv2
 import requests
-from config import RTSP_BASE_URL, SYNC_URL, INTERNAL_API_KEY
+from config import INTERNAL_API_KEY, RTSP_BASE_URL, SYNC_URL
+
 
 class CameraStream:
     """A threaded camera reader with Auto-Reconnect and Pause capabilities."""
@@ -16,7 +19,7 @@ class CameraStream:
         self.running = True
         self.is_paused = False  # The digital blindfold
         self.cap = None
-        
+
         self.connection_status = "Reconnecting"
         self.ai_status = "Inactive"
 
@@ -33,20 +36,21 @@ class CameraStream:
         if ai_status and self.ai_status != ai_status:
             self.ai_status = ai_status
             changed = True
-            
+
         if changed:
             url = f"{SYNC_URL}/{self.camera_id}/status"
             headers = {"x-api-key": INTERNAL_API_KEY}
             payload = {
                 "connection_status": self.connection_status,
-                "ai_status": self.ai_status
+                "ai_status": self.ai_status,
             }
+
             # Fire-and-forget network request to prevent blocking the video frame read loop
             def _send():
-                try:
+                # Drop silently if backend is offline to prevent console spam
+                with contextlib.suppress(Exception):
                     requests.patch(url, json=payload, headers=headers, timeout=2)
-                except Exception:
-                    pass # Drop silently if backend is offline to prevent console spam
+
             threading.Thread(target=_send, daemon=True).start()
 
     def pause(self):
@@ -63,8 +67,12 @@ class CameraStream:
         while self.running:
             # 1. Auto-Reconnect Loop
             if self.cap is None or not self.cap.isOpened():
-                self._update_status(connection_status="Reconnecting", ai_status="Inactive")
-                print(f"[SYSTEM] Channel {self.channel_id} is offline. Attempting connection to {self.url}...")
+                self._update_status(
+                    connection_status="Reconnecting", ai_status="Inactive"
+                )
+                print(
+                    f"[SYSTEM] Channel {self.channel_id} is offline. Attempting connection to {self.url}..."
+                )
                 self.cap = cv2.VideoCapture(self.url)
 
                 if not self.cap.isOpened():
@@ -73,7 +81,9 @@ class CameraStream:
                 else:
                     # Successfully connected
                     current_ai_status = "Paused" if self.is_paused else "Active"
-                    self._update_status(connection_status="Connected", ai_status=current_ai_status)
+                    self._update_status(
+                        connection_status="Connected", ai_status=current_ai_status
+                    )
 
             # 2. Pause Bypass
             if self.is_paused:
@@ -81,10 +91,14 @@ class CameraStream:
                 # when resumed, but do not decode them (saves CPU).
                 success = self.cap.grab()
                 if not success:
-                    print(f"[SYSTEM] Stream dropped on Channel {self.channel_id} while paused! Releasing socket...")
+                    print(
+                        f"[SYSTEM] Stream dropped on Channel {self.channel_id} while paused! Releasing socket..."
+                    )
                     self.cap.release()
                     self.cap = None
-                    self._update_status(connection_status="Reconnecting", ai_status="Inactive")
+                    self._update_status(
+                        connection_status="Reconnecting", ai_status="Inactive"
+                    )
                     time.sleep(1)
                 continue
 
@@ -94,10 +108,14 @@ class CameraStream:
                 self.latest_frame = frame
                 self.frame_ready = True
             else:
-                print(f"[SYSTEM] Stream dropped on Channel {self.channel_id}! Releasing socket...")
+                print(
+                    f"[SYSTEM] Stream dropped on Channel {self.channel_id}! Releasing socket..."
+                )
                 self.cap.release()
                 self.cap = None
-                self._update_status(connection_status="Reconnecting", ai_status="Inactive")
+                self._update_status(
+                    connection_status="Reconnecting", ai_status="Inactive"
+                )
                 time.sleep(1)
 
     def read(self):

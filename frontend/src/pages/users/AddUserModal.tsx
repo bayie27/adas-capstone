@@ -9,7 +9,6 @@ import type { CreateUserInput, UserRecord } from "@/types/users"
 import { getApiErrorMessage } from "@/utils/api"
 import { RiUserAddLine } from "@remixicon/react"
 
-
 type CreateUserFormState = {
   first_name: string
   last_name: string
@@ -42,7 +41,10 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
     onSuccess,
   })
 
-  function updateField<K extends keyof CreateUserFormState>(field: K, value: CreateUserFormState[K]) {
+  function updateField<K extends keyof CreateUserFormState>(
+    field: K,
+    value: CreateUserFormState[K],
+  ) {
     setValidationError(null)
     mutation.reset()
     setForm((current) => ({ ...current, [field]: value }))
@@ -74,7 +76,8 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
   }
 
   const errorMessage =
-    validationError ?? (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to create user.") : null)
+    validationError ??
+    (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to create user.") : null)
 
   return (
     <Modal
@@ -119,7 +122,9 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
             </div>
 
             <div>
-              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">First Name</label>
+              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">
+                First Name
+              </label>
               <input
                 type="text"
                 value={form.first_name}
@@ -128,7 +133,9 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
               />
             </div>
             <div>
-              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">Last Name</label>
+              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">
+                Last Name
+              </label>
               <input
                 type="text"
                 value={form.last_name}
@@ -137,7 +144,9 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
               />
             </div>
             <div>
-              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">Username</label>
+              <label className="mb-2 block text-[11px] font-semibold text-[#E4E4E7]">
+                Username
+              </label>
               <input
                 type="text"
                 value={form.username}
@@ -193,4 +202,3 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
     </Modal>
   )
 }
-

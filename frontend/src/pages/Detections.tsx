@@ -1,12 +1,6 @@
 ﻿import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-
-
-
-
-
-
 import { Modal } from "@/components/ui/Modal"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
@@ -40,8 +34,15 @@ import {
 import { getApiErrorMessage } from "@/utils/api"
 import { formatFullDateTime } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
-import { RiArrowRightSLine, RiCalendarLine, RiCameraLine, RiCloseLine, RiDownloadLine, RiEyeLine, RiUserLine } from "@remixicon/react"
-
+import {
+  RiArrowRightSLine,
+  RiCalendarLine,
+  RiCameraLine,
+  RiCloseLine,
+  RiDownloadLine,
+  RiEyeLine,
+  RiUserLine,
+} from "@remixicon/react"
 
 const ALERTS_PAGE_SIZE = 10
 const ACTIVE_ALERT_STATUSES: AlertStatus[] = ["Unverified", "Ongoing"]
@@ -59,7 +60,7 @@ export default function Detections() {
   const [endDate, setEndDate] = useState("")
   const [cameraId, setCameraId] = useState("")
   const [userId, setUserId] = useState("")
-  
+
   const role = useAuthStore((state) => state.role)
   const hasFilters = Boolean(startDate || endDate || cameraId || userId)
 
@@ -88,7 +89,16 @@ export default function Detections() {
   })
 
   const logsQuery = useQuery({
-    queryKey: ["alerts", "logs", debouncedLogSearch, logsPagination.offset, startDate, endDate, cameraId, userId],
+    queryKey: [
+      "alerts",
+      "logs",
+      debouncedLogSearch,
+      logsPagination.offset,
+      startDate,
+      endDate,
+      cameraId,
+      userId,
+    ],
     queryFn: () =>
       getAlerts({
         status: LOG_ALERT_STATUSES,
@@ -173,9 +183,7 @@ export default function Detections() {
     const firstError =
       confirmMutation.error ?? dismissMutation.error ?? resolveMutation.error ?? null
 
-    return firstError
-      ? getApiErrorMessage(firstError, "Unable to update alert status.")
-      : null
+    return firstError ? getApiErrorMessage(firstError, "Unable to update alert status.") : null
   }, [confirmMutation.error, dismissMutation.error, resolveMutation.error])
 
   const closeModal = () => {
@@ -249,7 +257,10 @@ export default function Detections() {
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => { logsPagination.reset(); setStartDate(e.target.value) }}
+                onChange={(e) => {
+                  logsPagination.reset()
+                  setStartDate(e.target.value)
+                }}
                 className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
               />
             </div>
@@ -259,7 +270,10 @@ export default function Detections() {
               <input
                 type="date"
                 value={endDate}
-                onChange={(e) => { logsPagination.reset(); setEndDate(e.target.value) }}
+                onChange={(e) => {
+                  logsPagination.reset()
+                  setEndDate(e.target.value)
+                }}
                 className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
               />
             </div>
@@ -267,7 +281,10 @@ export default function Detections() {
               <RiCameraLine size={13} className="text-[#737373]" />
               <select
                 value={cameraId}
-                onChange={(e) => { logsPagination.reset(); setCameraId(e.target.value) }}
+                onChange={(e) => {
+                  logsPagination.reset()
+                  setCameraId(e.target.value)
+                }}
                 className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none"
               >
                 <option value="">All cameras</option>
@@ -287,7 +304,10 @@ export default function Detections() {
                 <RiUserLine size={13} className="text-[#737373]" />
                 <select
                   value={userId}
-                  onChange={(e) => { logsPagination.reset(); setUserId(e.target.value) }}
+                  onChange={(e) => {
+                    logsPagination.reset()
+                    setUserId(e.target.value)
+                  }}
                   className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none"
                 >
                   <option value="">All operators</option>
@@ -302,7 +322,13 @@ export default function Detections() {
             {hasFilters ? (
               <button
                 type="button"
-                onClick={() => { setStartDate(""); setEndDate(""); setCameraId(""); setUserId(""); logsPagination.reset() }}
+                onClick={() => {
+                  setStartDate("")
+                  setEndDate("")
+                  setCameraId("")
+                  setUserId("")
+                  logsPagination.reset()
+                }}
                 className="flex items-center gap-1 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1.5 text-xs text-[#737373] transition-colors hover:text-white"
               >
                 <RiCloseLine size={12} />
@@ -341,7 +367,9 @@ export default function Detections() {
         <QueryErrorBanner
           error={currentQuery.error}
           fallback={
-            activeTab === "ongoing" ? "Unable to load active alerts." : "Unable to load historical logs."
+            activeTab === "ongoing"
+              ? "Unable to load active alerts."
+              : "Unable to load historical logs."
           }
           onRetry={() => currentQuery.refetch()}
         />
@@ -374,17 +402,33 @@ export default function Detections() {
                 </TableStateRow>
               ) : (
                 currentRows.map((item) => (
-                  <tr key={item.log_id} className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]">
-                    <td className="px-6 py-4 text-xs font-medium">{formatAlertCode(item.log_id)}</td>
-                    <td className="px-6 py-4 text-xs text-[#737373]">{formatFullDateTime(item.detected_at)}</td>
+                  <tr
+                    key={item.log_id}
+                    className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]"
+                  >
+                    <td className="px-6 py-4 text-xs font-medium">
+                      {formatAlertCode(item.log_id)}
+                    </td>
+                    <td className="px-6 py-4 text-xs text-[#737373]">
+                      {formatFullDateTime(item.detected_at)}
+                    </td>
                     <td className="px-6 py-4 text-xs">{item.camera_name ?? "Unknown Camera"}</td>
                     <td className="px-6 py-4 text-xs">
-                      <span className={cn("font-medium", getAlertStatusTextClass(item.detection_status))}>
+                      <span
+                        className={cn(
+                          "font-medium",
+                          getAlertStatusTextClass(item.detection_status),
+                        )}
+                      >
                         {item.detection_status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-xs text-[#737373]">{getAlertLastHandledBy(item)}</td>
-                    <td className="px-6 py-4 text-xs text-[#737373]">{getAlertLastUpdated(item)}</td>
+                    <td className="px-6 py-4 text-xs text-[#737373]">
+                      {getAlertLastHandledBy(item)}
+                    </td>
+                    <td className="px-6 py-4 text-xs text-[#737373]">
+                      {getAlertLastUpdated(item)}
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end">
                         <button
@@ -427,8 +471,14 @@ export default function Detections() {
       >
         <div className="flex flex-col bg-[#18181B]">
           <div className="flex items-center justify-between border-b border-[#27272A] px-6 py-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-white">ACCIDENT DETAILS</h2>
-            <button type="button" onClick={closeModal} className="text-[#737373] transition-colors hover:text-white">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-white">
+              ACCIDENT DETAILS
+            </h2>
+            <button
+              type="button"
+              onClick={closeModal}
+              className="text-[#737373] transition-colors hover:text-white"
+            >
               <RiCloseLine size={18} />
             </button>
           </div>
@@ -450,7 +500,9 @@ export default function Detections() {
             {selectedAlert ? (
               <>
                 <div className="mb-5 flex items-center gap-3">
-                  <span className="text-xl font-semibold text-white">{formatAlertCode(selectedAlert.log_id)}</span>
+                  <span className="text-xl font-semibold text-white">
+                    {formatAlertCode(selectedAlert.log_id)}
+                  </span>
                   <span
                     className={cn(
                       "rounded-sm px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
@@ -464,14 +516,20 @@ export default function Detections() {
                 <div className="mb-6 space-y-3.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium tracking-wider text-[#737373]">TIMESTAMP</span>
-                    <span className="font-medium text-[#D4D4D4]">{formatFullDateTime(selectedAlert.detected_at)}</span>
+                    <span className="font-medium text-[#D4D4D4]">
+                      {formatFullDateTime(selectedAlert.detected_at)}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium tracking-wider text-[#737373]">CAMERA NAME</span>
-                    <span className="font-medium text-[#D4D4D4]">{selectedAlert.camera_name ?? "Unknown Camera"}</span>
+                    <span className="font-medium text-[#D4D4D4]">
+                      {selectedAlert.camera_name ?? "Unknown Camera"}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium tracking-wider text-[#737373]">AI-CONFIDENCE SCORE</span>
+                    <span className="font-medium tracking-wider text-[#737373]">
+                      AI-CONFIDENCE SCORE
+                    </span>
                     <span className="rounded bg-[#ef4444]/10 px-1.5 py-0.5 font-bold text-[#ef4444]">
                       {formatAlertConfidence(selectedAlert.confidence_score)}
                     </span>
@@ -481,24 +539,41 @@ export default function Detections() {
                 <div className="mb-6 border-t border-[#27272A] pt-5">
                   <div className="mb-4 flex items-start justify-between">
                     <div>
-                      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">VERIFIED BY</div>
-                      <div className="text-xs font-medium text-[#D4D4D4]">{selectedAlert.verified_by_name ?? "-"}</div>
+                      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">
+                        VERIFIED BY
+                      </div>
+                      <div className="text-xs font-medium text-[#D4D4D4]">
+                        {selectedAlert.verified_by_name ?? "-"}
+                      </div>
                     </div>
                     <div className="text-right">
-                      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">TIME VERIFIED</div>
-                      <div className="text-xs text-[#D4D4D4]">{formatFullDateTime(selectedAlert.verified_at)}</div>
+                      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">
+                        TIME VERIFIED
+                      </div>
+                      <div className="text-xs text-[#D4D4D4]">
+                        {formatFullDateTime(selectedAlert.verified_at)}
+                      </div>
                     </div>
                   </div>
 
-                  {(selectedAlert.detection_status === "Dismissed" || selectedAlert.detection_status === "Resolved") ? (
+                  {selectedAlert.detection_status === "Dismissed" ||
+                  selectedAlert.detection_status === "Resolved" ? (
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">CLOSED BY</div>
-                        <div className="text-xs font-medium text-[#D4D4D4]">{selectedAlert.closed_by_name ?? "-"}</div>
+                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">
+                          CLOSED BY
+                        </div>
+                        <div className="text-xs font-medium text-[#D4D4D4]">
+                          {selectedAlert.closed_by_name ?? "-"}
+                        </div>
                       </div>
                       <div className="text-right">
-                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">{closedTimeLabel}</div>
-                        <div className="text-xs text-[#D4D4D4]">{formatFullDateTime(selectedAlert.closed_at)}</div>
+                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-[#555]">
+                          {closedTimeLabel}
+                        </div>
+                        <div className="text-xs text-[#D4D4D4]">
+                          {formatFullDateTime(selectedAlert.closed_at)}
+                        </div>
                       </div>
                     </div>
                   ) : null}
@@ -506,7 +581,10 @@ export default function Detections() {
 
                 {alertDetailsQuery.isError ? (
                   <div className="mb-4 rounded-md border border-[#F87171]/30 bg-[#F87171]/10 px-3 py-2 text-xs text-[#FCA5A5]">
-                    {getApiErrorMessage(alertDetailsQuery.error, "Unable to refresh alert details.")}
+                    {getApiErrorMessage(
+                      alertDetailsQuery.error,
+                      "Unable to refresh alert details.",
+                    )}
                   </div>
                 ) : null}
 
@@ -559,7 +637,9 @@ export default function Detections() {
                 ) : null}
               </>
             ) : (
-              <div className="py-12 text-center text-sm text-[#A1A1AA]">Loading alert details...</div>
+              <div className="py-12 text-center text-sm text-[#A1A1AA]">
+                Loading alert details...
+              </div>
             )}
           </div>
         </div>
@@ -567,4 +647,3 @@ export default function Detections() {
     </div>
   )
 }
-

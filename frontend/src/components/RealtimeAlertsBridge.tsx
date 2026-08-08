@@ -80,24 +80,27 @@ export function RealtimeAlertsBridge() {
         return
       }
 
-      queryClient.setQueriesData<CameraListResponse>({ queryKey: ["cameras"] }, (existingResponse) => {
-        if (!existingResponse) {
-          return existingResponse
-        }
+      queryClient.setQueriesData<CameraListResponse>(
+        { queryKey: ["cameras"] },
+        (existingResponse) => {
+          if (!existingResponse) {
+            return existingResponse
+          }
 
-        return {
-          ...existingResponse,
-          cameras: existingResponse.cameras.map((camera) =>
-            camera.camera_id === cameraStatus.camera_id
-              ? {
-                  ...camera,
-                  connection_status: cameraStatus.connection_status,
-                  ai_status: cameraStatus.ai_status,
-                }
-              : camera,
-          ),
-        }
-      })
+          return {
+            ...existingResponse,
+            cameras: existingResponse.cameras.map((camera) =>
+              camera.camera_id === cameraStatus.camera_id
+                ? {
+                    ...camera,
+                    connection_status: cameraStatus.connection_status,
+                    ai_status: cameraStatus.ai_status,
+                  }
+                : camera,
+            ),
+          }
+        },
+      )
       // No invalidate: the WS payload carries the complete new camera status,
       // so patching every cameras query in place is sufficient. Invalidating
       // here would refetch the list plus the dropdown copies on other pages on
