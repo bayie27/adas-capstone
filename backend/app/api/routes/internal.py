@@ -5,15 +5,8 @@ from sqlmodel import Session, col, select
 
 from app.api.dependencies import verify_internal_api_key
 from app.core.db import get_session
-from app.models import (
-    AIStatus,
-    Camera,
-    CameraRead,
-    CameraStatusUpdate,
-    DetectionLog,
-    DetectionLogCreate,
-    DetectionStatus,
-)
+from app.models import AIStatus, Camera, DetectionLog, DetectionStatus
+from app.schemas import CameraRead, CameraStatusUpdate, DetectionLogCreate
 from app.ws_manager import manager
 
 logger = logging.getLogger("uvicorn.error")

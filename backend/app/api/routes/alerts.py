@@ -9,15 +9,10 @@ from sqlmodel import Session, col, func, or_, select
 
 from app.api.dependencies import get_current_user
 from app.core.db import get_session
-from app.models import (
-    AIStatus,
-    Camera,
-    DetectionLog,
-    DetectionLogListResponse,
-    DetectionLogRead,
-    DetectionStatus,
-    User,
-)
+from app.models import AIStatus, Camera, DetectionLog, DetectionStatus, User
+from app.schemas import DetectionLogListResponse, DetectionLogRead
+from app.services.filters import validate_common_filters
+from app.services.formatting import format_user_name
 from app.ws_manager import manager
 
 router = APIRouter(
@@ -27,18 +22,11 @@ router = APIRouter(
 )
 
 
-def _format_user_name(user: User | None) -> str | None:
-    if not user:
-        return None
-    full_name = f"{user.first_name} {user.last_name}".strip()
-    return full_name or user.username
-
-
 def _to_detection_log_read(log: DetectionLog) -> DetectionLogRead:
     log_read = DetectionLogRead.model_validate(log)
     log_read.camera_name = log.camera.camera_name if log.camera else None
-    log_read.verified_by_name = _format_user_name(log.verified_by)
-    log_read.closed_by_name = _format_user_name(log.closed_by)
+    log_read.verified_by_name = format_user_name(log.verified_by)
+    log_read.closed_by_name = format_user_name(log.closed_by)
     return log_read
 
 
@@ -125,32 +113,6 @@ def _apply_alert_filters(
     return query
 
 
-def _validate_common_filters(
-    *,
-    start_date: datetime | None,
-    end_date: datetime | None,
-    camera_id: list[int] | None,
-    user_id: list[int] | None,
-) -> None:
-    if start_date and end_date and start_date > end_date:
-        raise HTTPException(
-            status_code=422,
-            detail="Invalid date range: `start_date` must be earlier than or equal to `end_date`.",
-        )
-
-    if camera_id and any(cid <= 0 for cid in camera_id):
-        raise HTTPException(
-            status_code=422,
-            detail="Invalid `camera_id` value(s): values must be positive integers.",
-        )
-
-    if user_id and any(uid <= 0 for uid in user_id):
-        raise HTTPException(
-            status_code=422,
-            detail="Invalid `user_id` value(s): values must be positive integers.",
-        )
-
-
 @router.get("/", response_model=DetectionLogListResponse)
 def get_alerts(
     start_date: datetime | None = Query(
@@ -180,11 +142,11 @@ def get_alerts(
     session: Session = Depends(get_session),
 ):
     """Fetches paginated incident logs with robust multi-select filtering."""
-    _validate_common_filters(
+    validate_common_filters(
         start_date=start_date,
         end_date=end_date,
-        camera_id=camera_id,
-        user_id=user_id,
+        camera_ids=camera_id,
+        user_ids=user_id,
     )
 
     query = select(DetectionLog).options(
@@ -232,11 +194,11 @@ def export_alerts_csv(
     session: Session = Depends(get_session),
 ):
     """Exports the filtered logs directly to a downloadable CSV file."""
-    _validate_common_filters(
+    validate_common_filters(
         start_date=start_date,
         end_date=end_date,
-        camera_id=camera_id,
-        user_id=user_id,
+        camera_ids=camera_id,
+        user_ids=user_id,
     )
 
     query = select(DetectionLog).options(
@@ -289,10 +251,10 @@ def export_alerts_csv(
                 f"{log.confidence_score * 100:.1f}%",
                 snapshot_url,
                 log.verified_by_id or "N/A",
-                _format_user_name(log.verified_by) or "N/A",
+                format_user_name(log.verified_by) or "N/A",
                 log.verified_at.isoformat() if log.verified_at else "N/A",
                 log.closed_by_id or "N/A",
-                _format_user_name(log.closed_by) or "N/A",
+                format_user_name(log.closed_by) or "N/A",
                 log.closed_at.isoformat() if log.closed_at else "N/A",
             ]
         )

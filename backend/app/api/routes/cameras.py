@@ -4,15 +4,8 @@ from sqlmodel import Session, col, func, select
 
 from app.api.dependencies import get_current_user
 from app.core.db import get_session
-from app.models import (
-    AIStatus,
-    Camera,
-    CameraCreate,
-    CameraListResponse,
-    CameraRead,
-    CameraUpdate,
-    ConnectionStatus,
-)
+from app.models import AIStatus, Camera, ConnectionStatus
+from app.schemas import CameraCreate, CameraListResponse, CameraRead, CameraUpdate
 
 router = APIRouter(
     prefix="/api/cameras",

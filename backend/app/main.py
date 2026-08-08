@@ -12,7 +12,8 @@ from sqlmodel import Session, col, select
 
 from app.api.routes import alerts, analytics, auth, cameras, internal, users
 from app.core.db import engine, init_db
-from app.models import AIStatus, ApiError, Camera, ConnectionStatus
+from app.models import AIStatus, Camera, ConnectionStatus
+from app.schemas import ApiError
 from app.ws_manager import manager
 
 
