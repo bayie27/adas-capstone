@@ -20,7 +20,12 @@ from app.core.logging import configure_logging, request_id_ctx
 from app.core.scheduler import add_job, create_scheduler
 from app.models import AIStatus, Camera, ConnectionStatus
 from app.schemas import ApiError, default_error_code
+from app.services.cameras import (
+    reconcile_camera_desired_states,
+    schedule_pending_cooldowns,
+)
 from app.services.sessions import expire_stale_sessions
+from app.services.snoozes import reconcile_snoozes
 from app.ws_manager import manager
 
 configure_logging(default_settings.LOG_LEVEL)
@@ -62,10 +67,23 @@ async def lifespan(app: FastAPI):
             "Reset %d camera(s) to Disconnected/Inactive.", len(cameras_to_reset)
         )
 
+    # Desired state is *recomputed*, not reset — unlike observed state,
+    # which genuinely has no reporter until the AI engine reconnects. This
+    # is what makes the dismiss cooldown durable across a restart: without
+    # it, a restart inside the 60s window used to strand the camera Paused
+    # forever, since the cooldown was only a discarded asyncio.create_task.
+    logger.info("Recomputing camera desired states...")
+    pending_cooldowns = reconcile_camera_desired_states(engine)
+
+    # Snooze reconciliation ordering is established now; P4 fills in the
+    # actual reschedule/clear-expired logic.
+    reconcile_snoozes(engine)
+
     # Guarded by SCHEDULER_ENABLED (defaulted False in tests) — otherwise
     # background jobs race the test suite's short-lived engines/sessions.
     if app_settings.SCHEDULER_ENABLED:
         scheduler = create_scheduler()
+        schedule_pending_cooldowns(scheduler, engine, pending_cooldowns)
         add_job(
             scheduler,
             lambda: expire_stale_sessions(engine),
