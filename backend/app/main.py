@@ -17,8 +17,10 @@ from app.core.config import Settings
 from app.core.config import settings as default_settings
 from app.core.db import create_db_engine, init_db
 from app.core.logging import configure_logging, request_id_ctx
+from app.core.scheduler import add_job, create_scheduler
 from app.models import AIStatus, Camera, ConnectionStatus
 from app.schemas import ApiError, default_error_code
+from app.services.sessions import expire_stale_sessions
 from app.ws_manager import manager
 
 configure_logging(default_settings.LOG_LEVEL)
@@ -58,8 +60,29 @@ async def lifespan(app: FastAPI):
         logger.info(
             "Reset %d camera(s) to Disconnected/Inactive.", len(cameras_to_reset)
         )
+
+    # Guarded by SCHEDULER_ENABLED (defaulted False in tests) — otherwise
+    # background jobs race the test suite's short-lived engines/sessions.
+    if app_settings.SCHEDULER_ENABLED:
+        scheduler = create_scheduler()
+        add_job(
+            scheduler,
+            lambda: expire_stale_sessions(engine),
+            job_id="expired_session_cleanup",
+            trigger="interval",
+            hours=1,
+        )
+        scheduler.start()
+        app.state.scheduler = scheduler
+        logger.info("Scheduler started.")
+    else:
+        app.state.scheduler = None
+
     yield
     # Anything here runs when the server shuts down
+    if app.state.scheduler is not None:
+        app.state.scheduler.shutdown(wait=False)
+        logger.info("Scheduler shut down.")
     logger.info("Server shutting down...")
 
 
