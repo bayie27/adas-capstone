@@ -265,3 +265,8 @@ Thumbs.db
 *.sln
 *.sw?
 
+
+# Playwright
+test-results/
+playwright-report/
+.playwright/
