@@ -1,9 +1,13 @@
+import logging
+
 from sqlalchemy import event
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models import UserRole
+
+logger = logging.getLogger("uvicorn.error")
 
 
 def install_sqlite_pragmas(target_engine) -> None:
@@ -46,7 +50,7 @@ def init_db() -> None:
         user_exists = session.exec(select(User)).first()
 
         if not user_exists:
-            print("No users found. Seeding default Administrator account...")
+            logger.info("No users found. Seeding default Administrator account...")
             default_admin = User(
                 username="admin",
                 first_name="System",
@@ -63,7 +67,7 @@ def init_db() -> None:
 
             session.add(AlarmSettings(user_id=default_admin.user_id))
             session.commit()
-            print("Default Administrator account created successfully.")
+            logger.info("Default Administrator account created successfully.")
 
 
 def get_session():

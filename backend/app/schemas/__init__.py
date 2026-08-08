@@ -9,7 +9,7 @@ from app.schemas.camera import (
     CameraStatusUpdate,
     CameraUpdate,
 )
-from app.schemas.common import ApiError, validate_password_strength
+from app.schemas.common import ApiError, default_error_code, validate_password_strength
 from app.schemas.detection import (
     DetectionLogCreate,
     DetectionLogListResponse,
@@ -36,6 +36,7 @@ __all__ = [
     "DetectionLogCreate",
     "DetectionLogListResponse",
     "DetectionLogRead",
+    "default_error_code",
     "SysHealthHourlyRead",
     "SysHealthRawRead",
     "TokenResponse",
