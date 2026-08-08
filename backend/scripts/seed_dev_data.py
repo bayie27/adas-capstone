@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import uuid
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
 from _bootstrap import bootstrap_backend
@@ -13,6 +14,8 @@ from app.core.db import engine, init_db
 from app.core.security import get_password_hash
 from app.models import (
     AIStatus,
+    AlarmSettings,
+    AuditLog,
     Camera,
     ConnectionStatus,
     DetectionLog,
@@ -20,10 +23,21 @@ from app.models import (
     User,
     UserRole,
 )
+from app.services.cameras import reconcile_camera_desired_states
 from sqlmodel import Session, select
 
 DEFAULT_SEED_PROFILE = "demo"
 SEED_PROFILES = ("demo", "analytics", "edge")
+
+# Deterministic per-run UUIDs (uuid5 of a stable label) so re-seeding a
+# non-reset database stays idempotent — a fresh uuid4() every run would
+# defeat ensure_alert()'s existing-row lookup and violate
+# ux_detection_source_event on the second run.
+_SEED_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "adas-capstone-seed-data")
+
+
+def _seed_source_event_id(label: str) -> str:
+    return str(uuid.uuid5(_SEED_NAMESPACE, label))
 
 
 @dataclass(frozen=True)
@@ -65,6 +79,10 @@ def ensure_user(
     session.add(user)
     session.commit()
     session.refresh(user)
+
+    session.add(AlarmSettings(user_id=user.user_id))
+    session.commit()
+
     print(f"Created user {username}")
     return user
 
@@ -103,8 +121,9 @@ def ensure_camera(
 def ensure_alert(
     session: Session,
     *,
+    label: str,
     camera_id: int,
-    snapshot_path: str,
+    snapshot_key: str,
     detected_at: datetime,
     confidence_score: float,
     detection_status: DetectionStatus,
@@ -113,15 +132,17 @@ def ensure_alert(
     closed_by_id: int | None = None,
     closed_at: datetime | None = None,
 ) -> DetectionLog:
+    source_event_id = _seed_source_event_id(label)
     alert = session.exec(
-        select(DetectionLog).where(DetectionLog.snapshot_path == snapshot_path)
+        select(DetectionLog).where(DetectionLog.source_event_id == source_event_id)
     ).first()
     if alert:
         return alert
 
     alert = DetectionLog(
         camera_id=camera_id,
-        snapshot_path=snapshot_path,
+        source_event_id=source_event_id,
+        snapshot_key=snapshot_key,
         detected_at=detected_at,
         confidence_score=confidence_score,
         detection_status=detection_status.value,
@@ -133,7 +154,7 @@ def ensure_alert(
     session.add(alert)
     session.commit()
     session.refresh(alert)
-    print(f"Created alert {snapshot_path}")
+    print(f"Created alert {label}")
     return alert
 
 
@@ -609,6 +630,121 @@ def build_alert_specs(profile: str, now: datetime) -> list[SeedAlertSpec]:
         ) from exc
 
 
+_OPEN_STATUSES = (DetectionStatus.UNVERIFIED, DetectionStatus.ONGOING)
+
+
+def _enforce_one_open_incident_per_camera(
+    specs: list[SeedAlertSpec],
+) -> list[SeedAlertSpec]:
+    """ux_detection_open_camera allows at most one Unverified/Ongoing row
+    per camera. The hand-written specs above don't know about that
+    constraint (some cameras get two), so demote every extra open spec —
+    in list order, keeping the first one seen per camera — to Resolved.
+
+    A demoted spec always ends up with a verifier and closer even if the
+    original (often Unverified, with neither) didn't have one — a Resolved
+    row with no verified_by/closed_by would be a nonsensical seed record.
+    """
+    seen_open_cameras: set[str] = set()
+    normalized: list[SeedAlertSpec] = []
+
+    for spec in specs:
+        if spec.detection_status in _OPEN_STATUSES:
+            if spec.camera_key in seen_open_cameras:
+                verified_by_key = spec.verified_by_key or "dsahagun"
+                verified_after_minutes = spec.verified_after_minutes or 5
+                closed_by_key = spec.closed_by_key or verified_by_key
+                closed_after_minutes = spec.closed_after_minutes or (
+                    verified_after_minutes + 15
+                )
+                spec = replace(
+                    spec,
+                    detection_status=DetectionStatus.RESOLVED,
+                    verified_by_key=verified_by_key,
+                    verified_after_minutes=verified_after_minutes,
+                    closed_by_key=closed_by_key,
+                    closed_after_minutes=closed_after_minutes,
+                )
+            else:
+                seen_open_cameras.add(spec.camera_key)
+        normalized.append(spec)
+
+    return normalized
+
+
+def _seed_audit_log_rows(
+    session: Session,
+    *,
+    admin: User,
+    operators: dict[str, User],
+    now: datetime,
+) -> None:
+    """A handful of representative audit_log rows so the P2 audit viewer has
+    something to page through. Real audit *writing* is P2's job — these are
+    seeded directly rather than produced by exercising that code path,
+    which doesn't exist yet.
+    """
+    if session.exec(select(AuditLog).limit(1)).first():
+        return
+
+    rows: list[AuditLog] = [
+        AuditLog(
+            actor_type="user",
+            user_id=admin.user_id,
+            username=admin.username,
+            role=admin.role,
+            action="LOGIN_SUCCESS",
+            target_type="session",
+            result="success",
+            created_at=seeded_timestamp(now, minutes_ago=180),
+        ),
+        AuditLog(
+            actor_type="user",
+            user_id=None,
+            username="ghost",
+            role=None,
+            action="LOGIN_FAILURE",
+            target_type="session",
+            result="denied",
+            detail='{"reason": "invalid_credentials"}',
+            created_at=seeded_timestamp(now, minutes_ago=42),
+        ),
+    ]
+
+    for offset, (username, operator) in enumerate(operators.items(), start=1):
+        rows.append(
+            AuditLog(
+                actor_type="user",
+                user_id=admin.user_id,
+                username=admin.username,
+                role=admin.role,
+                action="USER_CREATE",
+                target_type="user",
+                target_ref=str(operator.user_id),
+                result="success",
+                detail=f'{{"created_username": "{username}"}}',
+                created_at=seeded_timestamp(now, minutes_ago=170 - offset),
+            )
+        )
+        rows.append(
+            AuditLog(
+                actor_type="user",
+                user_id=operator.user_id,
+                username=operator.username,
+                role=operator.role,
+                action="LOGIN_SUCCESS",
+                target_type="session",
+                result="success",
+                created_at=seeded_timestamp(now, minutes_ago=60 + offset * 5),
+            )
+        )
+
+    for row in rows:
+        session.add(row)
+    session.commit()
+    print(f"Seeded {len(rows)} audit_log row(s).")
+
+
 def seed_cameras_only() -> None:
     init_db()
     with Session(engine) as session:
@@ -677,10 +813,13 @@ def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
             "tambo": camera_5,
             "dagatan": camera_6,
         }
-        alert_specs = build_alert_specs(profile, now)
+        alert_specs = _enforce_one_open_incident_per_camera(
+            build_alert_specs(profile, now)
+        )
 
-        def make_snapshot(cam_id: int, dt: datetime, label: str) -> str:
-            return f"cam{cam_id}_{dt.strftime('%Y%m%d_%H%M%S')}_{label}.jpg"
+        def make_snapshot(cam_id: int, dt: datetime, source_event_id: str) -> str:
+            # 01_CONTRACTS.md §7.1 nested key format, not a flat filename.
+            return f"{dt:%Y/%m/%d}/camera_{cam_id}/{source_event_id}.jpg"
 
         status_counts: Counter[str] = Counter()
         camera_counts: Counter[str] = Counter()
@@ -716,11 +855,13 @@ def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
                     f"Alert {spec.label} has a closure offset but no closer."
                 )
 
+            source_event_id = _seed_source_event_id(spec.label)
             ensure_alert(
                 session,
+                label=spec.label,
                 camera_id=camera.camera_id,
-                snapshot_path=make_snapshot(
-                    camera.camera_id, spec.detected_at, spec.label
+                snapshot_key=make_snapshot(
+                    camera.camera_id, spec.detected_at, source_event_id
                 ),
                 detected_at=spec.detected_at,
                 confidence_score=spec.confidence_score,
@@ -744,6 +885,8 @@ def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
                 verifier_counts[verified_by.username] += 1
             if closed_by:
                 closer_counts[closed_by.username] += 1
+
+        _seed_audit_log_rows(session, admin=admin, operators=operators, now=now)
 
         print(f"Dev data seeding complete for profile '{profile}'.")
         print(f"Total alerts seeded: {len(alert_specs)}")
@@ -780,6 +923,11 @@ def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
         print("  ealonzo / operator123")
         print("  smeer / operator123")
         print("  jtenorio / operator123")
+
+    # Derive desired_ai_state/reason/cooldown_until from the incidents just
+    # seeded (D-003) — a camera with a seeded open incident must come out
+    # Paused/'incident', or it would contradict ux_detection_open_camera.
+    reconcile_camera_desired_states(engine)
 
 
 def main() -> None:
