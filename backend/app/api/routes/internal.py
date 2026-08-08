@@ -1,32 +1,40 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select, col
-from typing import Optional
-from pydantic import BaseModel
-from app.core.db import get_session
-from app.models import DetectionLog, DetectionLogCreate, Camera, CameraRead, ConnectionStatus, AIStatus, DetectionStatus, CameraStatusUpdate
-from app.api.dependencies import verify_internal_api_key
-from app.ws_manager import manager
 import logging
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session, col, select
+
+from app.api.dependencies import verify_internal_api_key
+from app.core.db import get_session
+from app.models import (
+    AIStatus,
+    Camera,
+    CameraRead,
+    CameraStatusUpdate,
+    DetectionLog,
+    DetectionLogCreate,
+    DetectionStatus,
+)
+from app.ws_manager import manager
 
 logger = logging.getLogger("uvicorn.error")
 
 router = APIRouter(
     prefix="/api/internal",
     tags=["Internal AI System"],
-    dependencies=[Depends(verify_internal_api_key)]
+    dependencies=[Depends(verify_internal_api_key)],
 )
+
 
 @router.post("/alert", response_model=DetectionLog)
 async def receive_ai_alert(
-    alert_in: DetectionLogCreate,
-    session: Session = Depends(get_session)
+    alert_in: DetectionLogCreate, session: Session = Depends(get_session)
 ) -> DetectionLog:
     try:
         camera = session.get(Camera, alert_in.camera_id)
         if not camera or not camera.is_active or not camera.is_enabled:
             raise HTTPException(
                 status_code=404,
-                detail=f"Camera with ID {alert_in.camera_id} not found, inactive, or disabled."
+                detail=f"Camera with ID {alert_in.camera_id} not found, inactive, or disabled.",
             )
 
         # Immediately mark camera as Paused in DB so FE reflects the self-blindfold
@@ -47,7 +55,7 @@ async def receive_ai_alert(
             "detected_at": db_alert.detected_at.isoformat(),
             "snapshot_path": db_alert.snapshot_path,
             "confidence_score": db_alert.confidence_score,
-            "detection_status": db_alert.detection_status
+            "detection_status": db_alert.detection_status,
         }
         await manager.broadcast_alert(alert_payload)
 
@@ -64,10 +72,10 @@ async def receive_ai_alert(
 
     except HTTPException:
         raise
-    except Exception:
+    except Exception as exc:
         session.rollback()
         logger.exception("Failed to process AI alert")
-        raise HTTPException(status_code=500, detail="Failed to process alert.")
+        raise HTTPException(status_code=500, detail="Failed to process alert.") from exc
 
 
 @router.get("/cameras", response_model=list[CameraRead])
@@ -99,8 +107,7 @@ async def update_camera_status(
     camera = session.get(Camera, camera_id)
     if not camera or not camera.is_active:
         raise HTTPException(
-            status_code=404,
-            detail=f"Camera with ID {camera_id} not found or inactive."
+            status_code=404, detail=f"Camera with ID {camera_id} not found or inactive."
         )
 
     # Guard against the AI engine overruling an operator-driven pause.
@@ -110,10 +117,12 @@ async def update_camera_status(
         open_alert = session.exec(
             select(DetectionLog).where(
                 col(DetectionLog.camera_id) == camera_id,
-                col(DetectionLog.detection_status).in_([
-                    DetectionStatus.UNVERIFIED.value,
-                    DetectionStatus.ONGOING.value,
-                ]),
+                col(DetectionLog.detection_status).in_(
+                    [
+                        DetectionStatus.UNVERIFIED.value,
+                        DetectionStatus.ONGOING.value,
+                    ]
+                ),
             )
         ).first()
         if open_alert:

@@ -1,5 +1,4 @@
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
@@ -48,6 +47,7 @@ def _get_active_user_or_404(user_id: int, session: Session) -> User:
 # SELF-SERVICE (Operator & Admin)
 # ---------------------------------------------------------
 
+
 @router.get("/me", response_model=UserRead, tags=["Profile"])
 def get_my_profile(
     current_user: User = Depends(get_current_user),
@@ -73,12 +73,12 @@ def update_my_profile(
         session.commit()
         session.refresh(current_user)
         return UserRead.model_validate(current_user)
-    except IntegrityError:
+    except IntegrityError as exc:
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already taken.",
-        )
+        ) from exc
 
 
 @router.patch("/me/password", status_code=status.HTTP_204_NO_CONTENT, tags=["Profile"])
@@ -95,7 +95,7 @@ def change_my_password(
         )
 
     current_user.password_hash = get_password_hash(passwords_in.new_password)
-    current_user.password_changed_at = datetime.now(timezone.utc)
+    current_user.password_changed_at = datetime.now(UTC)
     session.add(current_user)
     session.commit()
 
@@ -104,9 +104,12 @@ def change_my_password(
 # ADMIN-ONLY
 # ---------------------------------------------------------
 
-@router.get("/", response_model=UserListResponse, dependencies=[Depends(get_current_admin)])
+
+@router.get(
+    "/", response_model=UserListResponse, dependencies=[Depends(get_current_admin)]
+)
 def get_all_users(
-    search: Optional[str] = Query(default=None, min_length=1, max_length=100),
+    search: str | None = Query(default=None, min_length=1, max_length=100),
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
@@ -152,7 +155,7 @@ def create_user(
         last_name=user_in.last_name,
         role=user_in.role,
         password_hash=get_password_hash(user_in.password),
-        password_changed_at=datetime.now(timezone.utc),
+        password_changed_at=datetime.now(UTC),
     )
 
     try:
@@ -160,12 +163,12 @@ def create_user(
         session.commit()
         session.refresh(new_user)
         return UserRead.model_validate(new_user)
-    except IntegrityError:
+    except IntegrityError as exc:
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already taken.",
-        )
+        ) from exc
 
 
 @router.patch(
@@ -185,8 +188,7 @@ def update_user(
 
     # Guard: cannot demote or deactivate the last active admin
     is_last_admin = (
-        target.role == UserRole.ADMIN
-        and _get_active_admin_count(session) <= 1
+        target.role == UserRole.ADMIN and _get_active_admin_count(session) <= 1
     )
 
     if is_last_admin:
@@ -209,12 +211,12 @@ def update_user(
         session.commit()
         session.refresh(target)
         return UserRead.model_validate(target)
-    except IntegrityError:
+    except IntegrityError as exc:
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already taken.",
-        )
+        ) from exc
 
 
 @router.post(
@@ -231,7 +233,7 @@ def reset_user_password(
     target = _get_active_user_or_404(user_id, session)
 
     target.password_hash = get_password_hash(passwords_in.new_password)
-    target.password_changed_at = datetime.now(timezone.utc)
+    target.password_changed_at = datetime.now(UTC)
     session.add(target)
     session.commit()
 
