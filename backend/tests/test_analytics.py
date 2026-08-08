@@ -1,4 +1,5 @@
 import csv
+import uuid
 from datetime import UTC, datetime
 from io import StringIO
 
@@ -39,13 +40,14 @@ def make_analytics_log(
     log = DetectionLog(
         camera_id=camera.camera_id,
         detected_at=detected_at,
-        snapshot_path=f"analytics_{camera.camera_id}_{int(detected_at.timestamp())}.jpg",
+        snapshot_key=f"analytics_{camera.camera_id}_{int(detected_at.timestamp())}.jpg",
         confidence_score=confidence_score,
         detection_status=status.value,
         verified_by_id=verified_by_id,
         verified_at=verified_at,
         closed_by_id=closed_by_id,
         closed_at=closed_at,
+        source_event_id=str(uuid.uuid4()),
     )
     session.add(log)
     session.commit()

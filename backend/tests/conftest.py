@@ -4,6 +4,7 @@ Uses an in-memory SQLite database so tests are fully isolated
 and never touch the real adas.db.
 """
 
+import uuid
 from datetime import UTC, datetime
 
 import pytest
@@ -124,9 +125,10 @@ def make_detection(
     log = DetectionLog(
         camera_id=camera.camera_id,
         detected_at=datetime.now(UTC),
-        snapshot_path="cam1_20260426_120000.jpg",
+        snapshot_key="cam1_20260426_120000.jpg",
         confidence_score=confidence,
         detection_status=status.value,
+        source_event_id=str(uuid.uuid4()),
     )
     session.add(log)
     session.commit()

@@ -5,6 +5,7 @@ Covers: list/filtering, CSV export, detail view, and alert state transitions.
 
 import asyncio
 import csv
+import uuid
 from datetime import UTC, datetime, timedelta
 from io import StringIO
 
@@ -37,7 +38,7 @@ def make_alert(
     detected_at: datetime | None = None,
     status: DetectionStatus = DetectionStatus.UNVERIFIED,
     confidence_score: float = 0.95,
-    snapshot_path: str | None = None,
+    snapshot_key: str | None = None,
     verified_by_id: int | None = None,
     verified_at: datetime | None = None,
     closed_by_id: int | None = None,
@@ -48,7 +49,7 @@ def make_alert(
     log = DetectionLog(
         camera_id=camera.camera_id,
         detected_at=detected_at,
-        snapshot_path=snapshot_path
+        snapshot_key=snapshot_key
         or f"cam_{camera.camera_id}_{int(detected_at.timestamp())}.jpg",
         confidence_score=confidence_score,
         detection_status=status.value,
@@ -56,6 +57,7 @@ def make_alert(
         verified_at=verified_at,
         closed_by_id=closed_by_id,
         closed_at=closed_at,
+        source_event_id=str(uuid.uuid4()),
     )
     session.add(log)
     session.commit()
@@ -100,9 +102,12 @@ class TestGetAlerts:
         _, headers = operator_with_headers(client, session)
         camera = make_camera(session, name="North Gate", channel_id=1)
         first_log = make_alert(session, camera)
+        # Terminal status: a camera may only have one *open* (Unverified/
+        # Ongoing) incident at a time (ux_detection_open_camera).
         second_log = make_alert(
             session,
             camera,
+            status=DetectionStatus.RESOLVED,
             detected_at=datetime.now(UTC) + timedelta(minutes=1),
         )
 
@@ -174,9 +179,13 @@ class TestGetAlerts:
             closed_by_id=actor.user_id,
             closed_at=datetime.now(UTC),
         )
+        # A different camera: only one open (Unverified/Ongoing) incident is
+        # allowed per camera at a time (ux_detection_open_camera), and
+        # `verified_log` above already holds that slot on `camera`.
+        other_camera = make_camera(session, name="Other User Filter Cam", channel_id=2)
         make_alert(
             session,
-            camera,
+            other_camera,
             status=DetectionStatus.ONGOING,
             detected_at=datetime.now(UTC) + timedelta(minutes=2),
             verified_by_id=other_operator.user_id,
@@ -199,9 +208,12 @@ class TestGetAlerts:
         early = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
         middle = datetime(2026, 1, 2, 9, 0, tzinfo=UTC)
         late = datetime(2026, 1, 3, 9, 0, tzinfo=UTC)
-        make_alert(session, camera, detected_at=early)
+        # Only one open (Unverified/Ongoing) incident is allowed per camera
+        # at a time (ux_detection_open_camera) — `middle` stays open, the
+        # other two are terminal so all three can coexist on one camera.
+        make_alert(session, camera, status=DetectionStatus.RESOLVED, detected_at=early)
         target_log = make_alert(session, camera, detected_at=middle)
-        make_alert(session, camera, detected_at=late)
+        make_alert(session, camera, status=DetectionStatus.RESOLVED, detected_at=late)
 
         resp = client.get(
             "/api/alerts/?start_date=2026-01-02T00:00:00Z&end_date=2026-01-02T23:59:59Z",
@@ -216,9 +228,13 @@ class TestGetAlerts:
     def test_pagination_limit_and_offset(self, client: TestClient, session: Session):
         _, headers = operator_with_headers(client, session)
         camera = make_camera(session, name="Paginate Cam", channel_id=1)
+        # Only one open (Unverified/Ongoing) incident is allowed per camera
+        # at a time (ux_detection_open_camera) — `middle` stays open, the
+        # other two are terminal so all three can coexist on one camera.
         oldest = make_alert(
             session,
             camera,
+            status=DetectionStatus.RESOLVED,
             detected_at=datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
         )
         middle = make_alert(
@@ -229,6 +245,7 @@ class TestGetAlerts:
         newest = make_alert(
             session,
             camera,
+            status=DetectionStatus.RESOLVED,
             detected_at=datetime(2026, 1, 3, 9, 0, tzinfo=UTC),
         )
 
@@ -279,10 +296,13 @@ class TestGetAlerts:
             verified_by_id=actor.user_id,
             verified_at=datetime.now(UTC),
         )
+        # Terminal status: target_log above already holds target_camera's one
+        # open-incident slot (ux_detection_open_camera). Status Dismissed
+        # also keeps this row excluded from the `status=Ongoing` filter below.
         make_alert(
             session,
             target_camera,
-            status=DetectionStatus.UNVERIFIED,
+            status=DetectionStatus.DISMISSED,
             detected_at=datetime.now(UTC) + timedelta(minutes=1),
         )
         make_alert(
@@ -314,7 +334,7 @@ class TestExportAlerts:
             camera,
             status=DetectionStatus.UNVERIFIED,
             confidence_score=0.87,
-            snapshot_path="exports/test_snapshot.jpg",
+            snapshot_key="exports/test_snapshot.jpg",
             verified_by_id=operator.user_id,
             verified_at=datetime(2026, 7, 1, 8, 5, tzinfo=UTC),
             closed_by_id=operator.user_id,
@@ -376,7 +396,7 @@ class TestGetAlertDetails:
         assert body["camera_name"] == "Detail Cam"
         assert body["verified_by_name"] == "Test Operator"
         assert body["closed_by_name"] == "Test Operator"
-        assert body["snapshot_path"] == log.snapshot_path
+        assert body["snapshot_key"] == log.snapshot_key
 
     def test_get_alert_details_404(self, client: TestClient, session: Session):
         _, headers = operator_with_headers(client, session)

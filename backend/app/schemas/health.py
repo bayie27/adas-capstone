@@ -1,13 +1,14 @@
 from datetime import datetime
 
-from app.models import SystemHealthHourlyBase, SystemHealthRawBase
+from app.models import SysHealthHourlyBase, SysHealthRawBase
 
 
-class SystemHealthRawRead(SystemHealthRawBase):
+class SysHealthRawRead(SysHealthRawBase):
     sys_health_id: int
     created_at: datetime
 
 
-class SystemHealthHourlyRead(SystemHealthHourlyBase):
-    hourly_sys_health_id: int
-    created_at_hour: datetime
+class SysHealthHourlyRead(SysHealthHourlyBase):
+    hourly_id: int
+    hour_start: datetime
+    sample_count: int

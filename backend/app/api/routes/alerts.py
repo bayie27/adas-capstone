@@ -240,7 +240,7 @@ def export_alerts_csv(
     )
 
     for log in logs:
-        snapshot_url = f"{base_url}/snapshots/{log.snapshot_path}"
+        snapshot_url = f"{base_url}/snapshots/{log.snapshot_key}"
         writer.writerow(
             [
                 log.log_id,

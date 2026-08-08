@@ -15,7 +15,7 @@ from app.schemas.detection import (
     DetectionLogListResponse,
     DetectionLogRead,
 )
-from app.schemas.health import SystemHealthHourlyRead, SystemHealthRawRead
+from app.schemas.health import SysHealthHourlyRead, SysHealthRawRead
 from app.schemas.user import (
     UserAdminUpdate,
     UserCreate,
@@ -36,8 +36,8 @@ __all__ = [
     "DetectionLogCreate",
     "DetectionLogListResponse",
     "DetectionLogRead",
-    "SystemHealthHourlyRead",
-    "SystemHealthRawRead",
+    "SysHealthHourlyRead",
+    "SysHealthRawRead",
     "TokenResponse",
     "UserAdminUpdate",
     "UserCreate",

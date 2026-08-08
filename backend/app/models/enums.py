@@ -7,6 +7,8 @@ class UserRole(StrEnum):
 
 
 class ConnectionStatus(StrEnum):
+    """Observed, AI-reported."""
+
     CONNECTED = "Connected"
     DISCONNECTED = "Disconnected"
     RECONNECTING = "Reconnecting"
@@ -14,10 +16,26 @@ class ConnectionStatus(StrEnum):
 
 
 class AIStatus(StrEnum):
+    """Observed, AI-reported."""
+
     ACTIVE = "Active"
     INACTIVE = "Inactive"
     PAUSED = "Paused"
     UNRESPONSIVE = "Unresponsive"
+
+
+class DesiredAIState(StrEnum):
+    """Desired, backend-owned (D-003)."""
+
+    ACTIVE = "Active"
+    PAUSED = "Paused"
+    INACTIVE = "Inactive"
+
+
+class DesiredStateReason(StrEnum):
+    INCIDENT = "incident"
+    COOLDOWN = "cooldown"
+    DISABLED = "disabled"
 
 
 class DetectionStatus(StrEnum):
@@ -25,3 +43,9 @@ class DetectionStatus(StrEnum):
     ONGOING = "Ongoing"
     DISMISSED = "Dismissed"
     RESOLVED = "Resolved"
+
+
+class AuditResult(StrEnum):
+    SUCCESS = "success"
+    DENIED = "denied"
+    FAILURE = "failure"

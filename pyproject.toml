@@ -5,6 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = "==3.12.13"
 dependencies = [
+    "apscheduler>=3.11.3",
+    "argon2-cffi>=25.1.0",
     "bcrypt==4.0.1",
     "fastapi[standard]>=0.136.1",
     "gputil>=1.4.0",

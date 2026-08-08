@@ -37,9 +37,7 @@ install_sqlite_pragmas(engine)
 
 
 def init_db() -> None:
-    from app.models import (
-        User,
-    )
+    from app.models import AlarmSettings, User
 
     SQLModel.metadata.create_all(engine)
 
@@ -60,6 +58,10 @@ def init_db() -> None:
                 is_active=True,
             )
             session.add(default_admin)
+            session.commit()
+            session.refresh(default_admin)
+
+            session.add(AlarmSettings(user_id=default_admin.user_id))
             session.commit()
             print("Default Administrator account created successfully.")
 
