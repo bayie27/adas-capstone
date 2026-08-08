@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import requests
-
 from _bootstrap import bootstrap_backend
 
 bootstrap_backend()
@@ -13,7 +12,7 @@ from app.core.config import settings
 
 
 def build_payloads(camera_ids: list[int]) -> list[dict]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payloads = []
 
     for index, camera_id in enumerate(camera_ids, start=1):

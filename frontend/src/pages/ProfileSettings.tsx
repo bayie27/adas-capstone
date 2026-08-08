@@ -96,8 +96,12 @@ export default function ProfileSettings() {
     })
   }, [profile, profileForm.first_name, profileForm.last_name])
 
-  const displayRole = profile ? formatUserRole(profile.role) : role ?? "Unknown Role"
-  const initials = getUserInitials(profileForm.first_name, profileForm.last_name, profileForm.username)
+  const displayRole = profile ? formatUserRole(profile.role) : (role ?? "Unknown Role")
+  const initials = getUserInitials(
+    profileForm.first_name,
+    profileForm.last_name,
+    profileForm.username,
+  )
 
   const isProfileDirty = profile
     ? profileForm.first_name.trim() !== profile.first_name ||
@@ -119,7 +123,10 @@ export default function ProfileSettings() {
     const nextUsername = profileForm.username.trim()
 
     if (!nextFirstName || !nextLastName || !nextUsername) {
-      setProfileNotice({ tone: "error", message: "First name, last name, and username are required." })
+      setProfileNotice({
+        tone: "error",
+        message: "First name, last name, and username are required.",
+      })
       return
     }
 
@@ -171,7 +178,9 @@ export default function ProfileSettings() {
                 {initials}
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-white">{displayName || "Unnamed User"}</h2>
+                <h2 className="text-xl font-semibold text-white">
+                  {displayName || "Unnamed User"}
+                </h2>
                 <p className="text-[#A1A1AA]">
                   {profileForm.username || "username"} ({displayRole})
                 </p>
@@ -180,7 +189,9 @@ export default function ProfileSettings() {
 
             <form onSubmit={handleProfileSubmit} className="max-w-sm space-y-6">
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-[#E4E4E7]">First Name</label>
+                <label className="mb-1.5 block text-sm font-medium text-[#E4E4E7]">
+                  First Name
+                </label>
                 <input
                   type="text"
                   value={profileForm.first_name}
@@ -228,7 +239,10 @@ export default function ProfileSettings() {
 
               {updateProfileMutation.isError ? (
                 <p className="text-xs text-[#F87171]">
-                  {getApiErrorMessage(updateProfileMutation.error, "Unable to update your profile.")}
+                  {getApiErrorMessage(
+                    updateProfileMutation.error,
+                    "Unable to update your profile.",
+                  )}
                 </p>
               ) : null}
 

@@ -146,7 +146,10 @@ export default function Users() {
                 <TableStateRow colSpan={5}>No users found.</TableStateRow>
               ) : (
                 users.map((user) => (
-                  <tr key={user.user_id} className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]">
+                  <tr
+                    key={user.user_id}
+                    className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]"
+                  >
                     <td className="px-6 py-4 text-xs font-medium">{getUserFullName(user)}</td>
                     <td className="px-6 py-4 text-xs">{user.username}</td>
                     <td className="px-6 py-4 text-xs">{formatUserRole(user.role)}</td>
@@ -252,7 +255,12 @@ export default function Users() {
             const mappedRole = mapApiRoleToAppRole(updatedUser.role)
 
             if (token && mappedRole) {
-              setSession(token, mappedRole, updatedUser.username, currentUserId ?? updatedUser.user_id)
+              setSession(
+                token,
+                mappedRole,
+                updatedUser.username,
+                currentUserId ?? updatedUser.user_id,
+              )
 
               if (mappedRole !== currentRole) {
                 navigate(getDefaultRouteForRole(mappedRole), { replace: true })
@@ -298,4 +306,3 @@ export default function Users() {
     </div>
   )
 }
-

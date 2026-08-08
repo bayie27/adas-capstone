@@ -1,12 +1,6 @@
 ﻿import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
-
-
-
-
-
-
 import {
   XAxis,
   YAxis,
@@ -19,17 +13,21 @@ import {
   AreaChart,
   Cell,
 } from "recharts"
-import {
-  exportDashboardAnalyticsCsv,
-  getDashboardAnalytics,
-} from "@/services/analytics"
+import { exportDashboardAnalyticsCsv, getDashboardAnalytics } from "@/services/analytics"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { formatHourLabel, truncateLabel } from "@/utils/analytics"
 import type { AnalyticsFilters } from "@/types/analytics"
-import { RiCalendarLine, RiCameraLine, RiCarLine, RiCheckboxLine, RiCloseLine, RiDownloadLine, RiRefreshLine } from "@remixicon/react"
-
+import {
+  RiCalendarLine,
+  RiCameraLine,
+  RiCarLine,
+  RiCheckboxLine,
+  RiCloseLine,
+  RiDownloadLine,
+  RiRefreshLine,
+} from "@remixicon/react"
 
 export default function Dashboard() {
   const [startDate, setStartDate] = useState("")
@@ -85,7 +83,9 @@ export default function Dashboard() {
         {/* Header */}
         <div className="mb-6">
           <h1 className="mb-0.5 text-xl font-semibold text-white">Dashboard</h1>
-          <p className="text-xs text-[#555]">View analytical summaries &amp; peak accident trends</p>
+          <p className="text-xs text-[#555]">
+            View analytical summaries &amp; peak accident trends
+          </p>
         </div>
 
         {dashboardQuery.isError ? (
@@ -138,7 +138,11 @@ export default function Dashboard() {
             {hasFilters ? (
               <button
                 type="button"
-                onClick={() => { setStartDate(""); setEndDate(""); setCameraId("") }}
+                onClick={() => {
+                  setStartDate("")
+                  setEndDate("")
+                  setCameraId("")
+                }}
                 className="flex items-center gap-1 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1.5 text-xs text-[#737373] transition-colors hover:text-white"
               >
                 <RiCloseLine size={12} />
@@ -158,19 +162,23 @@ export default function Dashboard() {
         </div>
 
         {exportMutation.isError ? (
-          <QueryErrorBanner error={exportMutation.error} fallback="Unable to export dashboard CSV." />
+          <QueryErrorBanner
+            error={exportMutation.error}
+            fallback="Unable to export dashboard CSV."
+          />
         ) : null}
 
         {/* Main grid */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-4">
           {/* Charts column */}
           <div className="flex flex-col gap-5 lg:col-span-3">
-
             {/* Peak Accident Hours â€” Area chart with gradient fill */}
             <div className="flex h-[270px] flex-col rounded-xl border border-[#222] bg-linear-to-b from-[#161616] to-[#0f0f0f] p-5 shadow-lg">
               <h3 className="mb-4 text-xs font-medium text-[#D4D4D4]">Peak Accident Hours (24H)</h3>
               {dashboardQuery.isLoading ? (
-                <div className="flex flex-1 items-center justify-center text-sm text-[#555]">Loading chart...</div>
+                <div className="flex flex-1 items-center justify-center text-sm text-[#555]">
+                  Loading chart...
+                </div>
               ) : (
                 <div className="flex-1 -ml-4">
                   <ResponsiveContainer width="100%" height="100%">
@@ -225,27 +233,52 @@ export default function Dashboard() {
                 </div>
               )}
               {!dashboardQuery.isLoading && !chartHasData ? (
-                <p className="mt-2 text-xs text-[#555]">No confirmed accidents found for the current view.</p>
+                <p className="mt-2 text-xs text-[#555]">
+                  No confirmed accidents found for the current view.
+                </p>
               ) : null}
             </div>
 
             {/* Accident Frequency by Location â€” gradient bars */}
             <div className="flex h-[340px] flex-col rounded-xl border border-[#222] bg-linear-to-b from-[#161616] to-[#0f0f0f] p-5 shadow-lg">
-              <h3 className="mb-4 text-xs font-medium text-[#D4D4D4]">Accident Frequency by Location</h3>
+              <h3 className="mb-4 text-xs font-medium text-[#D4D4D4]">
+                Accident Frequency by Location
+              </h3>
               {dashboardQuery.isLoading ? (
-                <div className="flex flex-1 items-center justify-center text-sm text-[#555]">Loading chart...</div>
+                <div className="flex flex-1 items-center justify-center text-sm text-[#555]">
+                  Loading chart...
+                </div>
               ) : locationHasData ? (
                 <div className="flex-1 -ml-2">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barData} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+                    <BarChart
+                      data={barData}
+                      layout="vertical"
+                      margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
+                    >
                       <defs>
                         {barData.map((entry, index) => {
                           const ratio = entry.value / maxBarValue
                           const lightness = Math.round(30 + ratio * 45)
                           return (
-                            <linearGradient key={`grad-${index}`} id={`barGrad-${index}`} x1="0" y1="0" x2="1" y2="0">
-                              <stop offset="0%" stopColor={`hsl(0,0%,${lightness}%)`} stopOpacity={1} />
-                              <stop offset="100%" stopColor={`hsl(0,0%,${Math.max(lightness - 15, 15)}%)`} stopOpacity={1} />
+                            <linearGradient
+                              key={`grad-${index}`}
+                              id={`barGrad-${index}`}
+                              x1="0"
+                              y1="0"
+                              x2="1"
+                              y2="0"
+                            >
+                              <stop
+                                offset="0%"
+                                stopColor={`hsl(0,0%,${lightness}%)`}
+                                stopOpacity={1}
+                              />
+                              <stop
+                                offset="100%"
+                                stopColor={`hsl(0,0%,${Math.max(lightness - 15, 15)}%)`}
+                                stopOpacity={1}
+                              />
                             </linearGradient>
                           )
                         })}
@@ -303,7 +336,7 @@ export default function Dashboard() {
               <StatCard
                 icon={RiRefreshLine}
                 title="Ongoing Accidents"
-                value={dashboardQuery.isLoading ? "..." : kpis?.ongoing ?? 0}
+                value={dashboardQuery.isLoading ? "..." : (kpis?.ongoing ?? 0)}
                 subtext="Live incident queue"
               />
             </div>
@@ -311,7 +344,7 @@ export default function Dashboard() {
               <StatCard
                 icon={RiCarLine}
                 title="Total Accidents"
-                value={dashboardQuery.isLoading ? "..." : kpis?.total_accidents ?? 0}
+                value={dashboardQuery.isLoading ? "..." : (kpis?.total_accidents ?? 0)}
                 subtext="Compared to last month"
               />
             </div>
@@ -319,7 +352,7 @@ export default function Dashboard() {
               <StatCard
                 icon={RiCheckboxLine}
                 title="Total Resolved"
-                value={dashboardQuery.isLoading ? "..." : kpis?.total_resolved ?? 0}
+                value={dashboardQuery.isLoading ? "..." : (kpis?.total_resolved ?? 0)}
                 subtext="Compared to last month"
               />
             </div>
@@ -329,4 +362,3 @@ export default function Dashboard() {
     </div>
   )
 }
-

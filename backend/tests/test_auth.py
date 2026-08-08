@@ -3,11 +3,10 @@ Tests for /api/auth — TC-U-201, TC-U-202, TC-U-203
 Covers: login success, bad credentials, inactive account, JWT generation.
 """
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from .conftest import make_admin, make_operator, get_token, auth_headers
+from .conftest import auth_headers, make_admin, make_operator
 
 
 class TestLogin:

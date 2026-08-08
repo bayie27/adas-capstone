@@ -1,14 +1,15 @@
-import os
-import cv2
-from concurrent.futures import ThreadPoolExecutor
 import datetime
-import requests
+import os
+from concurrent.futures import ThreadPoolExecutor
 
+import cv2
+import requests
 from config import (
-    WEBHOOK_URL,
-    INTERNAL_API_KEY,
     ACCIDENT_CLASS_ID,
+    INTERNAL_API_KEY,
+    WEBHOOK_URL,
 )
+
 
 class AccidentManager:
     """Handles alert logic, payload formatting, and backend communication."""
@@ -19,7 +20,11 @@ class AccidentManager:
 
     def process_detections(self, camera, results, frame):
         # 1. YOLO already filtered by CONFIDENCE_THRESHOLD, so we just check for the class ID
-        accident_confs = [float(box.conf[0]) for box in results.boxes if int(box.cls[0]) == ACCIDENT_CLASS_ID]
+        accident_confs = [
+            float(box.conf[0])
+            for box in results.boxes
+            if int(box.cls[0]) == ACCIDENT_CLASS_ID
+        ]
 
         if not accident_confs:
             return
@@ -41,8 +46,10 @@ class AccidentManager:
             # 1. Generate timestamps and paths
             timestamp_now = datetime.datetime.now()
             iso_time = timestamp_now.isoformat()
-            safe_filename = f"cam{camera.camera_id}_{timestamp_now.strftime('%Y%m%d_%H%M%S')}.jpg"
-            
+            safe_filename = (
+                f"cam{camera.camera_id}_{timestamp_now.strftime('%Y%m%d_%H%M%S')}.jpg"
+            )
+
             script_dir = os.path.dirname(os.path.abspath(__file__))
             snapshots_dir = os.path.join(script_dir, "snapshots")
             os.makedirs(snapshots_dir, exist_ok=True)
@@ -61,17 +68,23 @@ class AccidentManager:
 
             # 4. Transmit only the JSON data and the Security Key
             headers = {"x-api-key": INTERNAL_API_KEY}
-            print(f"[SYSTEM] Transmitting JSON payload to backend for Channel {camera.channel_id}...")
+            print(
+                f"[SYSTEM] Transmitting JSON payload to backend for Channel {camera.channel_id}..."
+            )
             response = requests.post(WEBHOOK_URL, json=data, headers=headers, timeout=5)
 
             if response.status_code in [200, 201]:
                 print("[SYSTEM] Webhook delivered successfully! Database updated.")
             else:
                 print(f"[SYSTEM] Backend Error {response.status_code}: {response.text}")
-                print(f"[SYSTEM] Forcing Channel {camera.channel_id} to resume detection due to backend failure.")
+                print(
+                    f"[SYSTEM] Forcing Channel {camera.channel_id} to resume detection due to backend failure."
+                )
                 camera.resume()
 
         except Exception as e:
             print(f"[SYSTEM] Webhook network failure: {e}")
-            print(f"[SYSTEM] Forcing Channel {camera.channel_id} to resume detection due to network failure.")
+            print(
+                f"[SYSTEM] Forcing Channel {camera.channel_id} to resume detection due to network failure."
+            )
             camera.resume()

@@ -35,47 +35,47 @@ function App() {
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route element={<AuthLayout />}>
-            <Route path="/login" element={<Login />} />
-          </Route>
-          <Route path="/" element={<Navigate to="/login" replace />} />
+              <Route path="/login" element={<Login />} />
+            </Route>
+            <Route path="/" element={<Navigate to="/login" replace />} />
 
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute requiredRole="Administrator">
-                <AdminLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="cameras" element={<Cameras />} />
-            <Route path="detections" element={<Detections />} />
-            <Route path="health" element={<SystemHealth />} />
-            <Route path="ai" element={<AiPerformance />} />
-            <Route path="profile" element={<ProfileSettings />} />
-            <Route path="help" element={<HelpCenter />} />
-            <Route path="users" element={<Users />} />
-          </Route>
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute requiredRole="Administrator">
+                  <AdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="cameras" element={<Cameras />} />
+              <Route path="detections" element={<Detections />} />
+              <Route path="health" element={<SystemHealth />} />
+              <Route path="ai" element={<AiPerformance />} />
+              <Route path="profile" element={<ProfileSettings />} />
+              <Route path="help" element={<HelpCenter />} />
+              <Route path="users" element={<Users />} />
+            </Route>
 
-          <Route
-            path="/user"
-            element={
-              <ProtectedRoute requiredRole="Operator">
-                <UserLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="cameras" element={<Cameras />} />
-            <Route path="detections" element={<Detections />} />
-            <Route path="health" element={<SystemHealth />} />
-            <Route path="ai" element={<AiPerformance />} />
-            <Route path="profile" element={<ProfileSettings />} />
-            <Route path="help" element={<HelpCenter />} />
-          </Route>
+            <Route
+              path="/user"
+              element={
+                <ProtectedRoute requiredRole="Operator">
+                  <UserLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="cameras" element={<Cameras />} />
+              <Route path="detections" element={<Detections />} />
+              <Route path="health" element={<SystemHealth />} />
+              <Route path="ai" element={<AiPerformance />} />
+              <Route path="profile" element={<ProfileSettings />} />
+              <Route path="help" element={<HelpCenter />} />
+            </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </Suspense>
       </ErrorBoundary>
     </Router>

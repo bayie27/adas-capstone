@@ -32,7 +32,8 @@ export default function Login() {
       return { tone: "success", message: navigationMessage }
     }
 
-    const sessionMessage = typeof window !== "undefined" ? window.sessionStorage.getItem("auth-message") : null
+    const sessionMessage =
+      typeof window !== "undefined" ? window.sessionStorage.getItem("auth-message") : null
 
     if (sessionMessage) {
       window.sessionStorage.removeItem("auth-message")
@@ -105,9 +106,15 @@ export default function Login() {
       <div className="w-full max-w-[400px] rounded-xl border border-[#2A2A2A] bg-[#111111] p-8 shadow-2xl">
         <div className="mb-8 flex flex-col items-center">
           <div className="mb-4 flex w-24 items-center justify-center">
-            <img src="/adas-logo.png" alt="ADAS Logo" className="h-auto w-full object-contain drop-shadow-md" />
+            <img
+              src="/adas-logo.png"
+              alt="ADAS Logo"
+              className="h-auto w-full object-contain drop-shadow-md"
+            />
           </div>
-          <h1 className="font-logo text-xl font-bold uppercase tracking-[0.3em] text-white">ADAS</h1>
+          <h1 className="font-logo text-xl font-bold uppercase tracking-[0.3em] text-white">
+            ADAS
+          </h1>
           <p className="mt-1 text-center text-xs tracking-wide text-[#A1A1AA]">
             Accident Detection and Alert System
           </p>
@@ -115,7 +122,9 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="mb-1.5 block text-xs font-medium tracking-wide text-[#E4E4E7]">Username</label>
+            <label className="mb-1.5 block text-xs font-medium tracking-wide text-[#E4E4E7]">
+              Username
+            </label>
             <input
               type="text"
               placeholder="username"

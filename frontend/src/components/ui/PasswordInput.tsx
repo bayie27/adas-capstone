@@ -1,9 +1,7 @@
 ﻿import { useState } from "react"
 
-
 import { cn } from "@/utils/cn"
 import { RiEyeLine, RiEyeOffLine } from "@remixicon/react"
-
 
 /**
  * Label + password field + eye-toggle. Owns its own visibility state (pure
@@ -66,4 +64,3 @@ export function PasswordInput({
     </div>
   )
 }
-

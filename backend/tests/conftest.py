@@ -4,16 +4,13 @@ Uses an in-memory SQLite database so tests are fully isolated
 and never touch the real adas.db.
 """
 
-import pytest
-from datetime import datetime, timezone
-from fastapi.testclient import TestClient
-from sqlmodel import SQLModel, Session, create_engine
-from sqlmodel.pool import StaticPool
+from datetime import UTC, datetime
 
-from app.main import app
+import pytest
 from app.core.config import settings
 from app.core.db import get_session
 from app.core.security import get_password_hash
+from app.main import app
 from app.models import (
     AIStatus,
     Camera,
@@ -23,11 +20,14 @@ from app.models import (
     User,
     UserRole,
 )
-
+from fastapi.testclient import TestClient
+from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel.pool import StaticPool
 
 # ---------------------------------------------------------------------------
 # Database fixture — fresh in-memory DB per test
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(name="session")
 def session_fixture():
@@ -57,6 +57,7 @@ def client_fixture(session: Session):
 # Seed helpers — reusable across test modules
 # ---------------------------------------------------------------------------
 
+
 def make_admin(session: Session, username="admin", password="Admin123") -> User:
     user = User(
         username=username,
@@ -72,7 +73,9 @@ def make_admin(session: Session, username="admin", password="Admin123") -> User:
     return user
 
 
-def make_operator(session: Session, username="operator", password="Operator123") -> User:
+def make_operator(
+    session: Session, username="operator", password="Operator123"
+) -> User:
     user = User(
         username=username,
         first_name="Test",
@@ -120,7 +123,7 @@ def make_detection(
     assert camera.camera_id is not None
     log = DetectionLog(
         camera_id=camera.camera_id,
-        detected_at=datetime.now(timezone.utc),
+        detected_at=datetime.now(UTC),
         snapshot_path="cam1_20260426_120000.jpg",
         confidence_score=confidence,
         detection_status=status.value,
@@ -134,6 +137,7 @@ def make_detection(
 # ---------------------------------------------------------------------------
 # Auth helper — returns a Bearer token for a given user
 # ---------------------------------------------------------------------------
+
 
 def get_token(client: TestClient, username: str, password: str) -> str:
     resp = client.post(

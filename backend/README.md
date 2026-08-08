@@ -10,15 +10,15 @@ For the full system overview, see the [root README](../README.md).
 
 ## Stack
 
-| Layer | Technology |
-|---|---|
-| Framework | FastAPI 0.136 on Uvicorn (ASGI) |
-| Database | SQLite with WAL mode |
-| ORM | SQLModel (SQLAlchemy + Pydantic) |
-| Auth | JWT via PyJWT · bcrypt via passlib |
-| Real-time | WebSocket (native FastAPI) |
-| Testing | pytest with in-memory SQLite |
-| Package manager | uv |
+| Layer           | Technology                         |
+| --------------- | ---------------------------------- |
+| Framework       | FastAPI 0.136 on Uvicorn (ASGI)    |
+| Database        | SQLite with WAL mode               |
+| ORM             | SQLModel (SQLAlchemy + Pydantic)   |
+| Auth            | JWT via PyJWT · bcrypt via passlib |
+| Real-time       | WebSocket (native FastAPI)         |
+| Testing         | pytest with in-memory SQLite       |
+| Package manager | uv                                 |
 
 ---
 
@@ -101,18 +101,18 @@ All routes except `/api/auth/login`, `/api/internal/*`, and `/` require a valid 
 
 ### Authentication
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
+| Method | Path              | Auth | Description                                                                            |
+| ------ | ----------------- | ---- | -------------------------------------------------------------------------------------- |
 | `POST` | `/api/auth/login` | None | Returns JWT. Body: `application/x-www-form-urlencoded` with `username` and `password`. |
 
 ### Internal — AI Engine Bridge
 
 These routes are protected by `x-api-key` header (the `INTERNAL_API_KEY` from `.env`), not JWT. They are called by the AI engine only, not by the dashboard.
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/internal/alert` | Receives a collision detection event. Saves the log, marks the camera `Paused` in DB, broadcasts `NEW_DETECTION` and `CAMERA_STATUS_UPDATE` over WebSocket. |
-| `GET` | `/api/internal/cameras` | Returns all enabled, active cameras with current statuses. The AI engine polls this every 3 seconds to reconcile its state on restart. |
+| Method  | Path                                       | Description                                                                                                                                                                 |
+| ------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST`  | `/api/internal/alert`                      | Receives a collision detection event. Saves the log, marks the camera `Paused` in DB, broadcasts `NEW_DETECTION` and `CAMERA_STATUS_UPDATE` over WebSocket.                 |
+| `GET`   | `/api/internal/cameras`                    | Returns all enabled, active cameras with current statuses. The AI engine polls this every 3 seconds to reconcile its state on restart.                                      |
 | `PATCH` | `/api/internal/cameras/{camera_id}/status` | AI engine reports connection or AI status changes. Updates DB and broadcasts `CAMERA_STATUS_UPDATE`. Rejects attempts to set `ai_status=Active` while an open alert exists. |
 
 **Alert webhook payload:**
@@ -128,12 +128,12 @@ These routes are protected by `x-api-key` header (the `INTERNAL_API_KEY` from `.
 
 ### Cameras
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/cameras/` | Operator+ | Paginated camera list with global KPIs. Supports `connection_status`, `ai_status`, `is_enabled`, and `search` filters. |
-| `POST` | `/api/cameras/` | Operator+ | Add a new camera. Validates no duplicate name or channel ID. |
-| `PATCH` | `/api/cameras/{camera_id}` | Operator+ | Edit camera name, channel ID, or enabled state. |
-| `DELETE` | `/api/cameras/{camera_id}` | Operator+ | Soft-delete a camera (sets `is_active=False`). |
+| Method   | Path                       | Auth      | Description                                                                                                            |
+| -------- | -------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/cameras/`            | Operator+ | Paginated camera list with global KPIs. Supports `connection_status`, `ai_status`, `is_enabled`, and `search` filters. |
+| `POST`   | `/api/cameras/`            | Operator+ | Add a new camera. Validates no duplicate name or channel ID.                                                           |
+| `PATCH`  | `/api/cameras/{camera_id}` | Operator+ | Edit camera name, channel ID, or enabled state.                                                                        |
+| `DELETE` | `/api/cameras/{camera_id}` | Operator+ | Soft-delete a camera (sets `is_active=False`).                                                                         |
 
 **GET /api/cameras/ response shape:**
 
@@ -149,14 +149,14 @@ These routes are protected by `x-api-key` header (the `INTERNAL_API_KEY` from `.
 
 ### Alerts (HITL Workflow)
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/alerts/` | Operator+ | Paginated alert list. Filters: `status`, `camera_id`, `user_id`, `start_date`, `end_date`, `search`. |
-| `GET` | `/api/alerts/export` | Operator+ | Streams a CSV of the filtered dataset. |
-| `GET` | `/api/alerts/{log_id}` | Operator+ | Full detail for one detection log including camera name. |
-| `POST` | `/api/alerts/{log_id}/confirm` | Operator+ | `Unverified → Ongoing`. Camera stays `Paused`. Records `verified_by` and `verified_at`. |
+| Method | Path                           | Auth      | Description                                                                                                                                               |
+| ------ | ------------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/alerts/`                 | Operator+ | Paginated alert list. Filters: `status`, `camera_id`, `user_id`, `start_date`, `end_date`, `search`.                                                      |
+| `GET`  | `/api/alerts/export`           | Operator+ | Streams a CSV of the filtered dataset.                                                                                                                    |
+| `GET`  | `/api/alerts/{log_id}`         | Operator+ | Full detail for one detection log including camera name.                                                                                                  |
+| `POST` | `/api/alerts/{log_id}/confirm` | Operator+ | `Unverified → Ongoing`. Camera stays `Paused`. Records `verified_by` and `verified_at`.                                                                   |
 | `POST` | `/api/alerts/{log_id}/dismiss` | Operator+ | `Unverified → Dismissed` (60s cooldown before camera resumes) or `Ongoing → Dismissed` (camera resumes immediately). Records `closed_by` and `closed_at`. |
-| `POST` | `/api/alerts/{log_id}/resolve` | Operator+ | `Ongoing → Resolved`. Camera resumes immediately. Records `closed_by` and `closed_at`. |
+| `POST` | `/api/alerts/{log_id}/resolve` | Operator+ | `Ongoing → Resolved`. Camera resumes immediately. Records `closed_by` and `closed_at`.                                                                    |
 
 **Detection status flow:**
 
@@ -169,16 +169,16 @@ Unverified ──confirm──► Ongoing ──resolve──► Resolved
 
 ### Users
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/users/me` | Operator+ | Own profile. |
-| `PATCH` | `/api/users/me` | Operator+ | Update own username, first name, or last name. |
-| `PATCH` | `/api/users/me/password` | Operator+ | Change own password. Requires current password. |
-| `GET` | `/api/users/` | Admin only | Paginated, searchable user directory. |
-| `POST` | `/api/users/` | Admin only | Create a new user account. |
-| `PATCH` | `/api/users/{user_id}` | Admin only | Edit profile, role, or active status. Guards against demoting or deactivating the last active admin. |
-| `POST` | `/api/users/{user_id}/reset-password` | Admin only | Force-reset any user's password. |
-| `DELETE` | `/api/users/{user_id}` | Admin only | Soft-delete a user. Guards against self-deletion and deleting the last active admin. |
+| Method   | Path                                  | Auth       | Description                                                                                          |
+| -------- | ------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/users/me`                       | Operator+  | Own profile.                                                                                         |
+| `PATCH`  | `/api/users/me`                       | Operator+  | Update own username, first name, or last name.                                                       |
+| `PATCH`  | `/api/users/me/password`              | Operator+  | Change own password. Requires current password.                                                      |
+| `GET`    | `/api/users/`                         | Admin only | Paginated, searchable user directory.                                                                |
+| `POST`   | `/api/users/`                         | Admin only | Create a new user account.                                                                           |
+| `PATCH`  | `/api/users/{user_id}`                | Admin only | Edit profile, role, or active status. Guards against demoting or deactivating the last active admin. |
+| `POST`   | `/api/users/{user_id}/reset-password` | Admin only | Force-reset any user's password.                                                                     |
+| `DELETE` | `/api/users/{user_id}`                | Admin only | Soft-delete a user. Guards against self-deletion and deleting the last active admin.                 |
 
 ### WebSocket
 
@@ -219,21 +219,21 @@ No authentication on the WebSocket connection itself — the dashboard sends the
 
 ### Detection Status Values
 
-| Value | Meaning |
-|---|---|
-| `Unverified` | AI detected, operator has not acted yet |
-| `Ongoing` | Operator confirmed — active emergency, camera paused |
-| `Dismissed` | False positive or corrected human error |
-| `Resolved` | Emergency cleared, camera resumed |
+| Value        | Meaning                                              |
+| ------------ | ---------------------------------------------------- |
+| `Unverified` | AI detected, operator has not acted yet              |
+| `Ongoing`    | Operator confirmed — active emergency, camera paused |
+| `Dismissed`  | False positive or corrected human error              |
+| `Resolved`   | Emergency cleared, camera resumed                    |
 
 ### Camera Status Values
 
-| `connection_status` | `ai_status` |
-|---|---|
-| `Connected` | `Active` |
-| `Disconnected` | `Inactive` |
-| `Reconnecting` | `Paused` |
-| `Unresponsive` | `Unresponsive` |
+| `connection_status` | `ai_status`    |
+| ------------------- | -------------- |
+| `Connected`         | `Active`       |
+| `Disconnected`      | `Inactive`     |
+| `Reconnecting`      | `Paused`       |
+| `Unresponsive`      | `Unresponsive` |
 
 ### Password Rules
 
@@ -272,10 +272,10 @@ Tests use an in-memory SQLite database (`sqlite://`) via a session fixture in `c
 
 **Current coverage:**
 
-| File | What it tests |
-|---|---|
-| `test_auth.py` | Login success/failure, inactive accounts, JWT protection, RBAC routing |
-| `test_users.py` | Full user CRUD, self-service, last-admin guards, password rules, soft delete |
+| File             | What it tests                                                                     |
+| ---------------- | --------------------------------------------------------------------------------- |
+| `test_auth.py`   | Login success/failure, inactive accounts, JWT protection, RBAC routing            |
+| `test_users.py`  | Full user CRUD, self-service, last-admin guards, password rules, soft delete      |
 | `test_alerts.py` | Filtering, pagination, CSV export, all HITL state transitions and rejection cases |
 
 ---

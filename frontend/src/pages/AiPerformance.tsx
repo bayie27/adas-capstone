@@ -1,17 +1,7 @@
 ﻿import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
-
-
-
-
-
-
-
-import {
-  exportPerformanceAnalyticsCsv,
-  getPerformanceAnalytics,
-} from "@/services/analytics"
+import { exportPerformanceAnalyticsCsv, getPerformanceAnalytics } from "@/services/analytics"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"
@@ -21,8 +11,16 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { formatPercent } from "@/utils/analytics"
-import { RiCalendarLine, RiCameraLine, RiCarLine, RiCloseCircleLine, RiCloseLine, RiDashboard3Line, RiDownloadLine, RiFocus3Line } from "@remixicon/react"
-
+import {
+  RiCalendarLine,
+  RiCameraLine,
+  RiCarLine,
+  RiCloseCircleLine,
+  RiCloseLine,
+  RiDashboard3Line,
+  RiDownloadLine,
+  RiFocus3Line,
+} from "@remixicon/react"
 
 const PERFORMANCE_QUERY_KEY = ["performance-analytics"] as const
 const ITEMS_PER_PAGE = 10
@@ -97,13 +95,13 @@ export default function AiPerformance() {
         <StatCard
           icon={RiCarLine}
           title="Total Accidents"
-          value={performanceQuery.isLoading ? "..." : globalKpis?.total_accidents ?? 0}
+          value={performanceQuery.isLoading ? "..." : (globalKpis?.total_accidents ?? 0)}
           subtext="Confirmed accidents"
         />
         <StatCard
           icon={RiCloseCircleLine}
           title="Total Dismissed"
-          value={performanceQuery.isLoading ? "..." : globalKpis?.total_dismissed ?? 0}
+          value={performanceQuery.isLoading ? "..." : (globalKpis?.total_dismissed ?? 0)}
           subtext="False positives"
         />
         <StatCard
@@ -145,7 +143,10 @@ export default function AiPerformance() {
             <input
               type="date"
               value={startDate}
-              onChange={(e) => { reset(); setStartDate(e.target.value) }}
+              onChange={(e) => {
+                reset()
+                setStartDate(e.target.value)
+              }}
               className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
             />
           </div>
@@ -155,29 +156,40 @@ export default function AiPerformance() {
             <input
               type="date"
               value={endDate}
-              onChange={(e) => { reset(); setEndDate(e.target.value) }}
+              onChange={(e) => {
+                reset()
+                setEndDate(e.target.value)
+              }}
               className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
             />
           </div>
-            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-              <RiCameraLine size={13} className="text-[#737373]" />
-              <select
-                value={cameraId}
-                onChange={(e) => { reset(); setCameraId(e.target.value) }}
-                className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none"
-              >
-                <option value="">All cameras</option>
-                {camerasQuery.data?.cameras.map((c) => (
-                  <option key={c.camera_id} value={c.camera_id}>
-                    {c.camera_name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
+            <RiCameraLine size={13} className="text-[#737373]" />
+            <select
+              value={cameraId}
+              onChange={(e) => {
+                reset()
+                setCameraId(e.target.value)
+              }}
+              className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none"
+            >
+              <option value="">All cameras</option>
+              {camerasQuery.data?.cameras.map((c) => (
+                <option key={c.camera_id} value={c.camera_id}>
+                  {c.camera_name}
+                </option>
+              ))}
+            </select>
+          </div>
           {hasDateFilter ? (
             <button
               type="button"
-              onClick={() => { setStartDate(""); setEndDate(""); setCameraId(""); reset() }}
+              onClick={() => {
+                setStartDate("")
+                setEndDate("")
+                setCameraId("")
+                reset()
+              }}
               className="flex items-center gap-1 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1.5 text-xs text-[#737373] transition-colors hover:text-white"
             >
               <RiCloseLine size={12} />
@@ -197,7 +209,10 @@ export default function AiPerformance() {
       </div>
 
       {exportMutation.isError ? (
-        <QueryErrorBanner error={exportMutation.error} fallback="Unable to export AI performance CSV." />
+        <QueryErrorBanner
+          error={exportMutation.error}
+          fallback="Unable to export AI performance CSV."
+        />
       ) : null}
 
       <div className="overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#111111]">
@@ -222,7 +237,10 @@ export default function AiPerformance() {
                 </TableStateRow>
               ) : (
                 visibleRows.map((item) => (
-                  <tr key={item.camera_id} className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]">
+                  <tr
+                    key={item.camera_id}
+                    className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]"
+                  >
                     <td className="px-6 py-4 text-xs font-medium">{item.camera_name}</td>
                     <td className="px-6 py-4 text-center text-xs">{item.total_accidents}</td>
                     <td className="px-6 py-4 text-center text-xs">{item.total_dismissed}</td>
@@ -231,7 +249,9 @@ export default function AiPerformance() {
                     </td>
                     <td
                       className={`px-6 py-4 text-center text-xs font-medium ${
-                        item.avg_accident_confidence === null ? "text-[#737373]" : "text-emerald-500"
+                        item.avg_accident_confidence === null
+                          ? "text-[#737373]"
+                          : "text-emerald-500"
                       }`}
                     >
                       {formatPercent(item.avg_accident_confidence)}
@@ -265,4 +285,3 @@ export default function AiPerformance() {
     </div>
   )
 }
-

@@ -1,8 +1,7 @@
 import asyncio
 import csv
 import io
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.orm import selectinload
@@ -45,12 +44,14 @@ def _to_detection_log_read(log: DetectionLog) -> DetectionLogRead:
 
 async def _broadcast_camera_status(camera: Camera) -> None:
     """Broadcast a CAMERA_STATUS_UPDATE payload to all connected FE clients."""
-    await manager.broadcast_alert({
-        "type": "CAMERA_STATUS_UPDATE",
-        "camera_id": camera.camera_id,
-        "connection_status": camera.connection_status,
-        "ai_status": camera.ai_status,
-    })
+    await manager.broadcast_alert(
+        {
+            "type": "CAMERA_STATUS_UPDATE",
+            "camera_id": camera.camera_id,
+            "connection_status": camera.connection_status,
+            "ai_status": camera.ai_status,
+        }
+    )
 
 
 async def _resume_camera_after_cooldown(camera_id: int) -> None:
@@ -62,12 +63,11 @@ async def _resume_camera_after_cooldown(camera_id: int) -> None:
     await asyncio.sleep(60)
 
     # Import here to avoid circular imports at module level
-    from app.core.db import get_session as _get_session
-    from sqlmodel import Session as _Session
 
     # We need a fresh DB session since this runs outside the request lifecycle
-    from app.core.db import engine
     from sqlmodel import Session as SyncSession
+
+    from app.core.db import engine
 
     with SyncSession(engine) as session:
         camera = session.get(Camera, camera_id)
@@ -108,7 +108,9 @@ def _apply_alert_filters(
         query = query.where(col(DetectionLog.detected_at) <= end_date)
     if status_values:
         query = query.where(
-            col(DetectionLog.detection_status).in_([status.value for status in status_values])
+            col(DetectionLog.detection_status).in_(
+                [status.value for status in status_values]
+            )
         )
     if camera_ids:
         query = query.where(col(DetectionLog.camera_id).in_(camera_ids))
@@ -151,8 +153,12 @@ def _validate_common_filters(
 
 @router.get("/", response_model=DetectionLogListResponse)
 def get_alerts(
-    start_date: Optional[datetime] = Query(default=None, description="ISO 8601 format, e.g. 2026-01-01T00:00:00Z"),
-    end_date: Optional[datetime] = Query(default=None, description="ISO 8601 format, e.g. 2026-12-31T23:59:59Z"),
+    start_date: datetime | None = Query(
+        default=None, description="ISO 8601 format, e.g. 2026-01-01T00:00:00Z"
+    ),
+    end_date: datetime | None = Query(
+        default=None, description="ISO 8601 format, e.g. 2026-12-31T23:59:59Z"
+    ),
     status: list[DetectionStatus] | None = Query(
         default=None,
         description="Filter by status with repeated params, e.g. ?status=Unverified&status=Ongoing",
@@ -168,7 +174,7 @@ def get_alerts(
             "e.g. ?user_id=4&user_id=5"
         ),
     ),
-    search: Optional[str] = Query(default=None, min_length=1, max_length=100),
+    search: str | None = Query(default=None, min_length=1, max_length=100),
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
@@ -213,12 +219,16 @@ def get_alerts(
 @router.get("/export")
 def export_alerts_csv(
     request: Request,
-    start_date: Optional[datetime] = Query(default=None, description="ISO 8601 format, e.g. 2026-01-01T00:00:00Z"),
-    end_date: Optional[datetime] = Query(default=None, description="ISO 8601 format, e.g. 2026-12-31T23:59:59Z"),
+    start_date: datetime | None = Query(
+        default=None, description="ISO 8601 format, e.g. 2026-01-01T00:00:00Z"
+    ),
+    end_date: datetime | None = Query(
+        default=None, description="ISO 8601 format, e.g. 2026-12-31T23:59:59Z"
+    ),
     status: list[DetectionStatus] | None = Query(default=None),
     camera_id: list[int] | None = Query(default=None),
     user_id: list[int] | None = Query(default=None),
-    search: Optional[str] = Query(default=None, min_length=1, max_length=100),
+    search: str | None = Query(default=None, min_length=1, max_length=100),
     session: Session = Depends(get_session),
 ):
     """Exports the filtered logs directly to a downloadable CSV file."""
@@ -315,6 +325,7 @@ def get_alert_details(log_id: int, session: Session = Depends(get_session)):
 # HITL STATE MACHINE TRANSITIONS
 # ---------------------------------------------------------
 
+
 @router.post("/{log_id}/confirm", response_model=DetectionLogRead)
 async def confirm_alert(
     log_id: int,
@@ -335,17 +346,21 @@ async def confirm_alert(
     log.detection_status = DetectionStatus.ONGOING
     log.verified_by_id = current_user.user_id
     log.verified_by = current_user
-    log.verified_at = datetime.now(timezone.utc)
+    log.verified_at = datetime.now(UTC)
 
     session.add(log)
     session.commit()
     session.refresh(log)
 
-    await manager.broadcast_alert({
-        "type": "ALERT_STATUS_UPDATE",
-        "log_id": log.log_id,
-        "detection_status": getattr(log.detection_status, "value", log.detection_status),
-    })
+    await manager.broadcast_alert(
+        {
+            "type": "ALERT_STATUS_UPDATE",
+            "log_id": log.log_id,
+            "detection_status": getattr(
+                log.detection_status, "value", log.detection_status
+            ),
+        }
+    )
 
     return _to_detection_log_read(log)
 
@@ -378,7 +393,7 @@ async def dismiss_alert(
     log.detection_status = DetectionStatus.DISMISSED
     log.closed_by_id = current_user.user_id
     log.closed_by = current_user
-    log.closed_at = datetime.now(timezone.utc)
+    log.closed_at = datetime.now(UTC)
 
     session.add(log)
 
@@ -407,11 +422,15 @@ async def dismiss_alert(
             session.refresh(camera)
             await _broadcast_camera_status(camera)
 
-    await manager.broadcast_alert({
-        "type": "ALERT_STATUS_UPDATE",
-        "log_id": log.log_id,
-        "detection_status": getattr(log.detection_status, "value", log.detection_status),
-    })
+    await manager.broadcast_alert(
+        {
+            "type": "ALERT_STATUS_UPDATE",
+            "log_id": log.log_id,
+            "detection_status": getattr(
+                log.detection_status, "value", log.detection_status
+            ),
+        }
+    )
 
     return _to_detection_log_read(log)
 
@@ -434,7 +453,7 @@ async def resolve_alert(
     log.detection_status = DetectionStatus.RESOLVED
     log.closed_by_id = current_user.user_id
     log.closed_by = current_user
-    log.closed_at = datetime.now(timezone.utc)
+    log.closed_at = datetime.now(UTC)
 
     session.add(log)
 
@@ -450,10 +469,14 @@ async def resolve_alert(
         session.refresh(camera)
         await _broadcast_camera_status(camera)
 
-    await manager.broadcast_alert({
-        "type": "ALERT_STATUS_UPDATE",
-        "log_id": log.log_id,
-        "detection_status": getattr(log.detection_status, "value", log.detection_status),
-    })
+    await manager.broadcast_alert(
+        {
+            "type": "ALERT_STATUS_UPDATE",
+            "log_id": log.log_id,
+            "detection_status": getattr(
+                log.detection_status, "value", log.detection_status
+            ),
+        }
+    )
 
     return _to_detection_log_read(log)

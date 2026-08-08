@@ -2,16 +2,21 @@
 End-to-end websocket tests for live alert and camera-status broadcasts.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
+from app.models import AIStatus, ConnectionStatus, DetectionStatus
+from app.ws_manager import manager
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import AIStatus, ConnectionStatus, DetectionStatus
-from app.ws_manager import manager
-
-from .conftest import auth_headers, internal_headers, make_camera, make_detection, make_operator
+from .conftest import (
+    auth_headers,
+    internal_headers,
+    make_camera,
+    make_detection,
+    make_operator,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -39,7 +44,7 @@ def test_internal_alert_broadcasts_to_websocket_client(
             headers=internal_headers(),
             json={
                 "camera_id": camera.camera_id,
-                "detected_at": datetime(2026, 4, 26, 12, 0, tzinfo=timezone.utc).isoformat(),
+                "detected_at": datetime(2026, 4, 26, 12, 0, tzinfo=UTC).isoformat(),
                 "snapshot_path": "ws/alert.jpg",
                 "confidence_score": 0.94,
             },
@@ -74,7 +79,10 @@ def test_status_patch_broadcasts_to_all_connected_websocket_clients(
         ai_status=AIStatus.INACTIVE.value,
     )
 
-    with client.websocket_connect("/ws/alerts") as ws_one, client.websocket_connect("/ws/alerts") as ws_two:
+    with (
+        client.websocket_connect("/ws/alerts") as ws_one,
+        client.websocket_connect("/ws/alerts") as ws_two,
+    ):
         resp = client.patch(
             f"/api/internal/cameras/{camera.camera_id}/status",
             headers=internal_headers(),

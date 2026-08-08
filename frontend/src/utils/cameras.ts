@@ -1,8 +1,4 @@
-import type {
-  CameraAiStatus,
-  CameraConnectionStatus,
-  CameraRecord,
-} from "@/types/cameras"
+import type { CameraAiStatus, CameraConnectionStatus, CameraRecord } from "@/types/cameras"
 
 export const CAMERA_CONNECTION_STATUS_OPTIONS: Array<{
   label: string

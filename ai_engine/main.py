@@ -1,11 +1,11 @@
+import time
 from pathlib import Path
 
 import cv2
-import time
-from ultralytics import YOLO
 from accident import AccidentManager
 from config import CONFIDENCE_THRESHOLD
 from sync import start_sync_thread
+from ultralytics import YOLO
 
 MODEL_DIR = Path(__file__).resolve().parent
 ENGINE_PATH = MODEL_DIR / "best.engine"
@@ -22,7 +22,9 @@ def load_model():
         try:
             return YOLO(str(ENGINE_PATH))
         except Exception as exc:
-            print(f"TensorRT engine failed to load ({exc}); falling back to {WEIGHTS_PATH.name}")
+            print(
+                f"TensorRT engine failed to load ({exc}); falling back to {WEIGHTS_PATH.name}"
+            )
     return YOLO(str(WEIGHTS_PATH))
 
 
@@ -56,7 +58,13 @@ def run_multi_camera_inference():
 
         # GPU BATCHING
         if frames_to_process:
-            results = model(frames_to_process, stream=False, device=0, verbose=False, conf=CONFIDENCE_THRESHOLD)
+            results = model(
+                frames_to_process,
+                stream=False,
+                device=0,
+                verbose=False,
+                conf=CONFIDENCE_THRESHOLD,
+            )
 
             for i, r in enumerate(results):
                 current_cam = active_cameras[i]
@@ -66,7 +74,7 @@ def run_multi_camera_inference():
                 alert_manager.process_detections(current_cam, r, annotated_frame)
 
                 # cv2.imshow(f"ADAS Stream - Camera {current_cam.camera_id} (Ch. {current_cam.channel_id})", annotated_frame)
-                
+
         else:
             # Yield the CPU to prevent starving the background sync thread
             time.sleep(0.05)

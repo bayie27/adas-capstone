@@ -1,9 +1,11 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import SecretStr, field_validator
 from pathlib import Path
+
+from pydantic import SecretStr, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROOT_ENV_FILE = REPO_ROOT / ".env"
+
 
 class Settings(BaseSettings):
     # Security
@@ -41,5 +43,6 @@ class Settings(BaseSettings):
 
         resolved = (REPO_ROOT / path_str).resolve()
         return f"{prefix}{resolved.as_posix()}"
+
 
 settings = Settings()

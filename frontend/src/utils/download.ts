@@ -21,10 +21,7 @@ function extractFilename(contentDisposition: string | undefined, fallback: strin
 }
 
 export function downloadBlobResponse(response: AxiosResponse<Blob>, fallbackFilename: string) {
-  const filename = extractFilename(
-    response.headers["content-disposition"],
-    fallbackFilename,
-  )
+  const filename = extractFilename(response.headers["content-disposition"], fallbackFilename)
 
   const blobUrl = window.URL.createObjectURL(response.data)
   const link = document.createElement("a")

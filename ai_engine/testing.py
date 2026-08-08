@@ -26,7 +26,7 @@ while True:
     cv2.imshow("MediaMTX RTSP Stream", frame)
 
     # Wait 1ms for a key event; exit if 'q' is pressed
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 
 # Clean up resources

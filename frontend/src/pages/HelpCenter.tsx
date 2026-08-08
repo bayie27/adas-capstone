@@ -1,4 +1,13 @@
-﻿import { RiArrowRightLine, RiBookOpenLine, RiCustomerService2Line, RiFileList3Line, RiLifebuoyLine, RiShieldCheckLine, RiSignalTowerLine, RiTimeLine } from "@remixicon/react"
+﻿import {
+  RiArrowRightLine,
+  RiBookOpenLine,
+  RiCustomerService2Line,
+  RiFileList3Line,
+  RiLifebuoyLine,
+  RiShieldCheckLine,
+  RiSignalTowerLine,
+  RiTimeLine,
+} from "@remixicon/react"
 
 const quickLinks = [
   {
@@ -36,7 +45,8 @@ export default function HelpCenter() {
             </p>
             <h1 className="text-3xl font-semibold tracking-tight text-white">Help Center</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#A1A1AA]">
-              Quick operating references for ADAS users handling detections, camera health, and account access.
+              Quick operating references for ADAS users handling detections, camera health, and
+              account access.
             </p>
           </div>
           <div className="rounded-lg border border-[#2A2A2A] bg-[#111111] px-4 py-3 text-sm">
@@ -50,7 +60,10 @@ export default function HelpCenter() {
 
         <section className="grid gap-4 md:grid-cols-3">
           {quickLinks.map((item) => (
-            <article key={item.title} className="rounded-xl border border-[#2A2A2A] bg-[#111111] p-5">
+            <article
+              key={item.title}
+              className="rounded-xl border border-[#2A2A2A] bg-[#111111] p-5"
+            >
               <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#1E1E1E]">
                 <item.icon size={18} className="text-[#D4D4D4]" />
               </div>
@@ -71,7 +84,10 @@ export default function HelpCenter() {
             </div>
             <div className="space-y-3">
               {procedures.map((procedure, index) => (
-                <div key={procedure} className="flex gap-3 rounded-lg border border-[#242424] bg-[#151515] p-4">
+                <div
+                  key={procedure}
+                  className="flex gap-3 rounded-lg border border-[#242424] bg-[#151515] p-4"
+                >
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#242424] text-xs font-semibold text-white">
                     {index + 1}
                   </span>
@@ -87,14 +103,18 @@ export default function HelpCenter() {
               <h2 className="text-lg font-semibold text-white">Contact support</h2>
             </div>
             <div className="space-y-4 text-sm text-[#A1A1AA]">
-              <p>For urgent detection or camera failures, contact the system administrator with the page, camera, and time observed.</p>
+              <p>
+                For urgent detection or camera failures, contact the system administrator with the
+                page, camera, and time observed.
+              </p>
               <div className="rounded-lg border border-[#242424] bg-[#151515] p-4">
                 <div className="flex items-center gap-2 text-white">
                   <RiFileList3Line size={16} className="text-[#A1A1AA]" />
                   Include in report
                 </div>
                 <p className="mt-2 text-xs leading-5 text-[#737373]">
-                  Username, camera name, channel ID, alert ID, and a short description of what failed.
+                  Username, camera name, channel ID, alert ID, and a short description of what
+                  failed.
                 </p>
               </div>
             </div>

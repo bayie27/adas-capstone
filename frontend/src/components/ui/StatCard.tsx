@@ -9,7 +9,14 @@ interface StatCardProps {
   deltaPositive?: boolean
 }
 
-export function StatCard({ icon: Icon, title, value, subtext, delta, deltaPositive }: StatCardProps) {
+export function StatCard({
+  icon: Icon,
+  title,
+  value,
+  subtext,
+  delta,
+  deltaPositive,
+}: StatCardProps) {
   return (
     <div className="flex h-full min-h-[160px] flex-col justify-between rounded-xl border border-[#2A2A2A] bg-[#111111] p-5">
       <div>
@@ -20,7 +27,9 @@ export function StatCard({ icon: Icon, title, value, subtext, delta, deltaPositi
           {title}
         </h4>
         <div className="flex items-end gap-2.5">
-          <div className="text-3xl font-semibold leading-none tracking-tight text-white">{value}</div>
+          <div className="text-3xl font-semibold leading-none tracking-tight text-white">
+            {value}
+          </div>
           {delta ? (
             <span
               className={`mb-1 text-xs font-medium ${deltaPositive ? "text-emerald-400" : "text-red-400"}`}

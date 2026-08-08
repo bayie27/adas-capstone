@@ -3,14 +3,13 @@ Tests for /api/internal.
 Covers AI-engine alert ingestion, camera polling, status updates, and internal auth.
 """
 
-from datetime import datetime, timezone
-
-import pytest
-from fastapi.testclient import TestClient
-from sqlmodel import Session, select
+from datetime import UTC, datetime
 
 import app.api.routes.internal as internal_routes
+import pytest
 from app.models import AIStatus, ConnectionStatus, DetectionLog, DetectionStatus
+from fastapi.testclient import TestClient
+from sqlmodel import Session, select
 
 from .conftest import internal_headers, make_camera, make_detection
 
@@ -40,7 +39,7 @@ def test_receive_ai_alert_creates_log_pauses_camera_and_broadcasts(
         headers=internal_headers(),
         json={
             "camera_id": camera.camera_id,
-            "detected_at": datetime(2026, 4, 26, 12, 0, tzinfo=timezone.utc).isoformat(),
+            "detected_at": datetime(2026, 4, 26, 12, 0, tzinfo=UTC).isoformat(),
             "snapshot_path": "snapshots/ingress.jpg",
             "confidence_score": 0.97,
         },
@@ -107,7 +106,7 @@ def test_receive_ai_alert_rejects_disabled_or_inactive_camera(
         headers=internal_headers(),
         json={
             "camera_id": camera.camera_id,
-            "detected_at": datetime.now(timezone.utc).isoformat(),
+            "detected_at": datetime.now(UTC).isoformat(),
             "snapshot_path": "snapshots/rejected.jpg",
             "confidence_score": 0.91,
         },
@@ -118,9 +117,12 @@ def test_receive_ai_alert_rejects_disabled_or_inactive_camera(
 
     session.refresh(camera)
     assert camera.ai_status == AIStatus.INACTIVE.value
-    assert session.exec(
-        select(DetectionLog).where(DetectionLog.camera_id == camera.camera_id)
-    ).all() == []
+    assert (
+        session.exec(
+            select(DetectionLog).where(DetectionLog.camera_id == camera.camera_id)
+        ).all()
+        == []
+    )
     assert payloads == []
 
 
@@ -159,9 +161,15 @@ def test_get_enabled_cameras_returns_only_enabled_and_active(
     returned = {camera["camera_id"]: camera for camera in body}
 
     assert set(returned) == {included_one.camera_id, included_two.camera_id}
-    assert returned[included_one.camera_id]["connection_status"] == ConnectionStatus.CONNECTED.value
+    assert (
+        returned[included_one.camera_id]["connection_status"]
+        == ConnectionStatus.CONNECTED.value
+    )
     assert returned[included_one.camera_id]["ai_status"] == AIStatus.ACTIVE.value
-    assert returned[included_two.camera_id]["connection_status"] == ConnectionStatus.RECONNECTING.value
+    assert (
+        returned[included_two.camera_id]["connection_status"]
+        == ConnectionStatus.RECONNECTING.value
+    )
     assert returned[included_two.camera_id]["ai_status"] == AIStatus.PAUSED.value
 
 

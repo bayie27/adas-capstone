@@ -14,7 +14,17 @@ interface ModalProps {
   closeOnBackdrop?: boolean
 }
 
-export function Modal({ isOpen, onClose, title, subtitle, icon, children, className, hideClose, closeOnBackdrop = true }: ModalProps) {
+export function Modal({
+  isOpen,
+  onClose,
+  title,
+  subtitle,
+  icon,
+  children,
+  className,
+  hideClose,
+  closeOnBackdrop = true,
+}: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -59,17 +69,20 @@ export function Modal({ isOpen, onClose, title, subtitle, icon, children, classN
         tabIndex={-1}
         className={cn(
           "relative bg-[#111111] border border-[#2A2A2A] rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200",
-          className
+          className,
         )}
       >
-
         {(title || icon) && (
           <div className="px-6 pt-6 pb-4 flex items-start justify-between">
             <div className="flex items-start gap-4">
               {icon}
               <div>
-                {title && <h3 className="text-lg font-semibold text-white leading-tight">{title}</h3>}
-                {subtitle && <p className="text-sm text-[#A1A1AA] mt-1 leading-relaxed">{subtitle}</p>}
+                {title && (
+                  <h3 className="text-lg font-semibold text-white leading-tight">{title}</h3>
+                )}
+                {subtitle && (
+                  <p className="text-sm text-[#A1A1AA] mt-1 leading-relaxed">{subtitle}</p>
+                )}
               </div>
             </div>
             {!hideClose && (
@@ -92,9 +105,7 @@ export function Modal({ isOpen, onClose, title, subtitle, icon, children, classN
           </button>
         )}
 
-        <div className="px-6 pb-6">
-          {children}
-        </div>
+        <div className="px-6 pb-6">{children}</div>
       </div>
     </div>
   )

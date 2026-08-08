@@ -79,7 +79,6 @@ export function GlobalAlerts() {
 
       {/* modal card */}
       <div className="relative w-full max-w-md overflow-hidden rounded-xl shadow-2xl">
-
         {/* header banner â€” red for Unverified, amber for Ongoing */}
         <div className={`px-6 py-4 text-center ${isOngoing ? "bg-amber-500" : "bg-[#F05252]"}`}>
           <p className="text-xl font-black uppercase tracking-widest text-[#1a1a1a]">
@@ -105,19 +104,25 @@ export function GlobalAlerts() {
         {/* metadata rows */}
         <div className="space-y-3 bg-[#1a1a1a] px-6 py-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-widest text-[#737373]">Timestamp</span>
+            <span className="text-xs font-semibold uppercase tracking-widest text-[#737373]">
+              Timestamp
+            </span>
             <span className="tabular-nums text-sm font-semibold text-white">
               {formatFullDateTime(alert.detected_at)}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-widest text-[#737373]">Camera Name</span>
+            <span className="text-xs font-semibold uppercase tracking-widest text-[#737373]">
+              Camera Name
+            </span>
             <span className="text-sm font-bold uppercase text-white">
               {alert.camera_name ?? `Camera ${alert.camera_id}`}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-widest text-[#737373]">AI-Confidence Score</span>
+            <span className="text-xs font-semibold uppercase tracking-widest text-[#737373]">
+              AI-Confidence Score
+            </span>
             <span className="text-sm font-bold text-[#F05252]">
               {formatAlertConfidence(alert.confidence_score)}
             </span>

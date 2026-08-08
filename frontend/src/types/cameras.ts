@@ -1,14 +1,6 @@
-export type CameraConnectionStatus =
-  | "Connected"
-  | "Disconnected"
-  | "Reconnecting"
-  | "Unresponsive"
+export type CameraConnectionStatus = "Connected" | "Disconnected" | "Reconnecting" | "Unresponsive"
 
-export type CameraAiStatus =
-  | "Active"
-  | "Inactive"
-  | "Paused"
-  | "Unresponsive"
+export type CameraAiStatus = "Active" | "Inactive" | "Paused" | "Unresponsive"
 
 export interface CameraRecord {
   camera_id: number

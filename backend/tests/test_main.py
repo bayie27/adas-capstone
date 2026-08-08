@@ -4,11 +4,10 @@ Focused tests for app startup behavior.
 
 import asyncio
 
-from sqlmodel import SQLModel, Session, create_engine
-from sqlmodel.pool import StaticPool
-
 import app.main as main_module
 from app.models import AIStatus, Camera, ConnectionStatus
+from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel.pool import StaticPool
 
 from .conftest import make_camera
 

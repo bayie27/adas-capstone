@@ -4,16 +4,15 @@ TC-I-402, TC-S-201, TC-S-202.
 Covers: CRUD, RBAC, last-admin guards, self-service, password rules.
 """
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from .conftest import make_admin, make_operator, auth_headers
-
+from .conftest import auth_headers, make_admin, make_operator
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def admin_headers(client, session):
     make_admin(session)
@@ -24,8 +23,8 @@ def admin_headers(client, session):
 # GET /api/users/me — self profile
 # ---------------------------------------------------------------------------
 
-class TestGetMyProfile:
 
+class TestGetMyProfile:
     def test_operator_can_get_own_profile(self, client: TestClient, session: Session):
         make_operator(session)
         headers = auth_headers(client, "operator", "Operator123")
@@ -49,9 +48,11 @@ class TestGetMyProfile:
 # PATCH /api/users/me — self-service profile update (Use Case 3)
 # ---------------------------------------------------------------------------
 
-class TestUpdateMyProfile:
 
-    def test_operator_can_update_own_username(self, client: TestClient, session: Session):
+class TestUpdateMyProfile:
+    def test_operator_can_update_own_username(
+        self, client: TestClient, session: Session
+    ):
         make_operator(session)
         headers = auth_headers(client, "operator", "Operator123")
         resp = client.patch(
@@ -62,7 +63,9 @@ class TestUpdateMyProfile:
         assert resp.status_code == 200
         assert resp.json()["username"] == "newoperator"
 
-    def test_operator_cannot_change_own_role(self, client: TestClient, session: Session):
+    def test_operator_cannot_change_own_role(
+        self, client: TestClient, session: Session
+    ):
         """Operator self-service only allows username/first_name/last_name."""
         make_operator(session)
         headers = auth_headers(client, "operator", "Operator123")
@@ -116,9 +119,11 @@ class TestUpdateMyProfile:
 # PATCH /api/users/me/password — self-service password change
 # ---------------------------------------------------------------------------
 
-class TestChangeMyPassword:
 
-    def test_operator_can_change_own_password(self, client: TestClient, session: Session):
+class TestChangeMyPassword:
+    def test_operator_can_change_own_password(
+        self, client: TestClient, session: Session
+    ):
         make_operator(session)
         headers = auth_headers(client, "operator", "Operator123")
         resp = client.patch(
@@ -156,7 +161,9 @@ class TestChangeMyPassword:
         )
         assert resp.status_code == 422
 
-    def test_new_password_no_number_rejected(self, client: TestClient, session: Session):
+    def test_new_password_no_number_rejected(
+        self, client: TestClient, session: Session
+    ):
         """Password must contain at least one number."""
         make_operator(session)
         headers = auth_headers(client, "operator", "Operator123")
@@ -180,14 +187,11 @@ class TestChangeMyPassword:
         )
         assert resp.status_code == 204
 
+    # ---------------------------------------------------------------------------
+    # GET /api/users/ — admin user directory
+    # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# GET /api/users/ — admin user directory
-# ---------------------------------------------------------------------------
-
-    def test_password_changed_at_is_updated(
-        self, client: TestClient, session: Session
-    ):
+    def test_password_changed_at_is_updated(self, client: TestClient, session: Session):
         operator = make_operator(session)
         original_changed_at = operator.password_changed_at
         headers = auth_headers(client, "operator", "Operator123")
@@ -205,7 +209,6 @@ class TestChangeMyPassword:
 
 
 class TestGetAllUsers:
-
     def test_admin_gets_paginated_list(self, client: TestClient, session: Session):
         make_admin(session)
         make_operator(session)
@@ -258,8 +261,8 @@ class TestGetAllUsers:
 # POST /api/users/ — admin creates user (TC-I-402)
 # ---------------------------------------------------------------------------
 
-class TestCreateUser:
 
+class TestCreateUser:
     def test_admin_creates_operator(self, client: TestClient, session: Session):
         make_admin(session)
         headers = auth_headers(client, "admin", "Admin123")
@@ -351,8 +354,8 @@ class TestCreateUser:
 # PATCH /api/users/{user_id} — admin edits user
 # ---------------------------------------------------------------------------
 
-class TestUpdateUser:
 
+class TestUpdateUser:
     def test_admin_can_edit_operator(self, client: TestClient, session: Session):
         make_admin(session)
         op = make_operator(session)
@@ -449,7 +452,9 @@ class TestUpdateUser:
     ):
         make_admin(session)
         headers = auth_headers(client, "admin", "Admin123")
-        resp = client.patch("/api/users/99999", json={"first_name": "Ghost"}, headers=headers)
+        resp = client.patch(
+            "/api/users/99999", json={"first_name": "Ghost"}, headers=headers
+        )
         assert resp.status_code == 404
 
 
@@ -457,8 +462,8 @@ class TestUpdateUser:
 # POST /api/users/{user_id}/reset-password — admin force reset
 # ---------------------------------------------------------------------------
 
-class TestResetPassword:
 
+class TestResetPassword:
     def test_admin_can_reset_operator_password(
         self, client: TestClient, session: Session
     ):
@@ -505,10 +510,9 @@ class TestResetPassword:
         )
         assert resp.status_code == 403
 
-
-# ---------------------------------------------------------------------------
-# DELETE /api/users/{user_id} — admin soft delete
-# ---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
+    # DELETE /api/users/{user_id} — admin soft delete
+    # ---------------------------------------------------------------------------
 
     def test_reset_password_nonexistent_user_returns_404(
         self, client: TestClient, session: Session
@@ -524,7 +528,6 @@ class TestResetPassword:
 
 
 class TestDeleteUser:
-
     def test_admin_can_delete_operator(self, client: TestClient, session: Session):
         make_admin(session)
         op = make_operator(session)
