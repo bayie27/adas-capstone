@@ -105,9 +105,10 @@ async def update_camera_status(
     Updates DB and broadcasts to all connected FE clients.
     """
     camera = session.get(Camera, camera_id)
-    if not camera or not camera.is_active:
+    if not camera or not camera.is_active or not camera.is_enabled:
         raise HTTPException(
-            status_code=404, detail=f"Camera with ID {camera_id} not found or inactive."
+            status_code=404,
+            detail=f"Camera with ID {camera_id} not found, inactive, or disabled.",
         )
 
     # Guard against the AI engine overruling an operator-driven pause.

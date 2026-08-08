@@ -615,7 +615,12 @@ class TestAlertCameraStatusSideEffects:
                 "camera_id": camera.camera_id,
                 "connection_status": camera.connection_status,
                 "ai_status": AIStatus.ACTIVE.value,
-            }
+            },
+            {
+                "type": "ALERT_STATUS_UPDATE",
+                "log_id": log.log_id,
+                "detection_status": DetectionStatus.DISMISSED.value,
+            },
         ]
 
     def test_dismiss_ongoing_does_not_reactivate_disabled_camera(
@@ -654,7 +659,13 @@ class TestAlertCameraStatusSideEffects:
         assert resp.status_code == 200
         session.refresh(camera)
         assert camera.ai_status == AIStatus.PAUSED.value
-        assert payloads == []
+        assert payloads == [
+            {
+                "type": "ALERT_STATUS_UPDATE",
+                "log_id": log.log_id,
+                "detection_status": DetectionStatus.DISMISSED.value,
+            },
+        ]
 
     def test_resolve_ongoing_reactivates_enabled_camera_and_broadcasts(
         self,
@@ -697,7 +708,12 @@ class TestAlertCameraStatusSideEffects:
                 "camera_id": camera.camera_id,
                 "connection_status": camera.connection_status,
                 "ai_status": AIStatus.ACTIVE.value,
-            }
+            },
+            {
+                "type": "ALERT_STATUS_UPDATE",
+                "log_id": log.log_id,
+                "detection_status": DetectionStatus.RESOLVED.value,
+            },
         ]
 
     def test_resolve_ongoing_does_not_reactivate_disabled_camera(
@@ -736,7 +752,13 @@ class TestAlertCameraStatusSideEffects:
         assert resp.status_code == 200
         session.refresh(camera)
         assert camera.ai_status == AIStatus.PAUSED.value
-        assert payloads == []
+        assert payloads == [
+            {
+                "type": "ALERT_STATUS_UPDATE",
+                "log_id": log.log_id,
+                "detection_status": DetectionStatus.RESOLVED.value,
+            },
+        ]
 
     def test_resume_camera_after_cooldown_reactivates_and_broadcasts(
         self,
