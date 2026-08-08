@@ -1,6 +1,6 @@
 # ADAS — Intelligent Real-Time Road Accident Detection & Alert System
 
-> Last updated: April 26, 2026
+> Last updated: August 8, 2026
 
 A capstone project for De La Salle Lipa, Bachelor of Science in Information Technology, College of Information Technology and Engineering. ADAS automates vehicle-to-vehicle collision detection across a CCTV network, eliminating reliance on manual monitoring and reducing emergency notification latency to seconds.
 
@@ -19,8 +19,10 @@ adas-capstone/
 ├── ai_engine/
 │   ├── main.py              # Entry point — multi-camera inference loop
 │   ├── camera.py            # Threaded RTSP stream reader with auto-reconnect
-│   ├── manager.py           # Accident detection logic and webhook dispatch
+│   ├── accident.py          # Accident detection logic and webhook dispatch
+│   ├── sync.py              # Background thread that polls the backend for camera state
 │   ├── config.py            # AI engine configuration (thresholds, endpoints)
+│   ├── best.pt / best.engine # YOLO weights (portable) / TensorRT engine (GPU-specific)
 │   └── snapshots/           # Saved incident snapshots (auto-created)
 ├── backend/
 │   ├── app/
@@ -39,18 +41,21 @@ adas-capstone/
 │   │           ├── cameras.py           # Camera CRUD and management
 │   │           ├── alerts.py            # HITL workflow (confirm/dismiss/resolve)
 │   │           ├── users.py             # User CRUD and self-service
-│   │           ├── analytics.py         # (planned) Dashboard KPIs and charts
-│   │           └── system.py            # (planned) System health telemetry
+│   │           ├── analytics.py         # Dashboard KPIs and charts
+│   │           └── system.py            # (not yet implemented) System health telemetry
 │   ├── scripts/             # Dev utilities — see backend/scripts/README.md
 │   ├── tests/               # Pytest test suite
 │   └── README.md            # Backend-specific setup and API reference
 ├── frontend/
 │   ├── src/                 # React source (components, pages, hooks, stores)
 │   ├── public/
-│   ├── package.json
-│   └── dashboard.html       # Standalone WebSocket alert feed (dev/debug only)
+│   └── package.json
+├── e2e/                     # Playwright specs (CI-only, spans backend + frontend)
+├── mediamtx.yml             # Camera simulation config — see "Simulate camera streams"
+├── scripts/start-sim.ps1    # Preflighted wrapper around `mediamtx mediamtx.yml`
 ├── pyproject.toml
 ├── uv.lock
+├── package.json             # Root pnpm workspace — see CONTRIBUTING.md for the script reference
 └── .python-version          # 3.12.13
 ```
 
@@ -60,10 +65,10 @@ adas-capstone/
 
 - **Python 3.12.13** (pinned via `.python-version`)
 - **uv** — fast Python package manager (`pip install uv` or see [uv docs](https://docs.astral.sh/uv/))
-- **Node.js 18+** and **pnpm** — for the React frontend
+- **Node.js 22+** and **pnpm** — for the frontend and the root pnpm workspace (`package.json` at the repo root drives lint/format/test scripts across both)
 - **ffmpeg** — required to broadcast local video files to the RTSP proxy during development
 - **MediaMTX** — RTSP media server used to simulate the VMS in development ([download](https://github.com/bluenviron/mediamtx/releases))
-- **NVIDIA GPU + CUDA** — required for TensorRT inference in production; CPU fallback works for development
+- **NVIDIA GPU + CUDA** — required to run the AI engine with the TensorRT engine; the AI engine falls back to portable `.pt` weights (still needs a GPU for reasonable inference speed, but not a matching TensorRT build) if `best.engine` fails to load
 
 ---
 
@@ -81,7 +86,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=480
 INTERNAL_API_KEY=your-internal-api-key
 
 # Database
-DATABASE_URL=sqlite:///adas.db
+DATABASE_URL=sqlite:///./adas.db
 DEFAULT_ADMIN_PASSWORD=ChangeMe123
 
 # Dahua DSS Pro VMS (production only)
@@ -95,23 +100,31 @@ DSS_PASS=your-vms-password
 
 ## Installation
 
-**Python dependencies (backend + AI engine):**
-
-````bash
-uv sync
-
-**Frontend dependencies:**
+**Python dependencies:**
 
 ```bash
-cd frontend
+uv sync
+```
+
+`uv sync` alone installs the backend only (fast, no CUDA — this is what CI runs). The AI engine's heavy ML dependencies (torch, tensorrt, ultralytics, opencv) live behind an optional extra, so running the AI engine needs:
+
+```bash
+uv sync --extra ai
+```
+
+**Node dependencies (frontend + root tooling):**
+
+Run from the **repo root**, not `frontend/` — this is a pnpm workspace, and running it at the root is also what activates the git hooks (see [CONTRIBUTING.md](CONTRIBUTING.md)):
+
+```bash
 pnpm install
-````
+```
 
 ---
 
 ## Running the System
 
-All three components run in separate terminals.
+All three components run in separate terminals. **Run every command from the repo root.** This is a convention, not a hard requirement anymore — the FastAPI CLI injects `backend/` into `sys.path` itself, and `DATABASE_URL` resolves to an absolute path under the repo root regardless of CWD — but the AI engine's `from config import ...`-style imports still need `ai_engine/` to be the script's own directory (which `uv run python ai_engine/main.py` gives it), so running from the root is simplest across the board.
 
 **1. Start the backend**
 
@@ -190,10 +203,13 @@ MediaMTX's default ports: RTSP `8554`, RTMP `1935`, HLS `8888`, WebRTC `8889`, S
 
 **4. Start the AI engine**
 
+Requires `uv sync --extra ai` (see [Installation](#installation)). Run from the repo root:
+
 ```bash
-cd ai_engine
-uv run python main.py
+uv run python ai_engine/main.py
 ```
+
+`best.engine` is a TensorRT engine built for one specific GPU + driver + TensorRT version — it will not load on a different machine. The AI engine detects this and falls back to the portable `best.pt` weights automatically; a fallback message on startup is expected on any machine other than the one it was built on.
 
 ---
 
@@ -202,10 +218,10 @@ uv run python main.py
 **Reset and seed the local database:**
 
 ```bash
-python backend/scripts/reseed_dev.py
+uv run python backend/scripts/reseed_dev.py
 ```
 
-This gives you a fresh DB with an admin account, three cameras, and sample alerts across all detection statuses. See [`backend/scripts/README.md`](backend/scripts/README.md) for the full script reference.
+Always use `uv run python`, never a bare `python` — the `python` on PATH may be a different, unpinned interpreter (e.g. a system install) rather than the project's pinned 3.12.13. This gives you a fresh DB with an admin account, three cameras, and sample alerts across all detection statuses. See [`backend/scripts/README.md`](backend/scripts/README.md) for the full script reference.
 
 **Run the test suite:**
 
@@ -213,7 +229,7 @@ This gives you a fresh DB with an admin account, three cameras, and sample alert
 uv run pytest
 ```
 
-Tests use an in-memory SQLite database and never touch `adas.db`.
+Tests use an in-memory SQLite database and never touch `adas.db`. For the full pre-push/pre-PR command reference (`pnpm check`, `pnpm full:check`, individual lint/format/typecheck scripts), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -268,10 +284,11 @@ Tests use an in-memory SQLite database and never touch `adas.db`.
 
 ## What Is Not Yet Implemented
 
-- `backend/app/api/routes/analytics.py` — dashboard KPIs, accident frequency charts, peak time charts
-- `backend/app/api/routes/system.py` — hardware telemetry (CPU, GPU, RAM, temperature) endpoints
-- `backend/app/core/monitor.py` — background process that polls hardware metrics and writes to `sys_health_raw`
-- `backend/scripts/daily_restart.sh` — scheduled nightly restart script
+- `backend/app/api/routes/system.py` — hardware telemetry (CPU, GPU, RAM, temperature) endpoints (intentional 0-byte placeholder)
+- `backend/app/core/monitor.py` — background process that polls hardware metrics and writes to `sys_health_raw` (intentional 0-byte placeholder)
+- `backend/scripts/daily_restart.sh` — scheduled nightly restart script (intentional 0-byte placeholder)
+
+`backend/app/api/routes/analytics.py` is implemented (dashboard KPIs, accident frequency and peak-time charts) with a full pytest suite — it used to be listed here as planned, which was stale.
 
 ---
 
