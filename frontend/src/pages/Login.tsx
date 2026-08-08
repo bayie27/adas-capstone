@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, type FormEvent } from "react"
+﻿import { useState, type FormEvent } from "react"
 import { Navigate, useLocation, useNavigate } from "react-router-dom"
 import { useMutation } from "@tanstack/react-query"
 import { getCurrentUser, loginUser } from "@/services/auth"
@@ -8,6 +8,10 @@ import { getApiErrorMessage } from "@/utils/api"
 import type { NoticeState } from "@/components/ui/NoticeBanner"
 import { PasswordInput } from "@/components/ui/PasswordInput"
 
+function getNavigationMessage(locationState: unknown): string | undefined {
+  return (locationState as { message?: string } | null)?.message
+}
+
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -16,7 +20,27 @@ export default function Login() {
   const setSession = useAuthStore((state) => state.setSession)
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
-  const [statusMessage, setStatusMessage] = useState<NoticeState | null>(null)
+  // Initialize from a one-time "post-action confirmation" message passed via
+  // router navigation state, or else a session-expiry message left behind by
+  // a 401 redirect. Reading/consuming that one-shot data during the lazy
+  // initializer means it's visible on the very first paint, and the
+  // sessionStorage entry is consumed exactly once (idempotent to repeat).
+  const [statusMessage, setStatusMessage] = useState<NoticeState | null>(() => {
+    const navigationMessage = getNavigationMessage(location.state)
+
+    if (navigationMessage) {
+      return { tone: "success", message: navigationMessage }
+    }
+
+    const sessionMessage = typeof window !== "undefined" ? window.sessionStorage.getItem("auth-message") : null
+
+    if (sessionMessage) {
+      window.sessionStorage.removeItem("auth-message")
+      return { tone: "error", message: sessionMessage }
+    }
+
+    return null
+  })
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
@@ -42,23 +66,21 @@ export default function Login() {
     },
   })
 
-  useEffect(() => {
-    // Check for message from navigation state (post-action confirmations)
-    const navigationMessage = (location.state as { message?: string } | null)?.message
+  // The lazy initializer above only runs once (on mount). If the router ever
+  // hands this already-mounted component a new location.state identity (e.g.
+  // navigating back to /login again with a fresh confirmation message),
+  // re-derive the message during render rather than in an effect.
+  const [prevLocationState, setPrevLocationState] = useState(location.state)
+
+  if (location.state !== prevLocationState) {
+    setPrevLocationState(location.state)
+
+    const navigationMessage = getNavigationMessage(location.state)
 
     if (navigationMessage) {
       setStatusMessage({ tone: "success", message: navigationMessage })
-      return
     }
-
-    // Check for message from 401 redirect (session expiry)
-    const sessionMessage = typeof window !== "undefined" ? window.sessionStorage.getItem("auth-message") : null
-
-    if (sessionMessage) {
-      setStatusMessage({ tone: "error", message: sessionMessage })
-      window.sessionStorage.removeItem("auth-message")
-    }
-  }, [location.state])
+  }
 
   if (token && role) {
     return <Navigate to={getDefaultRouteForRole(role)} replace />

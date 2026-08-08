@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type FormEvent } from "react"
+﻿import { useMemo, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { NoticeState } from "@/components/ui/NoticeBanner"
@@ -36,23 +36,25 @@ export default function ProfileSettings() {
   const [profileForm, setProfileForm] = useState<ProfileFormState>(EMPTY_PROFILE_FORM)
   const [profileNotice, setProfileNotice] = useState<NoticeState | null>(null)
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
+  const [hasHydratedProfileForm, setHasHydratedProfileForm] = useState(false)
 
   const profileQuery = useQuery({
     queryKey: PROFILE_QUERY_KEY,
     queryFn: getMyProfile,
   })
 
-  useEffect(() => {
-    if (!profileQuery.data) {
-      return
-    }
-
+  // Seed the editable form once the profile loads. Adjusting state during
+  // render (instead of an effect) makes this fire exactly once, the moment
+  // profileQuery.data first becomes available — later background refetches
+  // (e.g. window refocus) won't stomp on in-progress edits.
+  if (profileQuery.data && !hasHydratedProfileForm) {
+    setHasHydratedProfileForm(true)
     setProfileForm({
       first_name: profileQuery.data.first_name,
       last_name: profileQuery.data.last_name,
       username: profileQuery.data.username,
     })
-  }, [profileQuery.data])
+  }
 
   const updateProfileMutation = useMutation({
     mutationFn: updateMyProfile,

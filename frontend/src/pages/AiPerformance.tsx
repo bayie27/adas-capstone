@@ -61,7 +61,7 @@ export default function AiPerformance() {
   })
 
   const globalKpis = performanceQuery.data?.global_kpis
-  const perCamera = performanceQuery.data?.per_camera ?? []
+  const perCamera = useMemo(() => performanceQuery.data?.per_camera ?? [], [performanceQuery.data])
   // Client-side pagination: the total is `perCamera.length`, available in the
   // same render, so usePagination clamps the page directly (no state mirror).
   const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
