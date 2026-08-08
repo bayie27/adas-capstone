@@ -9,6 +9,7 @@ at the real repo-root adas.db.
 from pathlib import Path
 
 import pytest
+from app.core.config import settings
 from app.core.db import install_sqlite_pragmas
 from sqlalchemy import text
 from sqlmodel import create_engine
@@ -20,7 +21,7 @@ def pragma_engine(tmp_path: Path):
     engine = create_engine(
         f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
     )
-    install_sqlite_pragmas(engine)
+    install_sqlite_pragmas(engine, settings.SQLITE_BUSY_TIMEOUT_MS)
     yield engine
     engine.dispose()
 
@@ -40,8 +41,6 @@ class TestSqlitePragmas:
             assert conn.execute(text("PRAGMA synchronous")).scalar() == 2
 
     def test_busy_timeout_matches_configured_value(self, pragma_engine):
-        from app.core.config import settings
-
         with pragma_engine.connect() as conn:
             assert (
                 conn.execute(text("PRAGMA busy_timeout")).scalar()

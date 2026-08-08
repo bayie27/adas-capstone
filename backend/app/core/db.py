@@ -1,16 +1,18 @@
 import logging
 
+from fastapi import Depends, Request
 from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.security import get_password_hash
 from app.models import UserRole
 
 logger = logging.getLogger("uvicorn.error")
 
 
-def install_sqlite_pragmas(target_engine) -> None:
+def install_sqlite_pragmas(target_engine: Engine, busy_timeout_ms: int) -> None:
     """D-005 connection policy, applied on every new DBAPI connection.
 
     foreign_keys=ON is the important one — SQLite defaults it off, so none
@@ -26,27 +28,43 @@ def install_sqlite_pragmas(target_engine) -> None:
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=FULL")
-        cursor.execute(f"PRAGMA busy_timeout={settings.SQLITE_BUSY_TIMEOUT_MS}")
+        cursor.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
         cursor.close()
 
 
-_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+def create_db_engine(target_settings: Settings) -> Engine:
+    """Build a fully configured engine for the given settings.
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    echo=settings.SQL_ECHO,
-    connect_args={"check_same_thread": False} if _is_sqlite else {},
-)
-install_sqlite_pragmas(engine)
+    A resolvable factory (rather than a single module global) so the app
+    factory in main.py can bind a different engine per Settings instance —
+    the real repo-root DB for the FastAPI CLI entrypoint, a throwaway one
+    for tests.
+    """
+    is_sqlite = target_settings.DATABASE_URL.startswith("sqlite")
+    target_engine = create_engine(
+        target_settings.DATABASE_URL,
+        echo=target_settings.SQL_ECHO,
+        connect_args={"check_same_thread": False} if is_sqlite else {},
+    )
+    install_sqlite_pragmas(target_engine, target_settings.SQLITE_BUSY_TIMEOUT_MS)
+    return target_engine
 
 
-def init_db() -> None:
+# Default engine for scripts (seed_dev_data.py, reset_db.py, ...) and the
+# FastAPI CLI entrypoint, which import this directly rather than going
+# through create_app()'s per-instance engine.
+engine = create_db_engine(settings)
+
+
+def init_db(target_engine: Engine | None = None) -> None:
     from app.models import AlarmSettings, User
 
-    SQLModel.metadata.create_all(engine)
+    target_engine = target_engine if target_engine is not None else engine
+
+    SQLModel.metadata.create_all(target_engine)
 
     # Seed the default Administrator account
-    with Session(engine) as session:
+    with Session(target_engine) as session:
         user_exists = session.exec(select(User)).first()
 
         if not user_exists:
@@ -70,6 +88,10 @@ def init_db() -> None:
             logger.info("Default Administrator account created successfully.")
 
 
-def get_session():
-    with Session(engine) as session:
+def get_engine(request: Request) -> Engine:
+    return request.app.state.engine
+
+
+def get_session(bound_engine: Engine = Depends(get_engine)):
+    with Session(bound_engine) as session:
         yield session

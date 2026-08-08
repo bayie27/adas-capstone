@@ -13,22 +13,29 @@ from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, col, select
 
 from app.api.routes import alerts, analytics, auth, cameras, internal, users
-from app.core.config import settings
-from app.core.db import engine, init_db
+from app.core.config import Settings
+from app.core.config import settings as default_settings
+from app.core.db import create_db_engine, init_db
 from app.core.logging import configure_logging, request_id_ctx
 from app.models import AIStatus, Camera, ConnectionStatus
 from app.schemas import ApiError, default_error_code
 from app.ws_manager import manager
 
-configure_logging(settings.LOG_LEVEL)
+configure_logging(default_settings.LOG_LEVEL)
 logger = logging.getLogger("uvicorn.error")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # This runs exactly once when the server boots up
+    app_settings: Settings = app.state.settings
+    engine = app.state.engine
+
+    # Import-time side effect moved here: the directory only needs to exist
+    # once the app actually starts serving, not merely on `import app.main`.
+    os.makedirs(app_settings.SNAPSHOT_ROOT, exist_ok=True)
+
     logger.info("Initializing database...")
-    init_db()
+    init_db(engine)
 
     # On every server start, reset all enabled cameras to Disconnected/Inactive.
     # This is a single bulk UPDATE — not taxing even for 400 cameras.
@@ -56,15 +63,6 @@ async def lifespan(app: FastAPI):
     logger.info("Server shutting down...")
 
 
-app = FastAPI(
-    title="A.D.A.S. Backend API",
-    description="Intelligent Real-Time Road Accident Detection & Alert System",
-    version="1.0.0",
-    lifespan=lifespan,
-)
-
-
-@app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
     token = request_id_ctx.set(request_id)
@@ -76,29 +74,6 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Mount the static snapshots directory so FE can display the images
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SNAPSHOT_DIR = os.path.join(BASE_DIR, "..", "..", "ai_engine", "snapshots")
-os.makedirs(SNAPSHOT_DIR, exist_ok=True)
-app.mount("/snapshots", StaticFiles(directory=SNAPSHOT_DIR), name="snapshots")
-
-app.include_router(internal.router)
-app.include_router(auth.router)
-app.include_router(cameras.router)
-app.include_router(alerts.router)
-app.include_router(users.router)
-app.include_router(analytics.router)
-
-
-@app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
@@ -110,7 +85,6 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 
-@app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = json.loads(json.dumps(exc.errors(), default=str))
     return JSONResponse(
@@ -123,7 +97,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-@app.exception_handler(OperationalError)
 async def operational_error_handler(request: Request, exc: OperationalError):
     if "database is locked" not in str(exc).lower():
         # Not the lock-timeout case D-005 calls out — treat like any other
@@ -154,7 +127,6 @@ async def operational_error_handler(request: Request, exc: OperationalError):
     )
 
 
-@app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.exception(
         "Unhandled exception on %s %s [request_id=%s]",
@@ -171,7 +143,6 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-@app.websocket("/ws/alerts")
 async def websocket_alerts(websocket: WebSocket):
     await manager.connect(websocket)
     try:
@@ -184,6 +155,68 @@ async def websocket_alerts(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
-@app.get("/")
 def health_check() -> dict[str, str]:
     return {"status": "A.D.A.S. Backend is running securely"}
+
+
+def create_app(app_settings: Settings | None = None) -> FastAPI:
+    """App factory. `app_settings` lets tests bind a throwaway engine and
+    disposable settings without touching the real repo-root DB — see
+    backend/tests/conftest.py."""
+    resolved_settings = app_settings if app_settings is not None else default_settings
+
+    application = FastAPI(
+        title="A.D.A.S. Backend API",
+        description="Intelligent Real-Time Road Accident Detection & Alert System",
+        version="1.0.0",
+        lifespan=lifespan,
+    )
+    application.state.settings = resolved_settings
+    application.state.engine = create_db_engine(resolved_settings)
+
+    application.middleware("http")(request_id_middleware)
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=resolved_settings.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # The public /snapshots mount is removed entirely in P4 (replaced by an
+    # authorized, audited API route). Until then, keep it dev-only.
+    # check_dir=False because the directory is created by lifespan, which
+    # hasn't run yet at this point in app construction.
+    if resolved_settings.ENVIRONMENT == "development":
+        application.mount(
+            "/snapshots",
+            StaticFiles(
+                directory=str(resolved_settings.SNAPSHOT_ROOT), check_dir=False
+            ),
+            name="snapshots",
+        )
+
+    application.include_router(internal.router)
+    application.include_router(auth.router)
+    application.include_router(cameras.router)
+    application.include_router(alerts.router)
+    application.include_router(users.router)
+    application.include_router(analytics.router)
+
+    application.add_exception_handler(HTTPException, http_exception_handler)
+    application.add_exception_handler(
+        RequestValidationError, validation_exception_handler
+    )
+    application.add_exception_handler(OperationalError, operational_error_handler)
+    application.add_exception_handler(Exception, global_exception_handler)
+
+    application.add_api_websocket_route("/ws/alerts", websocket_alerts)
+    application.add_api_route("/", health_check, methods=["GET"])
+
+    return application
+
+
+# The FastAPI CLI entrypoint (`uv run fastapi dev backend/app/main.py`) still
+# imports this module-level `app` unchanged.
+app = create_app()

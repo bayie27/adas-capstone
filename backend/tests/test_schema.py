@@ -10,6 +10,7 @@ FK enforcement is on.
 from datetime import UTC, datetime
 
 import pytest
+from app.core.config import settings
 from app.core.db import install_sqlite_pragmas
 from app.models import (
     AuditLog,
@@ -27,7 +28,7 @@ from sqlmodel import Session, SQLModel, create_engine
 @pytest.fixture()
 def db_session():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
-    install_sqlite_pragmas(engine)
+    install_sqlite_pragmas(engine, settings.SQLITE_BUSY_TIMEOUT_MS)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield session

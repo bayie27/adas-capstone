@@ -48,8 +48,10 @@ def test_lifespan_resets_only_enabled_active_cameras(monkeypatch):
         disabled_id = disabled.camera_id
         inactive_id = inactive.camera_id
 
-    monkeypatch.setattr(main_module, "engine", engine)
-    monkeypatch.setattr(main_module, "init_db", lambda: None)
+    # Point the already-built module-level app at this throwaway engine
+    # instead of the one create_app() built at import time — lifespan reads
+    # both engine and settings from app.state, per Step 6.
+    monkeypatch.setattr(main_module.app.state, "engine", engine)
 
     async def run_lifespan_once() -> None:
         async with main_module.lifespan(main_module.app):
