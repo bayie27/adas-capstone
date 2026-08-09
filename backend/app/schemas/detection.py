@@ -4,7 +4,6 @@ from pydantic import field_validator
 from sqlmodel import Field, SQLModel
 
 from app.core.validation import reject_null_bytes
-from app.models import DetectionLogBase
 
 
 class DetectionLogCreate(SQLModel):
@@ -53,10 +52,20 @@ class DetectionLogCreateV2(SQLModel):
         return reject_null_bytes(v)
 
 
-class DetectionLogRead(DetectionLogBase):
+class DetectionLogRead(SQLModel):
+    """Operator-facing incident detail. Deliberately does NOT inherit
+    DetectionLogBase — it never exposes `snapshot_key` or any filesystem
+    path (05_PKG_incidents_cameras.md Step 9); `snapshot_url` is an
+    authorized API path instead."""
+
     log_id: int
     source_event_id: str
+    camera_id: int
+    camera_name: str | None = None
+    detected_at: datetime
+    confidence_score: float
     detection_status: str
+    snapshot_url: str
     verified_by_id: int | None = None
     verified_by_name: str | None = None
     verified_at: datetime | None = None
@@ -66,7 +75,8 @@ class DetectionLogRead(DetectionLogBase):
     snoozed_at: datetime | None = None
     snoozed_until: datetime | None = None
     snoozed_by_id: int | None = None
-    camera_name: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class DetectionLogListResponse(SQLModel):

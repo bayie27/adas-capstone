@@ -3,6 +3,7 @@ import io
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, func, or_, select
 
@@ -29,6 +30,7 @@ from app.services.incidents import (
     transition,
 )
 from app.services.realtime import RealtimeManager
+from app.services.snapshots import resolve as resolve_snapshot
 from app.services.snoozes import schedule_snooze_job, snooze_incident
 
 router = APIRouter(
@@ -43,11 +45,27 @@ _EMPTY_SNOOZE_REQUEST = AlertSnoozeRequest()
 
 
 def _to_detection_log_read(log: DetectionLog) -> DetectionLogRead:
-    log_read = DetectionLogRead.model_validate(log)
-    log_read.camera_name = log.camera.camera_name if log.camera else None
-    log_read.verified_by_name = format_user_name(log.verified_by)
-    log_read.closed_by_name = format_user_name(log.closed_by)
-    return log_read
+    return DetectionLogRead(
+        log_id=log.log_id,
+        source_event_id=log.source_event_id,
+        camera_id=log.camera_id,
+        camera_name=log.camera.camera_name if log.camera else None,
+        detected_at=log.detected_at,
+        confidence_score=log.confidence_score,
+        detection_status=log.detection_status,
+        snapshot_url=f"/api/alerts/{log.log_id}/snapshot",
+        verified_by_id=log.verified_by_id,
+        verified_by_name=format_user_name(log.verified_by),
+        verified_at=log.verified_at,
+        closed_by_id=log.closed_by_id,
+        closed_by_name=format_user_name(log.closed_by),
+        closed_at=log.closed_at,
+        snoozed_at=log.snoozed_at,
+        snoozed_until=log.snoozed_until,
+        snoozed_by_id=log.snoozed_by_id,
+        created_at=log.created_at,
+        updated_at=log.updated_at,
+    )
 
 
 def _conflict_response(exc: ConflictState) -> AppHTTPException:
@@ -291,6 +309,27 @@ def get_alert_details(log_id: int, session: Session = Depends(get_session)):
     if not log:
         raise HTTPException(status_code=404, detail="Incident log not found")
     return _to_detection_log_read(log)
+
+
+@router.get("/{log_id}/snapshot")
+def get_alert_snapshot(log_id: int, session: Session = Depends(get_session)):
+    """Session-authenticated evidence retrieval (05_PKG_incidents_cameras.md
+    Step 9) — replaces the public `/snapshots` static mount. `404` both when
+    the incident is missing and when its snapshot file is (the row can
+    outlive the file)."""
+    log = session.get(DetectionLog, log_id)
+    if log is None:
+        raise HTTPException(status_code=404, detail="Incident log not found")
+
+    path = resolve_snapshot(
+        log.snapshot_key,
+        snapshot_root=settings.SNAPSHOT_ROOT,
+        legacy_dir=settings.LEGACY_SNAPSHOT_DIR,
+    )
+    if path is None:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+
+    return FileResponse(path, headers={"Cache-Control": "private, max-age=3600"})
 
 
 # ---------------------------------------------------------

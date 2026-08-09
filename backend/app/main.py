@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -16,7 +15,6 @@ from fastapi import (
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, col, select
@@ -68,10 +66,6 @@ logger = logging.getLogger("uvicorn.error")
 async def lifespan(app: FastAPI):
     app_settings: Settings = app.state.settings
     engine = app.state.engine
-
-    # Import-time side effect moved here: the directory only needs to exist
-    # once the app actually starts serving, not merely on `import app.main`.
-    os.makedirs(app_settings.SNAPSHOT_ROOT, exist_ok=True)
 
     logger.info("Initializing database...")
     init_db(engine, app_settings)
@@ -413,19 +407,6 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.middleware("http")(
         make_origin_validation_middleware(resolved_settings.CORS_ORIGINS)
     )
-
-    # The public /snapshots mount is removed entirely in P4 (replaced by an
-    # authorized, audited API route). Until then, keep it dev-only.
-    # check_dir=False because the directory is created by lifespan, which
-    # hasn't run yet at this point in app construction.
-    if resolved_settings.ENVIRONMENT == "development":
-        application.mount(
-            "/snapshots",
-            StaticFiles(
-                directory=str(resolved_settings.SNAPSHOT_ROOT), check_dir=False
-            ),
-            name="snapshots",
-        )
 
     application.include_router(internal.router)
     application.include_router(auth.router)
