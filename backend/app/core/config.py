@@ -1,8 +1,8 @@
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROOT_ENV_FILE = REPO_ROOT / ".env"
@@ -34,7 +34,10 @@ class Settings(BaseSettings):
     SESSION_COOKIE_SECURE: bool = True
 
     # CORS
-    CORS_ORIGINS: list[str] = [
+    # NoDecode: without it, pydantic-settings tries to JSON-decode the raw
+    # env value before our comma-split validator ever runs, and a plain
+    # "a,b" string isn't valid JSON — it would hard-fail Settings() itself.
+    CORS_ORIGINS: Annotated[list[str], NoDecode] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
@@ -72,7 +75,7 @@ class Settings(BaseSettings):
     DSS_PASS: SecretStr | None = None
 
     # Alarm settings (D-004)
-    ALARM_SOUND_KEYS: list[str] = ["default"]
+    ALARM_SOUND_KEYS: Annotated[list[str], NoDecode] = ["default"]
     SNOOZE_MIN_SECONDS: int = 15
     SNOOZE_MAX_SECONDS: int = 60
     DISMISS_COOLDOWN_SECONDS: int = 60
