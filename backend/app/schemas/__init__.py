@@ -43,6 +43,7 @@ from app.schemas.maintenance import (
     RestoreStepRead,
     RestoreTriggerResponse,
 )
+from app.schemas.settings import AlarmSettingsRead, AlarmSettingsUpdate
 from app.schemas.user import (
     UserAdminUpdate,
     UserCreate,
@@ -54,6 +55,8 @@ from app.schemas.user import (
 )
 
 __all__ = [
+    "AlarmSettingsRead",
+    "AlarmSettingsUpdate",
     "AlertStatusUpdateData",
     "ApiError",
     "AuditLogListResponse",
