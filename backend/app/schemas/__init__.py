@@ -12,6 +12,7 @@ from app.schemas.camera import (
 )
 from app.schemas.common import ApiError, default_error_code, validate_password_strength
 from app.schemas.detection import (
+    AlertSnoozeRequest,
     DetectionLogCreate,
     DetectionLogListResponse,
     DetectionLogRead,
@@ -57,6 +58,7 @@ from app.schemas.user import (
 __all__ = [
     "AlarmSettingsRead",
     "AlarmSettingsUpdate",
+    "AlertSnoozeRequest",
     "AlertStatusUpdateData",
     "ApiError",
     "AuditLogListResponse",

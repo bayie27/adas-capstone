@@ -19,6 +19,8 @@ from app.schemas.events import (
     EventEnvelope,
     EventType,
     IncidentPayload,
+    ReAlarmData,
+    SnoozeActivatedData,
     make_event,
 )
 from app.services.formatting import format_user_name
@@ -76,6 +78,21 @@ def alert_status_update_event(
         handled_at=handled_at,
     )
     return make_event(EventType.ALERT_STATUS_UPDATE, data)
+
+
+def snooze_activated_event(log: DetectionLog) -> EventEnvelope:
+    data = SnoozeActivatedData(
+        log_id=log.log_id,
+        camera_id=log.camera_id,
+        snoozed_by=log.snoozed_by_id,
+        snoozed_until=log.snoozed_until,
+    )
+    return make_event(EventType.SNOOZE_ACTIVATED, data)
+
+
+def re_alarm_event(log: DetectionLog) -> EventEnvelope:
+    data = ReAlarmData(log_id=log.log_id, camera_id=log.camera_id)
+    return make_event(EventType.RE_ALARM, data)
 
 
 def camera_status_update_event(camera: Camera) -> EventEnvelope:

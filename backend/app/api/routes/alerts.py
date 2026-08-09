@@ -11,25 +11,35 @@ from app.core.config import settings
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
 from app.models import AuditResult, Camera, DetectionLog, DetectionStatus, User
-from app.schemas import DetectionLogListResponse, DetectionLogRead
+from app.schemas import AlertSnoozeRequest, DetectionLogListResponse, DetectionLogRead
 from app.services import audit
 from app.services.cameras import apply_desired_state, schedule_pending_cooldowns
-from app.services.events import alert_status_update_event, camera_status_update_event
+from app.services.events import (
+    alert_status_update_event,
+    camera_status_update_event,
+    snooze_activated_event,
+)
 from app.services.filters import validate_common_filters
 from app.services.formatting import format_user_name
 from app.services.incidents import (
     ConflictState,
     IncidentNotFound,
+    PreconditionFailed,
     dismiss_transition,
     transition,
 )
 from app.services.realtime import RealtimeManager
+from app.services.snoozes import schedule_snooze_job, snooze_incident
 
 router = APIRouter(
     prefix="/api/alerts",
     tags=["Alerts & Accident Management"],
     dependencies=[Depends(get_current_user)],
 )
+
+# Module-level singleton (ruff B008 — a Depends() default must not call a
+# function inline): the empty-body default for the snooze route below.
+_EMPTY_SNOOZE_REQUEST = AlertSnoozeRequest()
 
 
 def _to_detection_log_read(log: DetectionLog) -> DetectionLogRead:
@@ -476,5 +486,49 @@ def resolve_alert(
             camera_name=camera.camera_name if camera is not None else None,
         )
     )
+
+    return _to_detection_log_read(log)
+
+
+@router.post("/{log_id}/snooze", response_model=DetectionLogRead)
+def snooze_alert(
+    log_id: int,
+    request: Request,
+    snooze_in: AlertSnoozeRequest = _EMPTY_SNOOZE_REQUEST,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    manager: RealtimeManager = Depends(get_realtime_manager),
+    scheduler=Depends(get_scheduler),
+):
+    """FR-07/FR-08 — mutes an `Unverified` incident for the actor's saved
+    duration (01_CONTRACTS.md §11, D-004). Shared state: every dashboard
+    mutes it until the same deadline. `snooze_in` only exists so a
+    client-supplied duration is rejected with a 422 rather than ignored."""
+    del snooze_in
+    try:
+        log = snooze_incident(session, log_id=log_id, actor=current_user)
+    except IncidentNotFound as exc:
+        raise HTTPException(status_code=404, detail="Incident log not found") from exc
+    except PreconditionFailed as exc:
+        raise AppHTTPException(400, exc.detail, code="PRECONDITION_FAILED") from exc
+    except ConflictState as exc:
+        raise _conflict_response(exc) from exc
+
+    audit.record(
+        session,
+        action="ALERT_SNOOZE",
+        result=AuditResult.SUCCESS,
+        actor=current_user,
+        target_type="incident",
+        target_ref=str(log_id),
+        detail={"snoozed_until": log.snoozed_until.isoformat()},
+        source_ip=_client_ip(request),
+    )
+    session.commit()
+    session.refresh(log)
+
+    manager.broadcast(snooze_activated_event(log))
+    if scheduler is not None:
+        schedule_snooze_job(scheduler, session.get_bind(), log, manager)
 
     return _to_detection_log_read(log)

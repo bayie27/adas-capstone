@@ -54,7 +54,11 @@ from app.services.cameras import (
 from app.services.realtime import CloseCode, RealtimeManager
 from app.services.realtime_revalidation import ws_session_revalidation
 from app.services.sessions import expire_stale_sessions
-from app.services.snoozes import reconcile_snoozes
+from app.services.snoozes import (
+    reconcile_snoozes,
+    schedule_pending_snoozes,
+    sweep_expired_snoozes,
+)
 
 configure_logging(default_settings.LOG_LEVEL)
 logger = logging.getLogger("uvicorn.error")
@@ -103,9 +107,11 @@ async def lifespan(app: FastAPI):
     logger.info("Recomputing camera desired states...")
     pending_cooldowns = reconcile_camera_desired_states(engine)
 
-    # Snooze reconciliation ordering is established now; P4 fills in the
-    # actual reschedule/clear-expired logic.
-    reconcile_snoozes(engine)
+    # Atomically clears expired Unverified snoozes so those incidents become
+    # alarm-active again; returns the still-pending ones so they can be
+    # rescheduled once the scheduler exists below (D-004).
+    logger.info("Reconciling incident snoozes...")
+    pending_snoozes = reconcile_snoozes(engine)
 
     # Guarded by SCHEDULER_ENABLED (defaulted False in tests) — otherwise
     # background jobs race the test suite's short-lived engines/sessions.
@@ -118,6 +124,16 @@ async def lifespan(app: FastAPI):
             scheduler,
             lambda: sweep_expired_cooldowns(engine, app.state.realtime_manager),
             job_id="cooldown_sweep",
+            trigger="interval",
+            seconds=30,
+        )
+        schedule_pending_snoozes(
+            scheduler, engine, pending_snoozes, app.state.realtime_manager
+        )
+        add_job(
+            scheduler,
+            lambda: sweep_expired_snoozes(engine, app.state.realtime_manager),
+            job_id="snooze_sweep",
             trigger="interval",
             seconds=30,
         )

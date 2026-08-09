@@ -45,3 +45,11 @@ class DetectionLogRead(DetectionLogBase):
 class DetectionLogListResponse(SQLModel):
     total_filtered: int
     logs: list[DetectionLogRead]
+
+
+class AlertSnoozeRequest(SQLModel):
+    """POST /api/alerts/{log_id}/snooze accepts no body — duration comes
+    from the actor's saved settings, never the client (D-004). `extra`
+    forbids a client-supplied duration; sending one is a 422."""
+
+    model_config = {"extra": "forbid"}
