@@ -12,7 +12,16 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, col, select
 
-from app.api.routes import alerts, analytics, auth, cameras, internal, system, users
+from app.api.routes import (
+    alerts,
+    analytics,
+    audit,
+    auth,
+    cameras,
+    internal,
+    system,
+    users,
+)
 from app.core.config import Settings
 from app.core.config import settings as default_settings
 from app.core.db import create_db_engine, init_db
@@ -44,7 +53,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(app_settings.SNAPSHOT_ROOT, exist_ok=True)
 
     logger.info("Initializing database...")
-    init_db(engine)
+    init_db(engine, app_settings)
     app.state.db_initialized = True
 
     # On every server start, reset all enabled cameras to Disconnected/Inactive.
@@ -287,6 +296,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(users.router)
     application.include_router(analytics.router)
     application.include_router(system.router)
+    application.include_router(audit.router)
 
     application.add_exception_handler(HTTPException, http_exception_handler)
     application.add_exception_handler(

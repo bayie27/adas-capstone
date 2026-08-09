@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from enum import StrEnum
 
 from sqlalchemy import DDL, CheckConstraint, Index, event
 from sqlmodel import Field, SQLModel
@@ -36,6 +37,12 @@ AUDIT_ACTIONS = (
 )
 
 _AUDIT_ACTIONS_SQL = ", ".join(f"'{action}'" for action in AUDIT_ACTIONS)
+
+# A proper enum type over the same catalog, generated from the single
+# AUDIT_ACTIONS source of truth so the two can never drift. Used for typed
+# query-parameter validation on the audit viewer (P2 Step 11) — an unknown
+# action value becomes a normal 422 instead of a silently-empty filter.
+AuditAction = StrEnum("AuditAction", {action: action for action in AUDIT_ACTIONS})
 
 
 class AuditLog(SQLModel, table=True):
