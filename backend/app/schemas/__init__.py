@@ -28,6 +28,11 @@ from app.schemas.events import (
     make_event,
 )
 from app.schemas.health import SysHealthHourlyRead, SysHealthRawRead
+from app.schemas.help import (
+    HelpArticleDetail,
+    HelpArticleListResponse,
+    HelpArticleSummary,
+)
 from app.schemas.user import (
     UserAdminUpdate,
     UserCreate,
@@ -56,6 +61,9 @@ __all__ = [
     "default_error_code",
     "EventEnvelope",
     "EventType",
+    "HelpArticleDetail",
+    "HelpArticleListResponse",
+    "HelpArticleSummary",
     "IncidentPayload",
     "LoginResponse",
     "make_event",
