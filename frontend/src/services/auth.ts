@@ -5,6 +5,8 @@ import type { CurrentUserResponse, LoginCredentials, LoginResponse } from "@/typ
 
 const authApi = axios.create({
   baseURL: API_BASE_URL,
+  // The login/logout requests carry or receive the session cookie too.
+  withCredentials: true,
 })
 
 export async function loginUser(credentials: LoginCredentials) {
@@ -21,12 +23,12 @@ export async function loginUser(credentials: LoginCredentials) {
   return data
 }
 
-export async function getCurrentUser(accessToken: string) {
-  const { data } = await api.get<CurrentUserResponse>("/users/me", {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  })
+export async function logoutUser() {
+  await authApi.post("/auth/logout")
+}
+
+export async function getCurrentUser() {
+  const { data } = await api.get<CurrentUserResponse>("/users/me")
 
   return data
 }

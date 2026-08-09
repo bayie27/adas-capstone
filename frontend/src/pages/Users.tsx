@@ -33,7 +33,6 @@ type ModalState =
 export default function Users() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const token = useAuthStore((state) => state.token)
   const currentRole = useAuthStore((state) => state.role)
   const currentUsername = useAuthStore((state) => state.username)
   const currentUserId = useAuthStore((state) => state.userId)
@@ -254,13 +253,8 @@ export default function Users() {
 
             const mappedRole = mapApiRoleToAppRole(updatedUser.role)
 
-            if (token && mappedRole) {
-              setSession(
-                token,
-                mappedRole,
-                updatedUser.username,
-                currentUserId ?? updatedUser.user_id,
-              )
+            if (mappedRole) {
+              setSession(mappedRole, updatedUser.username, currentUserId ?? updatedUser.user_id)
 
               if (mappedRole !== currentRole) {
                 navigate(getDefaultRouteForRole(mappedRole), { replace: true })

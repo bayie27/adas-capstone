@@ -1,17 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, func, select
 
 from app.api.dependencies import get_current_user
 from app.core.db import get_session
-from app.models import AIStatus, Camera, ConnectionStatus
+from app.models import AIStatus, AuditResult, Camera, ConnectionStatus, User
 from app.schemas import CameraCreate, CameraListResponse, CameraRead, CameraUpdate
+from app.services import audit
 
 router = APIRouter(
     prefix="/api/cameras",
     tags=["Camera Management"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
 
 
 def _apply_camera_filters(
@@ -110,7 +115,12 @@ def get_all_cameras(
 
 
 @router.post("/", response_model=CameraRead, status_code=status.HTTP_201_CREATED)
-def add_camera(camera_in: CameraCreate, session: Session = Depends(get_session)):
+def add_camera(
+    camera_in: CameraCreate,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     existing_cam = session.exec(
         select(Camera).where(
             col(Camera.is_active).is_(True),
@@ -129,6 +139,22 @@ def add_camera(camera_in: CameraCreate, session: Session = Depends(get_session))
 
     new_camera = Camera.model_validate(camera_in)
     session.add(new_camera)
+    # Flush (not commit) to assign the autoincrement PK so the audit row's
+    # target_ref can be known before the two commit together.
+    session.flush()
+    audit.record(
+        session,
+        action="CAMERA_CREATE",
+        result=AuditResult.SUCCESS,
+        actor=current_user,
+        target_type="camera",
+        target_ref=str(new_camera.camera_id),
+        detail={
+            "camera_name": new_camera.camera_name,
+            "channel_id": new_camera.channel_id,
+        },
+        source_ip=_client_ip(request),
+    )
     session.commit()
     session.refresh(new_camera)
     return new_camera
@@ -138,15 +164,52 @@ def add_camera(camera_in: CameraCreate, session: Session = Depends(get_session))
 def update_camera(
     camera_id: int,
     camera_update: CameraUpdate,
+    request: Request,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     db_camera = session.get(Camera, camera_id)
     if not db_camera or not db_camera.is_active:
         raise HTTPException(status_code=404, detail="Camera not found")
 
     update_data = camera_update.model_dump(exclude_unset=True)
+    source_ip = _client_ip(request)
+
+    # D-007 multi-action semantics: is_enabled toggling gets its own
+    # CAMERA_ENABLE/CAMERA_DISABLE row; any other changed field gets
+    # CAMERA_UPDATE. Renaming and disabling in the same request produces
+    # both, same transaction; disabling alone produces only CAMERA_DISABLE.
+    is_enabled_changed = (
+        "is_enabled" in update_data
+        and update_data["is_enabled"] != db_camera.is_enabled
+    )
+    other_changed_fields = {k: v for k, v in update_data.items() if k != "is_enabled"}
+    new_is_enabled = update_data.get("is_enabled")
+
     for key, value in update_data.items():
         setattr(db_camera, key, value)
+
+    if other_changed_fields:
+        audit.record(
+            session,
+            action="CAMERA_UPDATE",
+            result=AuditResult.SUCCESS,
+            actor=current_user,
+            target_type="camera",
+            target_ref=str(camera_id),
+            detail={"changed_fields": sorted(other_changed_fields.keys())},
+            source_ip=source_ip,
+        )
+    if is_enabled_changed:
+        audit.record(
+            session,
+            action="CAMERA_ENABLE" if new_is_enabled else "CAMERA_DISABLE",
+            result=AuditResult.SUCCESS,
+            actor=current_user,
+            target_type="camera",
+            target_ref=str(camera_id),
+            source_ip=source_ip,
+        )
 
     try:
         session.add(db_camera)
@@ -162,12 +225,26 @@ def update_camera(
 
 
 @router.delete("/{camera_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_camera(camera_id: int, session: Session = Depends(get_session)):
+def delete_camera(
+    camera_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     db_camera = session.get(Camera, camera_id)
     if not db_camera or not db_camera.is_active:
         raise HTTPException(status_code=404, detail="Camera not found")
 
     db_camera.is_active = False
     session.add(db_camera)
+    audit.record(
+        session,
+        action="CAMERA_DELETE",
+        result=AuditResult.SUCCESS,
+        actor=current_user,
+        target_type="camera",
+        target_ref=str(camera_id),
+        source_ip=_client_ip(request),
+    )
     session.commit()
     return None

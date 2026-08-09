@@ -1,5 +1,6 @@
 ﻿import { Link, useLocation, useNavigate } from "react-router-dom"
 
+import { logoutUser } from "@/services/auth"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getUserInitials } from "@/utils/users"
 import { cn } from "@/utils/cn"
@@ -59,6 +60,9 @@ export function Sidebar() {
   const initials = getUserInitials("", "", displayName)
 
   const handleLogout = () => {
+    // Best-effort — clear the local session either way. The cookie may
+    // already be gone, and the user shouldn't be stuck if the request fails.
+    logoutUser().catch(() => {})
     clearSession()
     navigate("/login", { replace: true })
   }

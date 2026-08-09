@@ -56,10 +56,13 @@ def create_db_engine(target_settings: Settings) -> Engine:
 engine = create_db_engine(settings)
 
 
-def init_db(target_engine: Engine | None = None) -> None:
+def init_db(
+    target_engine: Engine | None = None, target_settings: Settings | None = None
+) -> None:
     from app.models import AlarmSettings, User
 
     target_engine = target_engine if target_engine is not None else engine
+    target_settings = target_settings if target_settings is not None else settings
 
     SQLModel.metadata.create_all(target_engine)
 
@@ -74,7 +77,7 @@ def init_db(target_engine: Engine | None = None) -> None:
                 first_name="System",
                 last_name="Administrator",
                 password_hash=get_password_hash(
-                    settings.DEFAULT_ADMIN_PASSWORD.get_secret_value()
+                    target_settings.DEFAULT_ADMIN_PASSWORD.get_secret_value()
                 ),  # Must be changed on first login!
                 role=UserRole.ADMIN,
                 is_active=True,

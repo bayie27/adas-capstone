@@ -80,7 +80,6 @@ Copy `.env.example` to `.env` in the repo root and fill in all values:
 # Security
 SECRET_KEY=your-secret-key-here
 ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=480
 
 # Internal AI Webhook
 INTERNAL_API_KEY=your-internal-api-key

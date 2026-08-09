@@ -159,21 +159,32 @@ def make_detection(
 
 
 # ---------------------------------------------------------------------------
-# Auth helper — returns a Bearer token for a given user
+# Auth helper — logs in and returns the session cookie for a given user
 # ---------------------------------------------------------------------------
 
 
-def get_token(client: TestClient, username: str, password: str) -> str:
+def login(client: TestClient, username: str, password: str) -> dict:
+    """Logs in and returns the response body's `user` dict."""
     resp = client.post(
         "/api/auth/login",
         data={"username": username, "password": password},
     )
     assert resp.status_code == 200, f"Login failed: {resp.text}"
-    return resp.json()["access_token"]
+    return resp.json()["user"]
 
 
 def auth_headers(client: TestClient, username: str, password: str) -> dict:
-    return {"Authorization": f"Bearer {get_token(client, username, password)}"}
+    """Logs in and returns a `Cookie` header carrying the session — kept as
+    an explicit header (rather than relying on the client's cookie jar) so
+    call sites across the suite don't need to change shape for the P2
+    cookie-based auth flow."""
+    resp = client.post(
+        "/api/auth/login",
+        data={"username": username, "password": password},
+    )
+    assert resp.status_code == 200, f"Login failed: {resp.text}"
+    cookie_value = resp.cookies.get(settings.SESSION_COOKIE_NAME)
+    return {"Cookie": f"{settings.SESSION_COOKIE_NAME}={cookie_value}"}
 
 
 def internal_headers() -> dict:

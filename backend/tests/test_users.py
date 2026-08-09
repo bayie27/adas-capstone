@@ -540,7 +540,10 @@ class TestDeleteUser:
             "/api/auth/login",
             data={"username": "operator", "password": "Operator123"},
         )
-        assert login.status_code == 400
+        # Same generic AUTH_INVALID_CREDENTIALS as unknown user / wrong
+        # password (D-006) — a deactivated account no longer gets its own
+        # distinguishable status code.
+        assert login.status_code == 401
 
     def test_cannot_delete_last_admin(self, client: TestClient, session: Session):
         """Use Case 2 — last admin lockout guard."""
