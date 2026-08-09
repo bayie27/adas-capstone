@@ -340,6 +340,49 @@ def test_fifo_ordering_within_one_connection():
     asyncio.run(scenario())
 
 
+def test_broadcast_during_a_client_disconnect_does_not_raise():
+    """Edge case 1.16 — a connection can be mid-teardown (its socket already
+    closing) while a broadcast concurrently iterates the connection list.
+    Enqueuing to it must be a no-op, never an exception that escapes into
+    the broadcaster and skips every connection after it in the loop."""
+
+    async def scenario():
+        manager = RealtimeManager(queue_maxsize=10, send_timeout_seconds=1)
+        closing_socket = _FakeSocket()
+        healthy_socket = _FakeSocket()
+
+        closing_conn = await manager.connect(
+            closing_socket,
+            user_id=1,
+            session_id="closing-session",
+            role=UserRole.OPERATOR,
+        )
+        await manager.connect(
+            healthy_socket,
+            user_id=2,
+            session_id="healthy-session",
+            role=UserRole.OPERATOR,
+        )
+
+        # Deregister "closing_conn" from the manager's indexes without going
+        # through disconnect() on the object a concurrent broadcast() might
+        # still be holding a reference to via its own snapshot — simulating
+        # the exact race: disconnect() has already popped the connection out
+        # of the shared dicts by the time broadcast()'s `for` loop reaches it.
+        await manager.disconnect(closing_conn.connection_id, code=1000, reason="race")
+
+        # Must not raise, and must still reach the healthy connection.
+        manager.broadcast(
+            make_event(EventType.RE_ALARM, ReAlarmData(log_id=1, camera_id=1))
+        )
+
+        await _wait_until(lambda: len(healthy_socket.sent) == 1)
+        assert healthy_socket.sent[0]["data"]["log_id"] == 1
+        assert closing_socket.sent == []
+
+    asyncio.run(scenario())
+
+
 # ---------------------------------------------------------------------------
 # Revocation and the revalidation scheduler job (TC-I-404, edge case 1.11)
 # ---------------------------------------------------------------------------
