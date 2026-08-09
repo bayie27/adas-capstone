@@ -1,7 +1,7 @@
 """Pydantic request/response models. SQLModel table definitions live in
 app.models, not here — see 02_PKG_foundation.md Step 3."""
 
-from app.schemas.auth import TokenResponse
+from app.schemas.auth import LoginResponse
 from app.schemas.camera import (
     CameraCreate,
     CameraListResponse,
@@ -37,9 +37,9 @@ __all__ = [
     "DetectionLogListResponse",
     "DetectionLogRead",
     "default_error_code",
+    "LoginResponse",
     "SysHealthHourlyRead",
     "SysHealthRawRead",
-    "TokenResponse",
     "UserAdminUpdate",
     "UserCreate",
     "UserListResponse",

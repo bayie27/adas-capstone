@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel
 
+from app.schemas.user import UserRead
 
-class TokenResponse(SQLModel):
-    access_token: str
-    token_type: str
+
+class LoginResponse(SQLModel):
+    user: UserRead
