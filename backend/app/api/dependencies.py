@@ -1,8 +1,12 @@
 import secrets
+from typing import TYPE_CHECKING
 
 import jwt
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlmodel import Session
+
+if TYPE_CHECKING:
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.core.config import settings
 from app.core.db import get_session
@@ -150,3 +154,11 @@ def get_realtime_manager(request: Request) -> RealtimeManager:
     must close the matching sockets (auth, users) depend on this instead of
     importing a module-level singleton — see app.services.realtime."""
     return request.app.state.realtime_manager
+
+
+def get_scheduler(request: Request) -> "AsyncIOScheduler | None":
+    """Routes that need to register a one-shot job (the dismiss cooldown,
+    snooze) depend on this instead of reaching into app.state directly.
+    None when SCHEDULER_ENABLED=False (the test suite) — callers must skip
+    scheduling in that case, same as main.py's lifespan already does."""
+    return request.app.state.scheduler

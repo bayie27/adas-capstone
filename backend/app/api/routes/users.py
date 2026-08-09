@@ -12,7 +12,7 @@ from app.api.dependencies import (
 )
 from app.core.db import get_session
 from app.core.security import get_password_hash, verify_password
-from app.models import AuditResult, User, UserRole
+from app.models import AlarmSettings, AuditResult, User, UserRole
 from app.schemas import (
     UserAdminUpdate,
     UserCreate,
@@ -219,6 +219,9 @@ def create_user(
         # Flush (not commit) to assign the autoincrement PK so the audit
         # row's target_ref can be known before the two commit together.
         session.flush()
+        # D-004 — every account gets an alarm-settings row (01_CONTRACTS.md
+        # §5.2). The defaults come from the model's own column defaults.
+        session.add(AlarmSettings(user_id=new_user.user_id))
         audit.record(
             session,
             action="USER_CREATE",

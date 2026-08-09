@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -16,7 +15,6 @@ from fastapi import (
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, col, select
@@ -32,6 +30,7 @@ from app.api.routes import (
     help,
     internal,
     maintenance,
+    settings,
     system,
     users,
 )
@@ -48,11 +47,16 @@ from app.schemas.events import ConnectionReadyData, EventType, make_event
 from app.services.cameras import (
     reconcile_camera_desired_states,
     schedule_pending_cooldowns,
+    sweep_expired_cooldowns,
 )
 from app.services.realtime import CloseCode, RealtimeManager
 from app.services.realtime_revalidation import ws_session_revalidation
 from app.services.sessions import expire_stale_sessions
-from app.services.snoozes import reconcile_snoozes
+from app.services.snoozes import (
+    reconcile_snoozes,
+    schedule_pending_snoozes,
+    sweep_expired_snoozes,
+)
 
 configure_logging(default_settings.LOG_LEVEL)
 logger = logging.getLogger("uvicorn.error")
@@ -62,10 +66,6 @@ logger = logging.getLogger("uvicorn.error")
 async def lifespan(app: FastAPI):
     app_settings: Settings = app.state.settings
     engine = app.state.engine
-
-    # Import-time side effect moved here: the directory only needs to exist
-    # once the app actually starts serving, not merely on `import app.main`.
-    os.makedirs(app_settings.SNAPSHOT_ROOT, exist_ok=True)
 
     logger.info("Initializing database...")
     init_db(engine, app_settings)
@@ -101,15 +101,36 @@ async def lifespan(app: FastAPI):
     logger.info("Recomputing camera desired states...")
     pending_cooldowns = reconcile_camera_desired_states(engine)
 
-    # Snooze reconciliation ordering is established now; P4 fills in the
-    # actual reschedule/clear-expired logic.
-    reconcile_snoozes(engine)
+    # Atomically clears expired Unverified snoozes so those incidents become
+    # alarm-active again; returns the still-pending ones so they can be
+    # rescheduled once the scheduler exists below (D-004).
+    logger.info("Reconciling incident snoozes...")
+    pending_snoozes = reconcile_snoozes(engine)
 
     # Guarded by SCHEDULER_ENABLED (defaulted False in tests) — otherwise
     # background jobs race the test suite's short-lived engines/sessions.
     if app_settings.SCHEDULER_ENABLED:
         scheduler = create_scheduler()
-        schedule_pending_cooldowns(scheduler, engine, pending_cooldowns)
+        schedule_pending_cooldowns(
+            scheduler, engine, pending_cooldowns, app.state.realtime_manager
+        )
+        add_job(
+            scheduler,
+            lambda: sweep_expired_cooldowns(engine, app.state.realtime_manager),
+            job_id="cooldown_sweep",
+            trigger="interval",
+            seconds=30,
+        )
+        schedule_pending_snoozes(
+            scheduler, engine, pending_snoozes, app.state.realtime_manager
+        )
+        add_job(
+            scheduler,
+            lambda: sweep_expired_snoozes(engine, app.state.realtime_manager),
+            job_id="snooze_sweep",
+            trigger="interval",
+            seconds=30,
+        )
         add_job(
             scheduler,
             lambda: expire_stale_sessions(engine),
@@ -387,19 +408,6 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         make_origin_validation_middleware(resolved_settings.CORS_ORIGINS)
     )
 
-    # The public /snapshots mount is removed entirely in P4 (replaced by an
-    # authorized, audited API route). Until then, keep it dev-only.
-    # check_dir=False because the directory is created by lifespan, which
-    # hasn't run yet at this point in app construction.
-    if resolved_settings.ENVIRONMENT == "development":
-        application.mount(
-            "/snapshots",
-            StaticFiles(
-                directory=str(resolved_settings.SNAPSHOT_ROOT), check_dir=False
-            ),
-            name="snapshots",
-        )
-
     application.include_router(internal.router)
     application.include_router(auth.router)
     application.include_router(cameras.router)
@@ -411,6 +419,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(maintenance.router)
     application.include_router(events.router)
     application.include_router(help.router)
+    application.include_router(settings.router)
 
     application.add_exception_handler(HTTPException, http_exception_handler)
     application.add_exception_handler(

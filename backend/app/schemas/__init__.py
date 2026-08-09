@@ -4,15 +4,21 @@ app.models, not here — see 02_PKG_foundation.md Step 3."""
 from app.schemas.audit import AuditLogListResponse, AuditLogRead
 from app.schemas.auth import LoginResponse
 from app.schemas.camera import (
+    AiBreakdown,
+    CameraBreakdowns,
     CameraCreate,
+    CameraKpis,
     CameraListResponse,
     CameraRead,
     CameraStatusUpdate,
     CameraUpdate,
+    ConnectionBreakdown,
 )
 from app.schemas.common import ApiError, default_error_code, validate_password_strength
 from app.schemas.detection import (
+    AlertSnoozeRequest,
     DetectionLogCreate,
+    DetectionLogCreateV2,
     DetectionLogListResponse,
     DetectionLogRead,
 )
@@ -43,6 +49,7 @@ from app.schemas.maintenance import (
     RestoreStepRead,
     RestoreTriggerResponse,
 )
+from app.schemas.settings import AlarmSettingsRead, AlarmSettingsUpdate
 from app.schemas.user import (
     UserAdminUpdate,
     UserCreate,
@@ -54,6 +61,10 @@ from app.schemas.user import (
 )
 
 __all__ = [
+    "AiBreakdown",
+    "AlarmSettingsRead",
+    "AlarmSettingsUpdate",
+    "AlertSnoozeRequest",
     "AlertStatusUpdateData",
     "ApiError",
     "AuditLogListResponse",
@@ -61,17 +72,21 @@ __all__ = [
     "BackupListResponse",
     "BackupRead",
     "BackupTriggerResponse",
+    "CameraBreakdowns",
     "CameraCreate",
+    "CameraKpis",
     "CameraListResponse",
     "CameraRead",
     "CameraStatusUpdate",
     "CameraStatusUpdateData",
     "CameraUpdate",
+    "ConnectionBreakdown",
     "ConnectionReadyData",
     "DetectionLogCreate",
     "DetectionLogListResponse",
     "DetectionLogRead",
     "default_error_code",
+    "DetectionLogCreateV2",
     "EventEnvelope",
     "EventType",
     "HelpArticleDetail",

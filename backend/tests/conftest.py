@@ -14,6 +14,7 @@ from app.core.security import get_password_hash
 from app.main import create_app
 from app.models import (
     AIStatus,
+    AlarmSettings,
     Camera,
     ConnectionStatus,
     DetectionLog,
@@ -93,6 +94,8 @@ def make_admin(session: Session, username="admin", password="Admin123") -> User:
     session.add(user)
     session.commit()
     session.refresh(user)
+    session.add(AlarmSettings(user_id=user.user_id))
+    session.commit()
     return user
 
 
@@ -110,6 +113,8 @@ def make_operator(
     session.add(user)
     session.commit()
     session.refresh(user)
+    session.add(AlarmSettings(user_id=user.user_id))
+    session.commit()
     return user
 
 
@@ -122,6 +127,10 @@ def make_camera(
     ai_status: str = AIStatus.INACTIVE.value,
     is_enabled: bool = True,
     is_active: bool = True,
+    desired_ai_state: str | None = None,
+    desired_state_reason: str | None = None,
+    cooldown_until=None,
+    last_heartbeat_at=None,
 ) -> Camera:
     camera = Camera(
         camera_name=name,
@@ -130,7 +139,14 @@ def make_camera(
         ai_status=ai_status,
         is_enabled=is_enabled,
         is_active=is_active,
+        last_heartbeat_at=last_heartbeat_at,
     )
+    if desired_ai_state is not None:
+        camera.desired_ai_state = desired_ai_state
+    if desired_state_reason is not None:
+        camera.desired_state_reason = desired_state_reason
+    if cooldown_until is not None:
+        camera.cooldown_until = cooldown_until
     session.add(camera)
     session.commit()
     session.refresh(camera)
