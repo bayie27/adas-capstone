@@ -17,9 +17,12 @@ from typing import TYPE_CHECKING
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, col, select
 
+from app.core.config import settings
 from app.core.redaction import redact_text
 from app.models import (
+    AIStatus,
     Camera,
+    ConnectionStatus,
     DesiredAIState,
     DesiredStateReason,
     DetectionLog,
@@ -32,6 +35,79 @@ if TYPE_CHECKING:
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 _OPEN_STATUSES = (DetectionStatus.UNVERIFIED.value, DetectionStatus.ONGOING.value)
+
+
+def presented_statuses(camera: Camera, *, now: datetime) -> tuple[str, str]:
+    """05_PKG_incidents_cameras.md Step 2/10 — the read-time presentation
+    layer over the stored observed columns. Never written to the row, so a
+    stale value never becomes indistinguishable from a genuinely reported
+    one (that's the whole point of computing it here instead).
+
+    - never heartbeated yet (enabled, no report received): presented as
+      Reconnecting rather than the raw Disconnected default — camera create
+      doesn't block on an RTSP handshake, so a brand-new camera legitimately
+      has no heartbeat yet (Step 10).
+    - heartbeated before but now stale (>= HEARTBEAT_STALE_SECONDS):
+      presented as Unresponsive for both dimensions (Step 2). The AI engine
+      never emits Unresponsive itself.
+    - a disabled camera is never "stale" — it isn't expected to heartbeat.
+    - otherwise: the raw stored values.
+    """
+    if not camera.is_enabled:
+        return camera.connection_status, camera.ai_status
+
+    if camera.last_heartbeat_at is None:
+        return ConnectionStatus.RECONNECTING.value, camera.ai_status
+
+    elapsed = (now - camera.last_heartbeat_at).total_seconds()
+    if elapsed >= settings.HEARTBEAT_STALE_SECONDS:
+        return ConnectionStatus.UNRESPONSIVE.value, AIStatus.UNRESPONSIVE.value
+
+    return camera.connection_status, camera.ai_status
+
+
+def compute_kpis_and_breakdowns(
+    session: Session, *, now: datetime
+) -> tuple[dict, dict]:
+    """01_CONTRACTS.md §5.9 — one query over the unfiltered `is_active=1`
+    population (replacing three separate unfiltered COUNTs), aggregated in
+    Python because the breakdown is over *presented* status, which is a
+    staleness computation no plain SQL GROUP BY can express without
+    duplicating presented_statuses()'s logic in SQL."""
+    cameras = session.exec(select(Camera).where(col(Camera.is_active).is_(True))).all()
+
+    total = len(cameras)
+    enabled = sum(1 for camera in cameras if camera.is_enabled)
+    connection_counts = {status.value: 0 for status in ConnectionStatus}
+    ai_counts = {status.value: 0 for status in AIStatus}
+
+    for camera in cameras:
+        connection_status, ai_status = presented_statuses(camera, now=now)
+        connection_counts[connection_status] += 1
+        ai_counts[ai_status] += 1
+
+    kpis = {
+        "total": total,
+        "enabled": enabled,
+        "network_connected": connection_counts[ConnectionStatus.CONNECTED.value],
+        "active_detection": ai_counts[AIStatus.ACTIVE.value],
+    }
+    breakdowns = {
+        "connection": {
+            "connected": connection_counts[ConnectionStatus.CONNECTED.value],
+            "disconnected": connection_counts[ConnectionStatus.DISCONNECTED.value],
+            "reconnecting": connection_counts[ConnectionStatus.RECONNECTING.value],
+            "unresponsive": connection_counts[ConnectionStatus.UNRESPONSIVE.value],
+        },
+        "ai": {
+            "active": ai_counts[AIStatus.ACTIVE.value],
+            "paused": ai_counts[AIStatus.PAUSED.value],
+            "inactive": ai_counts[AIStatus.INACTIVE.value],
+            "unresponsive": ai_counts[AIStatus.UNRESPONSIVE.value],
+        },
+    }
+    return kpis, breakdowns
+
 
 # 05_PKG_incidents_cameras.md Step 2 — fields that matter to the AI engine.
 # Renaming a camera does not bump config_version; the engine does not care

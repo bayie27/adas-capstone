@@ -4,11 +4,15 @@ app.models, not here — see 02_PKG_foundation.md Step 3."""
 from app.schemas.audit import AuditLogListResponse, AuditLogRead
 from app.schemas.auth import LoginResponse
 from app.schemas.camera import (
+    AiBreakdown,
+    CameraBreakdowns,
     CameraCreate,
+    CameraKpis,
     CameraListResponse,
     CameraRead,
     CameraStatusUpdate,
     CameraUpdate,
+    ConnectionBreakdown,
 )
 from app.schemas.common import ApiError, default_error_code, validate_password_strength
 from app.schemas.detection import (
@@ -57,6 +61,7 @@ from app.schemas.user import (
 )
 
 __all__ = [
+    "AiBreakdown",
     "AlarmSettingsRead",
     "AlarmSettingsUpdate",
     "AlertSnoozeRequest",
@@ -67,12 +72,15 @@ __all__ = [
     "BackupListResponse",
     "BackupRead",
     "BackupTriggerResponse",
+    "CameraBreakdowns",
     "CameraCreate",
+    "CameraKpis",
     "CameraListResponse",
     "CameraRead",
     "CameraStatusUpdate",
     "CameraStatusUpdateData",
     "CameraUpdate",
+    "ConnectionBreakdown",
     "ConnectionReadyData",
     "DetectionLogCreate",
     "DetectionLogListResponse",
