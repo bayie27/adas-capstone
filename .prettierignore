@@ -6,6 +6,12 @@ node_modules/
 ai_engine/snapshots/
 ai_engine/sample_vids/
 
+# Nested git worktrees (.claude/worktrees/<name>) are separate checkouts on
+# other branches; prettier scans the raw filesystem regardless of branch, so
+# without this it fails on whatever those in-progress branches currently
+# contain.
+.claude/worktrees/
+
 # Untracked team working docs — never touch these
 *.pdf
 final_paper_text.txt
