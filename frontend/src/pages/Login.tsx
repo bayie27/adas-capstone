@@ -1,7 +1,7 @@
 ﻿import { useState, type FormEvent } from "react"
 import { Navigate, useLocation, useNavigate } from "react-router-dom"
 import { useMutation } from "@tanstack/react-query"
-import { getCurrentUser, loginUser } from "@/services/auth"
+import { loginUser } from "@/services/auth"
 import { useAuthStore } from "@/store/useAuthStore"
 import { mapApiRoleToAppRole, getDefaultRouteForRole } from "@/utils/auth"
 import { getApiErrorMessage } from "@/utils/api"
@@ -15,7 +15,6 @@ function getNavigationMessage(locationState: unknown): string | undefined {
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
-  const token = useAuthStore((state) => state.token)
   const role = useAuthStore((state) => state.role)
   const setSession = useAuthStore((state) => state.setSession)
   const [username, setUsername] = useState("")
@@ -45,18 +44,17 @@ export default function Login() {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
-      const { access_token } = await loginUser(credentials)
-      const currentUser = await getCurrentUser(access_token)
+      const { user: currentUser } = await loginUser(credentials)
       const mappedRole = mapApiRoleToAppRole(currentUser.role)
 
       if (!mappedRole) {
         throw new Error("Your account role is not supported in this client.")
       }
 
-      return { access_token, mappedRole, currentUser }
+      return { mappedRole, currentUser }
     },
-    onSuccess: ({ access_token, mappedRole, currentUser }) => {
-      setSession(access_token, mappedRole, currentUser.username, currentUser.user_id)
+    onSuccess: ({ mappedRole, currentUser }) => {
+      setSession(mappedRole, currentUser.username, currentUser.user_id)
       navigate(getDefaultRouteForRole(mappedRole), { replace: true })
     },
     onError: (error) => {
@@ -83,7 +81,7 @@ export default function Login() {
     }
   }
 
-  if (token && role) {
+  if (role) {
     return <Navigate to={getDefaultRouteForRole(role)} replace />
   }
 

@@ -27,7 +27,6 @@ const EMPTY_PROFILE_FORM: ProfileFormState = {
 export default function ProfileSettings() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const token = useAuthStore((state) => state.token)
   const role = useAuthStore((state) => state.role)
   const username = useAuthStore((state) => state.username)
   const userId = useAuthStore((state) => state.userId)
@@ -75,8 +74,8 @@ export default function ProfileSettings() {
         return
       }
 
-      if (token && role) {
-        setSession(token, role, updatedProfile.username, userId ?? updatedProfile.user_id)
+      if (role) {
+        setSession(role, updatedProfile.username, userId ?? updatedProfile.user_id)
       }
 
       setProfileNotice({ tone: "success", message: "Profile updated successfully." })

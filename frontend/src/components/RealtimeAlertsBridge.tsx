@@ -10,7 +10,7 @@ import { normalizeRealtimeAlert, normalizeRealtimeCameraStatus } from "@/utils/r
 
 export function RealtimeAlertsBridge() {
   const queryClient = useQueryClient()
-  const token = useAuthStore((state) => state.token)
+  const role = useAuthStore((state) => state.role)
   const addAlert = useAlertStore((state) => state.addAlert)
   const clearAlerts = useAlertStore((state) => state.clearAlerts)
   const recoveryRanRef = useRef(false)
@@ -18,7 +18,7 @@ export function RealtimeAlertsBridge() {
   // Active Recovery Fetch: on login, seed the alert queue with any open
   // Unverified/Ongoing alerts that existed before this session connected.
   useEffect(() => {
-    if (!token) {
+    if (!role) {
       clearAlerts()
       recoveryRanRef.current = false
       return
@@ -46,7 +46,7 @@ export function RealtimeAlertsBridge() {
       .catch(() => {
         // Non-fatal â€” live WebSocket events will still populate the queue
       })
-  }, [token, addAlert, clearAlerts])
+  }, [role, addAlert, clearAlerts])
 
   useAdasWebSocket(
     (payload) => {
@@ -106,7 +106,7 @@ export function RealtimeAlertsBridge() {
       // here would refetch the list plus the dropdown copies on other pages on
       // every status flap of any camera.
     },
-    { enabled: Boolean(token) },
+    { enabled: Boolean(role) },
   )
 
   return null

@@ -10,10 +10,13 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const token = useAuthStore((state) => state.token)
+  // `role` is a display cache (P2, D-006), not proof of authentication —
+  // the actual session lives in an HttpOnly cookie the backend verifies on
+  // every request. A stale/invalid cookie still 401s and gets caught by
+  // api.ts's response interceptor, which clears this cache and redirects.
   const role = useAuthStore((state) => state.role)
 
-  if (!token || !role) {
+  if (!role) {
     return <Navigate to="/login" replace />
   }
 
