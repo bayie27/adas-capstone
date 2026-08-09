@@ -224,6 +224,12 @@ def update_camera(
     other_changed_fields = {k: v for k, v in update_data.items() if k != "is_enabled"}
     new_is_enabled = update_data.get("is_enabled")
 
+    # Computed *before* any mutation below — querying after would
+    # autoflush the pending camera_name/channel_id change, and a duplicate
+    # would then raise IntegrityError outside this function's try/except,
+    # leaking an unhandled 500 instead of the intended 409.
+    has_open_incident = _has_open_incident(session, camera_id)
+
     # Snapshot before *any* mutation — channel_id/is_enabled are themselves
     # AI-relevant, so the baseline must predate the setattr loop below.
     before = snapshot_ai_relevant_fields(db_camera)
@@ -234,11 +240,7 @@ def update_camera(
     # Recompute everywhere (Step 2): enabling/disabling changes desired
     # state immediately, and re-deriving from current facts is always safe
     # even when nothing about desired state actually changed.
-    recompute_desired_state(
-        db_camera,
-        has_open_incident=_has_open_incident(session, camera_id),
-        now=now,
-    )
+    recompute_desired_state(db_camera, has_open_incident=has_open_incident, now=now)
     ai_relevant_changed = bump_if_ai_relevant_changed(db_camera, before)
 
     if other_changed_fields:

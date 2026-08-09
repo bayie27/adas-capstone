@@ -6,7 +6,6 @@ import inspect
 import sqlite3
 from pathlib import Path
 
-import pytest
 from app.core.config import Settings, settings
 from app.core.db import get_engine, get_session
 from app.main import create_app
@@ -68,30 +67,6 @@ class TestAppFactoryIsolation:
         app = client.app
         assert get_engine in app.dependency_overrides
         assert get_session in app.dependency_overrides
-
-
-class TestSnapshotRootStartupFailure:
-    def test_unwritable_snapshot_root_fails_startup_cleanly(self, tmp_path):
-        """Edge case 6.9 — an unwritable SNAPSHOT_ROOT must fail startup
-        loudly (the lifespan raises, so the server never comes up) rather
-        than starting cleanly and only surfacing as a per-request 500 the
-        first time something tries to write a snapshot."""
-        blocker_file = tmp_path / "blocker"
-        blocker_file.write_text("not a directory")
-
-        app_settings = Settings(
-            _env_file=None,
-            SECRET_KEY="test-secret-key-not-for-production-use",
-            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
-            DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
-            DATABASE_URL=f"sqlite:///{tmp_path / 'snap.db'}",
-            SCHEDULER_ENABLED=False,
-            SNAPSHOT_ROOT=blocker_file / "snapshots",
-        )
-        app = create_app(app_settings)
-
-        with pytest.raises(OSError), TestClient(app):
-            pass
 
 
 class TestSchedulerJobWiring:

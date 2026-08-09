@@ -97,12 +97,12 @@ def test_internal_alert_broadcasts_to_websocket_client(
         "camera_id": camera.camera_id,
         "camera_name": "WS Alert Cam",
         "is_enabled": True,
-        "desired_ai_state": "Inactive",
-        "desired_state_reason": None,
+        "desired_ai_state": "Paused",
+        "desired_state_reason": "incident",
         "connection_status": ConnectionStatus.CONNECTED.value,
-        "ai_status": AIStatus.PAUSED.value,
+        "ai_status": AIStatus.ACTIVE.value,
         "cooldown_until": None,
-        "config_version": 1,
+        "config_version": 2,
     }
 
 
@@ -187,12 +187,12 @@ def test_resolve_alert_broadcasts_camera_status_update_over_websocket(
         "camera_id": camera.camera_id,
         "camera_name": "WS Resolve Cam",
         "is_enabled": True,
-        "desired_ai_state": "Inactive",
+        "desired_ai_state": "Active",
         "desired_state_reason": None,
         "connection_status": ConnectionStatus.CONNECTED.value,
-        "ai_status": AIStatus.ACTIVE.value,
+        "ai_status": AIStatus.PAUSED.value,
         "cooldown_until": None,
-        "config_version": 1,
+        "config_version": 2,
     }
     assert alert_data["log_id"] == detection.log_id
     assert alert_data["detection_status"] == DetectionStatus.RESOLVED.value
@@ -228,12 +228,12 @@ def test_dismiss_ongoing_broadcasts_camera_status_update_over_websocket(
         "camera_id": camera.camera_id,
         "camera_name": "WS Dismiss Cam",
         "is_enabled": True,
-        "desired_ai_state": "Inactive",
+        "desired_ai_state": "Active",
         "desired_state_reason": None,
         "connection_status": ConnectionStatus.CONNECTED.value,
-        "ai_status": AIStatus.ACTIVE.value,
+        "ai_status": AIStatus.PAUSED.value,
         "cooldown_until": None,
-        "config_version": 1,
+        "config_version": 2,
     }
     assert alert_data["log_id"] == detection.log_id
     assert alert_data["detection_status"] == DetectionStatus.DISMISSED.value
