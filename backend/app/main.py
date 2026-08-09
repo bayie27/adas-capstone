@@ -48,6 +48,7 @@ from app.schemas.events import ConnectionReadyData, EventType, make_event
 from app.services.cameras import (
     reconcile_camera_desired_states,
     schedule_pending_cooldowns,
+    sweep_expired_cooldowns,
 )
 from app.services.realtime import CloseCode, RealtimeManager
 from app.services.realtime_revalidation import ws_session_revalidation
@@ -109,7 +110,16 @@ async def lifespan(app: FastAPI):
     # background jobs race the test suite's short-lived engines/sessions.
     if app_settings.SCHEDULER_ENABLED:
         scheduler = create_scheduler()
-        schedule_pending_cooldowns(scheduler, engine, pending_cooldowns)
+        schedule_pending_cooldowns(
+            scheduler, engine, pending_cooldowns, app.state.realtime_manager
+        )
+        add_job(
+            scheduler,
+            lambda: sweep_expired_cooldowns(engine, app.state.realtime_manager),
+            job_id="cooldown_sweep",
+            trigger="interval",
+            seconds=30,
+        )
         add_job(
             scheduler,
             lambda: expire_stale_sessions(engine),
