@@ -3,41 +3,54 @@ import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, col, select
 
+from app.api.dependencies import authenticate_session_token
 from app.api.routes import (
     alerts,
     analytics,
     audit,
     auth,
     cameras,
+    events,
     internal,
     system,
     users,
 )
 from app.core.config import Settings
 from app.core.config import settings as default_settings
-from app.core.db import create_db_engine, init_db
+from app.core.db import create_db_engine, get_engine, init_db
 from app.core.errors import AppHTTPException
 from app.core.logging import configure_logging, request_id_ctx
 from app.core.rate_limit import SlidingWindowLimiter
 from app.core.scheduler import add_job, create_scheduler
 from app.models import AIStatus, Camera, ConnectionStatus
 from app.schemas import ApiError, default_error_code
+from app.schemas.events import ConnectionReadyData, EventType, make_event
 from app.services.cameras import (
     reconcile_camera_desired_states,
     schedule_pending_cooldowns,
 )
+from app.services.realtime import CloseCode, RealtimeManager
+from app.services.realtime_revalidation import ws_session_revalidation
 from app.services.sessions import expire_stale_sessions
 from app.services.snoozes import reconcile_snoozes
-from app.ws_manager import manager
 
 configure_logging(default_settings.LOG_LEVEL)
 logger = logging.getLogger("uvicorn.error")
@@ -101,6 +114,13 @@ async def lifespan(app: FastAPI):
             job_id="expired_session_cleanup",
             trigger="interval",
             hours=1,
+        )
+        add_job(
+            scheduler,
+            lambda: ws_session_revalidation(engine, app.state.realtime_manager),
+            job_id="ws_session_revalidation",
+            trigger="interval",
+            seconds=60,
         )
         scheduler.start()
         app.state.scheduler = scheduler
@@ -226,16 +246,89 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-async def websocket_alerts(websocket: WebSocket):
-    await manager.connect(websocket)
+async def websocket_alerts(
+    websocket: WebSocket, engine: Engine = Depends(get_engine)
+) -> None:
+    """01_CONTRACTS.md §9 / 04_PKG_realtime.md Step 4. Order matters: Origin
+    is rejected before any DB work, and the socket is only `accept()`-ed once
+    authentication and the connection limits both pass — a browser cannot
+    set an `Authorization` header on a WebSocket, so the session cookie
+    (sent automatically on the handshake) is the only credential, same as
+    D-006 chose for REST.
+
+    `engine` comes through `Depends(get_engine)` rather than reading
+    `websocket.app.state.engine` directly, so the test suite's dependency
+    override (a throwaway in-memory engine) actually takes effect here too.
+    """
+    app_settings: Settings = websocket.app.state.settings
+    manager: RealtimeManager = websocket.app.state.realtime_manager
+
+    origin = websocket.headers.get("origin")
+    if origin is not None and origin not in set(app_settings.CORS_ORIGINS):
+        await websocket.close(code=CloseCode.ORIGIN_REJECTED)
+        return
+
+    token = websocket.cookies.get(app_settings.SESSION_COOKIE_NAME)
+    if not token:
+        await websocket.close(code=CloseCode.AUTH_FAILED)
+        return
+
+    with Session(engine) as session:
+        try:
+            user, auth_session = authenticate_session_token(token, session)
+        except AppHTTPException:
+            await websocket.close(code=CloseCode.AUTH_FAILED)
+            return
+
+        assert user.user_id is not None
+        if (
+            manager.connection_count_for_user(user.user_id)
+            >= app_settings.WS_MAX_CONNECTIONS_PER_USER
+            or manager.total_connection_count() >= app_settings.WS_MAX_CONNECTIONS_TOTAL
+        ):
+            # Reject the new connection; never displace an established
+            # operational dashboard.
+            await websocket.close(code=CloseCode.CONNECTION_LIMIT)
+            return
+
+        await websocket.accept()
+        conn = await manager.connect(
+            websocket,
+            user_id=user.user_id,
+            session_id=auth_session.session_id,
+            role=user.role,
+        )
+        user_id, role = user.user_id, user.role
+
+    ready_event = make_event(
+        EventType.CONNECTION_READY,
+        ConnectionReadyData(
+            connection_id=conn.connection_id,
+            server_time=datetime.now(UTC),
+            user_id=user_id,
+            role=role,
+        ),
+    )
+    conn.queue.put_nowait(ready_event.model_dump(mode="json"))
+
     try:
         while True:
-            # Received messages are unused — this just blocks until the client
-            # disconnects (or sends a ping/keepalive), since alerts are only
-            # ever pushed server -> client.
+            # Received messages are unused — clients never mutate state over
+            # the socket (D-008). This just blocks until the client
+            # disconnects.
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        pass
+    except Exception:
+        # The old implementation only deregistered on WebSocketDisconnect,
+        # leaking the connection on any other exception. Every exit path
+        # goes through the `finally` below now.
+        logger.exception(
+            "Unexpected error in /ws/alerts read loop for connection %s",
+            conn.connection_id,
+        )
+    finally:
+        await manager.disconnect(conn.connection_id, code=1000, reason="closed")
 
 
 def health_check() -> dict[str, str]:
@@ -260,6 +353,12 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.state.rate_limiter = SlidingWindowLimiter(
         resolved_settings.LOGIN_RATE_LIMIT_ATTEMPTS,
         resolved_settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    # On app.state, not a module global, so tests get a clean instance per
+    # app (04_PKG_realtime.md Step 2).
+    application.state.realtime_manager = RealtimeManager(
+        queue_maxsize=resolved_settings.WS_QUEUE_MAXSIZE,
+        send_timeout_seconds=resolved_settings.WS_SEND_TIMEOUT_SECONDS,
     )
 
     application.middleware("http")(request_id_middleware)
@@ -297,6 +396,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(analytics.router)
     application.include_router(system.router)
     application.include_router(audit.router)
+    application.include_router(events.router)
 
     application.add_exception_handler(HTTPException, http_exception_handler)
     application.add_exception_handler(

@@ -4,12 +4,13 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, col, select
 
-from app.api.dependencies import verify_internal_api_key
+from app.api.dependencies import get_realtime_manager, verify_internal_api_key
 from app.core.db import get_session
 from app.core.types import parse_utc_query_datetime
 from app.models import AIStatus, Camera, DetectionLog, DetectionStatus
 from app.schemas import CameraRead, CameraStatusUpdate, DetectionLogCreate
-from app.ws_manager import manager
+from app.services.events import camera_status_update_event, new_detection_event
+from app.services.realtime import RealtimeManager
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -22,7 +23,9 @@ router = APIRouter(
 
 @router.post("/alert", response_model=DetectionLog)
 async def receive_ai_alert(
-    alert_in: DetectionLogCreate, session: Session = Depends(get_session)
+    alert_in: DetectionLogCreate,
+    session: Session = Depends(get_session),
+    manager: RealtimeManager = Depends(get_realtime_manager),
 ) -> DetectionLog:
     try:
         camera = session.get(Camera, alert_in.camera_id)
@@ -54,26 +57,11 @@ async def receive_ai_alert(
         session.refresh(db_alert)
         session.refresh(camera)
 
-        # Broadcast the new detection alert
-        alert_payload = {
-            "type": "NEW_DETECTION",
-            "log_id": db_alert.log_id,
-            "camera_id": db_alert.camera_id,
-            "detected_at": db_alert.detected_at.isoformat(),
-            "snapshot_key": db_alert.snapshot_key,
-            "confidence_score": db_alert.confidence_score,
-            "detection_status": db_alert.detection_status,
-        }
-        await manager.broadcast_alert(alert_payload)
-
-        # Broadcast the camera status change so FE camera cards update live
-        camera_status_payload = {
-            "type": "CAMERA_STATUS_UPDATE",
-            "camera_id": camera.camera_id,
-            "connection_status": camera.connection_status,
-            "ai_status": camera.ai_status,
-        }
-        await manager.broadcast_alert(camera_status_payload)
+        # Enqueue only after commit (01_CONTRACTS.md §9.4) — a broadcast
+        # inside the transaction could announce a row a later rollback
+        # undoes.
+        manager.broadcast(new_detection_event(db_alert, camera_name=camera.camera_name))
+        manager.broadcast(camera_status_update_event(camera))
 
         return db_alert
 
@@ -106,6 +94,7 @@ async def update_camera_status(
     camera_id: int,
     status_update: CameraStatusUpdate,
     session: Session = Depends(get_session),
+    manager: RealtimeManager = Depends(get_realtime_manager),
 ) -> CameraRead:
     """
     AI engine calls this to report connection and/or AI status changes.
@@ -152,12 +141,6 @@ async def update_camera_status(
     session.commit()
     session.refresh(camera)
 
-    camera_status_payload = {
-        "type": "CAMERA_STATUS_UPDATE",
-        "camera_id": camera.camera_id,
-        "connection_status": camera.connection_status,
-        "ai_status": camera.ai_status,
-    }
-    await manager.broadcast_alert(camera_status_payload)
+    manager.broadcast(camera_status_update_event(camera))
 
     return CameraRead.model_validate(camera)

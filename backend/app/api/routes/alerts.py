@@ -7,13 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, func, or_, select
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, get_realtime_manager
 from app.core.db import get_session
 from app.models import AIStatus, Camera, DetectionLog, DetectionStatus, User
 from app.schemas import DetectionLogListResponse, DetectionLogRead
+from app.services.events import alert_status_update_event, camera_status_update_event
 from app.services.filters import validate_common_filters
 from app.services.formatting import format_user_name
-from app.ws_manager import manager
+from app.services.realtime import RealtimeManager
 
 router = APIRouter(
     prefix="/api/alerts",
@@ -30,19 +31,15 @@ def _to_detection_log_read(log: DetectionLog) -> DetectionLogRead:
     return log_read
 
 
-async def _broadcast_camera_status(camera: Camera) -> None:
-    """Broadcast a CAMERA_STATUS_UPDATE payload to all connected FE clients."""
-    await manager.broadcast_alert(
-        {
-            "type": "CAMERA_STATUS_UPDATE",
-            "camera_id": camera.camera_id,
-            "connection_status": camera.connection_status,
-            "ai_status": camera.ai_status,
-        }
-    )
+def _broadcast_camera_status(camera: Camera, manager: RealtimeManager) -> None:
+    """Broadcast a CAMERA_STATUS_UPDATE payload to all connected FE clients.
+    Synchronous — RealtimeManager.broadcast() never awaits a network send."""
+    manager.broadcast(camera_status_update_event(camera))
 
 
-async def _resume_camera_after_cooldown(camera_id: int) -> None:
+async def _resume_camera_after_cooldown(
+    camera_id: int, manager: RealtimeManager
+) -> None:
     """
     Background task: wait 60 seconds then set ai_status = Active in DB
     and broadcast the update to FE. Used for the Unverified → Dismissed
@@ -65,7 +62,7 @@ async def _resume_camera_after_cooldown(camera_id: int) -> None:
             session.commit()
             session.refresh(camera)
 
-            await _broadcast_camera_status(camera)
+            _broadcast_camera_status(camera, manager)
 
 
 def _apply_alert_filters(
@@ -141,7 +138,15 @@ def get_alerts(
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ):
-    """Fetches paginated incident logs with robust multi-select filtering."""
+    """Fetches paginated incident logs with robust multi-select filtering.
+
+    01_CONTRACTS.md §9.5 recovery sequence: after every WebSocket (re)connect,
+    the client fetches `?status=Unverified&status=Ongoing` to rebuild alarm
+    state, including `snoozed_until`/`snoozed_by_id` (columns exist from P1;
+    P4 populates them). `updated_at` is the merge key — an event carrying an
+    older `updated_at` than what the client already has for that `log_id`
+    must not overwrite the newer state.
+    """
     validate_common_filters(
         start_date=start_date,
         end_date=end_date,
@@ -293,6 +298,7 @@ async def confirm_alert(
     log_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    manager: RealtimeManager = Depends(get_realtime_manager),
 ):
     """
     Operator confirms an incident as a true positive.
@@ -314,14 +320,13 @@ async def confirm_alert(
     session.commit()
     session.refresh(log)
 
-    await manager.broadcast_alert(
-        {
-            "type": "ALERT_STATUS_UPDATE",
-            "log_id": log.log_id,
-            "detection_status": getattr(
-                log.detection_status, "value", log.detection_status
-            ),
-        }
+    # Enqueue only after commit (01_CONTRACTS.md §9.4).
+    manager.broadcast(
+        alert_status_update_event(
+            log,
+            action="ALERT_CONFIRM",
+            camera_name=log.camera.camera_name if log.camera else None,
+        )
     )
 
     return _to_detection_log_read(log)
@@ -332,6 +337,7 @@ async def dismiss_alert(
     log_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    manager: RealtimeManager = Depends(get_realtime_manager),
 ):
     """
     Operator dismisses an alert as a false positive (Unverified) or corrects
@@ -369,7 +375,9 @@ async def dismiss_alert(
         session.refresh(log)
 
         if camera and camera.is_active and camera.is_enabled and camera.camera_id:
-            asyncio.create_task(_resume_camera_after_cooldown(camera.camera_id))
+            asyncio.create_task(
+                _resume_camera_after_cooldown(camera.camera_id, manager)
+            )
 
     else:
         # Human error correction on an Ongoing incident: resume immediately.
@@ -382,16 +390,15 @@ async def dismiss_alert(
 
         if camera and camera.is_active and camera.is_enabled:
             session.refresh(camera)
-            await _broadcast_camera_status(camera)
+            _broadcast_camera_status(camera, manager)
 
-    await manager.broadcast_alert(
-        {
-            "type": "ALERT_STATUS_UPDATE",
-            "log_id": log.log_id,
-            "detection_status": getattr(
-                log.detection_status, "value", log.detection_status
-            ),
-        }
+    action = "ALERT_DISMISS" if was_unverified else "ALERT_CORRECTION"
+    manager.broadcast(
+        alert_status_update_event(
+            log,
+            action=action,
+            camera_name=camera.camera_name if camera else None,
+        )
     )
 
     return _to_detection_log_read(log)
@@ -402,6 +409,7 @@ async def resolve_alert(
     log_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    manager: RealtimeManager = Depends(get_realtime_manager),
 ):
     """
     Operator marks the scene as cleared. Camera resumes AI detection immediately.
@@ -429,16 +437,14 @@ async def resolve_alert(
 
     if camera and camera.is_active and camera.is_enabled:
         session.refresh(camera)
-        await _broadcast_camera_status(camera)
+        _broadcast_camera_status(camera, manager)
 
-    await manager.broadcast_alert(
-        {
-            "type": "ALERT_STATUS_UPDATE",
-            "log_id": log.log_id,
-            "detection_status": getattr(
-                log.detection_status, "value", log.detection_status
-            ),
-        }
+    manager.broadcast(
+        alert_status_update_event(
+            log,
+            action="ALERT_RESOLVE",
+            camera_name=camera.camera_name if camera else None,
+        )
     )
 
     return _to_detection_log_read(log)
