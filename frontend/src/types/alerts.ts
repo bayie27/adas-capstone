@@ -4,11 +4,10 @@ export interface AlertLog {
   log_id: number
   camera_id: number
   detected_at: string
-  // Wire field is `snapshot_key` (01_CONTRACTS.md §7.1), not the pre-P1
-  // `snapshot_path` this used to be named. Nullable because a WS-delivered
-  // incident doesn't carry it (only `snapshot_url`, which isn't a real route
-  // until P4) — it stays null until RealtimeAlertsBridge enriches it via REST.
-  snapshot_key: string | null
+  // 01_CONTRACTS.md §5.9/§9.3 — an authorized API path (e.g.
+  // `/api/alerts/42/snapshot`), never a filesystem key. Always present; the
+  // public `/snapshots` static mount is gone as of backend P4.
+  snapshot_url: string
   confidence_score: number
   detection_status: AlertStatus
   verified_by_id: number | null

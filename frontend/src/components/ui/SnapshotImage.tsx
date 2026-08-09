@@ -1,13 +1,12 @@
-﻿import { useMemo, useState, type ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 
 import { API_BASE_URL } from "@/utils/env"
 import { cn } from "@/utils/cn"
 
 const BACKEND_HTTP_ORIGIN = API_BASE_URL.replace(/\/+$/, "").replace(/\/api$/, "")
-const KNOWN_IMAGE_EXTENSION_PATTERN = /\.(jpg|jpeg|png|webp)$/i
 
 interface SnapshotImageProps {
-  snapshotPath: string | null | undefined
+  snapshotUrl: string | null | undefined
   alt: string
   className?: string
   fallbackClassName?: string
@@ -15,90 +14,30 @@ interface SnapshotImageProps {
   loading?: "eager" | "lazy"
 }
 
-function encodePathSegments(value: string) {
-  return value
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/")
-}
-
-function hasKnownImageExtension(value: string) {
-  return KNOWN_IMAGE_EXTENSION_PATTERN.test(value)
-}
-
-function expandImageCandidates(baseUrl: string) {
-  if (hasKnownImageExtension(baseUrl)) {
-    return [baseUrl]
+// 01_CONTRACTS.md §5.9/§9.3 — `snapshot_url` is always an authorized API
+// path like `/api/alerts/42/snapshot`, resolved against the backend origin.
+// It is session-cookie authenticated; a same-site `<img src>` sends that
+// cookie automatically, so no fetch wrapper is needed.
+function resolveSnapshotSrc(snapshotUrl: string | null | undefined) {
+  if (!snapshotUrl) {
+    return null
   }
 
-  return [baseUrl, `${baseUrl}.jpg`, `${baseUrl}.jpeg`, `${baseUrl}.png`]
-}
-
-function resolveSnapshotUrls(snapshotPath: string | null | undefined) {
-  if (!snapshotPath) {
-    return []
-  }
-
-  const normalized = String(snapshotPath).trim().replace(/\\/g, "/")
-
-  if (!normalized) {
-    return []
-  }
-
-  if (/^https?:\/\//i.test(normalized)) {
-    return [normalized]
-  }
-
-  if (normalized.startsWith("/snapshots/")) {
-    return expandImageCandidates(`${BACKEND_HTTP_ORIGIN}${encodeURI(normalized)}`)
-  }
-
-  if (normalized.startsWith("snapshots/")) {
-    return expandImageCandidates(`${BACKEND_HTTP_ORIGIN}/${encodePathSegments(normalized)}`)
-  }
-
-  if (normalized.startsWith("/")) {
-    return [`${BACKEND_HTTP_ORIGIN}${encodeURI(normalized)}`]
-  }
-
-  // 01_CONTRACTS.md §7.1 — a bare filename with no path separator is a
-  // legacy v1 key; a normalized key (`2026/07/12/camera_5/<uuid>.jpg`) must
-  // keep its full relative path, since that's exactly the sub-path the
-  // `/snapshots` mount serves out of SNAPSHOT_ROOT. Stripping it down to the
-  // basename here 404s every post-P1 snapshot.
-  if (normalized.includes("/")) {
-    return expandImageCandidates(
-      `${BACKEND_HTTP_ORIGIN}/snapshots/${encodePathSegments(normalized)}`,
-    )
-  }
-
-  return expandImageCandidates(`${BACKEND_HTTP_ORIGIN}/snapshots/${encodeURIComponent(normalized)}`)
+  return `${BACKEND_HTTP_ORIGIN}${snapshotUrl}`
 }
 
 export function SnapshotImage({
-  snapshotPath,
+  snapshotUrl,
   alt,
   className,
   fallbackClassName,
   fallbackContent,
   loading = "lazy",
 }: SnapshotImageProps) {
-  const snapshotUrls = useMemo(() => resolveSnapshotUrls(snapshotPath), [snapshotPath])
-  const [candidateIndex, setCandidateIndex] = useState(0)
+  const src = resolveSnapshotSrc(snapshotUrl)
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
 
-  // Reset the candidate index whenever the resolved URL list changes identity
-  // (i.e. snapshotPath changed). Adjusting state during render instead of in
-  // an effect avoids the extra "stale index, then reset" render pass.
-  const [prevSnapshotUrls, setPrevSnapshotUrls] = useState(snapshotUrls)
-
-  if (snapshotUrls !== prevSnapshotUrls) {
-    setPrevSnapshotUrls(snapshotUrls)
-    setCandidateIndex(0)
-  }
-
-  const currentSnapshotUrl = snapshotUrls[candidateIndex] ?? null
-
-  if (!currentSnapshotUrl) {
+  if (!src || src === failedSrc) {
     return (
       <div
         className={cn(
@@ -113,14 +52,11 @@ export function SnapshotImage({
 
   return (
     <img
-      src={currentSnapshotUrl}
+      src={src}
       alt={alt}
       loading={loading}
       className={className}
-      onError={() => {
-        // Try the next candidate before showing the fallback state.
-        setCandidateIndex((currentIndex) => currentIndex + 1)
-      }}
+      onError={() => setFailedSrc(src)}
     />
   )
 }
