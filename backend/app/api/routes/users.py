@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, func, select
 
-from app.api.dependencies import get_current_admin, get_current_user, require_admin
+from app.api.dependencies import (
+    get_current_admin,
+    get_current_user,
+    get_realtime_manager,
+    require_admin,
+)
 from app.core.db import get_session
 from app.core.security import get_password_hash, verify_password
 from app.models import AuditResult, User, UserRole
@@ -18,6 +23,7 @@ from app.schemas import (
     UserUpdatePassword,
 )
 from app.services import audit
+from app.services.realtime import RealtimeManager
 from app.services.sessions import revoke_all_for_user
 
 router = APIRouter(
@@ -112,11 +118,12 @@ def update_my_profile(
 
 
 @router.patch("/me/password", status_code=status.HTTP_204_NO_CONTENT, tags=["Profile"])
-def change_my_password(
+async def change_my_password(
     passwords_in: UserUpdatePassword,
     request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    manager: RealtimeManager = Depends(get_realtime_manager),
 ) -> None:
     """Operator self-service: change own password after verifying current one."""
     if not verify_password(passwords_in.old_password, current_user.password_hash):
@@ -141,6 +148,10 @@ def change_my_password(
         source_ip=_client_ip(request),
     )
     session.commit()
+
+    # After the commit (04_PKG_realtime.md Step 5) — every session for this
+    # user was just revoked, so every one of their sockets closes too.
+    await manager.close_user(current_user.user_id, reason="password_change")
 
 
 # ---------------------------------------------------------
@@ -233,12 +244,13 @@ def create_user(
     "/{user_id}",
     response_model=UserRead,
 )
-def update_user(
+async def update_user(
     user_id: int,
     update_in: UserAdminUpdate,
     request: Request,
     session: Session = Depends(get_session),
     current_admin: User = Depends(_require_admin_for_update),
+    manager: RealtimeManager = Depends(get_realtime_manager),
 ) -> UserRead:
     """Admin: edit a user's profile, role, or active status.
     Guards against demoting or deactivating the last active admin."""
@@ -357,7 +369,6 @@ def update_user(
         session.add(target)
         session.commit()
         session.refresh(target)
-        return UserRead.model_validate(target)
     except IntegrityError as exc:
         session.rollback()
         raise HTTPException(
@@ -365,17 +376,26 @@ def update_user(
             detail="Username already taken.",
         ) from exc
 
+    # After the commit (04_PKG_realtime.md Step 5).
+    if being_deactivated:
+        await manager.close_user(target.user_id, reason="account_disabled")
+    elif role_changed:
+        await manager.close_user(target.user_id, reason="role_change")
+
+    return UserRead.model_validate(target)
+
 
 @router.post(
     "/{user_id}/reset-password",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def reset_user_password(
+async def reset_user_password(
     user_id: int,
     passwords_in: UserResetPassword,
     request: Request,
     session: Session = Depends(get_session),
     current_admin: User = Depends(_require_admin_for_password_reset),
+    manager: RealtimeManager = Depends(get_realtime_manager),
 ) -> None:
     """Admin: force-reset any user's password."""
     target = _get_active_user_or_404(user_id, session)
@@ -395,16 +415,20 @@ def reset_user_password(
     )
     session.commit()
 
+    # After the commit (04_PKG_realtime.md Step 5).
+    await manager.close_user(target.user_id, reason="password_reset")
+
 
 @router.delete(
     "/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_user(
+async def delete_user(
     user_id: int,
     request: Request,
     session: Session = Depends(get_session),
     current_admin: User = Depends(_require_admin_for_disable),
+    manager: RealtimeManager = Depends(get_realtime_manager),
 ) -> None:
     """Admin: soft-delete a user. Guards against deleting the last active admin
     and against self-deletion."""
@@ -458,3 +482,6 @@ def delete_user(
         source_ip=source_ip,
     )
     session.commit()
+
+    # After the commit (04_PKG_realtime.md Step 5).
+    await manager.close_user(target.user_id, reason="account_disabled")

@@ -8,8 +8,9 @@ from app.core.config import settings
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
 from app.core.security import decode_session_token
-from app.models import AuditResult, User, UserRole
+from app.models import AuditResult, AuthSession, User, UserRole
 from app.services.audit import record_out_of_band
+from app.services.realtime import RealtimeManager
 from app.services.sessions import get_active_session
 
 
@@ -37,20 +38,21 @@ def _auth_revoked() -> AppHTTPException:
     )
 
 
-def get_current_user(
-    request: Request,
-    session: Session = Depends(get_session),
-) -> User:
+def authenticate_session_token(
+    token: str, session: Session
+) -> tuple[User, AuthSession]:
     """D-006 request authentication, in order: (1) verify the JWT signature,
     issuer, audience, and expiry; (2) load the auth_session by `sid` and
     require it active; (3) load the User by `sub` and require it active;
     (4) the caller authorizes using the *current* database role, never the
-    JWT's `role` claim. The cookie is the only place the token is read from
-    — there is no bearer-token fallback."""
-    token = request.cookies.get(settings.SESSION_COOKIE_NAME)
-    if not token:
-        raise _auth_required()
+    JWT's `role` claim.
 
+    Shared by `get_current_user` (reads the token from the cookie on an HTTP
+    `Request`) and the `/ws/alerts` handshake (04_PKG_realtime.md Step 4,
+    reads it from `WebSocket.cookies`) — a browser cannot set an
+    `Authorization` header on a WebSocket, so both paths authenticate off
+    the same session cookie, just plucked from a different object.
+    """
     try:
         payload = decode_session_token(token)
     except jwt.ExpiredSignatureError as exc:
@@ -89,6 +91,20 @@ def get_current_user(
     if user is None or not user.is_active:
         raise _auth_revoked()
 
+    return user, auth_session
+
+
+def get_current_user(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> User:
+    """The cookie is the only place the token is read from — there is no
+    bearer-token fallback."""
+    token = request.cookies.get(settings.SESSION_COOKIE_NAME)
+    if not token:
+        raise _auth_required()
+
+    user, _auth_session = authenticate_session_token(token, session)
     return user
 
 
@@ -127,3 +143,10 @@ def require_admin(action: str | None = None):
 
 
 get_current_admin = require_admin(None)
+
+
+def get_realtime_manager(request: Request) -> RealtimeManager:
+    """Routes that broadcast (alerts, internal) or that revoke sessions and
+    must close the matching sockets (auth, users) depend on this instead of
+    importing a module-level singleton — see app.services.realtime."""
+    return request.app.state.realtime_manager

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
 
+from app.api.dependencies import get_realtime_manager
 from app.core.config import settings
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
@@ -20,6 +21,7 @@ from app.core.security import (
 from app.models import AuditResult, User
 from app.schemas import LoginResponse, UserRead
 from app.services import audit
+from app.services.realtime import RealtimeManager
 from app.services.sessions import create_session, revoke_session
 
 # The Swagger "Authorize" button no longer works once auth moves to an
@@ -133,10 +135,11 @@ def login(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(
+async def logout(
     request: Request,
     response: Response,
     session: Session = Depends(get_session),
+    manager: RealtimeManager = Depends(get_realtime_manager),
 ) -> None:
     """Idempotent: an already-revoked, expired, or missing session cookie
     still clears the cookie and returns 204 (edge case 10.5, D-006) — logout
@@ -145,6 +148,7 @@ def logout(
     response.headers["Cache-Control"] = "no-store"
 
     token = request.cookies.get(settings.SESSION_COOKIE_NAME)
+    sid = None
     if token:
         try:
             payload = decode_session_token(token)
@@ -174,4 +178,11 @@ def logout(
                 session.commit()
 
     clear_session_cookie(response)
+
+    # After the commit, in the route (04_PKG_realtime.md Step 5) — closing a
+    # socket for a rollback that never happened is worse than a late close.
+    # Idempotent: a second logout for an already-revoked sid closes nothing.
+    if sid:
+        await manager.close_session(sid, reason="logout")
+
     return None
