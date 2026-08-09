@@ -259,7 +259,9 @@ def _wait_for_restart_readiness(settings, *, timeout: float) -> int:
         return 1
 
     db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
-    engine = create_engine(f"sqlite:///{db_path}")
+    # .as_posix(): SQLAlchemy's sqlite:/// URL scheme wants forward
+    # slashes even on Windows, matching how config.py builds DATABASE_URL.
+    engine = create_engine(f"sqlite:///{db_path.as_posix()}")
     install_sqlite_pragmas(engine, settings.SQLITE_BUSY_TIMEOUT_MS)
     heartbeat_at: float | None = None
     while time.monotonic() < deadline:

@@ -1,0 +1,19 @@
+# REVIEWED-BUT-UNVERIFIED, PRODUCTION-TARGET, ILLUSTRATIVE — see
+# deploy/systemd/README.md. Not part of P7's scope; copy and adapt.
+[Unit]
+Description=ADAS AI engine
+After=network-online.target adas-backend.service
+Wants=network-online.target
+Requires=adas-backend.service
+
+[Service]
+Type=simple
+User=adas
+Group=adas
+WorkingDirectory=/opt/adas-capstone
+ExecStart=/usr/local/bin/uv run python ai_engine/main.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

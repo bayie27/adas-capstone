@@ -1,0 +1,17 @@
+# REVIEWED-BUT-UNVERIFIED, PRODUCTION-TARGET — see deploy/systemd/README.md.
+#
+# Fires adas-maintenance.service daily at 3:00 AM *local* time, matching
+# MAINTENANCE_HOUR_LOCAL (.env) — deliberately local, not UTC (D-011: the
+# maintenance window is a wall-clock concept). Persistent=true means a
+# missed firing (host was off at 3 AM) runs once on the next boot instead
+# of silently skipping a day (edge case 5.11).
+[Unit]
+Description=Daily timer for ADAS backup + restart (D-011)
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
