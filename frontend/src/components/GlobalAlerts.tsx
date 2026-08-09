@@ -1,7 +1,7 @@
 ﻿import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
-import { useAlertStore } from "@/store/useAlertStore"
+import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
 import { confirmAlert, dismissAlert, resolveAlert } from "@/services/alerts"
 import { formatAlertConfidence } from "@/utils/alerts"
 import { formatFullDateTime } from "@/utils/datetime"
@@ -10,11 +10,15 @@ import { getApiErrorMessage } from "@/utils/api"
 export function GlobalAlerts() {
   const queryClient = useQueryClient()
   const alerts = useAlertStore((state) => state.alerts)
+  const snoozedUntil = useAlertStore((state) => state.snoozedUntil)
   const removeAlert = useAlertStore((state) => state.removeAlert)
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const alert = alerts[0]
+  // Snoozed incidents (FR-07) mute the alarm modal for that incident until
+  // the shared deadline expires or a RE_ALARM event reactivates it.
+  const activeAlerts = alerts.filter((a) => !isSnoozedNow(a.log_id, snoozedUntil))
+  const alert = activeAlerts[0]
   if (!alert) return null
 
   const busy = loadingId === alert.log_id
@@ -84,9 +88,9 @@ export function GlobalAlerts() {
           <p className="text-xl font-black uppercase tracking-widest text-[#1a1a1a]">
             {isOngoing ? "Ongoing Accident" : "Accident Detected"}
           </p>
-          {alerts.length > 1 && (
+          {activeAlerts.length > 1 && (
             <p className="mt-1 text-xs font-semibold text-[#1a1a1a]/70">
-              +{alerts.length - 1} more alert{alerts.length > 2 ? "s" : ""} queued
+              +{activeAlerts.length - 1} more alert{activeAlerts.length > 2 ? "s" : ""} queued
             </p>
           )}
         </div>
@@ -94,7 +98,7 @@ export function GlobalAlerts() {
         {/* snapshot area */}
         <div className="flex min-h-[220px] items-center justify-center bg-[#6B6B6B] p-6">
           <SnapshotImage
-            snapshotPath={alert.snapshot_path}
+            snapshotPath={alert.snapshot_key}
             alt={`Accident snapshot for log ${alert.log_id}`}
             className="max-h-52 w-auto rounded border-2 border-[#1a1a1a] object-contain"
             fallbackClassName="h-40 w-full rounded"

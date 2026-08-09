@@ -19,7 +19,7 @@ const api = axios.create({
   },
 })
 
-function redirectToLogin(message?: string) {
+export function redirectToLogin(message?: string) {
   if (typeof window !== "undefined" && message) {
     window.sessionStorage.setItem("auth-message", message)
   }

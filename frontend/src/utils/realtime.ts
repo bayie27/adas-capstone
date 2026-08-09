@@ -1,12 +1,24 @@
 import type { AlertStatus } from "@/types/alerts"
 import type { CameraAiStatus, CameraConnectionStatus } from "@/types/cameras"
 import type {
-  RealtimeAlertEventType,
-  RealtimeAlertPayload,
-  RealtimeCameraStatusPayload,
+  AlertStatusUpdateData,
+  CameraStatusUpdateData,
+  ConnectionReadyData,
+  EventEnvelope,
+  IncidentPayload,
+  ReAlarmData,
+  RealtimeEventType,
+  SnoozeActivatedData,
 } from "@/types/realtime"
 
-const ALERT_EVENT_TYPES: RealtimeAlertEventType[] = ["NEW_DETECTION", "NEW_ALERT", "NEW_ACCIDENT"]
+const EVENT_TYPES: RealtimeEventType[] = [
+  "CONNECTION_READY",
+  "NEW_DETECTION",
+  "ALERT_STATUS_UPDATE",
+  "CAMERA_STATUS_UPDATE",
+  "SNOOZE_ACTIVATED",
+  "RE_ALARM",
+]
 const ALERT_STATUS_VALUES: AlertStatus[] = ["Unverified", "Ongoing", "Dismissed", "Resolved"]
 const CAMERA_CONNECTION_STATUS_VALUES: CameraConnectionStatus[] = [
   "Connected",
@@ -20,8 +32,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object"
 }
 
-function isAlertEventType(value: unknown): value is RealtimeAlertEventType {
-  return typeof value === "string" && ALERT_EVENT_TYPES.includes(value as RealtimeAlertEventType)
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string"
+}
+
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || typeof value === "number"
+}
+
+function isEventType(value: unknown): value is RealtimeEventType {
+  return typeof value === "string" && EVENT_TYPES.includes(value as RealtimeEventType)
 }
 
 function isAlertStatus(value: unknown): value is AlertStatus {
@@ -39,67 +59,172 @@ function isCameraAiStatus(value: unknown): value is CameraAiStatus {
   return typeof value === "string" && CAMERA_AI_STATUS_VALUES.includes(value as CameraAiStatus)
 }
 
-function getAlertCandidate(payload: Record<string, unknown>) {
-  if (isRecord(payload.alert)) {
-    return payload.alert
-  }
-
-  if (isRecord(payload.data)) {
-    return payload.data
-  }
-
-  return payload
-}
-
-export function normalizeRealtimeAlert(payload: unknown): RealtimeAlertPayload | null {
-  if (!isRecord(payload) || !isAlertEventType(payload.type)) {
-    return null
-  }
-
-  const alert = getAlertCandidate(payload)
-
+// 01_CONTRACTS.md §9.1 — the envelope every server message is wrapped in.
+export function parseEventEnvelope(raw: unknown): EventEnvelope | null {
   if (
-    typeof alert.log_id !== "number" ||
-    typeof alert.camera_id !== "number" ||
-    typeof alert.detected_at !== "string" ||
-    typeof alert.snapshot_path !== "string" ||
-    typeof alert.confidence_score !== "number" ||
-    !isAlertStatus(alert.detection_status)
+    !isRecord(raw) ||
+    raw.version !== 1 ||
+    typeof raw.event_id !== "string" ||
+    !isEventType(raw.type) ||
+    typeof raw.occurred_at !== "string" ||
+    !isRecord(raw.data)
   ) {
     return null
   }
 
   return {
-    type: payload.type,
-    log_id: alert.log_id,
-    camera_id: alert.camera_id,
-    detected_at: alert.detected_at,
-    snapshot_path: alert.snapshot_path,
-    confidence_score: alert.confidence_score,
-    detection_status: alert.detection_status,
-    camera_name: typeof alert.camera_name === "string" ? alert.camera_name : null,
+    version: 1,
+    event_id: raw.event_id,
+    type: raw.type,
+    occurred_at: raw.occurred_at,
+    data: raw.data,
   }
 }
 
-export function normalizeRealtimeCameraStatus(
-  payload: unknown,
-): RealtimeCameraStatusPayload | null {
-  if (!isRecord(payload) || payload.type !== "CAMERA_STATUS_UPDATE") {
-    return null
-  }
-
+export function asConnectionReadyData(data: Record<string, unknown>): ConnectionReadyData | null {
   if (
-    typeof payload.camera_id !== "number" ||
-    !isCameraConnectionStatus(payload.connection_status) ||
-    !isCameraAiStatus(payload.ai_status)
+    typeof data.connection_id !== "string" ||
+    typeof data.server_time !== "string" ||
+    typeof data.user_id !== "number" ||
+    typeof data.role !== "string"
   ) {
     return null
   }
 
   return {
-    type: "CAMERA_STATUS_UPDATE",
-    camera_id: payload.camera_id,
-    connection_status: payload.connection_status,
-    ai_status: payload.ai_status,
+    connection_id: data.connection_id,
+    server_time: data.server_time,
+    user_id: data.user_id,
+    role: data.role,
+  }
+}
+
+// Shared by NEW_DETECTION and ALERT_STATUS_UPDATE — the latter's data is a
+// superset (adds action/handled_by/handled_at), so validating the common
+// incident fields covers both.
+export function asIncidentPayload(data: Record<string, unknown>): IncidentPayload | null {
+  if (
+    typeof data.log_id !== "number" ||
+    typeof data.source_event_id !== "string" ||
+    typeof data.camera_id !== "number" ||
+    !isNullableString(data.camera_name) ||
+    typeof data.detected_at !== "string" ||
+    typeof data.confidence_score !== "number" ||
+    !isAlertStatus(data.detection_status) ||
+    typeof data.snapshot_url !== "string" ||
+    !isNullableNumber(data.verified_by_id) ||
+    !isNullableString(data.verified_by_name) ||
+    !isNullableString(data.verified_at) ||
+    !isNullableNumber(data.closed_by_id) ||
+    !isNullableString(data.closed_by_name) ||
+    !isNullableString(data.closed_at) ||
+    !isNullableString(data.snoozed_until) ||
+    !isNullableNumber(data.snoozed_by_id) ||
+    typeof data.created_at !== "string" ||
+    typeof data.updated_at !== "string"
+  ) {
+    return null
+  }
+
+  return {
+    log_id: data.log_id,
+    source_event_id: data.source_event_id,
+    camera_id: data.camera_id,
+    camera_name: data.camera_name,
+    detected_at: data.detected_at,
+    confidence_score: data.confidence_score,
+    detection_status: data.detection_status,
+    snapshot_url: data.snapshot_url,
+    verified_by_id: data.verified_by_id,
+    verified_by_name: data.verified_by_name,
+    verified_at: data.verified_at,
+    closed_by_id: data.closed_by_id,
+    closed_by_name: data.closed_by_name,
+    closed_at: data.closed_at,
+    snoozed_until: data.snoozed_until,
+    snoozed_by_id: data.snoozed_by_id,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+  }
+}
+
+export function asAlertStatusUpdateData(
+  data: Record<string, unknown>,
+): AlertStatusUpdateData | null {
+  const incident = asIncidentPayload(data)
+
+  if (
+    !incident ||
+    typeof data.action !== "string" ||
+    !isNullableString(data.handled_by) ||
+    !isNullableString(data.handled_at)
+  ) {
+    return null
+  }
+
+  return {
+    ...incident,
+    action: data.action,
+    handled_by: data.handled_by,
+    handled_at: data.handled_at,
+  }
+}
+
+export function asCameraStatusUpdateData(
+  data: Record<string, unknown>,
+): CameraStatusUpdateData | null {
+  if (
+    typeof data.camera_id !== "number" ||
+    typeof data.camera_name !== "string" ||
+    typeof data.is_enabled !== "boolean" ||
+    typeof data.desired_ai_state !== "string" ||
+    !isNullableString(data.desired_state_reason) ||
+    !isCameraConnectionStatus(data.connection_status) ||
+    !isCameraAiStatus(data.ai_status) ||
+    !isNullableString(data.cooldown_until) ||
+    typeof data.config_version !== "number"
+  ) {
+    return null
+  }
+
+  return {
+    camera_id: data.camera_id,
+    camera_name: data.camera_name,
+    is_enabled: data.is_enabled,
+    desired_ai_state: data.desired_ai_state,
+    desired_state_reason: data.desired_state_reason,
+    connection_status: data.connection_status,
+    ai_status: data.ai_status,
+    cooldown_until: data.cooldown_until,
+    config_version: data.config_version,
+  }
+}
+
+export function asSnoozeActivatedData(data: Record<string, unknown>): SnoozeActivatedData | null {
+  if (
+    typeof data.log_id !== "number" ||
+    typeof data.camera_id !== "number" ||
+    !isNullableNumber(data.snoozed_by) ||
+    typeof data.snoozed_until !== "string"
+  ) {
+    return null
+  }
+
+  return {
+    log_id: data.log_id,
+    camera_id: data.camera_id,
+    snoozed_by: data.snoozed_by,
+    snoozed_until: data.snoozed_until,
+  }
+}
+
+export function asReAlarmData(data: Record<string, unknown>): ReAlarmData | null {
+  if (typeof data.log_id !== "number" || typeof data.camera_id !== "number") {
+    return null
+  }
+
+  return {
+    log_id: data.log_id,
+    camera_id: data.camera_id,
   }
 }
