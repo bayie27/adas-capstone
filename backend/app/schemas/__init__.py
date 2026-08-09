@@ -28,6 +28,11 @@ from app.schemas.events import (
     make_event,
 )
 from app.schemas.health import SysHealthHourlyRead, SysHealthRawRead
+from app.schemas.help import (
+    HelpArticleDetail,
+    HelpArticleListResponse,
+    HelpArticleSummary,
+)
 from app.schemas.maintenance import (
     BackupListResponse,
     BackupRead,
@@ -36,11 +41,6 @@ from app.schemas.maintenance import (
     RestoreStateRead,
     RestoreStepRead,
     RestoreTriggerResponse,
-)
-from app.schemas.help import (
-    HelpArticleDetail,
-    HelpArticleListResponse,
-    HelpArticleSummary,
 )
 from app.schemas.user import (
     UserAdminUpdate,
