@@ -292,7 +292,25 @@ def _wait_for_restart_readiness(settings, *, timeout: float) -> int:
             indent=2,
         )
     )
-    return 0 if heartbeat_at is not None else 1
+    if heartbeat_at is None:
+        # Not a failure: nothing in this codebase writes
+        # Camera.last_heartbeat_at yet (that's the AI-owner's v2
+        # POST /api/internal/heartbeat contract, per
+        # be_plan/12_AI_ENGINE_CONTRACT.md §2.1 — deferred, not built by
+        # any merged package as of this branch). Gating the restart/restore
+        # pass/fail on it would mean every restore permanently rolls itself
+        # back, since the one thing it's waiting for can never happen —
+        # worse than not checking it at all. Ready-only is the honest
+        # criterion until that lands; `heartbeat_confirmed` above is
+        # reported for visibility and will start reflecting reality
+        # automatically once heartbeat writing exists.
+        print(
+            "WARNING: AI heartbeat not confirmed — no writer of "
+            "Camera.last_heartbeat_at exists yet in this codebase "
+            "(pending the P4 heartbeat contract). Not treated as failure.",
+            file=sys.stderr,
+        )
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:

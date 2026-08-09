@@ -25,6 +25,10 @@ class EventType(StrEnum):
     CAMERA_STATUS_UPDATE = "CAMERA_STATUS_UPDATE"
     SNOOZE_ACTIVATED = "SNOOZE_ACTIVATED"
     RE_ALARM = "RE_ALARM"
+    # 08_PKG_backup_ops.md Step 5 — sent just before a restore takes the
+    # backend offline, so connected dashboards can warn the operator
+    # before the socket drops.
+    MAINTENANCE_NOTICE = "MAINTENANCE_NOTICE"
 
 
 class ConnectionReadyData(BaseModel):
@@ -88,6 +92,11 @@ class ReAlarmData(BaseModel):
     camera_id: int
 
 
+class MaintenanceNoticeData(BaseModel):
+    message: str
+    backup_id: str
+
+
 class EventEnvelope(BaseModel):
     version: Literal[1] = 1
     event_id: str
@@ -104,6 +113,7 @@ def make_event[
         CameraStatusUpdateData,
         SnoozeActivatedData,
         ReAlarmData,
+        MaintenanceNoticeData,
     )
 ](event_type: EventType, data: T) -> EventEnvelope:
     """The only way to build an envelope — `event_id` and `occurred_at` are
