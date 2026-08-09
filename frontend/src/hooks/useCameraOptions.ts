@@ -8,15 +8,16 @@ import { getCameras } from "@/services/cameras"
  * and the `staleTime` stops those three pages from each re-fetching the same
  * rarely-changing list.
  *
- * NOTE: silent cap — the backend has no unpaginated "options" endpoint, so
- * camera #1001 would not appear in any filter. The proper fix is a backend
+ * NOTE: silent cap — the backend has no unpaginated "options" endpoint, and
+ * `GET /api/cameras/` caps `limit` at 100 (backend/app/api/routes/cameras.py),
+ * so camera #101 would not appear in any filter. The proper fix is a backend
  * `/cameras/options` route; this hook is the single call site to swap when it
  * lands.
  */
 export function useCameraOptions() {
   return useQuery({
     queryKey: ["cameras", "options"],
-    queryFn: () => getCameras({ limit: 1000 }),
+    queryFn: () => getCameras({ limit: 100 }),
     staleTime: 5 * 60_000,
   })
 }

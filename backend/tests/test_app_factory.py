@@ -2,6 +2,7 @@
 Tests for the create_app() factory and test-harness isolation (P1 Step 6).
 """
 
+import inspect
 import sqlite3
 from pathlib import Path
 
@@ -91,6 +92,31 @@ class TestSnapshotRootStartupFailure:
 
         with pytest.raises(OSError), TestClient(app):
             pass
+
+
+class TestSchedulerJobWiring:
+    def test_ws_session_revalidation_job_is_a_real_coroutine_function(self, tmp_path):
+        """Regression test: `lambda: ws_session_revalidation(...)` wraps a
+        coroutine call in a plain sync function, so APScheduler's
+        AsyncIOExecutor (which dispatches on
+        `inspect.iscoroutinefunction(job.func)`) would run it synchronously
+        and drop the returned coroutine unawaited — the job silently never
+        does anything. The scheduled job's `func` must itself satisfy
+        `iscoroutinefunction` so APScheduler actually awaits it."""
+        app_settings = Settings(
+            _env_file=None,
+            SECRET_KEY="test-secret-key-not-for-production-use",
+            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            DATABASE_URL=f"sqlite:///{tmp_path / 'scheduler.db'}",
+            SCHEDULER_ENABLED=True,
+        )
+        app = create_app(app_settings)
+
+        with TestClient(app):
+            job = app.state.scheduler.get_job("ws_session_revalidation")
+            assert job is not None
+            assert inspect.iscoroutinefunction(job.func)
 
 
 class TestConcurrentWriteLockHandling:
