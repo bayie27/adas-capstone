@@ -51,7 +51,10 @@ class AccidentManager:
 
         snapshot_path = SNAPSHOT_ROOT / snapshot_key
         snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = snapshot_path.with_name(snapshot_path.name + ".tmp")
+        # cv2.imwrite picks its encoder from the file extension, so the temp
+        # name must still end in .jpg — a trailing .tmp makes it fail with
+        # "could not find a writer for the specified extension".
+        tmp_path = snapshot_path.with_name(snapshot_path.stem + ".tmp.jpg")
 
         written = cv2.imwrite(str(tmp_path), frame)
         if not written:
