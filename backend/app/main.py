@@ -18,6 +18,7 @@ from app.core.config import settings as default_settings
 from app.core.db import create_db_engine, init_db
 from app.core.errors import AppHTTPException
 from app.core.logging import configure_logging, request_id_ctx
+from app.core.rate_limit import SlidingWindowLimiter
 from app.core.scheduler import add_job, create_scheduler
 from app.models import AIStatus, Camera, ConnectionStatus
 from app.schemas import ApiError, default_error_code
@@ -247,6 +248,10 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.state.settings = resolved_settings
     application.state.engine = create_db_engine(resolved_settings)
     application.state.db_initialized = False
+    application.state.rate_limiter = SlidingWindowLimiter(
+        resolved_settings.LOGIN_RATE_LIMIT_ATTEMPTS,
+        resolved_settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    )
 
     application.middleware("http")(request_id_middleware)
 
