@@ -5,13 +5,27 @@ Covers AI-engine alert ingestion, camera polling, status updates, and internal a
 
 from datetime import UTC, datetime
 
-import app.api.routes.internal as internal_routes
 import pytest
 from app.models import AIStatus, ConnectionStatus, DetectionLog, DetectionStatus
+from app.schemas.events import EventEnvelope
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from .conftest import internal_headers, make_camera, make_detection
+
+
+def _capture_broadcasts(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> list[dict]:
+    """Replaces RealtimeManager.broadcast on this test's app instance with a
+    recorder, returning the envelopes (as plain dicts) in emission order."""
+    payloads: list[dict] = []
+
+    def fake_broadcast(event: EventEnvelope, *, roles=None) -> None:
+        payloads.append(event.model_dump(mode="json"))
+
+    monkeypatch.setattr(client.app.state.realtime_manager, "broadcast", fake_broadcast)
+    return payloads
 
 
 def test_receive_ai_alert_creates_log_pauses_camera_and_broadcasts(
@@ -19,12 +33,7 @@ def test_receive_ai_alert_creates_log_pauses_camera_and_broadcasts(
     session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    payloads: list[dict] = []
-
-    async def fake_broadcast(payload: dict) -> None:
-        payloads.append(payload)
-
-    monkeypatch.setattr(internal_routes.manager, "broadcast_alert", fake_broadcast)
+    payloads = _capture_broadcasts(client, monkeypatch)
 
     camera = make_camera(
         session,
@@ -63,12 +72,17 @@ def test_receive_ai_alert_creates_log_pauses_camera_and_broadcasts(
         "NEW_DETECTION",
         "CAMERA_STATUS_UPDATE",
     ]
-    assert payloads[0]["camera_id"] == camera.camera_id
-    assert payloads[1] == {
-        "type": "CAMERA_STATUS_UPDATE",
+    assert payloads[0]["data"]["camera_id"] == camera.camera_id
+    assert payloads[1]["data"] == {
         "camera_id": camera.camera_id,
+        "camera_name": "Ingress Cam",
+        "is_enabled": True,
+        "desired_ai_state": "Inactive",
+        "desired_state_reason": None,
         "connection_status": ConnectionStatus.CONNECTED.value,
         "ai_status": AIStatus.PAUSED.value,
+        "cooldown_until": None,
+        "config_version": 1,
     }
 
 
@@ -86,12 +100,7 @@ def test_receive_ai_alert_rejects_disabled_or_inactive_camera(
     is_enabled: bool,
     is_active: bool,
 ):
-    payloads: list[dict] = []
-
-    async def fake_broadcast(payload: dict) -> None:
-        payloads.append(payload)
-
-    monkeypatch.setattr(internal_routes.manager, "broadcast_alert", fake_broadcast)
+    payloads = _capture_broadcasts(client, monkeypatch)
 
     camera = make_camera(
         session,
@@ -188,12 +197,7 @@ def test_update_camera_status_updates_fields_and_broadcasts(
     session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    payloads: list[dict] = []
-
-    async def fake_broadcast(payload: dict) -> None:
-        payloads.append(payload)
-
-    monkeypatch.setattr(internal_routes.manager, "broadcast_alert", fake_broadcast)
+    payloads = _capture_broadcasts(client, monkeypatch)
 
     camera = make_camera(
         session,
@@ -220,14 +224,18 @@ def test_update_camera_status_updates_fields_and_broadcasts(
     session.refresh(camera)
     assert camera.connection_status == ConnectionStatus.CONNECTED.value
     assert camera.ai_status == AIStatus.ACTIVE.value
-    assert payloads == [
-        {
-            "type": "CAMERA_STATUS_UPDATE",
-            "camera_id": camera.camera_id,
-            "connection_status": ConnectionStatus.CONNECTED.value,
-            "ai_status": AIStatus.ACTIVE.value,
-        }
-    ]
+    assert [p["type"] for p in payloads] == ["CAMERA_STATUS_UPDATE"]
+    assert payloads[0]["data"] == {
+        "camera_id": camera.camera_id,
+        "camera_name": "Patch Cam",
+        "is_enabled": True,
+        "desired_ai_state": "Inactive",
+        "desired_state_reason": None,
+        "connection_status": ConnectionStatus.CONNECTED.value,
+        "ai_status": AIStatus.ACTIVE.value,
+        "cooldown_until": None,
+        "config_version": 1,
+    }
 
 
 def test_update_camera_status_supports_partial_updates(
@@ -235,12 +243,7 @@ def test_update_camera_status_supports_partial_updates(
     session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    payloads: list[dict] = []
-
-    async def fake_broadcast(payload: dict) -> None:
-        payloads.append(payload)
-
-    monkeypatch.setattr(internal_routes.manager, "broadcast_alert", fake_broadcast)
+    payloads = _capture_broadcasts(client, monkeypatch)
 
     camera = make_camera(
         session,
@@ -261,8 +264,10 @@ def test_update_camera_status_supports_partial_updates(
     session.refresh(camera)
     assert camera.connection_status == ConnectionStatus.RECONNECTING.value
     assert camera.ai_status == AIStatus.PAUSED.value
-    assert payloads[0]["connection_status"] == ConnectionStatus.RECONNECTING.value
-    assert payloads[0]["ai_status"] == AIStatus.PAUSED.value
+    assert (
+        payloads[0]["data"]["connection_status"] == ConnectionStatus.RECONNECTING.value
+    )
+    assert payloads[0]["data"]["ai_status"] == AIStatus.PAUSED.value
 
 
 @pytest.mark.parametrize(
@@ -306,12 +311,7 @@ def test_update_camera_status_rejects_active_override_while_alert_is_open(
     monkeypatch: pytest.MonkeyPatch,
     alert_status: DetectionStatus,
 ):
-    payloads: list[dict] = []
-
-    async def fake_broadcast(payload: dict) -> None:
-        payloads.append(payload)
-
-    monkeypatch.setattr(internal_routes.manager, "broadcast_alert", fake_broadcast)
+    payloads = _capture_broadcasts(client, monkeypatch)
 
     camera = make_camera(
         session,
@@ -346,12 +346,7 @@ def test_update_camera_status_allows_active_when_no_open_alert_exists(
     monkeypatch: pytest.MonkeyPatch,
     closed_status: DetectionStatus,
 ):
-    payloads: list[dict] = []
-
-    async def fake_broadcast(payload: dict) -> None:
-        payloads.append(payload)
-
-    monkeypatch.setattr(internal_routes.manager, "broadcast_alert", fake_broadcast)
+    payloads = _capture_broadcasts(client, monkeypatch)
 
     camera = make_camera(
         session,
@@ -371,7 +366,7 @@ def test_update_camera_status_allows_active_when_no_open_alert_exists(
 
     session.refresh(camera)
     assert camera.ai_status == AIStatus.ACTIVE.value
-    assert payloads[0]["ai_status"] == AIStatus.ACTIVE.value
+    assert payloads[0]["data"]["ai_status"] == AIStatus.ACTIVE.value
 
 
 def test_update_camera_status_invalid_enum_returns_422(

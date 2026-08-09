@@ -1,13 +1,15 @@
 import logging
 
-from fastapi import Depends, Request
+from fastapi import Depends
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine, select
+from starlette.requests import HTTPConnection
 
 from app.core.config import Settings, settings
 from app.core.security import get_password_hash
 from app.models import UserRole
+from app.services.help import seed_help_articles
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -90,9 +92,20 @@ def init_db(
             session.commit()
             logger.info("Default Administrator account created successfully.")
 
+    # FR-20 — idempotent: unchanged files write nothing (edge case 10.6).
+    with Session(target_engine) as session:
+        seed_help_articles(session)
 
-def get_engine(request: Request) -> Engine:
-    return request.app.state.engine
+
+def get_engine(conn: HTTPConnection) -> Engine:
+    """`HTTPConnection`, not `Request` — this is also depended on from the
+    `/ws/alerts` WebSocket route (04_PKG_realtime.md Step 4). FastAPI's
+    dependency solver only injects a real value for the *first* connection
+    type a dependency's annotation matches (`Request`, then `WebSocket`,
+    then the shared `HTTPConnection` base); typing this as `Request` would
+    silently resolve to nothing on a WebSocket connection and crash with a
+    plain `TypeError`, not a clean close code."""
+    return conn.app.state.engine
 
 
 def get_session(bound_engine: Engine = Depends(get_engine)):

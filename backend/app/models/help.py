@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import event, text
+from sqlalchemy import Column, event, text
 from sqlmodel import Field, SQLModel
 
 from app.core.types import UtcDateTime
@@ -29,7 +29,13 @@ class HelpArticle(SQLModel, table=True):
         default_factory=lambda: datetime.now(UTC), sa_type=UtcDateTime
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC), sa_type=UtcDateTime
+        default=None,
+        sa_column=Column(
+            UtcDateTime,
+            default=lambda: datetime.now(UTC),
+            onupdate=lambda: datetime.now(UTC),
+            nullable=False,
+        ),
     )
 
 

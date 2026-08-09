@@ -56,7 +56,16 @@ def get_all_cameras(
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ):
-    """Fetches paginated camera list with global KPIs and multi-select filtering."""
+    """Fetches paginated camera list with global KPIs and multi-select filtering.
+
+    01_CONTRACTS.md §9.5 recovery sequence: after every WebSocket (re)connect,
+    the client re-fetches this list to rebuild camera state. `config_version`
+    is the merge key — a camera's `CAMERA_STATUS_UPDATE` events must not be
+    allowed to overwrite a state fetched with a *higher* `config_version`
+    than the event carries. `config_version` isn't yet in `CameraRead` (P4
+    adds the desired/observed response fields); this note is here so P4
+    doesn't have to rediscover the contract.
+    """
 
     # ---------------------------------------------------------
     # 1. GLOBAL KPIs (always unfiltered)
