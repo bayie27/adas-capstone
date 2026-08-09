@@ -80,9 +80,9 @@ def update_my_profile(
     Never revokes sessions — identity is user_id, not username (D-006)."""
     update_data = update_in.model_dump(exclude_unset=True)
 
-    for key, value in update_data.items():
-        setattr(current_user, key, value)
-
+    # Snapshot the actor *before* mutating — a self-rename must not audit
+    # under the new username, since the actor performing the action was
+    # still identified by the old one (D-007 actor-snapshot intent).
     if update_data:
         audit.record(
             session,
@@ -94,6 +94,9 @@ def update_my_profile(
             detail={"changed_fields": sorted(update_data.keys())},
             source_ip=_client_ip(request),
         )
+
+    for key, value in update_data.items():
+        setattr(current_user, key, value)
 
     try:
         session.add(current_user)

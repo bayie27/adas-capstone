@@ -1,0 +1,410 @@
+"""
+Tests for app.services.audit (D-007) and GET /api/audit-logs — TC-S-501...505
+and 14_EDGE_CASES.md rows 3.14, 9.2, plus the package doc's "Tests to write"
+table for audit coupling, redaction, multi-action, and the viewer.
+"""
+
+import pytest
+from app.core.config import settings
+from app.core.security import create_session_token
+from app.models import AuditLog, AuditResult, Camera
+from app.services import audit
+from app.services.sessions import create_session
+from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, select
+
+from .conftest import auth_headers, make_admin, make_camera, make_operator
+
+
+def _cookie_header_for(session: Session, user) -> dict:
+    """Authenticates without going through POST /login, so no LOGIN_SUCCESS
+    row is written — needed for tests that assert an exact row count."""
+    auth_session = create_session(session, user, user_agent=None, source_ip=None)
+    session.commit()
+    token = create_session_token(user, auth_session)
+    return {"Cookie": f"{settings.SESSION_COOKIE_NAME}={token}"}
+
+
+class TestAuditCoupling:
+    def test_forcing_the_audit_insert_to_fail_rolls_back_the_primary_action(
+        self, session: Session
+    ):
+        camera = Camera(camera_name="RollbackCam", channel_id=987)
+        session.add(camera)
+        session.flush()
+        audit.record(
+            session,
+            action="NOT_A_REAL_ACTION",
+            result=AuditResult.SUCCESS,
+            target_type="camera",
+            target_ref=str(camera.camera_id),
+        )
+        with pytest.raises(IntegrityError):
+            session.commit()
+        session.rollback()
+
+        found = session.exec(
+            select(Camera).where(Camera.camera_name == "RollbackCam")
+        ).first()
+        assert found is None
+
+    def test_denied_guard_rejection_still_produces_a_row_after_rollback(
+        self, client: TestClient, session: Session
+    ):
+        """Last-admin-demote guard: nothing is written to the user row, but
+        the denied attempt is still audited via a separate transaction."""
+        admin = make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        resp = client.patch(
+            f"/api/users/{admin.user_id}",
+            json={"role": "Operator"},
+            headers=headers,
+        )
+        assert resp.status_code == 400
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "USER_ROLE_CHANGE")
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].result == "denied"
+
+    def test_self_delete_guard_is_audited_denied(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session, username="admin1")
+        admin2 = make_admin(session, username="admin2")
+        headers = auth_headers(client, "admin2", "Admin123")
+        resp = client.delete(f"/api/users/{admin2.user_id}", headers=headers)
+        assert resp.status_code == 400
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "USER_DISABLE")
+        ).all()
+        assert any(r.result == "denied" for r in rows)
+
+
+class TestAuditRedaction:
+    def test_password_token_apikey_url_and_paths_never_survive(self, session: Session):
+        detail = {
+            "password": "hunter2",
+            "note": (
+                "token=abc123 rtsp://admin:hunter2@10.0.5.50:554/cam "
+                f"path={settings.SNAPSHOT_ROOT / 'x.jpg'}"
+            ),
+            "api_key": settings.INTERNAL_API_KEY.get_secret_value(),
+        }
+        row = audit.record(
+            session, action="LOGIN_SUCCESS", result=AuditResult.SUCCESS, detail=detail
+        )
+        session.commit()
+        session.refresh(row)
+
+        assert row.detail is not None
+        assert "hunter2" not in row.detail
+        assert settings.INTERNAL_API_KEY.get_secret_value() not in row.detail
+        assert str(settings.SNAPSHOT_ROOT) not in row.detail
+        assert "rtsp://admin:hunter2" not in row.detail
+        assert "***REDACTED***" in row.detail
+
+    def test_password_reset_does_not_leak_new_password(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 8.15."""
+        make_admin(session)
+        op = make_operator(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        client.post(
+            f"/api/users/{op.user_id}/reset-password",
+            json={"new_password": "SuperSecret9"},
+            headers=headers,
+        )
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "USER_PASSWORD_RESET")
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].detail is None or "SuperSecret9" not in rows[0].detail
+
+
+class TestMultiAction:
+    def test_camera_rename_and_disable_writes_exactly_two_rows(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        camera = make_camera(session, name="Old Name", channel_id=42)
+
+        resp = client.patch(
+            f"/api/cameras/{camera.camera_id}",
+            json={"camera_name": "New Name", "is_enabled": False},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+
+        rows = session.exec(
+            select(AuditLog).where(
+                AuditLog.target_type == "camera",
+                AuditLog.target_ref == str(camera.camera_id),
+            )
+        ).all()
+        assert len(rows) == 2
+        assert {r.action for r in rows} == {"CAMERA_UPDATE", "CAMERA_DISABLE"}
+
+    def test_disabling_alone_writes_only_camera_disable(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        camera = make_camera(session, name="Solo Cam", channel_id=43)
+
+        resp = client.patch(
+            f"/api/cameras/{camera.camera_id}",
+            json={"is_enabled": False},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+
+        rows = session.exec(
+            select(AuditLog).where(
+                AuditLog.target_type == "camera",
+                AuditLog.target_ref == str(camera.camera_id),
+            )
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].action == "CAMERA_DISABLE"
+
+    def test_user_update_base_action_plus_role_change(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        op = make_operator(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        resp = client.patch(
+            f"/api/users/{op.user_id}",
+            json={"first_name": "Renamed", "role": "Admin"},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+
+        rows = session.exec(
+            select(AuditLog).where(
+                AuditLog.target_type == "user",
+                AuditLog.target_ref == str(op.user_id),
+            )
+        ).all()
+        assert {r.action for r in rows} == {"USER_UPDATE", "USER_ROLE_CHANGE"}
+
+
+class TestSinceRenamedUserSnapshot:
+    def test_audit_row_keeps_the_username_at_time_of_action(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 9.2."""
+        make_admin(session)
+        op = make_operator(session, username="original_name")
+        admin_headers = auth_headers(client, "admin", "Admin123")
+        op_headers = auth_headers(client, "original_name", "Operator123")
+
+        client.patch(
+            "/api/users/me", json={"username": "renamed_now"}, headers=op_headers
+        )
+
+        row = session.exec(
+            select(AuditLog).where(AuditLog.action == "USER_PROFILE_UPDATE")
+        ).first()
+        assert row is not None
+        assert row.username == "original_name"
+
+        session.refresh(op)
+        assert op.username == "renamed_now"
+        assert admin_headers  # keeps the admin fixture alive/used
+
+
+class TestAuditViewer:
+    def test_fresh_database_returns_empty_page(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 3.14 — empty page, correct total_filtered, no crash.
+        Authenticates without POST /login so no LOGIN_SUCCESS row exists."""
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        assert session.exec(select(AuditLog)).all() == []
+
+        resp = client.get("/api/audit-logs/", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"total_filtered": 0, "items": []}
+
+    def test_viewer_stable_pagination_no_duplicates_or_gaps(
+        self, client: TestClient, session: Session
+    ):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+
+        # Five rows sharing the exact same created_at — only audit_id can
+        # break the tie, proving the (created_at DESC, audit_id DESC) order
+        # is what keeps pagination stable.
+        from datetime import UTC, datetime
+
+        same_instant = datetime.now(UTC)
+        for _ in range(5):
+            row = AuditLog(
+                actor_type="system",
+                action="LOGIN_SUCCESS",
+                result="success",
+                created_at=same_instant,
+            )
+            session.add(row)
+        session.commit()
+
+        page1 = client.get("/api/audit-logs/?limit=2&offset=0", headers=headers).json()
+        page2 = client.get("/api/audit-logs/?limit=2&offset=2", headers=headers).json()
+        page3 = client.get("/api/audit-logs/?limit=2&offset=4", headers=headers).json()
+
+        assert page1["total_filtered"] == 5
+        all_ids = (
+            [i["audit_id"] for i in page1["items"]]
+            + [i["audit_id"] for i in page2["items"]]
+            + [i["audit_id"] for i in page3["items"]]
+        )
+        assert len(all_ids) == len(set(all_ids)) == 5
+        assert all_ids == sorted(all_ids, reverse=True)
+
+    def test_filter_by_action(self, client: TestClient, session: Session):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        session.add(AuditLog(actor_type="system", action="LOGOUT", result="success"))
+        session.add(
+            AuditLog(actor_type="system", action="CAMERA_DELETE", result="success")
+        )
+        session.commit()
+
+        resp = client.get("/api/audit-logs/?action=LOGOUT", headers=headers)
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert body["items"][0]["action"] == "LOGOUT"
+
+    def test_filter_by_invalid_action_is_422(
+        self, client: TestClient, session: Session
+    ):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        resp = client.get("/api/audit-logs/?action=NOT_REAL", headers=headers)
+        assert resp.status_code == 422
+
+    def test_filter_by_result(self, client: TestClient, session: Session):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        session.add(AuditLog(actor_type="system", action="LOGOUT", result="denied"))
+        session.add(AuditLog(actor_type="system", action="LOGOUT", result="success"))
+        session.commit()
+
+        resp = client.get("/api/audit-logs/?result=denied", headers=headers)
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert body["items"][0]["result"] == "denied"
+
+    def test_filter_by_user_id(self, client: TestClient, session: Session):
+        admin = make_admin(session)
+        op = make_operator(session)
+        headers = _cookie_header_for(session, admin)
+        session.add(
+            AuditLog(
+                actor_type="user",
+                user_id=op.user_id,
+                username=op.username,
+                action="LOGOUT",
+                result="success",
+            )
+        )
+        session.commit()
+
+        resp = client.get(f"/api/audit-logs/?user_id={op.user_id}", headers=headers)
+        assert resp.json()["total_filtered"] == 1
+
+    def test_filter_by_target_type_and_ref(self, client: TestClient, session: Session):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        session.add(
+            AuditLog(
+                actor_type="system",
+                action="CAMERA_DELETE",
+                result="success",
+                target_type="camera",
+                target_ref="7",
+            )
+        )
+        session.commit()
+
+        resp = client.get(
+            "/api/audit-logs/?target_type=camera&target_ref=7", headers=headers
+        )
+        assert resp.json()["total_filtered"] == 1
+
+    def test_filter_by_date_range(self, client: TestClient, session: Session):
+        from datetime import UTC, datetime, timedelta
+
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        old = AuditLog(
+            actor_type="system",
+            action="LOGOUT",
+            result="success",
+            created_at=datetime.now(UTC) - timedelta(days=10),
+        )
+        session.add(old)
+        session.commit()
+
+        start = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+        resp = client.get(
+            "/api/audit-logs/", params={"start_date": start}, headers=headers
+        )
+        assert resp.status_code == 200
+        assert old.audit_id not in [i["audit_id"] for i in resp.json()["items"]]
+
+    def test_date_range_start_after_end_is_422(
+        self, client: TestClient, session: Session
+    ):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        resp = client.get(
+            "/api/audit-logs/?start_date=2026-06-02T00:00:00Z"
+            "&end_date=2026-06-01T00:00:00Z",
+            headers=headers,
+        )
+        assert resp.status_code == 422
+
+    def test_search_matches_username(self, client: TestClient, session: Session):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        session.add(
+            AuditLog(
+                actor_type="user",
+                username="findme_special",
+                action="LOGOUT",
+                result="success",
+            )
+        )
+        session.commit()
+
+        resp = client.get("/api/audit-logs/?search=findme_special", headers=headers)
+        assert resp.json()["total_filtered"] == 1
+
+    def test_no_update_or_delete_route_exists(
+        self, client: TestClient, session: Session
+    ):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        row = AuditLog(actor_type="system", action="LOGOUT", result="success")
+        session.add(row)
+        session.commit()
+
+        patch_resp = client.patch(
+            f"/api/audit-logs/{row.audit_id}",
+            json={"result": "denied"},
+            headers=headers,
+        )
+        delete_resp = client.delete(f"/api/audit-logs/{row.audit_id}", headers=headers)
+        assert patch_resp.status_code in (404, 405)
+        assert delete_resp.status_code in (404, 405)
