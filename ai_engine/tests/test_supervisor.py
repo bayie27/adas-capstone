@@ -104,6 +104,16 @@ def test_newer_config_version_with_channel_change_triggers_reapply():
     assert actions == [ReconcileAction(1, Action.REAPPLY_CONFIG, snap)]
 
 
+def test_rtsp_url_change_without_a_config_version_bump_still_reapplies():
+    # RTSP_URL_TEMPLATE is a global backend .env setting, not a per-camera
+    # DB write, so a template/credential rotation (e.g. MediaMTX -> DSS)
+    # never bumps config_version. The restart must not depend on it.
+    snap = _snap(1, config_version=1, rtsp_url="rtsp://backend/channel1_v2")
+    local = {1: _local(applied_config_version=1, rtsp_url="rtsp://backend/channel1")}
+    actions = supervisor.compute_actions([snap], local)
+    assert actions == [ReconcileAction(1, Action.REAPPLY_CONFIG, snap)]
+
+
 def test_same_config_version_and_state_is_a_no_op():
     snap = _snap(1)
     local = {1: _local()}

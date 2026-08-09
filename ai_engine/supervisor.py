@@ -83,7 +83,13 @@ def compute_actions(snapshot_cameras, local_cameras):
             "config_version"
         )
 
-        if config_changed and restart_needed:
+        # restart_needed is deliberately NOT gated on config_changed: the
+        # backend's RTSP_URL_TEMPLATE is a global .env setting, not a
+        # per-camera DB write, so it never bumps config_version. Gating the
+        # restart on a version bump would mean a template/credential change
+        # (e.g. MediaMTX -> DSS cutover) is silently ignored by every
+        # already-running stream.
+        if restart_needed:
             # A fresh stream is constructed in the correct desired state
             # directly, so no separate pause/resume action is needed.
             actions.append(ReconcileAction(camera_id, Action.REAPPLY_CONFIG, snap))
