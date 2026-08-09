@@ -45,7 +45,7 @@ torch = { index = "pytorch-cu130" }
 torchvision = { index = "pytorch-cu130" }
 
 [tool.pytest.ini_options]
-testpaths = ["backend/tests"]
+testpaths = ["backend/tests", "ai_engine/tests"]
 cache_dir = "backend/.pytest_cache"
 addopts = "-q"
 markers = [

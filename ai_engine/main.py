@@ -2,9 +2,10 @@ import time
 from pathlib import Path
 
 import cv2
+import outbox
 from accident import AccidentManager
 from config import CONFIDENCE_THRESHOLD
-from sync import start_sync_thread
+from supervisor import start_supervisor_thread
 from ultralytics import YOLO
 
 MODEL_DIR = Path(__file__).resolve().parent
@@ -38,17 +39,32 @@ def run_multi_camera_inference():
     # Change cameras from a list to a dictionary for dynamic lookup by ID
     cameras = {}
 
-    # Start the background sync thread (polls every 3 seconds)
-    start_sync_thread(cameras)
+    def _stop_camera(camera_id):
+        cam = cameras.pop(camera_id, None)
+        if cam is not None:
+            print(
+                f"[SYSTEM] Camera {camera_id} reported gone by the backend "
+                "(404 on event delivery); stopping stream..."
+            )
+            cam.stop()
 
-    print("Waiting for backend sync... Press 'q' in any video window to quit.")
+    # Drain anything persisted before a crash, then keep delivering new
+    # events in the background. This is the entire reason the outbox
+    # exists (be_plan/15 Step 6) — do it before the inference loop starts.
+    outbox.run_delivery_cycle(on_camera_gone=_stop_camera)
+    outbox.start_delivery_worker(on_camera_gone=_stop_camera)
+
+    # Start the heartbeat/reconciliation thread (replaces the 3s poll)
+    start_supervisor_thread(cameras)
+
+    print("Waiting for backend heartbeat... Press 'q' in any video window to quit.")
 
     while True:
         frames_to_process = []
         active_cameras = []
 
         # Gather frames ONLY from cameras that are online and NOT paused
-        # Use .copy() to prevent Threading RuntimeError if sync.py modifies the dict
+        # Use .copy() to prevent Threading RuntimeError if supervisor.py modifies the dict
         for cam in list(cameras.copy().values()):
             if not cam.is_paused:
                 frame = cam.read()
@@ -58,6 +74,7 @@ def run_multi_camera_inference():
 
         # GPU BATCHING
         if frames_to_process:
+            batch_start = time.perf_counter()
             results = model(
                 frames_to_process,
                 stream=False,
@@ -65,9 +82,11 @@ def run_multi_camera_inference():
                 verbose=False,
                 conf=CONFIDENCE_THRESHOLD,
             )
+            batch_latency_ms = (time.perf_counter() - batch_start) * 1000
 
             for i, r in enumerate(results):
                 current_cam = active_cameras[i]
+                current_cam.inference_latency_ms = batch_latency_ms
                 annotated_frame = r.plot()
 
                 # Hand it to the manager to check for accidents and trigger webhooks

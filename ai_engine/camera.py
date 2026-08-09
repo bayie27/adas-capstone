@@ -1,19 +1,24 @@
-import contextlib
 import threading
 import time
+from collections import deque
 
 import cv2
-import requests
-from config import INTERNAL_API_KEY, RTSP_BASE_URL, SYNC_URL
+from config import RECONNECT_INTERVAL_SECONDS, UNRESPONSIVE_AFTER_FAILURES
+
+_FPS_WINDOW_SECONDS = 5
 
 
 class CameraStream:
-    """A threaded camera reader with Auto-Reconnect and Pause capabilities."""
+    """A threaded camera reader with Auto-Reconnect and Pause capabilities.
 
-    def __init__(self, channel_id, camera_id):
+    All state reporting flows through the heartbeat (observed_state()) —
+    this class no longer talks to the backend itself.
+    """
+
+    def __init__(self, channel_id, camera_id, rtsp_url):
         self.channel_id = channel_id
-        self.url = f"{RTSP_BASE_URL}{self.channel_id}"
         self.camera_id = camera_id
+        self.url = rtsp_url
         self.latest_frame = None
         self.frame_ready = False
         self.running = True
@@ -22,68 +27,73 @@ class CameraStream:
 
         self.connection_status = "Reconnecting"
         self.ai_status = "Inactive"
+        self.applied_config_version = None
+
+        self.consecutive_failures = 0
+        self.error_code = None
+        self.error_message = None
+
+        self._frame_times = deque()
+        self.measured_fps = None
+        self.inference_latency_ms = None
 
         # Start the background thread immediately
         self.thread = threading.Thread(target=self._update, daemon=True)
         self.thread.start()
 
-    def _update_status(self, connection_status=None, ai_status=None):
-        """Updates the local state and pushes changes to the FastAPI backend."""
-        changed = False
-        if connection_status and self.connection_status != connection_status:
-            self.connection_status = connection_status
-            changed = True
-        if ai_status and self.ai_status != ai_status:
-            self.ai_status = ai_status
-            changed = True
-
-        if changed:
-            url = f"{SYNC_URL}/{self.camera_id}/status"
-            headers = {"x-api-key": INTERNAL_API_KEY}
-            payload = {
-                "connection_status": self.connection_status,
-                "ai_status": self.ai_status,
-            }
-
-            # Fire-and-forget network request to prevent blocking the video frame read loop
-            def _send():
-                # Drop silently if backend is offline to prevent console spam
-                with contextlib.suppress(Exception):
-                    requests.patch(url, json=payload, headers=headers, timeout=2)
-
-            threading.Thread(target=_send, daemon=True).start()
-
     def pause(self):
         self.is_paused = True
-        self._update_status(ai_status="Paused")
+        self.ai_status = "Paused"
 
     def resume(self):
         print(f"[SYSTEM] Resuming AI ingestion for Channel {self.channel_id}...")
         self.is_paused = False
-        self._update_status(ai_status="Active")
+        self.ai_status = "Active"
+
+    def _record_failure(self, error_code, error_message):
+        self.consecutive_failures += 1
+        self.error_code = error_code
+        self.error_message = error_message
+        if self.consecutive_failures >= UNRESPONSIVE_AFTER_FAILURES:
+            self.connection_status = "Unresponsive"
+        else:
+            self.connection_status = "Reconnecting"
+        self.ai_status = "Inactive"
+
+    def _record_success(self):
+        self.consecutive_failures = 0
+        self.error_code = None
+        self.error_message = None
+
+    def _record_frame_decoded(self):
+        now = time.monotonic()
+        self._frame_times.append(now)
+        cutoff = now - _FPS_WINDOW_SECONDS
+        while self._frame_times and self._frame_times[0] < cutoff:
+            self._frame_times.popleft()
+        if len(self._frame_times) >= 2:
+            span = self._frame_times[-1] - self._frame_times[0]
+            self.measured_fps = (len(self._frame_times) - 1) / span if span > 0 else 0.0
 
     def _update(self):
         """This function runs infinitely in the background."""
         while self.running:
             # 1. Auto-Reconnect Loop
             if self.cap is None or not self.cap.isOpened():
-                self._update_status(
-                    connection_status="Reconnecting", ai_status="Inactive"
-                )
                 print(
                     f"[SYSTEM] Channel {self.channel_id} is offline. Attempting connection to {self.url}..."
                 )
                 self.cap = cv2.VideoCapture(self.url)
 
                 if not self.cap.isOpened():
-                    time.sleep(5)  # Wait 5 seconds before retrying
+                    self._record_failure("CONNECT_FAILED", "Could not open RTSP stream")
+                    time.sleep(RECONNECT_INTERVAL_SECONDS)
                     continue
                 else:
                     # Successfully connected
-                    current_ai_status = "Paused" if self.is_paused else "Active"
-                    self._update_status(
-                        connection_status="Connected", ai_status=current_ai_status
-                    )
+                    self._record_success()
+                    self.connection_status = "Connected"
+                    self.ai_status = "Paused" if self.is_paused else "Active"
 
             # 2. Pause Bypass
             if self.is_paused:
@@ -96,8 +106,8 @@ class CameraStream:
                     )
                     self.cap.release()
                     self.cap = None
-                    self._update_status(
-                        connection_status="Reconnecting", ai_status="Inactive"
+                    self._record_failure(
+                        "STREAM_DROPPED", "Stream dropped while paused"
                     )
                     time.sleep(1)
                 continue
@@ -107,15 +117,16 @@ class CameraStream:
             if success:
                 self.latest_frame = frame
                 self.frame_ready = True
+                self._record_frame_decoded()
+                self._record_success()
+                self.connection_status = "Connected"
             else:
                 print(
                     f"[SYSTEM] Stream dropped on Channel {self.channel_id}! Releasing socket..."
                 )
                 self.cap.release()
                 self.cap = None
-                self._update_status(
-                    connection_status="Reconnecting", ai_status="Inactive"
-                )
+                self._record_failure("STREAM_DROPPED", "Stream dropped during read")
                 time.sleep(1)
 
     def read(self):
@@ -125,10 +136,22 @@ class CameraStream:
             return self.latest_frame
         return None
 
+    def observed_state(self):
+        """Matches HeartbeatCameraReport (01_CONTRACTS.md §6.2)."""
+        return {
+            "camera_id": self.camera_id,
+            "connection_status": self.connection_status,
+            "ai_status": self.ai_status,
+            "applied_config_version": self.applied_config_version,
+            "measured_fps": self.measured_fps,
+            "inference_latency_ms": self.inference_latency_ms,
+            "error_code": self.error_code,
+            "error_message": self.error_message,
+        }
+
     def stop(self):
         """Safely shuts down the thread and connection."""
         self.running = False
-        self._update_status(connection_status="Disconnected", ai_status="Inactive")
         self.thread.join()
         if self.cap:
             self.cap.release()

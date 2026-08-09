@@ -1,22 +1,23 @@
-import datetime
 import os
-from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 
 import cv2
-import requests
-from config import (
-    ACCIDENT_CLASS_ID,
-    INTERNAL_API_KEY,
-    WEBHOOK_URL,
-)
+import outbox
+from config import ACCIDENT_CLASS_ID, SNAPSHOT_ROOT
+from events import build_event_payload, build_snapshot_key, new_source_event_id
 
 
 class AccidentManager:
-    """Handles alert logic, payload formatting, and backend communication."""
+    """Handles alert logic, payload formatting, and durable delivery.
 
-    def __init__(self):
-        # Limit to 5 concurrent webhook uploads to prevent network congestion
-        self.webhook_pool = ThreadPoolExecutor(max_workers=5)
+    _send_payload() runs synchronously on the calling (inference-loop)
+    thread. The original ThreadPoolExecutor existed to keep the network
+    POST off the video path; that POST no longer happens here — delivery
+    is outbox.py's job, off its own single bounded worker thread. What's
+    left is a local JPEG encode and an atomic file write, both fast enough
+    not to warrant a thread pool, and accidents are rare relative to the
+    per-frame inference loop.
+    """
 
     def process_detections(self, camera, results, frame):
         # 1. YOLO already filtered by CONFIDENCE_THRESHOLD, so we just check for the class ID
@@ -38,53 +39,44 @@ class AccidentManager:
         # 2. The Digital Blindfold: Instantly pause the camera to prevent backend spam
         camera.pause()
 
-        # 3. Fire the webhook in a background thread to prevent video lag
-        self.webhook_pool.submit(self._send_payload, camera, frame, highest_confidence)
+        # 3. Encode and enqueue — see the class docstring for why this is synchronous
+        self._send_payload(camera, frame, highest_confidence)
 
     def _send_payload(self, camera, frame, confidence):
-        try:
-            # 1. Generate timestamps and paths
-            timestamp_now = datetime.datetime.now()
-            iso_time = timestamp_now.isoformat()
-            safe_filename = (
-                f"cam{camera.camera_id}_{timestamp_now.strftime('%Y%m%d_%H%M%S')}.jpg"
-            )
+        """Persists the event to the durable outbox (D-012) and returns.
+        Inference stays paused regardless of outcome — resume is the
+        backend's decision, arriving via desired_ai_state on a future
+        heartbeat, never triggered from here."""
+        now = datetime.now(UTC)
+        source_event_id = new_source_event_id()
+        snapshot_key = build_snapshot_key(camera.camera_id, source_event_id, now=now)
 
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            snapshots_dir = os.path.join(script_dir, "snapshots")
-            os.makedirs(snapshots_dir, exist_ok=True)
-            local_path = os.path.join(snapshots_dir, safe_filename)
+        snapshot_path = SNAPSHOT_ROOT / snapshot_key
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        # cv2.imwrite picks its encoder from the file extension, so the temp
+        # name must still end in .jpg — a trailing .tmp makes it fail with
+        # "could not find a writer for the specified extension".
+        tmp_path = snapshot_path.with_name(snapshot_path.stem + ".tmp.jpg")
 
-            # 2. Save the image physically to the shared Edge Server hard drive
-            cv2.imwrite(local_path, frame)
-
-            # 3. Format the pure JSON payload exactly to the teammate's schema
-            data = {
-                "camera_id": camera.camera_id,
-                "detected_at": iso_time,
-                "snapshot_path": safe_filename,
-                "confidence_score": round(confidence, 4),
-            }
-
-            # 4. Transmit only the JSON data and the Security Key
-            headers = {"x-api-key": INTERNAL_API_KEY}
+        written = cv2.imwrite(str(tmp_path), frame)
+        if not written:
+            # A committed incident pointing at a half-written JPEG is
+            # unrecoverable evidence loss — drop the event instead. The
+            # camera resumes on its own at the next heartbeat, since no
+            # incident (and therefore no Paused desired state) was ever
+            # requested from the backend.
             print(
-                f"[SYSTEM] Transmitting JSON payload to backend for Channel {camera.channel_id}..."
+                f"[SYSTEM] Failed to encode snapshot for Channel {camera.channel_id}; "
+                "event dropped."
             )
-            response = requests.post(WEBHOOK_URL, json=data, headers=headers, timeout=5)
+            return
+        os.replace(tmp_path, snapshot_path)
 
-            if response.status_code in [200, 201]:
-                print("[SYSTEM] Webhook delivered successfully! Database updated.")
-            else:
-                print(f"[SYSTEM] Backend Error {response.status_code}: {response.text}")
-                print(
-                    f"[SYSTEM] Forcing Channel {camera.channel_id} to resume detection due to backend failure."
-                )
-                camera.resume()
-
-        except Exception as e:
-            print(f"[SYSTEM] Webhook network failure: {e}")
-            print(
-                f"[SYSTEM] Forcing Channel {camera.channel_id} to resume detection due to network failure."
-            )
-            camera.resume()
+        payload = build_event_payload(
+            camera.camera_id, source_event_id, snapshot_key, confidence, now=now
+        )
+        outbox.enqueue(payload)
+        print(
+            f"[SYSTEM] Event {source_event_id} queued for delivery "
+            f"(Channel {camera.channel_id})."
+        )
