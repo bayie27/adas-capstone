@@ -1,19 +1,28 @@
-import asyncio
 import csv
 import io
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, func, or_, select
 
-from app.api.dependencies import get_current_user, get_realtime_manager
+from app.api.dependencies import get_current_user, get_realtime_manager, get_scheduler
+from app.core.config import settings
 from app.core.db import get_session
-from app.models import AIStatus, Camera, DetectionLog, DetectionStatus, User
+from app.core.errors import AppHTTPException
+from app.models import AuditResult, Camera, DetectionLog, DetectionStatus, User
 from app.schemas import DetectionLogListResponse, DetectionLogRead
+from app.services import audit
+from app.services.cameras import apply_desired_state, schedule_pending_cooldowns
 from app.services.events import alert_status_update_event, camera_status_update_event
 from app.services.filters import validate_common_filters
 from app.services.formatting import format_user_name
+from app.services.incidents import (
+    ConflictState,
+    IncidentNotFound,
+    dismiss_transition,
+    transition,
+)
 from app.services.realtime import RealtimeManager
 
 router = APIRouter(
@@ -31,38 +40,24 @@ def _to_detection_log_read(log: DetectionLog) -> DetectionLogRead:
     return log_read
 
 
-def _broadcast_camera_status(camera: Camera, manager: RealtimeManager) -> None:
-    """Broadcast a CAMERA_STATUS_UPDATE payload to all connected FE clients.
-    Synchronous — RealtimeManager.broadcast() never awaits a network send."""
-    manager.broadcast(camera_status_update_event(camera))
+def _conflict_response(exc: ConflictState) -> AppHTTPException:
+    """01_CONTRACTS.md §5.3 — the exact 409 body the frontend's
+    already-handled modal depends on."""
+    return AppHTTPException(
+        409,
+        "This incident was already handled by another operator.",
+        code="CONFLICT_STATE",
+        extra={
+            "current_status": exc.current_status,
+            "handled_action": exc.handled_action,
+            "handled_by": exc.handled_by,
+            "handled_at": exc.handled_at.isoformat() if exc.handled_at else None,
+        },
+    )
 
 
-async def _resume_camera_after_cooldown(
-    camera_id: int, manager: RealtimeManager
-) -> None:
-    """
-    Background task: wait 60 seconds then set ai_status = Active in DB
-    and broadcast the update to FE. Used for the Unverified → Dismissed
-    false-positive cooldown.
-    """
-    await asyncio.sleep(60)
-
-    # Import here to avoid circular imports at module level
-
-    # We need a fresh DB session since this runs outside the request lifecycle
-    from sqlmodel import Session as SyncSession
-
-    from app.core.db import engine
-
-    with SyncSession(engine) as session:
-        camera = session.get(Camera, camera_id)
-        if camera and camera.is_active and camera.is_enabled:
-            camera.ai_status = AIStatus.ACTIVE.value
-            session.add(camera)
-            session.commit()
-            session.refresh(camera)
-
-            _broadcast_camera_status(camera, manager)
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
 
 
 def _apply_alert_filters(
@@ -294,29 +289,40 @@ def get_alert_details(log_id: int, session: Session = Depends(get_session)):
 
 
 @router.post("/{log_id}/confirm", response_model=DetectionLogRead)
-async def confirm_alert(
+def confirm_alert(
     log_id: int,
+    request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     manager: RealtimeManager = Depends(get_realtime_manager),
 ):
-    """
-    Operator confirms an incident as a true positive.
-    Camera is already Paused in DB from when the alert arrived (/api/internal/alert).
-    This just transitions the detection log to Ongoing.
-    """
-    log = session.get(DetectionLog, log_id)
-    if not log or log.detection_status != DetectionStatus.UNVERIFIED:
-        raise HTTPException(
-            status_code=400, detail="Only 'Unverified' alerts can be confirmed."
+    """Operator confirms an incident as a true positive. The camera's desired
+    state is unchanged (§10.2: "Confirm | Paused (unchanged) | incident |
+    —") — it was already Paused/incident when the alert arrived."""
+    try:
+        result = transition(
+            session,
+            log_id=log_id,
+            expected=DetectionStatus.UNVERIFIED,
+            new=DetectionStatus.ONGOING,
+            actor=current_user,
         )
+    except IncidentNotFound as exc:
+        raise HTTPException(status_code=404, detail="Incident log not found") from exc
+    except ConflictState as exc:
+        raise _conflict_response(exc) from exc
 
-    log.detection_status = DetectionStatus.ONGOING
-    log.verified_by_id = current_user.user_id
-    log.verified_by = current_user
-    log.verified_at = datetime.now(UTC)
-
-    session.add(log)
+    log = result.log
+    audit.record(
+        session,
+        action=result.action.value,
+        result=AuditResult.SUCCESS,
+        actor=current_user,
+        target_type="incident",
+        target_ref=str(log_id),
+        detail={"camera_id": log.camera_id},
+        source_ip=_client_ip(request),
+    )
     session.commit()
     session.refresh(log)
 
@@ -324,7 +330,7 @@ async def confirm_alert(
     manager.broadcast(
         alert_status_update_event(
             log,
-            action="ALERT_CONFIRM",
+            action=result.action.value,
             camera_name=log.camera.camera_name if log.camera else None,
         )
     )
@@ -333,117 +339,141 @@ async def confirm_alert(
 
 
 @router.post("/{log_id}/dismiss", response_model=DetectionLogRead)
-async def dismiss_alert(
+def dismiss_alert(
     log_id: int,
+    request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     manager: RealtimeManager = Depends(get_realtime_manager),
+    scheduler=Depends(get_scheduler),
 ):
+    """Operator dismisses an alert as a false positive (Unverified) or
+    corrects a human error on a confirmed incident (Ongoing).
+
+    - Unverified -> Dismissed: camera gets a 60-second cooldown before
+      resuming (D-002/D-004), enforced entirely backend-side.
+    - Ongoing -> Dismissed: camera resumes immediately (human correction).
     """
-    Operator dismisses an alert as a false positive (Unverified) or corrects
-    a human error on a confirmed incident (Ongoing).
+    now = datetime.now(UTC)
+    try:
+        result = dismiss_transition(session, log_id=log_id, actor=current_user, now=now)
+    except IncidentNotFound as exc:
+        raise HTTPException(status_code=404, detail="Incident log not found") from exc
+    except ConflictState as exc:
+        raise _conflict_response(exc) from exc
 
-    - Unverified → Dismissed: camera gets a 60-second cooldown before resuming.
-    - Ongoing → Dismissed: camera resumes immediately (human error correction).
-    """
-    log = session.get(DetectionLog, log_id)
-    if not log or log.detection_status not in (
-        DetectionStatus.UNVERIFIED,
-        DetectionStatus.ONGOING,
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="Only 'Unverified' or 'Ongoing' alerts can be dismissed.",
-        )
-
-    was_unverified = log.detection_status == DetectionStatus.UNVERIFIED
-
-    log.detection_status = DetectionStatus.DISMISSED
-    log.closed_by_id = current_user.user_id
-    log.closed_by = current_user
-    log.closed_at = datetime.now(UTC)
-
-    session.add(log)
+    log = result.log
+    was_unverified = result.expected == DetectionStatus.UNVERIFIED
 
     camera = session.get(Camera, log.camera_id)
-
-    if was_unverified:
-        # False positive: keep camera Paused during the 60s cooldown window.
-        # The background task will set it back to Active after the cooldown.
-        # Camera is already Paused from when the alert arrived; no DB change needed here.
-        session.commit()
-        session.refresh(log)
-
-        if camera and camera.is_active and camera.is_enabled and camera.camera_id:
-            asyncio.create_task(
-                _resume_camera_after_cooldown(camera.camera_id, manager)
+    camera_changed = False
+    if camera is not None:
+        if was_unverified:
+            camera.cooldown_until = now + timedelta(
+                seconds=settings.DISMISS_COOLDOWN_SECONDS
             )
+        camera_changed = apply_desired_state(camera, has_open_incident=False, now=now)
+        session.add(camera)
 
-    else:
-        # Human error correction on an Ongoing incident: resume immediately.
-        if camera and camera.is_active and camera.is_enabled:
-            camera.ai_status = AIStatus.ACTIVE.value
-            session.add(camera)
-
-        session.commit()
-        session.refresh(log)
-
-        if camera and camera.is_active and camera.is_enabled:
-            session.refresh(camera)
-            _broadcast_camera_status(camera, manager)
-
-    action = "ALERT_DISMISS" if was_unverified else "ALERT_CORRECTION"
-    manager.broadcast(
-        alert_status_update_event(
-            log,
-            action=action,
-            camera_name=camera.camera_name if camera else None,
-        )
+    audit.record(
+        session,
+        action=result.action.value,
+        result=AuditResult.SUCCESS,
+        actor=current_user,
+        target_type="incident",
+        target_ref=str(log_id),
+        detail={"camera_id": log.camera_id},
+        source_ip=_client_ip(request),
     )
+    session.commit()
+    session.refresh(log)
+    if camera is not None:
+        session.refresh(camera)
+
+    # Broadcast ordering is a contract (05_PKG_incidents_cameras.md Step 3):
+    # from Unverified the alert event leads (the cooldown is a side effect
+    # of it); from Ongoing the camera resuming leads.
+    camera_name = camera.camera_name if camera is not None else None
+    if was_unverified:
+        manager.broadcast(
+            alert_status_update_event(
+                log, action=result.action.value, camera_name=camera_name
+            )
+        )
+        if camera_changed and camera is not None:
+            manager.broadcast(camera_status_update_event(camera))
+        if (
+            scheduler is not None
+            and camera is not None
+            and camera.cooldown_until is not None
+        ):
+            schedule_pending_cooldowns(scheduler, session.get_bind(), [camera], manager)
+    else:
+        if camera_changed and camera is not None:
+            manager.broadcast(camera_status_update_event(camera))
+        manager.broadcast(
+            alert_status_update_event(
+                log, action=result.action.value, camera_name=camera_name
+            )
+        )
 
     return _to_detection_log_read(log)
 
 
 @router.post("/{log_id}/resolve", response_model=DetectionLogRead)
-async def resolve_alert(
+def resolve_alert(
     log_id: int,
+    request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     manager: RealtimeManager = Depends(get_realtime_manager),
 ):
-    """
-    Operator marks the scene as cleared. Camera resumes AI detection immediately.
-    """
-    log = session.get(DetectionLog, log_id)
-    if not log or log.detection_status != DetectionStatus.ONGOING:
-        raise HTTPException(
-            status_code=400, detail="Only 'Ongoing' alerts can be resolved."
+    """Operator marks the scene as cleared. Camera resumes AI detection
+    immediately (§10.2)."""
+    now = datetime.now(UTC)
+    try:
+        result = transition(
+            session,
+            log_id=log_id,
+            expected=DetectionStatus.ONGOING,
+            new=DetectionStatus.RESOLVED,
+            actor=current_user,
+            now=now,
         )
+    except IncidentNotFound as exc:
+        raise HTTPException(status_code=404, detail="Incident log not found") from exc
+    except ConflictState as exc:
+        raise _conflict_response(exc) from exc
 
-    log.detection_status = DetectionStatus.RESOLVED
-    log.closed_by_id = current_user.user_id
-    log.closed_by = current_user
-    log.closed_at = datetime.now(UTC)
-
-    session.add(log)
-
+    log = result.log
     camera = session.get(Camera, log.camera_id)
-    if camera and camera.is_active and camera.is_enabled:
-        camera.ai_status = AIStatus.ACTIVE.value
+    camera_changed = False
+    if camera is not None:
+        camera_changed = apply_desired_state(camera, has_open_incident=False, now=now)
         session.add(camera)
 
+    audit.record(
+        session,
+        action=result.action.value,
+        result=AuditResult.SUCCESS,
+        actor=current_user,
+        target_type="incident",
+        target_ref=str(log_id),
+        detail={"camera_id": log.camera_id},
+        source_ip=_client_ip(request),
+    )
     session.commit()
     session.refresh(log)
-
-    if camera and camera.is_active and camera.is_enabled:
+    if camera is not None:
         session.refresh(camera)
-        _broadcast_camera_status(camera, manager)
 
+    if camera_changed and camera is not None:
+        manager.broadcast(camera_status_update_event(camera))
     manager.broadcast(
         alert_status_update_event(
             log,
-            action="ALERT_RESOLVE",
-            camera_name=camera.camera_name if camera else None,
+            action=result.action.value,
+            camera_name=camera.camera_name if camera is not None else None,
         )
     )
 
