@@ -57,7 +57,7 @@ def test_receive_ai_alert_creates_log_pauses_camera_and_broadcasts(
         select(DetectionLog).where(DetectionLog.camera_id == camera.camera_id)
     ).all()
     assert len(logs) == 1
-    assert logs[0].snapshot_path == "snapshots/ingress.jpg"
+    assert logs[0].snapshot_key == "snapshots/ingress.jpg"
 
     assert [payload["type"] for payload in payloads] == [
         "NEW_DETECTION",

@@ -4,13 +4,14 @@ Uses an in-memory SQLite database so tests are fully isolated
 and never touch the real adas.db.
 """
 
+import uuid
 from datetime import UTC, datetime
 
 import pytest
-from app.core.config import settings
-from app.core.db import get_session
+from app.core.config import Settings, settings
+from app.core.db import get_engine, get_session
 from app.core.security import get_password_hash
-from app.main import app
+from app.main import create_app
 from app.models import (
     AIStatus,
     Camera,
@@ -42,12 +43,34 @@ def session_fixture():
     SQLModel.metadata.drop_all(engine)
 
 
+def _build_test_settings(tmp_path) -> Settings:
+    """A disposable Settings instance, decoupled from the real .env, whose
+    engine (built inside create_app()) never touches the repo-root adas.db —
+    that engine is unused anyway once get_session/get_engine are overridden
+    below, but lifespan still runs init_db() against it on TestClient
+    startup, and that must land somewhere harmless."""
+    return Settings(
+        _env_file=None,
+        SECRET_KEY="test-secret-key-not-for-production-use",
+        INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+        DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+        DATABASE_URL=f"sqlite:///{tmp_path / 'lifespan-only.db'}",
+        SCHEDULER_ENABLED=False,
+    )
+
+
 @pytest.fixture(name="client")
-def client_fixture(session: Session):
+def client_fixture(session: Session, tmp_path):
+    app = create_app(_build_test_settings(tmp_path))
+
     def get_session_override():
         yield session
 
+    def get_engine_override():
+        return session.get_bind()
+
     app.dependency_overrides[get_session] = get_session_override
+    app.dependency_overrides[get_engine] = get_engine_override
     with TestClient(app) as client:
         yield client
     app.dependency_overrides.clear()
@@ -124,9 +147,10 @@ def make_detection(
     log = DetectionLog(
         camera_id=camera.camera_id,
         detected_at=datetime.now(UTC),
-        snapshot_path="cam1_20260426_120000.jpg",
+        snapshot_key="cam1_20260426_120000.jpg",
         confidence_score=confidence,
         detection_status=status.value,
+        source_event_id=str(uuid.uuid4()),
     )
     session.add(log)
     session.commit()

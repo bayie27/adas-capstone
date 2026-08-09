@@ -1,19 +1,14 @@
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, col, select
 
 from app.api.dependencies import verify_internal_api_key
 from app.core.db import get_session
-from app.models import (
-    AIStatus,
-    Camera,
-    CameraRead,
-    CameraStatusUpdate,
-    DetectionLog,
-    DetectionLogCreate,
-    DetectionStatus,
-)
+from app.core.types import parse_utc_query_datetime
+from app.models import AIStatus, Camera, DetectionLog, DetectionStatus
+from app.schemas import CameraRead, CameraStatusUpdate, DetectionLogCreate
 from app.ws_manager import manager
 
 logger = logging.getLogger("uvicorn.error")
@@ -41,7 +36,19 @@ async def receive_ai_alert(
         camera.ai_status = AIStatus.PAUSED.value
         session.add(camera)
 
-        db_alert = DetectionLog(**alert_in.model_dump())
+        # v1 legacy payload — 01_CONTRACTS.md §6.1. No source_event_id is
+        # supplied, so the backend generates one; `snapshot_path` (the wire
+        # field) becomes `snapshot_key` (the DB column). The AI engine
+        # currently sends naive local time — assumed UTC, same policy as
+        # query-parameter datetimes (§1.1), so the raw wall-clock value
+        # written to the DB is unchanged from today, just now tz-aware.
+        db_alert = DetectionLog(
+            camera_id=alert_in.camera_id,
+            detected_at=parse_utc_query_datetime(alert_in.detected_at),
+            snapshot_key=alert_in.snapshot_path,
+            confidence_score=alert_in.confidence_score,
+            source_event_id=str(uuid.uuid4()),
+        )
         session.add(db_alert)
         session.commit()
         session.refresh(db_alert)
@@ -53,7 +60,7 @@ async def receive_ai_alert(
             "log_id": db_alert.log_id,
             "camera_id": db_alert.camera_id,
             "detected_at": db_alert.detected_at.isoformat(),
-            "snapshot_path": db_alert.snapshot_path,
+            "snapshot_key": db_alert.snapshot_key,
             "confidence_score": db_alert.confidence_score,
             "detection_status": db_alert.detection_status,
         }

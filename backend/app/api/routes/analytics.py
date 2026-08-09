@@ -22,13 +22,15 @@ import csv
 import io
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, func, select
 
 from app.api.dependencies import get_current_user
 from app.core.db import get_session
-from app.models import Camera, DetectionLog, DetectionStatus, User
+from app.models import Camera, DetectionLog, DetectionStatus
+from app.services.filters import validate_common_filters
+from app.services.formatting import format_user_name
 
 router = APIRouter(
     prefix="/api/analytics",
@@ -48,25 +50,6 @@ _DISMISSED_STATUSES = [DetectionStatus.DISMISSED.value]
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
-
-
-def _validate_common_filters(
-    *,
-    start_date: datetime | None,
-    end_date: datetime | None,
-    camera_ids: list[int] | None,
-) -> None:
-    """Raise 422 for invalid shared analytics filters."""
-    if start_date and end_date and start_date > end_date:
-        raise HTTPException(
-            status_code=422,
-            detail="Invalid date range: `start_date` must be earlier than or equal to `end_date`.",
-        )
-    if camera_ids and any(camera_id <= 0 for camera_id in camera_ids):
-        raise HTTPException(
-            status_code=422,
-            detail="Invalid `camera_id` value(s): values must be positive integers.",
-        )
 
 
 def _apply_log_filters(query, *, start_date, end_date, camera_ids):
@@ -95,13 +78,6 @@ def _compute_precision(confirmed: int, dismissed: int) -> float | None:
 def _format_pct(value: float | None) -> str:
     """Format a 0-1 float as a percentage string for CSV export, or 'N/A'."""
     return f"{value * 100:.1f}%" if value is not None else "N/A"
-
-
-def _format_user_name(user: User | None) -> str | None:
-    if not user:
-        return None
-    full_name = f"{user.first_name} {user.last_name}".strip()
-    return full_name or user.username
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +117,7 @@ def get_dashboard_analytics(
     This is a pattern chart: if you filter to a 7-day window you still see which
     hours of the day are most dangerous, not a timeline of the last 7 days.
     """
-    _validate_common_filters(
+    validate_common_filters(
         start_date=start_date,
         end_date=end_date,
         camera_ids=camera_id,
@@ -245,7 +221,7 @@ def export_dashboard_csv(
     Export confirmed accident logs (Ongoing + Resolved) matching the
     active dashboard filters as a downloadable CSV.
     """
-    _validate_common_filters(
+    validate_common_filters(
         start_date=start_date,
         end_date=end_date,
         camera_ids=camera_id,
@@ -295,10 +271,10 @@ def export_dashboard_csv(
                 log.detection_status,
                 _format_pct(log.confidence_score),
                 log.verified_by_id or "N/A",
-                _format_user_name(log.verified_by) or "N/A",
+                format_user_name(log.verified_by) or "N/A",
                 log.verified_at.isoformat() if log.verified_at else "N/A",
                 log.closed_by_id or "N/A",
-                _format_user_name(log.closed_by) or "N/A",
+                format_user_name(log.closed_by) or "N/A",
                 log.closed_at.isoformat() if log.closed_at else "N/A",
             ]
         )
@@ -399,7 +375,7 @@ def get_ai_performance(
     name via `?search=`. Only cameras that have at least one detection in the
     filtered window appear in the table.
     """
-    _validate_common_filters(
+    validate_common_filters(
         start_date=start_date,
         end_date=end_date,
         camera_ids=camera_id,

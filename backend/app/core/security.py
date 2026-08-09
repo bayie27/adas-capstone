@@ -5,7 +5,10 @@ from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Argon2id per 01_CONTRACTS.md §3.1 / D-005 password handling. No bcrypt->argon2
+# migration path is needed — the dev DB is disposable and gets reset with this
+# package's schema change (be_decisions_review.md, Password Handling).
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
