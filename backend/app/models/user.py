@@ -6,6 +6,7 @@ from sqlalchemy import CheckConstraint, Column, Index, String
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.core.types import UtcDateTime
+from app.core.validation import reject_null_bytes
 from app.models.enums import UserRole
 
 if TYPE_CHECKING:
@@ -22,8 +23,8 @@ class UserBase(SQLModel):
     @classmethod
     def strip_whitespace(cls, v: str) -> str:
         if isinstance(v, str):
-            return v.strip()
-        return v
+            v = v.strip()
+        return reject_null_bytes(v)
 
 
 class User(UserBase, table=True):

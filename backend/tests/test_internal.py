@@ -133,6 +133,16 @@ def test_internal_routes_require_valid_api_key(client: TestClient):
     assert resp.json()["detail"] == "Invalid Internal API Key"
 
 
+def test_internal_routes_reject_missing_api_key(client: TestClient):
+    """Edge case 8.13 — an absent x-api-key header must 401, not 422 (which
+    is what FastAPI would produce if the dependency declared the header as
+    required instead of optional-with-a-None-check)."""
+    resp = client.get("/api/internal/cameras")
+
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Invalid Internal API Key"
+
+
 def test_get_enabled_cameras_returns_only_enabled_and_active(
     client: TestClient,
     session: Session,

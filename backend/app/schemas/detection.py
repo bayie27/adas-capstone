@@ -1,7 +1,9 @@
 from datetime import datetime
 
+from pydantic import field_validator
 from sqlmodel import Field, SQLModel
 
+from app.core.validation import reject_null_bytes
 from app.models import DetectionLogBase
 
 
@@ -17,6 +19,11 @@ class DetectionLogCreate(SQLModel):
     detected_at: datetime
     snapshot_path: str = Field(min_length=1)
     confidence_score: float = Field(ge=0.0, le=1.0)
+
+    @field_validator("snapshot_path")
+    @classmethod
+    def snapshot_path_no_null_bytes(cls, v: str) -> str:
+        return reject_null_bytes(v)
 
 
 class DetectionLogRead(DetectionLogBase):
