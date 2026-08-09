@@ -16,6 +16,17 @@ from app.schemas.detection import (
     DetectionLogListResponse,
     DetectionLogRead,
 )
+from app.schemas.events import (
+    AlertStatusUpdateData,
+    CameraStatusUpdateData,
+    ConnectionReadyData,
+    EventEnvelope,
+    EventType,
+    IncidentPayload,
+    ReAlarmData,
+    SnoozeActivatedData,
+    make_event,
+)
 from app.schemas.health import SysHealthHourlyRead, SysHealthRawRead
 from app.schemas.user import (
     UserAdminUpdate,
@@ -28,6 +39,7 @@ from app.schemas.user import (
 )
 
 __all__ = [
+    "AlertStatusUpdateData",
     "ApiError",
     "AuditLogListResponse",
     "AuditLogRead",
@@ -35,12 +47,20 @@ __all__ = [
     "CameraListResponse",
     "CameraRead",
     "CameraStatusUpdate",
+    "CameraStatusUpdateData",
     "CameraUpdate",
+    "ConnectionReadyData",
     "DetectionLogCreate",
     "DetectionLogListResponse",
     "DetectionLogRead",
     "default_error_code",
+    "EventEnvelope",
+    "EventType",
+    "IncidentPayload",
     "LoginResponse",
+    "make_event",
+    "ReAlarmData",
+    "SnoozeActivatedData",
     "SysHealthHourlyRead",
     "SysHealthRawRead",
     "UserAdminUpdate",
