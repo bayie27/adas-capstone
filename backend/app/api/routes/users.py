@@ -17,6 +17,7 @@ from app.schemas import (
     UserResetPassword,
     UserUpdatePassword,
 )
+from app.services.sessions import revoke_all_for_user
 
 router = APIRouter(
     prefix="/api/users",
@@ -96,6 +97,9 @@ def change_my_password(
     current_user.password_hash = get_password_hash(passwords_in.new_password)
     current_user.password_changed_at = datetime.now(UTC)
     session.add(current_user)
+    # D-006 — a self password change revokes every session for this user,
+    # including the one making this request. The user must log in again.
+    revoke_all_for_user(session, current_user.user_id, "password_change")
     session.commit()
 
 
@@ -202,8 +206,23 @@ def update_user(
                 detail="Cannot deactivate the last active Administrator.",
             )
 
+    # D-006 revocation cascade — computed from the *pre-mutation* target
+    # before setattr below changes it. Username/first_name/last_name never
+    # revoke: identity is user_id, so a rename invalidates nothing.
+    role_changed = "role" in update_data and update_data["role"] != target.role
+    being_deactivated = (
+        "is_active" in update_data
+        and update_data["is_active"] is False
+        and target.is_active is True
+    )
+
     for key, value in update_data.items():
         setattr(target, key, value)
+
+    if being_deactivated:
+        revoke_all_for_user(session, target.user_id, "account_disabled")
+    elif role_changed:
+        revoke_all_for_user(session, target.user_id, "role_change")
 
     try:
         session.add(target)
@@ -234,6 +253,7 @@ def reset_user_password(
     target.password_hash = get_password_hash(passwords_in.new_password)
     target.password_changed_at = datetime.now(UTC)
     session.add(target)
+    revoke_all_for_user(session, target.user_id, "password_reset")
     session.commit()
 
 
@@ -267,4 +287,5 @@ def delete_user(
 
     target.is_active = False
     session.add(target)
+    revoke_all_for_user(session, target.user_id, "account_disabled")
     session.commit()
