@@ -13,6 +13,7 @@ import app.api.routes.alerts as alert_routes
 import app.core.db as db_module
 import pytest
 from app.models import AIStatus, DetectionLog, DetectionStatus
+from app.schemas.events import EventEnvelope
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
@@ -29,6 +30,20 @@ def operator_with_headers(
     operator = make_operator(session, username=username, password=password)
     headers = auth_headers(client, username, password)
     return operator, headers
+
+
+def _capture_broadcasts(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> list[dict]:
+    """Replaces RealtimeManager.broadcast on this test's app instance with a
+    recorder, returning the envelopes (as plain dicts) in emission order."""
+    payloads: list[dict] = []
+
+    def fake_broadcast(event: EventEnvelope, *, roles=None) -> None:
+        payloads.append(event.model_dump(mode="json"))
+
+    monkeypatch.setattr(client.app.state.realtime_manager, "broadcast", fake_broadcast)
+    return payloads
 
 
 def make_alert(
@@ -602,12 +617,7 @@ class TestAlertCameraStatusSideEffects:
         session: Session,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        payloads: list[dict] = []
-
-        async def fake_broadcast(payload: dict) -> None:
-            payloads.append(payload)
-
-        monkeypatch.setattr(alert_routes.manager, "broadcast_alert", fake_broadcast)
+        payloads = _capture_broadcasts(client, monkeypatch)
 
         operator, headers = operator_with_headers(client, session, username="dismisso")
         camera = make_camera(
@@ -629,19 +639,26 @@ class TestAlertCameraStatusSideEffects:
         assert resp.status_code == 200
         session.refresh(camera)
         assert camera.ai_status == AIStatus.ACTIVE.value
-        assert payloads == [
-            {
-                "type": "CAMERA_STATUS_UPDATE",
-                "camera_id": camera.camera_id,
-                "connection_status": camera.connection_status,
-                "ai_status": AIStatus.ACTIVE.value,
-            },
-            {
-                "type": "ALERT_STATUS_UPDATE",
-                "log_id": log.log_id,
-                "detection_status": DetectionStatus.DISMISSED.value,
-            },
+        assert [p["type"] for p in payloads] == [
+            "CAMERA_STATUS_UPDATE",
+            "ALERT_STATUS_UPDATE",
         ]
+        assert payloads[0]["data"] == {
+            "camera_id": camera.camera_id,
+            "camera_name": camera.camera_name,
+            "is_enabled": True,
+            "desired_ai_state": "Inactive",
+            "desired_state_reason": None,
+            "connection_status": camera.connection_status,
+            "ai_status": AIStatus.ACTIVE.value,
+            "cooldown_until": None,
+            "config_version": 1,
+        }
+        assert payloads[1]["data"]["log_id"] == log.log_id
+        assert (
+            payloads[1]["data"]["detection_status"] == DetectionStatus.DISMISSED.value
+        )
+        assert payloads[1]["data"]["action"] == "ALERT_CORRECTION"
 
     def test_dismiss_ongoing_does_not_reactivate_disabled_camera(
         self,
@@ -649,12 +666,7 @@ class TestAlertCameraStatusSideEffects:
         session: Session,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        payloads: list[dict] = []
-
-        async def fake_broadcast(payload: dict) -> None:
-            payloads.append(payload)
-
-        monkeypatch.setattr(alert_routes.manager, "broadcast_alert", fake_broadcast)
+        payloads = _capture_broadcasts(client, monkeypatch)
 
         operator, headers = operator_with_headers(
             client, session, username="dismissdisabled"
@@ -679,13 +691,12 @@ class TestAlertCameraStatusSideEffects:
         assert resp.status_code == 200
         session.refresh(camera)
         assert camera.ai_status == AIStatus.PAUSED.value
-        assert payloads == [
-            {
-                "type": "ALERT_STATUS_UPDATE",
-                "log_id": log.log_id,
-                "detection_status": DetectionStatus.DISMISSED.value,
-            },
-        ]
+        assert [p["type"] for p in payloads] == ["ALERT_STATUS_UPDATE"]
+        assert payloads[0]["data"]["log_id"] == log.log_id
+        assert (
+            payloads[0]["data"]["detection_status"] == DetectionStatus.DISMISSED.value
+        )
+        assert payloads[0]["data"]["action"] == "ALERT_CORRECTION"
 
     def test_resolve_ongoing_reactivates_enabled_camera_and_broadcasts(
         self,
@@ -693,12 +704,7 @@ class TestAlertCameraStatusSideEffects:
         session: Session,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        payloads: list[dict] = []
-
-        async def fake_broadcast(payload: dict) -> None:
-            payloads.append(payload)
-
-        monkeypatch.setattr(alert_routes.manager, "broadcast_alert", fake_broadcast)
+        payloads = _capture_broadcasts(client, monkeypatch)
 
         operator, headers = operator_with_headers(
             client, session, username="resolveactive"
@@ -722,19 +728,24 @@ class TestAlertCameraStatusSideEffects:
         assert resp.status_code == 200
         session.refresh(camera)
         assert camera.ai_status == AIStatus.ACTIVE.value
-        assert payloads == [
-            {
-                "type": "CAMERA_STATUS_UPDATE",
-                "camera_id": camera.camera_id,
-                "connection_status": camera.connection_status,
-                "ai_status": AIStatus.ACTIVE.value,
-            },
-            {
-                "type": "ALERT_STATUS_UPDATE",
-                "log_id": log.log_id,
-                "detection_status": DetectionStatus.RESOLVED.value,
-            },
+        assert [p["type"] for p in payloads] == [
+            "CAMERA_STATUS_UPDATE",
+            "ALERT_STATUS_UPDATE",
         ]
+        assert payloads[0]["data"] == {
+            "camera_id": camera.camera_id,
+            "camera_name": camera.camera_name,
+            "is_enabled": True,
+            "desired_ai_state": "Inactive",
+            "desired_state_reason": None,
+            "connection_status": camera.connection_status,
+            "ai_status": AIStatus.ACTIVE.value,
+            "cooldown_until": None,
+            "config_version": 1,
+        }
+        assert payloads[1]["data"]["log_id"] == log.log_id
+        assert payloads[1]["data"]["detection_status"] == DetectionStatus.RESOLVED.value
+        assert payloads[1]["data"]["action"] == "ALERT_RESOLVE"
 
     def test_resolve_ongoing_does_not_reactivate_disabled_camera(
         self,
@@ -742,12 +753,7 @@ class TestAlertCameraStatusSideEffects:
         session: Session,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        payloads: list[dict] = []
-
-        async def fake_broadcast(payload: dict) -> None:
-            payloads.append(payload)
-
-        monkeypatch.setattr(alert_routes.manager, "broadcast_alert", fake_broadcast)
+        payloads = _capture_broadcasts(client, monkeypatch)
 
         operator, headers = operator_with_headers(
             client, session, username="resolvedisabled"
@@ -772,13 +778,10 @@ class TestAlertCameraStatusSideEffects:
         assert resp.status_code == 200
         session.refresh(camera)
         assert camera.ai_status == AIStatus.PAUSED.value
-        assert payloads == [
-            {
-                "type": "ALERT_STATUS_UPDATE",
-                "log_id": log.log_id,
-                "detection_status": DetectionStatus.RESOLVED.value,
-            },
-        ]
+        assert [p["type"] for p in payloads] == ["ALERT_STATUS_UPDATE"]
+        assert payloads[0]["data"]["log_id"] == log.log_id
+        assert payloads[0]["data"]["detection_status"] == DetectionStatus.RESOLVED.value
+        assert payloads[0]["data"]["action"] == "ALERT_RESOLVE"
 
     def test_resume_camera_after_cooldown_reactivates_and_broadcasts(
         self,
@@ -791,7 +794,7 @@ class TestAlertCameraStatusSideEffects:
         async def fake_sleep(seconds: int) -> None:
             slept.append(seconds)
 
-        async def fake_broadcast(camera) -> None:
+        def fake_broadcast(camera, manager) -> None:
             broadcasted.append((camera.camera_id, camera.ai_status))
 
         monkeypatch.setattr(db_module, "engine", session.get_bind())
@@ -805,7 +808,7 @@ class TestAlertCameraStatusSideEffects:
             ai_status=AIStatus.PAUSED.value,
         )
 
-        asyncio.run(alert_routes._resume_camera_after_cooldown(camera.camera_id))
+        asyncio.run(alert_routes._resume_camera_after_cooldown(camera.camera_id, None))
 
         session.refresh(camera)
         assert slept == [60]
@@ -832,7 +835,7 @@ class TestAlertCameraStatusSideEffects:
         async def fake_sleep(seconds: int) -> None:
             slept.append(seconds)
 
-        async def fake_broadcast(camera) -> None:
+        def fake_broadcast(camera, manager) -> None:
             broadcasted.append((camera.camera_id, camera.ai_status))
 
         monkeypatch.setattr(db_module, "engine", session.get_bind())
@@ -848,7 +851,7 @@ class TestAlertCameraStatusSideEffects:
             is_active=is_active,
         )
 
-        asyncio.run(alert_routes._resume_camera_after_cooldown(camera.camera_id))
+        asyncio.run(alert_routes._resume_camera_after_cooldown(camera.camera_id, None))
 
         session.refresh(camera)
         assert slept == [60]
