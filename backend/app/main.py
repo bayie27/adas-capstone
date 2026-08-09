@@ -16,6 +16,7 @@ from app.api.routes import alerts, analytics, auth, cameras, internal, system, u
 from app.core.config import Settings
 from app.core.config import settings as default_settings
 from app.core.db import create_db_engine, init_db
+from app.core.errors import AppHTTPException
 from app.core.logging import configure_logging, request_id_ctx
 from app.core.scheduler import add_job, create_scheduler
 from app.models import AIStatus, Camera, ConnectionStatus
@@ -117,12 +118,13 @@ async def request_id_middleware(request: Request, call_next):
 
 
 async def http_exception_handler(request: Request, exc: HTTPException):
+    code = getattr(exc, "code", None) or default_error_code(exc.status_code)
+    content = ApiError(detail=str(exc.detail), code=code).model_dump()
+    if isinstance(exc, AppHTTPException):
+        content.update(exc.extra)
     return JSONResponse(
         status_code=exc.status_code,
-        content=ApiError(
-            detail=str(exc.detail),
-            code=default_error_code(exc.status_code),
-        ).model_dump(),
+        content=content,
         headers=exc.headers,
     )
 
