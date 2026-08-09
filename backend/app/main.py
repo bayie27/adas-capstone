@@ -32,6 +32,7 @@ from app.api.routes import (
     maintenance,
     settings,
     system,
+    system_health,
     users,
 )
 from app.core.config import Settings
@@ -39,6 +40,14 @@ from app.core.config import settings as default_settings
 from app.core.db import create_db_engine, get_engine, init_db
 from app.core.errors import AppHTTPException
 from app.core.logging import configure_logging, request_id_ctx
+from app.core.monitor import (
+    HealthStore,
+    run_health_sample,
+    run_hourly_rollup,
+    run_persist_raw,
+    run_prune_hourly,
+    run_prune_raw,
+)
 from app.core.rate_limit import SlidingWindowLimiter
 from app.core.scheduler import add_job, create_scheduler
 from app.models import AIStatus, Camera, ConnectionStatus
@@ -137,6 +146,46 @@ async def lifespan(app: FastAPI):
             job_id="expired_session_cleanup",
             trigger="interval",
             hours=1,
+        )
+
+        # P5 — system health (D-009). health_sample is the live in-memory
+        # collector; the other three condense/aggregate/prune it into
+        # sys_health_raw/sys_health_hourly on their own cadence.
+        health_store = app.state.health_store
+        add_job(
+            scheduler,
+            lambda: run_health_sample(engine, health_store),
+            job_id="health_sample",
+            trigger="interval",
+            seconds=app_settings.HEALTH_SAMPLE_SECONDS,
+        )
+        add_job(
+            scheduler,
+            lambda: run_persist_raw(engine, health_store),
+            job_id="health_persist_raw",
+            trigger="interval",
+            seconds=app_settings.HEALTH_PERSIST_SECONDS,
+        )
+        add_job(
+            scheduler,
+            lambda: run_hourly_rollup(engine),
+            job_id="health_rollup_hourly",
+            trigger="cron",
+            minute=0,
+        )
+        add_job(
+            scheduler,
+            lambda: run_prune_raw(engine),
+            job_id="health_prune_raw",
+            trigger="interval",
+            hours=1,
+        )
+        add_job(
+            scheduler,
+            lambda: run_prune_hourly(engine),
+            job_id="health_prune_hourly",
+            trigger="interval",
+            days=1,
         )
 
         # A plain `lambda` here would NOT be awaited by APScheduler's
@@ -393,6 +442,9 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         queue_maxsize=resolved_settings.WS_QUEUE_MAXSIZE,
         send_timeout_seconds=resolved_settings.WS_SEND_TIMEOUT_SECONDS,
     )
+    # On app.state, not a module global, same reasoning as realtime_manager
+    # above — each app instance gets its own retained live sample.
+    application.state.health_store = HealthStore()
 
     application.middleware("http")(request_id_middleware)
 
@@ -415,6 +467,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(users.router)
     application.include_router(analytics.router)
     application.include_router(system.router)
+    application.include_router(system_health.router)
     application.include_router(audit.router)
     application.include_router(maintenance.router)
     application.include_router(events.router)

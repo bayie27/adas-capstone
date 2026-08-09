@@ -11,6 +11,7 @@ from app.models.enums import (
     DesiredAIState,
     DesiredStateReason,
     DetectionStatus,
+    HealthState,
     UserRole,
 )
 from app.models.export import ExportJob
@@ -40,6 +41,7 @@ __all__ = [
     "DetectionLogBase",
     "DetectionStatus",
     "ExportJob",
+    "HealthState",
     "HelpArticle",
     "SysHealthHourly",
     "SysHealthHourlyBase",

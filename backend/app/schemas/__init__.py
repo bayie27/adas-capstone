@@ -34,7 +34,15 @@ from app.schemas.events import (
     SnoozeActivatedData,
     make_event,
 )
-from app.schemas.health import SysHealthHourlyRead, SysHealthRawRead
+from app.schemas.health import (
+    GpuRead,
+    HealthHistoryPoint,
+    HealthHistoryResponse,
+    HealthWarning,
+    SysHealthHourlyRead,
+    SysHealthLive,
+    SysHealthRawRead,
+)
 from app.schemas.help import (
     HelpArticleDetail,
     HelpArticleListResponse,
@@ -89,6 +97,10 @@ __all__ = [
     "DetectionLogCreateV2",
     "EventEnvelope",
     "EventType",
+    "GpuRead",
+    "HealthHistoryPoint",
+    "HealthHistoryResponse",
+    "HealthWarning",
     "HelpArticleDetail",
     "HelpArticleListResponse",
     "HelpArticleSummary",
@@ -103,6 +115,7 @@ __all__ = [
     "ReAlarmData",
     "SnoozeActivatedData",
     "SysHealthHourlyRead",
+    "SysHealthLive",
     "SysHealthRawRead",
     "UserAdminUpdate",
     "UserCreate",
