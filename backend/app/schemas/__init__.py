@@ -14,6 +14,7 @@ from app.schemas.common import ApiError, default_error_code, validate_password_s
 from app.schemas.detection import (
     AlertSnoozeRequest,
     DetectionLogCreate,
+    DetectionLogCreateV2,
     DetectionLogListResponse,
     DetectionLogRead,
 )
@@ -77,6 +78,7 @@ __all__ = [
     "DetectionLogListResponse",
     "DetectionLogRead",
     "default_error_code",
+    "DetectionLogCreateV2",
     "EventEnvelope",
     "EventType",
     "HelpArticleDetail",

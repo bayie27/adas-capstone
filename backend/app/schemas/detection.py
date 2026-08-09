@@ -13,7 +13,15 @@ class DetectionLogCreate(SQLModel):
     `snapshot_path` is the wire field name (a bare filename resolved against
     LEGACY_SNAPSHOT_DIR); internal.py maps it onto the table's `snapshot_key`
     column when persisting, alongside a backend-generated `source_event_id`.
+
+    `extra="forbid"` is what lets `DetectionLogCreate | DetectionLogCreateV2`
+    discriminate cleanly on Pydantic's own "smart union" validation instead
+    of dict-sniffing a raw body for `source_event_id`: a v2-shaped payload
+    carries `source_event_id`/`snapshot_key`, which this model would
+    otherwise silently ignore.
     """
+
+    model_config = {"extra": "forbid"}
 
     camera_id: int
     detected_at: datetime
@@ -23,6 +31,25 @@ class DetectionLogCreate(SQLModel):
     @field_validator("snapshot_path")
     @classmethod
     def snapshot_path_no_null_bytes(cls, v: str) -> str:
+        return reject_null_bytes(v)
+
+
+class DetectionLogCreateV2(SQLModel):
+    """v2 idempotent AI-engine payload — 01_CONTRACTS.md §6.3. The AI engine
+    generates `source_event_id` once per genuine event and reuses it for
+    every retry."""
+
+    model_config = {"extra": "forbid"}
+
+    source_event_id: str = Field(min_length=1)
+    camera_id: int
+    detected_at: datetime
+    snapshot_key: str = Field(min_length=1)
+    confidence_score: float = Field(ge=0.0, le=1.0)
+
+    @field_validator("source_event_id", "snapshot_key")
+    @classmethod
+    def no_null_bytes(cls, v: str) -> str:
         return reject_null_bytes(v)
 
 
