@@ -61,13 +61,18 @@ function resolveSnapshotUrls(snapshotPath: string | null | undefined) {
     return [`${BACKEND_HTTP_ORIGIN}${encodeURI(normalized)}`]
   }
 
-  const fileName = normalized.split("/").pop()
-
-  if (!fileName) {
-    return []
+  // 01_CONTRACTS.md §7.1 — a bare filename with no path separator is a
+  // legacy v1 key; a normalized key (`2026/07/12/camera_5/<uuid>.jpg`) must
+  // keep its full relative path, since that's exactly the sub-path the
+  // `/snapshots` mount serves out of SNAPSHOT_ROOT. Stripping it down to the
+  // basename here 404s every post-P1 snapshot.
+  if (normalized.includes("/")) {
+    return expandImageCandidates(
+      `${BACKEND_HTTP_ORIGIN}/snapshots/${encodePathSegments(normalized)}`,
+    )
   }
 
-  return expandImageCandidates(`${BACKEND_HTTP_ORIGIN}/snapshots/${encodeURIComponent(fileName)}`)
+  return expandImageCandidates(`${BACKEND_HTTP_ORIGIN}/snapshots/${encodeURIComponent(normalized)}`)
 }
 
 export function SnapshotImage({

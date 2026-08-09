@@ -4,19 +4,30 @@ import { WS_BASE_URL } from "@/utils/env"
 
 const WS_URL = `${WS_BASE_URL}/ws/alerts`
 
+// 01_CONTRACTS.md §9 close-code table — authentication/session failures and
+// origin rejection are terminal, never reconnect automatically.
+const TERMINAL_CLOSE_CODES = new Set([4001, 4003, 4009])
+// Too many connections for this user — still recoverable, but back off hard
+// rather than hammering the limit again immediately.
+const CONNECTION_LIMIT_CLOSE_CODE = 4008
+
 interface UseAdasWebSocketOptions {
   enabled?: boolean
   reconnectDelayMs?: number
+  /** Fired on every close, including ones the hook will reconnect from. */
+  onClose?: (code: number) => void
 }
 
 export function useAdasWebSocket(
   onMessage: (data: unknown) => void,
-  { enabled = true, reconnectDelayMs = 1500 }: UseAdasWebSocketOptions = {},
+  { enabled = true, reconnectDelayMs = 1500, onClose }: UseAdasWebSocketOptions = {},
 ) {
   const onMessageRef = useRef(onMessage)
+  const onCloseRef = useRef(onClose)
 
   useEffect(() => {
     onMessageRef.current = onMessage
+    onCloseRef.current = onClose
   })
 
   useEffect(() => {
@@ -49,8 +60,14 @@ export function useAdasWebSocket(
         }
       }
 
-      websocket.onclose = () => {
+      websocket.onclose = (event: CloseEvent) => {
         if (isDisposed) {
+          return
+        }
+
+        onCloseRef.current?.(event.code)
+
+        if (TERMINAL_CLOSE_CODES.has(event.code)) {
           return
         }
 
@@ -58,8 +75,13 @@ export function useAdasWebSocket(
         // reconnect hammering while the backend is down, the 30s cap keeps
         // recovery prompt for an ops console, and the jitter de-synchronizes
         // multiple open tabs so they don't reconnect in the same instant.
-        const backoff = Math.min(30_000, reconnectDelayMs * 2 ** attempt) + Math.random() * 500
-        attempt += 1
+        // CONNECTION_LIMIT starts partway up the curve so it backs off hard
+        // immediately instead of retrying the limit right away.
+        const startingAttempt =
+          event.code === CONNECTION_LIMIT_CLOSE_CODE ? Math.max(attempt, 4) : attempt
+        const backoff =
+          Math.min(30_000, reconnectDelayMs * 2 ** startingAttempt) + Math.random() * 500
+        attempt = startingAttempt + 1
         reconnectTimer = window.setTimeout(connect, backoff)
       }
 

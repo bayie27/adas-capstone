@@ -1,9 +1,13 @@
 import { create } from "zustand"
 
-import type { RealtimeAlertPayload } from "@/types/realtime"
+import type { AlertLog } from "@/types/alerts"
 import { playDetectionSound, stopDetectionSound } from "@/utils/detectionSound"
 
 const HANDLED_IDS_KEY = "adas-handled-alert-ids"
+// Reconnect-race dedup only needs to survive the live connection, not a page
+// reload — a reload re-runs the full recovery sequence anyway — so this is
+// in-memory only, capped so a long session can't grow it unbounded.
+const MAX_SEEN_EVENT_IDS = 500
 
 function readHandledIds(): Set<number> {
   try {
@@ -31,30 +35,59 @@ function clearHandledIds() {
   }
 }
 
-interface AlertState {
-  alerts: RealtimeAlertPayload[]
-  /** log_ids dismissed or confirmed this session — persisted to sessionStorage */
-  handledIds: Set<number>
-  addAlert: (alert: RealtimeAlertPayload) => void
-  removeAlert: (logId: number) => void
-  clearAlerts: () => void
+export function isSnoozedNow(logId: number, snoozedUntil: Record<number, string>): boolean {
+  const until = snoozedUntil[logId]
+  return Boolean(until) && new Date(until).getTime() > Date.now()
 }
 
-// Drive the alarm off the single fact that matters — whether the active queue
-// is non-empty. Playing/stopping on the 0<->non-0 edge means the siren starts
-// once when the first alert arrives and stops the moment the queue empties,
-// regardless of whether the removal came from a REST action, a WS broadcast,
-// or logout.
+function withoutSnooze(
+  snoozedUntil: Record<number, string>,
+  logId: number,
+): Record<number, string> {
+  if (!(logId in snoozedUntil)) return snoozedUntil
+  const next = { ...snoozedUntil }
+  delete next[logId]
+  return next
+}
+
+interface AlertState {
+  alerts: AlertLog[]
+  /** log_ids dismissed or confirmed this session — persisted to sessionStorage */
+  handledIds: Set<number>
+  /** log_id -> snoozed_until (ISO). Shared incident state, mirrored from SNOOZE_ACTIVATED/RE_ALARM. */
+  snoozedUntil: Record<number, string>
+  /** event_ids applied this connection — 01_CONTRACTS.md §9.1 reconnect-race dedup */
+  seenEventIds: string[]
+  addAlert: (alert: AlertLog) => void
+  removeAlert: (logId: number) => void
+  clearAlerts: () => void
+  activateSnooze: (logId: number, snoozedUntil: string) => void
+  clearSnooze: (logId: number) => void
+  isEventSeen: (eventId: string) => boolean
+  markEventSeen: (eventId: string) => void
+}
+
+// Drive the alarm off the single fact that matters — whether the active
+// (non-snoozed) queue is non-empty. Playing/stopping on the 0<->non-0 edge
+// means the siren starts once when the first active alert arrives and stops
+// the moment the queue empties, regardless of whether the change came from a
+// REST action, a WS broadcast, a snooze, or logout.
 const syncSound = (before: number, after: number) => {
   if (after > 0 && before === 0) playDetectionSound()
   if (after === 0 && before > 0) stopDetectionSound()
 }
 
+function activeCount(alerts: AlertLog[], snoozedUntil: Record<number, string>): number {
+  return alerts.filter((a) => !isSnoozedNow(a.log_id, snoozedUntil)).length
+}
+
 export const useAlertStore = create<AlertState>((set, get) => ({
   alerts: [],
   handledIds: readHandledIds(),
+  snoozedUntil: {},
+  seenEventIds: [],
   addAlert: (alert) => {
-    const before = get().alerts.length
+    const before = activeCount(get().alerts, get().snoozedUntil)
     set((state) => {
       // If the alert is now Dismissed or Resolved, it should definitely be removed
       // from the active queue and marked as handled.
@@ -64,6 +97,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
         return {
           alerts: state.alerts.filter((a) => a.log_id !== alert.log_id),
           handledIds: nextHandled,
+          snoozedUntil: withoutSnooze(state.snoozedUntil, alert.log_id),
         }
       }
 
@@ -86,23 +120,40 @@ export const useAlertStore = create<AlertState>((set, get) => ({
         alerts: [alert, ...state.alerts],
       }
     })
-    syncSound(before, get().alerts.length)
+    syncSound(before, activeCount(get().alerts, get().snoozedUntil))
   },
   removeAlert: (logId) => {
-    const before = get().alerts.length
+    const before = activeCount(get().alerts, get().snoozedUntil)
     set((state) => {
       const next = new Set([...state.handledIds, logId])
       writeHandledIds(next)
       return {
         alerts: state.alerts.filter((alert) => alert.log_id !== logId),
         handledIds: next,
+        snoozedUntil: withoutSnooze(state.snoozedUntil, logId),
       }
     })
-    syncSound(before, get().alerts.length)
+    syncSound(before, activeCount(get().alerts, get().snoozedUntil))
   },
   clearAlerts: () => {
     stopDetectionSound()
     clearHandledIds()
-    set({ alerts: [], handledIds: new Set() })
+    set({ alerts: [], handledIds: new Set(), snoozedUntil: {}, seenEventIds: [] })
+  },
+  activateSnooze: (logId, snoozedUntil) => {
+    const before = activeCount(get().alerts, get().snoozedUntil)
+    set((state) => ({ snoozedUntil: { ...state.snoozedUntil, [logId]: snoozedUntil } }))
+    syncSound(before, activeCount(get().alerts, get().snoozedUntil))
+  },
+  clearSnooze: (logId) => {
+    const before = activeCount(get().alerts, get().snoozedUntil)
+    set((state) => ({ snoozedUntil: withoutSnooze(state.snoozedUntil, logId) }))
+    syncSound(before, activeCount(get().alerts, get().snoozedUntil))
+  },
+  isEventSeen: (eventId) => get().seenEventIds.includes(eventId),
+  markEventSeen: (eventId) => {
+    set((state) => ({
+      seenEventIds: [...state.seenEventIds, eventId].slice(-MAX_SEEN_EVENT_IDS),
+    }))
   },
 }))
