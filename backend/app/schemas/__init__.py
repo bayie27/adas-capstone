@@ -17,6 +17,11 @@ from app.schemas.detection import (
     DetectionLogRead,
 )
 from app.schemas.health import SysHealthHourlyRead, SysHealthRawRead
+from app.schemas.help import (
+    HelpArticleDetail,
+    HelpArticleListResponse,
+    HelpArticleSummary,
+)
 from app.schemas.user import (
     UserAdminUpdate,
     UserCreate,
@@ -40,6 +45,9 @@ __all__ = [
     "DetectionLogListResponse",
     "DetectionLogRead",
     "default_error_code",
+    "HelpArticleDetail",
+    "HelpArticleListResponse",
+    "HelpArticleSummary",
     "LoginResponse",
     "SysHealthHourlyRead",
     "SysHealthRawRead",

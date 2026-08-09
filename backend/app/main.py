@@ -18,6 +18,7 @@ from app.api.routes import (
     audit,
     auth,
     cameras,
+    help,
     internal,
     system,
     users,
@@ -297,6 +298,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(analytics.router)
     application.include_router(system.router)
     application.include_router(audit.router)
+    application.include_router(help.router)
 
     application.add_exception_handler(HTTPException, http_exception_handler)
     application.add_exception_handler(
