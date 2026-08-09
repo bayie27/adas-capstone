@@ -33,6 +33,15 @@ from app.schemas.help import (
     HelpArticleListResponse,
     HelpArticleSummary,
 )
+from app.schemas.maintenance import (
+    BackupListResponse,
+    BackupRead,
+    BackupTriggerResponse,
+    RestoreRequestIn,
+    RestoreStateRead,
+    RestoreStepRead,
+    RestoreTriggerResponse,
+)
 from app.schemas.user import (
     UserAdminUpdate,
     UserCreate,
@@ -48,6 +57,9 @@ __all__ = [
     "ApiError",
     "AuditLogListResponse",
     "AuditLogRead",
+    "BackupListResponse",
+    "BackupRead",
+    "BackupTriggerResponse",
     "CameraCreate",
     "CameraListResponse",
     "CameraRead",
@@ -66,6 +78,10 @@ __all__ = [
     "HelpArticleSummary",
     "IncidentPayload",
     "LoginResponse",
+    "RestoreRequestIn",
+    "RestoreStateRead",
+    "RestoreStepRead",
+    "RestoreTriggerResponse",
     "make_event",
     "ReAlarmData",
     "SnoozeActivatedData",

@@ -31,6 +31,7 @@ from app.api.routes import (
     events,
     help,
     internal,
+    maintenance,
     system,
     users,
 )
@@ -397,6 +398,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(analytics.router)
     application.include_router(system.router)
     application.include_router(audit.router)
+    application.include_router(maintenance.router)
     application.include_router(events.router)
     application.include_router(help.router)
 

@@ -1,0 +1,22 @@
+# REVIEWED-BUT-UNVERIFIED, PRODUCTION-TARGET — see deploy/systemd/README.md.
+#
+# Restricted maintenance unit: ExecStart can invoke only the one approved
+# daily_restart.sh script — never an arbitrary command (08_PKG_backup_ops.md
+# Step 7). Triggered by adas-maintenance.timer, not enabled directly.
+[Unit]
+Description=ADAS daily backup + restart (D-011)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=adas
+Group=adas
+WorkingDirectory=/opt/adas-capstone
+ExecStart=/opt/adas-capstone/backend/scripts/daily_restart.sh
+TimeoutStartSec=300
+
+# Defense in depth: this unit's only job is to run the one approved script.
+ProtectSystem=strict
+ReadWritePaths=/opt/adas-capstone/var
+NoNewPrivileges=true
