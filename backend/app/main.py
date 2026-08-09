@@ -117,9 +117,19 @@ async def lifespan(app: FastAPI):
             trigger="interval",
             hours=1,
         )
+
+        # A plain `lambda` here would NOT be awaited by APScheduler's
+        # AsyncIOExecutor: it dispatches based on
+        # `inspect.iscoroutinefunction(job.func)`, and a lambda wrapping a
+        # coroutine call is itself a sync function, so the returned
+        # coroutine gets silently dropped ("coroutine was never awaited").
+        # An `async def` closure keeps the coroutine-function check true.
+        async def run_ws_session_revalidation() -> None:
+            await ws_session_revalidation(engine, app.state.realtime_manager)
+
         add_job(
             scheduler,
-            lambda: ws_session_revalidation(engine, app.state.realtime_manager),
+            run_ws_session_revalidation,
             job_id="ws_session_revalidation",
             trigger="interval",
             seconds=60,
