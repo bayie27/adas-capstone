@@ -226,7 +226,7 @@ async def trigger_restore(
             source_ip=source_ip,
         )
         raise AppHTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             f"Confirmation must be exactly {expected!r}.",
             code="VALIDATION_ERROR",
         )
@@ -262,7 +262,7 @@ async def trigger_restore(
             source_ip=source_ip,
         )
         raise AppHTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "Not a valid backup id.",
             code="VALIDATION_ERROR",
         ) from exc
