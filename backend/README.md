@@ -66,7 +66,7 @@ backend/
 │   ├── core/
 │   │   ├── config.py        # Pydantic settings (reads from .env)
 │   │   ├── db.py            # Engine, WAL setup, session factory, init_db
-│   │   ├── security.py      # get_password_hash, verify_password, create_access_token
+│   │   ├── security.py      # get_password_hash, verify_password, create_session_token
 │   │   └── monitor.py       # (planned) Background hardware telemetry polling
 │   └── api/
 │       ├── dependencies.py  # verify_internal_api_key, get_current_user, get_current_admin
