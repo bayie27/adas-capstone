@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 from unittest.mock import patch
 
 import config
-import numpy as np
 import pytest
 
 cv2 = pytest.importorskip("cv2")
+np = pytest.importorskip("numpy")
 
 import accident  # noqa: E402
 from accident import AccidentManager  # noqa: E402
