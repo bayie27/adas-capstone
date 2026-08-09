@@ -14,7 +14,6 @@ os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 BACKEND_BASE_URL = os.environ.get("AI_BACKEND_BASE_URL", "http://127.0.0.1:8000")
 HEARTBEAT_URL = f"{BACKEND_BASE_URL}/api/internal/heartbeat"
 WEBHOOK_URL = f"{BACKEND_BASE_URL}/api/internal/alert"
-SYNC_URL = f"{BACKEND_BASE_URL}/api/internal/cameras"  # legacy, kept for rollback
 
 INTERNAL_API_KEY = os.environ.get(
     "INTERNAL_API_KEY"
@@ -24,11 +23,6 @@ if not INTERNAL_API_KEY:
         "INTERNAL_API_KEY is not set. Copy .env.example to .env at the repo root "
         "and fill in a value that matches the backend's INTERNAL_API_KEY."
     )
-
-# Legacy poll only; unused once the heartbeat cutover is verified (Step 8 deletes it).
-RTSP_BASE_URL = (
-    "rtsp://localhost:8554/channel"  # The base network path for your cameras
-)
 
 ENGINE_ID = os.environ.get("AI_ENGINE_ID", "adas-ai-1")
 

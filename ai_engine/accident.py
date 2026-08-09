@@ -1,5 +1,4 @@
 import os
-from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
 import cv2
@@ -9,13 +8,16 @@ from events import build_event_payload, build_snapshot_key, new_source_event_id
 
 
 class AccidentManager:
-    """Handles alert logic, payload formatting, and durable delivery."""
+    """Handles alert logic, payload formatting, and durable delivery.
 
-    def __init__(self):
-        # Limit to 5 concurrent snapshot writes to prevent I/O congestion.
-        # Network delivery itself goes through outbox.py's single bounded
-        # worker thread, not this pool (removed in Step 8 of the cutover).
-        self.webhook_pool = ThreadPoolExecutor(max_workers=5)
+    _send_payload() runs synchronously on the calling (inference-loop)
+    thread. The original ThreadPoolExecutor existed to keep the network
+    POST off the video path; that POST no longer happens here — delivery
+    is outbox.py's job, off its own single bounded worker thread. What's
+    left is a local JPEG encode and an atomic file write, both fast enough
+    not to warrant a thread pool, and accidents are rare relative to the
+    per-frame inference loop.
+    """
 
     def process_detections(self, camera, results, frame):
         # 1. YOLO already filtered by CONFIDENCE_THRESHOLD, so we just check for the class ID
@@ -37,8 +39,8 @@ class AccidentManager:
         # 2. The Digital Blindfold: Instantly pause the camera to prevent backend spam
         camera.pause()
 
-        # 3. Encode and enqueue in a background thread to prevent video lag
-        self.webhook_pool.submit(self._send_payload, camera, frame, highest_confidence)
+        # 3. Encode and enqueue — see the class docstring for why this is synchronous
+        self._send_payload(camera, frame, highest_confidence)
 
     def _send_payload(self, camera, frame, confidence):
         """Persists the event to the durable outbox (D-012) and returns.
