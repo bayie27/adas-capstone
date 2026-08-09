@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import field_validator
 from sqlmodel import Field, SQLModel
 
+from app.core.validation import reject_null_bytes
 from app.models import AIStatus, CameraBase, ConnectionStatus
 
 
@@ -37,8 +38,8 @@ class CameraUpdate(SQLModel):
     @classmethod
     def strip_whitespace(cls, v: str) -> str:
         if v is not None and isinstance(v, str):
-            return v.strip()
-        return v
+            v = v.strip()
+        return reject_null_bytes(v)
 
 
 class CameraStatusUpdate(SQLModel):

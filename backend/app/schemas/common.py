@@ -2,6 +2,8 @@ from typing import Any
 
 from sqlmodel import SQLModel
 
+from app.core.validation import reject_null_bytes
+
 
 class ApiError(SQLModel):
     detail: str
@@ -10,6 +12,7 @@ class ApiError(SQLModel):
 
 
 def validate_password_strength(v: str) -> str:
+    reject_null_bytes(v)
     if not any(char.isdigit() for char in v):
         raise ValueError("Password must contain at least 1 number.")
     return v

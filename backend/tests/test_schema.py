@@ -13,6 +13,7 @@ import pytest
 from app.core.config import settings
 from app.core.db import install_sqlite_pragmas
 from app.models import (
+    AlarmSettings,
     AuditLog,
     Camera,
     DetectionLog,
@@ -20,6 +21,8 @@ from app.models import (
     User,
     UserRole,
 )
+from app.schemas import CameraCreate, UserCreate
+from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, SQLModel, create_engine
@@ -129,6 +132,22 @@ class TestCheckConstraints:
         db_session.add(log)
         with pytest.raises(IntegrityError):
             db_session.commit()
+
+    @pytest.mark.parametrize("boundary_score", [0.0, 1.0])
+    def test_confidence_score_at_boundary_accepted(self, db_session, boundary_score):
+        """Edge case 2.3 — the CHECK constraint is inclusive at both ends."""
+        camera = _make_camera(db_session)
+        log = DetectionLog(
+            camera_id=camera.camera_id,
+            detected_at=datetime.now(UTC),
+            snapshot_key="a.jpg",
+            confidence_score=boundary_score,
+            source_event_id=f"evt-conf-boundary-{boundary_score}",
+        )
+        db_session.add(log)
+        db_session.commit()  # must not raise
+        db_session.refresh(log)
+        assert log.confidence_score == boundary_score
 
     def test_bad_role_rejected(self, db_session):
         user = User(
@@ -328,3 +347,87 @@ class TestAuditLogImmutability:
         db_session.add(log)
         with pytest.raises(IntegrityError):
             db_session.commit()
+
+
+class TestNullByteRejection:
+    """Edge case 4.6 — a null byte must be rejected at the write boundary,
+    not silently stored (SQLite itself would happily store it as-is, which
+    is exactly the trap: several downstream consumers truncate at it).
+
+    Table models skip Pydantic validation entirely on a direct
+    `Camera(...)`/`User(...)` call — an inherent SQLModel/SQLAlchemy trait
+    that applies to every constraint (min_length, max_length, ...), not
+    something specific to this check. The real write paths validate via
+    `Camera.model_validate(camera_in)` (POST /api/cameras/) and the
+    UserCreate/*Update schemas (every /api/users/ write route), so those are
+    the boundaries exercised here.
+    """
+
+    def test_camera_model_validate_rejects_null_byte(self):
+        with pytest.raises(ValidationError, match="null byte"):
+            Camera.model_validate({"camera_name": "bad\x00name", "channel_id": 1})
+
+    @pytest.mark.parametrize("field", ["username", "first_name", "last_name"])
+    def test_user_create_rejects_null_byte(self, field):
+        defaults = {
+            "username": "gooduser",
+            "first_name": "Good",
+            "last_name": "User",
+            "role": UserRole.OPERATOR,
+            "password": "Password1",
+        }
+        defaults[field] = "bad\x00value"
+        with pytest.raises(ValidationError, match="null byte"):
+            UserCreate(**defaults)
+
+
+class TestUnicodeLength:
+    """Edge case 4.5 — max_length must count Unicode codepoints, not UTF-8
+    bytes. Pydantic/Python already do this correctly; this test only locks
+    the behavior in against regression (e.g. a future byte-based check)."""
+
+    def test_max_length_counts_codepoints_not_bytes(self):
+        # 100 four-byte codepoints — 100 chars, 400 bytes.
+        CameraCreate(camera_name="\U0001f3a5" * 100, channel_id=1)  # must not raise
+
+    def test_one_over_max_length_in_codepoints_rejected(self):
+        with pytest.raises(ValidationError, match="at most 100 characters"):
+            CameraCreate(camera_name="\U0001f3a5" * 101, channel_id=1)
+
+
+class TestCascadeDeletes:
+    def test_deleting_a_user_cascades_their_alarm_settings(self, db_session):
+        """Edge case 9.10 — deleting a user must cascade-delete their
+        alarm_settings row rather than leaving it orphaned or blocking the
+        delete."""
+        user = _make_user(db_session)
+        user_id = user.user_id
+        db_session.add(AlarmSettings(user_id=user_id))
+        db_session.commit()
+
+        assert (
+            db_session.execute(
+                text("SELECT COUNT(*) FROM alarm_settings WHERE user_id = :uid"),
+                {"uid": user_id},
+            ).scalar()
+            == 1
+        )
+
+        # A raw DELETE, not session.delete() — the ORM's own cascade would
+        # otherwise be indistinguishable from the DB-level ON DELETE CASCADE
+        # this test is actually checking. `user` is expired by the commit
+        # above, so only ever touch the plain `user_id` int from here on —
+        # accessing an attribute on `user` itself after the row is gone
+        # would trigger an implicit refresh against a now-missing row.
+        db_session.execute(
+            text("DELETE FROM user WHERE user_id = :uid"), {"uid": user_id}
+        )
+        db_session.commit()
+
+        assert (
+            db_session.execute(
+                text("SELECT COUNT(*) FROM alarm_settings WHERE user_id = :uid"),
+                {"uid": user_id},
+            ).scalar()
+            == 0
+        )
