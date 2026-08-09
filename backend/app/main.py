@@ -117,6 +117,35 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 
+_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def make_origin_validation_middleware(allowed_origins: list[str]):
+    """01_CONTRACTS.md §5 Step 5 — defense in depth alongside SameSite=Strict.
+    Every unsafe cookie-authenticated method must present an `Origin` that's
+    either absent (same-origin non-browser callers like curl/TestClient) or
+    in CORS_ORIGINS. /api/internal/* is exempt: it authenticates with
+    x-api-key from a non-browser client and never sends Origin."""
+    allowed = set(allowed_origins)
+
+    async def origin_validation_middleware(request: Request, call_next):
+        if request.method in _UNSAFE_METHODS and not request.url.path.startswith(
+            "/api/internal/"
+        ):
+            origin = request.headers.get("origin")
+            if origin is not None and origin not in allowed:
+                return JSONResponse(
+                    status_code=403,
+                    content=ApiError(
+                        detail="Request Origin is not allowed.",
+                        code="ORIGIN_REJECTED",
+                    ).model_dump(),
+                )
+        return await call_next(request)
+
+    return origin_validation_middleware
+
+
 async def http_exception_handler(request: Request, exc: HTTPException):
     code = getattr(exc, "code", None) or default_error_code(exc.status_code)
     content = ApiError(detail=str(exc.detail), code=code).model_dump()
@@ -227,6 +256,10 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+
+    application.middleware("http")(
+        make_origin_validation_middleware(resolved_settings.CORS_ORIGINS)
     )
 
     # The public /snapshots mount is removed entirely in P4 (replaced by an
