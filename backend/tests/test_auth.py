@@ -548,6 +548,32 @@ class TestConcurrencyAndMultiSession:
         rejected = client.get("/api/users/me", headers=_cookie_header(cookie))
         assert rejected.status_code == 401
 
+    def test_deactivation_by_another_session_rejects_the_next_request_immediately(
+        self, client: TestClient, session: Session
+    ):
+        """Verification step 4 — an operator's own session is still
+        cookie-valid, but an admin deactivating them in a *different*
+        session must make the operator's very next request 401 AUTH_REVOKED
+        immediately, not after the JWT's own 8-hour expiry."""
+        op = make_operator(session)
+        op_cookie_headers = auth_headers(client, "operator", "Operator123")
+        make_admin(session)
+        admin_headers = auth_headers(client, "admin", "Admin123")
+
+        still_active = client.get("/api/users/me", headers=op_cookie_headers)
+        assert still_active.status_code == 200
+
+        deactivate = client.patch(
+            f"/api/users/{op.user_id}",
+            json={"is_active": False},
+            headers=admin_headers,
+        )
+        assert deactivate.status_code == 200
+
+        next_request = client.get("/api/users/me", headers=op_cookie_headers)
+        assert next_request.status_code == 401
+        assert next_request.json()["code"] == "AUTH_REVOKED"
+
 
 class TestLogout:
     def test_logout_revokes_session(self, client: TestClient, session: Session):
@@ -702,6 +728,9 @@ class TestRateLimit:
     def test_rate_limit_rejection_is_audited(
         self, client: TestClient, session: Session
     ):
+        """Verification step 5 — LOGIN_RATE_LIMIT_ATTEMPTS+1 failed attempts
+        (default 10+1=11) produce exactly that many LOGIN_FAILURE rows: the
+        real wrong-password checks plus the rate-limited rejection itself."""
         make_admin(session)
         for _ in range(settings.LOGIN_RATE_LIMIT_ATTEMPTS + 1):
             client.post(
@@ -711,7 +740,8 @@ class TestRateLimit:
         rows = session.exec(
             select(AuditLog).where(AuditLog.action == "LOGIN_FAILURE")
         ).all()
-        assert any(r.result == "denied" for r in rows)
+        assert len(rows) == settings.LOGIN_RATE_LIMIT_ATTEMPTS + 1
+        assert all(r.result == "denied" for r in rows)
 
 
 class TestProtectedRoutes:
