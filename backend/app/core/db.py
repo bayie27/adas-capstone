@@ -8,6 +8,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from app.core.config import Settings, settings
 from app.core.security import get_password_hash
 from app.models import UserRole
+from app.services.help import seed_help_articles
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -89,6 +90,10 @@ def init_db(
             session.add(AlarmSettings(user_id=default_admin.user_id))
             session.commit()
             logger.info("Default Administrator account created successfully.")
+
+    # FR-20 — idempotent: unchanged files write nothing (edge case 10.6).
+    with Session(target_engine) as session:
+        seed_help_articles(session)
 
 
 def get_engine(request: Request) -> Engine:
