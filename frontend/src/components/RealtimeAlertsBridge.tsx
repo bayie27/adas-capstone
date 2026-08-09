@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 
 import { useAdasWebSocket } from "@/hooks/useAdasWebSocket"
-import { getAlertDetails, getAlerts } from "@/services/alerts"
+import { getAlerts } from "@/services/alerts"
 import { redirectToLogin } from "@/services/api"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -23,15 +23,12 @@ import {
 const SESSION_LOST_CLOSE_CODES = new Set([4001, 4009])
 const ORIGIN_REJECTED_CLOSE_CODE = 4003
 
-function incidentToAlertLog(payload: IncidentPayload, knownSnapshotKey: string | null): AlertLog {
+function incidentToAlertLog(payload: IncidentPayload): AlertLog {
   return {
     log_id: payload.log_id,
     camera_id: payload.camera_id,
     detected_at: payload.detected_at,
-    // WS envelope only carries `snapshot_url` (the P4 authenticated route,
-    // not live yet) — preserve whatever we already resolved via REST, or
-    // leave it null until the enrichment fetch below fills it in.
-    snapshot_key: knownSnapshotKey,
+    snapshot_url: payload.snapshot_url,
     confidence_score: payload.confidence_score,
     detection_status: payload.detection_status,
     verified_by_id: payload.verified_by_id,
@@ -102,26 +99,12 @@ export function RealtimeAlertsBridge() {
   }
 
   function handleIncident(payload: IncidentPayload) {
-    const existing = useAlertStore.getState().alerts.find((a) => a.log_id === payload.log_id)
-
-    const alert = incidentToAlertLog(payload, existing?.snapshot_key ?? null)
-    addAlert(alert)
+    addAlert(incidentToAlertLog(payload))
 
     // The WS payload doesn't carry verified_by/closed_by-adjacent computed
     // fields the table shows in some views, so invalidate rather than
     // trusting the broadcast to be the complete row.
     queryClient.invalidateQueries({ queryKey: ["alerts", "active"] })
-
-    const isTerminal =
-      alert.detection_status === "Dismissed" || alert.detection_status === "Resolved"
-
-    if (!alert.snapshot_key && !isTerminal) {
-      getAlertDetails(alert.log_id)
-        .then((enriched) => {
-          addAlert(enriched)
-        })
-        .catch(() => {})
-    }
   }
 
   function handleCameraStatus(cameraStatus: CameraStatusUpdateData) {

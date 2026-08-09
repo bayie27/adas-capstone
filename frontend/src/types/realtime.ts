@@ -26,9 +26,8 @@ export interface ConnectionReadyData {
 }
 
 // 01_CONTRACTS.md §9.3 — carried by NEW_DETECTION, and as the base of
-// ALERT_STATUS_UPDATE. `snapshot_url` points at the P4 authenticated
-// snapshot route, which does not exist on the backend yet — do not render
-// it directly, see RealtimeAlertsBridge's enrichment fetch.
+// ALERT_STATUS_UPDATE. `snapshot_url` is the P4 authenticated snapshot
+// route (e.g. `/api/alerts/42/snapshot`) — pass it straight to SnapshotImage.
 export interface IncidentPayload {
   log_id: number
   source_event_id: string

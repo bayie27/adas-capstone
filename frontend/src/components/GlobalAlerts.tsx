@@ -98,7 +98,7 @@ export function GlobalAlerts() {
         {/* snapshot area */}
         <div className="flex min-h-[220px] items-center justify-center bg-[#6B6B6B] p-6">
           <SnapshotImage
-            snapshotPath={alert.snapshot_key}
+            snapshotUrl={alert.snapshot_url}
             alt={`Accident snapshot for log ${alert.log_id}`}
             className="max-h-52 w-auto rounded border-2 border-[#1a1a1a] object-contain"
             fallbackClassName="h-40 w-full rounded"

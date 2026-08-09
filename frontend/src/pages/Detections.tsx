@@ -486,7 +486,7 @@ export default function Detections() {
           <div className="flex aspect-video w-full items-center justify-center border-b border-[#2A2A2A] bg-[#111]">
             {selectedAlert ? (
               <SnapshotImage
-                snapshotPath={selectedAlert.snapshot_key}
+                snapshotUrl={selectedAlert.snapshot_url}
                 alt={`${formatAlertCode(selectedAlert.log_id)} snapshot`}
                 className="h-full w-full object-contain"
                 fallbackClassName="h-32 w-48 border border-[#333] bg-[#1A1A1A] text-[#555]"
