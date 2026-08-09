@@ -179,6 +179,7 @@ def cmd_archive(args: argparse.Namespace) -> int:
             backup_manifest=latest,
             backup_dir=settings.BACKUP_DIR,
             snapshot_root=settings.SNAPSHOT_ROOT,
+            legacy_snapshot_dir=settings.LEGACY_SNAPSHOT_DIR,
             model_weights_path=REPO_ROOT / "ai_engine" / "best.pt",
             archive_dir=settings.ARCHIVE_DIR,
         )

@@ -161,6 +161,19 @@ def write_restore_request(
     return state
 
 
+def _remove_sidecars(path: Path) -> None:
+    """Removes `path`'s own `-wal`/`-shm` companions. Needed for the
+    *temporary* restore/rollback copy too, not just the final `db_path` —
+    `sqlite3.Connection.backup()` can carry WAL mode into the copy, and
+    even a read-only `run_integrity_check` against a WAL-mode file can
+    create a `-shm` sidecar next to it. Without this, a temp file's
+    sidecars survive the `os.replace()` that renames only the main file,
+    leaking `adas.db.restoring.tmp-wal`/`-shm` next to the real database
+    on every restore."""
+    for suffix in ("-wal", "-shm"):
+        path.with_name(path.name + suffix).unlink(missing_ok=True)
+
+
 @contextmanager
 def _timed_step(state: RestoreState, name: str):
     step = RestoreStep(name=name, started_at=datetime.now(UTC).isoformat())
@@ -236,13 +249,16 @@ def perform_offline_restore(
                 shutil.copyfile(selected_path, tmp_restore_path)
                 if not run_integrity_check(tmp_restore_path):
                     tmp_restore_path.unlink(missing_ok=True)
+                    _remove_sidecars(tmp_restore_path)
                     raise RestoreError("Restored temp database failed integrity_check.")
 
-            # Step 6 — remove obsolete WAL/SHM sidecars. Only reached once
-            # services are confirmed offline (the caller's responsibility).
+            # Step 6 — remove obsolete WAL/SHM sidecars, for both the
+            # primary path and the temp copy itself (see _remove_sidecars).
+            # Only reached once services are confirmed offline (the
+            # caller's responsibility).
             with _timed_step(state, "remove_sidecars"):
-                for suffix in ("-wal", "-shm"):
-                    db_path.with_name(db_path.name + suffix).unlink(missing_ok=True)
+                _remove_sidecars(db_path)
+                _remove_sidecars(tmp_restore_path)
 
             # Step 7 — atomically replace the primary database.
             with _timed_step(state, "swap_primary_database"):
@@ -291,11 +307,12 @@ def perform_rollback(*, backup_dir: Path, db_path: Path) -> RestoreState:
                 shutil.copyfile(emergency_path, tmp_restore_path)
                 if not run_integrity_check(tmp_restore_path):
                     tmp_restore_path.unlink(missing_ok=True)
+                    _remove_sidecars(tmp_restore_path)
                     raise RestoreError("Emergency backup failed integrity_check.")
 
             with _timed_step(state, "rollback_remove_sidecars"):
-                for suffix in ("-wal", "-shm"):
-                    db_path.with_name(db_path.name + suffix).unlink(missing_ok=True)
+                _remove_sidecars(db_path)
+                _remove_sidecars(tmp_restore_path)
 
             with _timed_step(state, "rollback_swap_primary_database"):
                 os.replace(tmp_restore_path, db_path)

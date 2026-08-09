@@ -20,6 +20,7 @@ rows in 14_EDGE_CASES.md: 1.12, 1.13, 3.16, 4.10, 6.6, 6.18. Rows 5.10 and
 `TestSchedulingEdgeCases` for why.
 """
 
+import json
 import sqlite3
 import threading
 import time
@@ -70,6 +71,12 @@ from tests.conftest import auth_headers, make_admin, make_operator
 
 def _make_real_db(db_path, *, seed_value="seed"):
     conn = sqlite3.connect(db_path)
+    # WAL mode, matching every real adas.db (app.core.db.install_sqlite_pragmas)
+    # — without this, sqlite3.Connection.backup() never carries WAL mode
+    # into its copies, and the sidecar-cleanup path (restore.py's
+    # _remove_sidecars on the *temp* restore file, not just the final
+    # path) never actually gets exercised by these tests.
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
     conn.execute("INSERT INTO t (v) VALUES (?)", (seed_value,))
     conn.commit()
@@ -421,6 +428,14 @@ class TestRestoreCore:
         assert _read_rows(maint_paths.db_path) == ["seed"]
         assert not wal.exists()
         assert not shm.exists()
+        # Regression: sqlite3.Connection.backup() can carry WAL mode into
+        # the restore's *temporary* copy, and even a read-only
+        # integrity_check against it can create a stray `-shm` sidecar
+        # next to that temp file — which os.replace() never renames away,
+        # since only the main file gets renamed. Caught live running the
+        # real restore drill against a real WAL-mode adas.db.
+        leftover = list(maint_paths.db_path.parent.glob("*.tmp*"))
+        assert leftover == []
 
     def test_offline_restore_rejects_invalid_backup_id(self, maint_paths):
         with pytest.raises(InvalidBackupIdError):
@@ -577,11 +592,26 @@ class TestArchive:
     @pytest.fixture
     def archive_paths(self, maint_paths, tmp_path):
         snapshot_root = tmp_path / "snapshots"
+        snapshot_key = "2026/camera_1/evt.jpg"
         (snapshot_root / "2026" / "camera_1").mkdir(parents=True)
         (snapshot_root / "2026" / "camera_1" / "evt.jpg").write_bytes(b"fake jpg bytes")
         model_path = tmp_path / "best.pt"
         model_path.write_bytes(b"fake model weights")
         archive_dir = tmp_path / "archive"
+
+        # A minimal detection_log so build_archive can discover which
+        # snapshot(s) this specific backup references (01_CONTRACTS.md §7.1)
+        # — the archive no longer walks the whole snapshot directory.
+        conn = sqlite3.connect(maint_paths.db_path)
+        conn.execute(
+            "CREATE TABLE detection_log (log_id INTEGER PRIMARY KEY, snapshot_key TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO detection_log (snapshot_key) VALUES (?)", (snapshot_key,)
+        )
+        conn.commit()
+        conn.close()
+
         manifest = create_backup(
             db_path=maint_paths.db_path, backup_dir=maint_paths.backup_dir
         )
@@ -589,6 +619,7 @@ class TestArchive:
             manifest=manifest,
             backup_dir=maint_paths.backup_dir,
             snapshot_root=snapshot_root,
+            snapshot_key=snapshot_key,
             model_path=model_path,
             archive_dir=archive_dir,
         )
@@ -657,6 +688,48 @@ class TestArchive:
         with zipfile.ZipFile(archive_path) as zf:
             manifest_data = zf.read("archive_manifest.json").decode()
         assert "does-not-exist.pt" in manifest_data
+
+    def test_archive_only_includes_snapshots_referenced_by_this_backup(
+        self, archive_paths
+    ):
+        """01_CONTRACTS.md §7.1 — an unrelated file sitting in snapshot_root
+        that no detection_log row references must not end up in the
+        archive; only `archive_paths.snapshot_key` should."""
+        import zipfile
+
+        (archive_paths.snapshot_root / "orphaned_unreferenced.jpg").write_bytes(b"x")
+
+        archive_path = archive_mod.build_archive(
+            backup_manifest=archive_paths.manifest,
+            backup_dir=archive_paths.backup_dir,
+            snapshot_root=archive_paths.snapshot_root,
+            model_weights_path=archive_paths.model_path,
+            archive_dir=archive_paths.archive_dir,
+        )
+        with zipfile.ZipFile(archive_path) as zf:
+            names = zf.namelist()
+        assert f"snapshots/{archive_paths.snapshot_key}" in names
+        assert not any("orphaned_unreferenced" in n for n in names)
+
+    def test_archive_reports_missing_referenced_snapshot(self, archive_paths):
+        import zipfile
+
+        (archive_paths.snapshot_root / "2026" / "camera_1" / "evt.jpg").unlink()
+
+        archive_path = archive_mod.build_archive(
+            backup_manifest=archive_paths.manifest,
+            backup_dir=archive_paths.backup_dir,
+            snapshot_root=archive_paths.snapshot_root,
+            model_weights_path=archive_paths.model_path,
+            archive_dir=archive_paths.archive_dir,
+        )
+        with zipfile.ZipFile(archive_path) as zf:
+            names = zf.namelist()
+            manifest_data = json.loads(zf.read("archive_manifest.json"))
+        assert f"snapshots/{archive_paths.snapshot_key}" not in names
+        assert (
+            f"snapshots/{archive_paths.snapshot_key}" in manifest_data["missing_files"]
+        )
 
 
 # ---------------------------------------------------------------------------

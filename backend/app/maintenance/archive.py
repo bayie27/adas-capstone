@@ -8,6 +8,7 @@ credential-bearing configuration.
 
 import json
 import os
+import sqlite3
 import zipfile
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -40,6 +41,50 @@ class ArchiveManifest:
     checksums: dict[str, str] = field(default_factory=dict)
 
 
+def _referenced_snapshot_keys(db_path: Path) -> list[str]:
+    """01_CONTRACTS.md §7.1 — the archive includes only snapshots this
+    *specific backup's* detection_log actually references, read from the
+    backup file itself (never the live database, which may have moved on)
+    so the archive is a true point-in-time pairing of database and
+    evidence."""
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT snapshot_key FROM detection_log"
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return []
+    finally:
+        conn.close()
+    return [row[0] for row in rows if row[0]]
+
+
+def _resolve_snapshot_path(
+    key: str, snapshot_root: Path, legacy_snapshot_dir: Path
+) -> Path | None:
+    """Mirrors the resolution order in 01_CONTRACTS.md §7.1: `SNAPSHOT_ROOT
+    / key` first, then `LEGACY_SNAPSHOT_DIR / key` for a legacy bare
+    filename. Rejects absolute paths and any key whose resolution would
+    escape the configured roots — defense in depth, even though these keys
+    come from the database rather than a live request."""
+    if not key or Path(key).is_absolute() or ".." in Path(key).parts:
+        return None
+
+    candidate = (snapshot_root / key).resolve()
+    if candidate.is_relative_to(snapshot_root.resolve()) and candidate.exists():
+        return candidate
+
+    if "/" not in key and "\\" not in key:
+        legacy_candidate = (legacy_snapshot_dir / key).resolve()
+        if (
+            legacy_candidate.is_relative_to(legacy_snapshot_dir.resolve())
+            and legacy_candidate.exists()
+        ):
+            return legacy_candidate
+
+    return None
+
+
 def _add_file(
     zf: zipfile.ZipFile,
     path: Path,
@@ -63,7 +108,11 @@ def build_archive(
     snapshot_root: Path,
     model_weights_path: Path,
     archive_dir: Path,
+    legacy_snapshot_dir: Path | None = None,
 ) -> Path:
+    legacy_snapshot_dir = (
+        legacy_snapshot_dir if legacy_snapshot_dir is not None else snapshot_root
+    )
     archive_dir.mkdir(parents=True, exist_ok=True)
     archive_id = f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}_{backup_manifest.backup_id[:8]}"
     archive_path = archive_dir / f"adas_archive_{archive_id}.zip"
@@ -99,13 +148,15 @@ def build_archive(
                 checksums,
             )
 
-            if snapshot_root.exists():
-                for snap in sorted(snapshot_root.rglob("*")):
-                    if snap.is_file():
-                        rel = snap.relative_to(snapshot_root).as_posix()
-                        _add_file(
-                            zf, snap, f"snapshots/{rel}", included, missing, checksums
-                        )
+            for key in sorted(_referenced_snapshot_keys(db_file)):
+                arcname = f"snapshots/{key}"
+                resolved = _resolve_snapshot_path(
+                    key, snapshot_root, legacy_snapshot_dir
+                )
+                if resolved is None:
+                    missing.append(arcname)
+                    continue
+                _add_file(zf, resolved, arcname, included, missing, checksums)
 
             archive_manifest = ArchiveManifest(
                 archive_id=archive_id,
