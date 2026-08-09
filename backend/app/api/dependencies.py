@@ -8,7 +8,8 @@ from app.core.config import settings
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
 from app.core.security import decode_session_token
-from app.models import User, UserRole
+from app.models import AuditResult, User, UserRole
+from app.services.audit import record_out_of_band
 from app.services.sessions import get_active_session
 
 
@@ -91,10 +92,38 @@ def get_current_user(
     return user
 
 
-def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Runs the standard guard first, then checks if the role is Admin."""
-    if current_user.role != UserRole.ADMIN:
-        raise AppHTTPException(
-            status.HTTP_403_FORBIDDEN, "Admin privileges required.", code="FORBIDDEN"
-        )
-    return current_user
+def require_admin(action: str | None = None):
+    """Like a plain admin guard, but when `action` names a catalog action
+    (01_CONTRACTS.md §8), a 403 rejection is also audited as a denied
+    attempt at that action — Step 10's "every 403 from get_current_admin"
+    requirement, applied per-route since `action` is a CHECK-constrained
+    enum and there's no generic "forbidden" catalog entry to fall back to.
+    Routes with no corresponding catalog action (the users list, the audit
+    viewer — "viewing is not audited") use `get_current_admin` below, which
+    is just `require_admin(None)`, instead."""
+
+    def dependency(
+        request: Request,
+        current_user: User = Depends(get_current_user),
+        session: Session = Depends(get_session),
+    ) -> User:
+        if current_user.role != UserRole.ADMIN:
+            if action is not None:
+                record_out_of_band(
+                    session.get_bind(),
+                    action=action,
+                    result=AuditResult.DENIED,
+                    actor=current_user,
+                    source_ip=request.client.host if request.client else None,
+                )
+            raise AppHTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Admin privileges required.",
+                code="FORBIDDEN",
+            )
+        return current_user
+
+    return dependency
+
+
+get_current_admin = require_admin(None)
