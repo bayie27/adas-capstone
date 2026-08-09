@@ -17,6 +17,15 @@ from app.schemas.detection import (
     DetectionLogRead,
 )
 from app.schemas.health import SysHealthHourlyRead, SysHealthRawRead
+from app.schemas.maintenance import (
+    BackupListResponse,
+    BackupRead,
+    BackupTriggerResponse,
+    RestoreRequestIn,
+    RestoreStateRead,
+    RestoreStepRead,
+    RestoreTriggerResponse,
+)
 from app.schemas.user import (
     UserAdminUpdate,
     UserCreate,
@@ -31,6 +40,9 @@ __all__ = [
     "ApiError",
     "AuditLogListResponse",
     "AuditLogRead",
+    "BackupListResponse",
+    "BackupRead",
+    "BackupTriggerResponse",
     "CameraCreate",
     "CameraListResponse",
     "CameraRead",
@@ -41,6 +53,10 @@ __all__ = [
     "DetectionLogRead",
     "default_error_code",
     "LoginResponse",
+    "RestoreRequestIn",
+    "RestoreStateRead",
+    "RestoreStepRead",
+    "RestoreTriggerResponse",
     "SysHealthHourlyRead",
     "SysHealthRawRead",
     "UserAdminUpdate",

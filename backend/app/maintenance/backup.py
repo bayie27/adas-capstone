@@ -56,14 +56,26 @@ class MaintenanceBusyError(RuntimeError):
 _maintenance_lock = threading.Lock()
 
 
+def try_acquire_maintenance_lock() -> bool:
+    """For a caller (the API route) that must know synchronously, before
+    committing to any further work, whether a backup/restore is already
+    running — used to turn a busy backup route into an immediate 409
+    rather than only discovering it once a background task starts."""
+    return _maintenance_lock.acquire(blocking=False)
+
+
+def release_maintenance_lock() -> None:
+    _maintenance_lock.release()
+
+
 @contextmanager
 def maintenance_lock():
-    if not _maintenance_lock.acquire(blocking=False):
+    if not try_acquire_maintenance_lock():
         raise MaintenanceBusyError("A backup or restore operation is already running.")
     try:
         yield
     finally:
-        _maintenance_lock.release()
+        release_maintenance_lock()
 
 
 @dataclass
@@ -184,6 +196,25 @@ def create_backup(
     if retention is not None and manifest.valid:
         prune_backups(backup_dir, retention=retention)
 
+    return manifest
+
+
+def perform_backup_assuming_lock_held(
+    db_path: Path,
+    backup_dir: Path,
+    origin: str,
+    *,
+    retention: RetentionConfig | None = None,
+) -> BackupManifest:
+    """For a caller that has already acquired `maintenance_lock`/
+    `try_acquire_maintenance_lock` itself — the manual-backup API route
+    acquires it synchronously (so a busy second request gets an immediate
+    409) and runs this in a background task afterwards. Calling
+    `create_backup()` there instead would try to re-acquire the same
+    (non-reentrant) lock and immediately raise `MaintenanceBusyError`."""
+    manifest = _perform_backup_write(db_path, backup_dir, origin)
+    if retention is not None and manifest.valid:
+        prune_backups(backup_dir, retention=retention)
     return manifest
 
 
