@@ -133,6 +133,28 @@ class TestLogin:
         )
         assert resp.status_code in (400, 401, 422)
 
+    def test_unknown_username_still_runs_a_real_password_verification(
+        self, client: TestClient, session: Session, monkeypatch
+    ):
+        """Edge case 8.8 — timing safety. Asserting wall-clock timing is
+        flaky; this instead proves the *mechanism* runs: an unknown
+        username still triggers a dummy Argon2id verification rather than
+        short-circuiting before any hashing cost is paid."""
+        import app.api.routes.auth as auth_module
+
+        calls = []
+        original = auth_module.verify_dummy_password
+        monkeypatch.setattr(
+            auth_module,
+            "verify_dummy_password",
+            lambda pw: (calls.append(pw), original(pw))[1],
+        )
+
+        client.post(
+            "/api/auth/login", data={"username": "ghost", "password": "whatever"}
+        )
+        assert calls == ["whatever"]
+
 
 class TestUsernameNormalization:
     """Edge case 4.7 — whitespace is stripped consistently; padding a
