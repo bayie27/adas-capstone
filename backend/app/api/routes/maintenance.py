@@ -20,7 +20,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
-from app.api.dependencies import get_current_admin, require_admin
+from app.api.dependencies import get_current_admin, get_realtime_manager, require_admin
 from app.core.config import settings
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
@@ -36,6 +36,7 @@ from app.maintenance.backup import (
 )
 from app.maintenance.manifest import ORIGIN_MANUAL, InvalidBackupIdError
 from app.models import AuditResult, User
+from app.schemas.events import EventType, MaintenanceNoticeData, make_event
 from app.schemas.maintenance import (
     BackupListResponse,
     BackupRead,
@@ -45,6 +46,7 @@ from app.schemas.maintenance import (
     RestoreTriggerResponse,
 )
 from app.services import audit
+from app.services.realtime import RealtimeManager
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -185,6 +187,7 @@ async def trigger_restore(
     request: Request,
     session: Session = Depends(get_session),
     current_admin: User = Depends(_require_admin_for_restore),
+    realtime_manager: RealtimeManager = Depends(get_realtime_manager),
 ) -> RestoreTriggerResponse:
     """Admin only, and deliberately heavy on authorization — this is
     destructive (08_PKG_backup_ops.md Step 5). Requires the current admin's
@@ -296,22 +299,21 @@ async def trigger_restore(
     session.commit()
 
     # Broadcast planned maintenance so connected dashboards can warn the
-    # operator before the socket drops (08_PKG_backup_ops.md Step 5). Uses
-    # the current pre-P4 `ws_manager.manager` — P4/D-008's typed event
-    # envelope isn't in this branch yet (P7 is parallel-safe against P4,
-    # not dependent on it); this will presumably move onto the typed
-    # envelope once that lands. Best-effort: a dead connection or a fully
-    # disconnected dashboard must never fail this response.
+    # operator before the socket drops (08_PKG_backup_ops.md Step 5), on
+    # D-008's typed event envelope now that P4/P3 realtime is in this
+    # branch's history. broadcast() is synchronous and non-blocking
+    # (04_PKG_realtime.md) — no await, and best-effort: a broadcast
+    # failure must never fail this response.
     try:
-        from app.ws_manager import manager
-
-        await manager.broadcast_alert(
-            {
-                "type": "MAINTENANCE_NOTICE",
-                "message": "A database restore has been requested. The system "
-                "will go offline shortly for maintenance.",
-                "backup_id": body.backup_id,
-            }
+        realtime_manager.broadcast(
+            make_event(
+                EventType.MAINTENANCE_NOTICE,
+                MaintenanceNoticeData(
+                    message="A database restore has been requested. The system "
+                    "will go offline shortly for maintenance.",
+                    backup_id=body.backup_id,
+                ),
+            )
         )
     except Exception:
         logger.warning(

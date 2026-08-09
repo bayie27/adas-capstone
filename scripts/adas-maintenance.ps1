@@ -57,10 +57,24 @@ function Write-Step($message) {
 }
 
 function Invoke-Maintenance([string[]]$MaintenanceArgs) {
+    # $output = & ... (an assignment, not a bare pipeline statement) captures
+    # the native command's stdout instead of letting it flow straight into
+    # this function's own output stream. Without this, every JSON line the
+    # CLI prints becomes part of Invoke-Maintenance's *return value* too, so
+    # `$exit = Invoke-Maintenance @(...)` ends up an array (JSON lines plus
+    # the exit code) rather than a bare int — and `$exit -ne 0` against an
+    # array is a PowerShell *filter* (returns non-matching elements), which
+    # is non-empty (truthy) any time the command printed anything at all.
+    # That silently inverted every success/failure check in this script:
+    # `-Action Restart` reported "backup failed" on a run that produced a
+    # fully valid backup file on disk. Write-Host below writes straight to
+    # the console host, bypassing the success stream, so the printed JSON
+    # stays visible without re-polluting the return value.
     Write-Step "python -m app.maintenance $($MaintenanceArgs -join ' ')"
     Push-Location (Join-Path $RepoRoot "backend")
     try {
-        & uv run python -m app.maintenance @MaintenanceArgs
+        $output = & uv run --no-sync python -m app.maintenance @MaintenanceArgs
+        $output | ForEach-Object { Write-Host $_ }
         return $LASTEXITCODE
     }
     finally {
@@ -85,11 +99,18 @@ function Stop-TrackedProcess([string]$PidFile, [string]$Label) {
         return
     }
     Write-Step "Stopping $Label (PID $processId)..."
-    Stop-Process -Id $processId -ErrorAction SilentlyContinue
-    Wait-Process -Id $processId -Timeout 10 -ErrorAction SilentlyContinue
+    # taskkill /T, not Stop-Process: the PID recorded here is `uv.exe`
+    # (Start-Backend/Start-AiEngine launch via `uv run ...`), and on Windows
+    # `uv run` does not exec-replace itself — it stays alive as a parent
+    # spawning the real fastapi/python worker as a child. Stop-Process only
+    # kills the recorded PID, so the worker (and the open port) survived
+    # every -Action Stop even though the script reported success and
+    # deleted the PID file. taskkill /T walks the whole process tree.
+    & taskkill /PID $processId /T /F 2>&1 | Out-Null
+    Start-Sleep -Milliseconds 300
     if (Get-Process -Id $processId -ErrorAction SilentlyContinue) {
-        Write-Step "$Label did not stop gracefully; forcing."
-        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+        Write-Step "$Label`: PID $processId still alive after taskkill /T /F — leaving PID file for investigation."
+        return
     }
     Remove-Item $PidFile -ErrorAction SilentlyContinue
 }
