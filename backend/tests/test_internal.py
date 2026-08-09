@@ -106,9 +106,14 @@ class TestReceiveAiAlertV1Legacy:
         log = session.exec(
             select(DetectionLog).where(DetectionLog.camera_id == camera.camera_id)
         ).first()
-        # If the naive value had been reinterpreted as UTC, this would be
-        # naive_local.replace(tzinfo=UTC) instead — assert it is not.
-        assert log.detected_at != naive_local.replace(tzinfo=UTC)
+        # The value must be interpreted in the server's actual local offset,
+        # not blindly stamped as UTC — assert against the dynamically
+        # computed expected value rather than a fixed offset, since the
+        # test (and CI runners) may run in UTC themselves, where the two
+        # interpretations would otherwise coincide and mask the bug.
+        local_tzinfo = datetime.now().astimezone().tzinfo
+        expected = naive_local.replace(tzinfo=local_tzinfo).astimezone(UTC)
+        assert log.detected_at == expected
 
     def test_v1_generates_its_own_source_event_id(
         self, client: TestClient, session: Session
