@@ -17,12 +17,18 @@ The system is composed of three independently runnable components that communica
 ```
 adas-capstone/
 ├── ai_engine/
-│   ├── main.py              # Entry point — multi-camera inference loop
+│   ├── main.py              # Entry point — wire-up only
+│   ├── pipeline.py          # Fixed-cadence batched multi-camera tick loop
+│   ├── detector.py          # Model ownership, grayscale, class filtering
+│   ├── accumulate.py        # Temporal evidence accumulator (fires the event)
 │   ├── camera.py            # Threaded RTSP stream reader with auto-reconnect
-│   ├── accident.py          # Accident detection logic and webhook dispatch
-│   ├── sync.py              # Background thread that polls the backend for camera state
+│   ├── accident.py          # Event → annotated snapshot → outbox entry
+│   ├── supervisor.py        # Reconciles engine state against the backend
+│   ├── calibrate.py         # One-shot per-machine capacity benchmark
+│   ├── machine_profile.py   # Read/write/validate machine_profile.json
 │   ├── config.py            # AI engine configuration (thresholds, endpoints)
-│   ├── best.pt / best.engine # YOLO weights (portable) / TensorRT engine (GPU-specific)
+│   ├── epoch50.pt           # YOLO weights (the adopted checkpoint)
+│   ├── eval/                # Measurement harness — see eval/README.md
 │   └── snapshots/           # Saved incident snapshots (auto-created)
 ├── backend/
 │   ├── app/
@@ -68,7 +74,7 @@ adas-capstone/
 - **Node.js 22+** and **pnpm** — for the frontend and the root pnpm workspace (`package.json` at the repo root drives lint/format/test scripts across both)
 - **ffmpeg** — required to broadcast local video files to the RTSP proxy during development
 - **MediaMTX** — RTSP media server used to simulate the VMS in development ([download](https://github.com/bluenviron/mediamtx/releases))
-- **NVIDIA GPU + CUDA** — required to run the AI engine with the TensorRT engine; the AI engine falls back to portable `.pt` weights (still needs a GPU for reasonable inference speed, but not a matching TensorRT build) if `best.engine` fails to load
+- **NVIDIA GPU + CUDA** — needed for detection at a usable frame rate. The engine runs without one (see `uv sync --extra ai-cpu` under [Installation](#installation)) and is useful that way for integration work, but a CPU-only machine is not a detection platform and no measured claim may come from it
 
 ---
 
@@ -105,11 +111,21 @@ DSS_PASS=your-vms-password
 uv sync
 ```
 
-`uv sync` alone installs the backend only (fast, no CUDA — this is what CI runs). The AI engine's heavy ML dependencies (torch, tensorrt, ultralytics, opencv) live behind an optional extra, so running the AI engine needs:
+`uv sync` alone installs the backend only (fast, no CUDA — this is what CI runs). The AI engine's heavy ML dependencies (torch, ultralytics, opencv) live behind an optional extra, so running the AI engine needs:
 
 ```bash
 uv sync --extra ai
 ```
+
+On a machine without an NVIDIA GPU, use the CPU install instead — the `ai` extra pulls CUDA-specific PyTorch wheels that are a large download and of no use there:
+
+```bash
+uv sync --extra ai-cpu
+```
+
+The two are mutually exclusive; pick one. `ai-cpu` resolves torch from PyTorch's CPU index, so it pulls **no** `nvidia-*` packages at all. (Simply omitting the CUDA index would not be enough — on Linux the default PyPI torch wheel bundles the CUDA runtime anyway.) It also resolves a newer torch than the CUDA extra, since the two indexes carry different builds; that is fine precisely because no measured claim may come from a CPU machine.
+
+The engine detects the absence of a GPU and falls back automatically. It will run and connect, which is useful for integration work, but it is not a detection platform — run `uv run python ai_engine/calibrate.py` and it will tell you so.
 
 **Node dependencies (frontend + root tooling):**
 
@@ -208,7 +224,15 @@ Requires `uv sync --extra ai` (see [Installation](#installation)). Run from the 
 uv run python ai_engine/main.py
 ```
 
-`best.engine` is a TensorRT engine built for one specific GPU + driver + TensorRT version — it will not load on a different machine. The AI engine detects this and falls back to the portable `best.pt` weights automatically; a fallback message on startup is expected on any machine other than the one it was built on.
+The engine loads `ai_engine/epoch50.pt` directly. There is no longer a `best.engine`/`best.pt` pair or a fallback between them — both files were removed when the detection core was ported, because `best.pt` lost checkpoint selection in all three training runs and `main.py` had been _preferring_ the stale TensorRT build of it.
+
+Before running it on a new machine, calibrate:
+
+```bash
+uv run python ai_engine/calibrate.py
+```
+
+This reports how many cameras the machine can carry at 10 and at 15 FPS and writes a gitignored `machine_profile.json`. See [`ai_engine/eval/README.md`](ai_engine/eval/README.md).
 
 ---
 

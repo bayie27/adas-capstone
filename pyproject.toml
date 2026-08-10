@@ -28,11 +28,35 @@ ai = [
     "ultralytics>=8.4.41",
 ]
 
+# For teammates without an NVIDIA GPU. Identical to `ai` except that torch and
+# torchvision come from PyTorch's CPU index instead of the CUDA 13 one — see
+# [tool.uv.sources] below. Without this a GPU-less machine downloads a full
+# CUDA build to run on the CPU.
+#
+# Pointing at the pytorch-cpu index rather than just omitting the CUDA index is
+# deliberate: on Linux the DEFAULT PyPI torch wheel bundles the CUDA runtime,
+# so plain PyPI would still pull the thing this extra exists to avoid. Windows
+# happens to default to a CPU build, which makes the bug invisible on the
+# machine this was developed on.
+#
+#     uv sync --extra ai-cpu
+#
+# Mutually exclusive with `ai` — see [tool.uv] conflicts.
+ai-cpu = [
+    "opencv-python>=4.13.0.92",
+    "torch>=2.11.0",
+    "torchvision>=0.26.0",
+    "ultralytics>=8.4.41",
+]
+
 # TensorRT is a SPEED optimization, not a requirement, and it is deliberately
 # NOT part of the `ai` extra. The GPU is used either way — that comes from
-# torch's CUDA build. TensorRT adds a faster inference backend on top, and
-# ai_engine/calibrate.py probes for it and falls back to plain PyTorch when it
-# is absent, exactly as SPEC.md describes the `.engine` -> `.pt` fallback.
+# torch's CUDA build. TensorRT would add a faster inference backend on top.
+#
+# Nothing currently builds or loads a TensorRT engine: calibrate.py benchmarks
+# the plain .pt weights and does not probe for TensorRT, so installing this
+# extra changes nothing today. It is kept because design doc section 8 still
+# specifies a build step (see the handover's "Still to do").
 #
 # It is separated because `tensorrt` on PyPI is a wheel-stub that downloads
 # several GB from NVIDIA's own index inside a PEP 517 build step, with no
@@ -59,9 +83,28 @@ name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv]
+# `ai` and `ai-cpu` both provide torch, from different indexes. uv cannot
+# resolve a single lock entry for a package whose source depends on which
+# extra is enabled unless the two are declared mutually exclusive.
+conflicts = [[{ extra = "ai" }, { extra = "ai-cpu" }]]
+
 [tool.uv.sources]
-torch = { index = "pytorch-cu130" }
-torchvision = { index = "pytorch-cu130" }
+# Index selection is per-extra, so it must NOT be unconditional here — an
+# unconditional cu130 pin would drag the CUDA wheels back into `ai-cpu`.
+torch = [
+    { index = "pytorch-cu130", extra = "ai" },
+    { index = "pytorch-cpu", extra = "ai-cpu" },
+]
+torchvision = [
+    { index = "pytorch-cu130", extra = "ai" },
+    { index = "pytorch-cpu", extra = "ai-cpu" },
+]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "ai_engine/tests"]
