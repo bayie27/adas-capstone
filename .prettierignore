@@ -6,6 +6,12 @@ node_modules/
 ai_engine/snapshots/
 ai_engine/sample_vids/
 
+# Frozen artifact staged from the research repo `adas_detection`. It is the
+# reference the ported detector is diffed against to prove the port changed
+# no behaviour (SPEC.md §8 step 3), so it must stay a faithful copy — never
+# reformat it.
+ai_engine/adas_transfer/
+
 # Nested git worktrees (.claude/worktrees/<name>) are separate checkouts on
 # other branches; prettier scans the raw filesystem regardless of branch, so
 # without this it fails on whatever those in-progress branches currently

@@ -61,7 +61,22 @@ target-version = "py312"
 # uses Ruff for Python only (Prettier owns Markdown), and several working docs at
 # the repo root are untracked notes that must not be touched — so keep Ruff off
 # Markdown entirely.
-extend-exclude = ["ai_engine/snapshots", "ai_engine/sample_vids", ".venv", "*.md"]
+extend-exclude = [
+    "ai_engine/snapshots",
+    "ai_engine/sample_vids",
+    ".venv",
+    "*.md",
+    # Frozen artifact staged from the research repo `adas_detection`. It is the
+    # reference the ported detector is diffed against to prove the port changed
+    # no behaviour (SPEC.md §8 step 3), so it must stay a faithful copy.
+    # `accumulate.py` in particular is required to be byte-identical — a `UP` or
+    # `SIM` autofix here would silently invalidate every measurement in SPEC.md §4.
+    "ai_engine/adas_transfer",
+]
+# lint-staged passes explicit file paths, and Ruff ignores `extend-exclude` for
+# paths given on the command line unless exclusions are forced. Without this the
+# pre-commit hook would reformat the frozen package above regardless.
+force-exclude = true
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
