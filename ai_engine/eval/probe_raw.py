@@ -26,6 +26,7 @@ Usage:
     prototype/.venv/Scripts/python.exe eval/probe_raw.py --imgsz 640 1280 --conf 0.05
     prototype/.venv/Scripts/python.exe eval/probe_raw.py --clips truck-student-car.mp4
 """
+
 from __future__ import annotations
 
 import argparse
@@ -47,8 +48,13 @@ SAMPLES = os.path.join(REPO, "prototype", "samples")
 # The five clips missed by every model at every checkpoint, as of 2026-08-08. Four carry the
 # pre-registered `hard` label; motor-motor.mp4 is `standard` and is the one usually left off the
 # list. Override with --clips.
-UNIVERSAL_MISSES = ("armored-car-car.mp4", "car-motor-far.mp4", "jeep-car.mp4",
-                    "motor-motor.mp4", "truck-student-car.mp4")
+UNIVERSAL_MISSES = (
+    "armored-car-car.mp4",
+    "car-motor-far.mp4",
+    "jeep-car.mp4",
+    "motor-motor.mp4",
+    "truck-student-car.mp4",
+)
 
 
 def load_onsets(path: str) -> dict[str, float]:
@@ -59,7 +65,7 @@ def load_onsets(path: str) -> dict[str, float]:
             if not clip or clip.startswith("#"):
                 continue
             if (row.get("onset_s") or "").strip().lower() == "none":
-                continue          # declared negative: no window to probe
+                continue  # declared negative: no window to probe
             try:
                 out[clip] = float(row["onset_s"])
             except (KeyError, TypeError, ValueError):
@@ -68,14 +74,26 @@ def load_onsets(path: str) -> dict[str, float]:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Probe raw detections inside crash windows.")
-    ap.add_argument("--weights", default=os.path.join(REPO, "models", "weights_v2", "best.pt"))
+    ap = argparse.ArgumentParser(
+        description="Probe raw detections inside crash windows."
+    )
+    ap.add_argument(
+        "--weights", default=os.path.join(REPO, "models", "weights_v2", "best.pt")
+    )
     ap.add_argument("--labels", default=LABELS)
-    ap.add_argument("--clips", nargs="*", default=list(UNIVERSAL_MISSES),
-                    help="clip filenames; default is the five universal misses")
+    ap.add_argument(
+        "--clips",
+        nargs="*",
+        default=list(UNIVERSAL_MISSES),
+        help="clip filenames; default is the five universal misses",
+    )
     ap.add_argument("--imgsz", nargs="*", type=int, default=[640, 1280])
-    ap.add_argument("--conf", type=float, default=0.05,
-                    help="floor, deliberately far below the deployed 0.15")
+    ap.add_argument(
+        "--conf",
+        type=float,
+        default=0.05,
+        help="floor, deliberately far below the deployed 0.15",
+    )
     ap.add_argument("--lead", type=float, default=2.0)
     ap.add_argument("--tail", type=float, default=15.0)
     args = ap.parse_args()
@@ -87,10 +105,14 @@ def main() -> None:
     if missing:
         print(f"[warn] no label row for {missing} -- skipping")
 
-    print(f"weights {os.path.relpath(args.weights, REPO)}   conf floor {args.conf}   "
-          f"window [onset-{args.lead:g}s, onset+{args.tail:g}s]")
-    print(f"\n{'clip':<24}{'imgsz':>6}{'frames':>8}{'w/box':>7}{'duty':>7}"
-          f"{'maxconf':>9}{'conf-s':>9}")
+    print(
+        f"weights {os.path.relpath(args.weights, REPO)}   conf floor {args.conf}   "
+        f"window [onset-{args.lead:g}s, onset+{args.tail:g}s]"
+    )
+    print(
+        f"\n{'clip':<24}{'imgsz':>6}{'frames':>8}{'w/box':>7}{'duty':>7}"
+        f"{'maxconf':>9}{'conf-s':>9}"
+    )
     print("-" * 70)
     for imgsz in args.imgsz:
         for clip in args.clips:
@@ -109,11 +131,26 @@ def main() -> None:
                 ok, frame = cap.read()
                 if not ok:
                     break
-                r = model.predict(to_gray(frame), conf=args.conf, imgsz=imgsz, device=0,
-                                  verbose=False)[0]
-                cf = ([float(c) for c, k in zip(r.boxes.conf.tolist(),
-                                                r.boxes.cls.int().tolist()) if int(k) == 0]
-                      if r.boxes is not None else [])
+                r = model.predict(
+                    to_gray(frame), conf=args.conf, imgsz=imgsz, device=0, verbose=False
+                )[0]
+                # strict=True is safe here (and matches detector.py): both lists
+                # come from the same r.boxes, so they cannot differ in length.
+                # This is NOT the accumulate.py case, where the frozen reference
+                # truncates on purpose and strict=True would raise.
+                cf = (
+                    [
+                        float(c)
+                        for c, k in zip(
+                            r.boxes.conf.tolist(),
+                            r.boxes.cls.int().tolist(),
+                            strict=True,
+                        )
+                        if int(k) == 0
+                    ]
+                    if r.boxes is not None
+                    else []
+                )
                 if cf:
                     nb += 1
                     mx = max(mx, max(cf))
@@ -121,7 +158,9 @@ def main() -> None:
                 n += 1
             cap.release()
             duty = nb / n if n else 0.0
-            print(f"{clip:<24}{imgsz:>6}{n:>8}{nb:>7}{duty:>6.0%}{mx:>9.3f}{total:>9.2f}")
+            print(
+                f"{clip:<24}{imgsz:>6}{n:>8}{nb:>7}{duty:>6.0%}{mx:>9.3f}{total:>9.2f}"
+            )
         print("-" * 70)
 
 

@@ -18,6 +18,13 @@ ai_engine/adas_transfer/
 # contain.
 .claude/worktrees/
 
+# Gitignored agent working files (per-task briefs, reports and the progress
+# ledger). Machine-generated and never committed, but prettier scans the raw
+# filesystem, so without this `pnpm check` fails on ~40 files nobody edits by
+# hand. Same reasoning as the worktrees entry above and as Ruff's blanket
+# Markdown exclusion in pyproject.toml.
+.superpowers/
+
 # Untracked team working docs — never touch these
 *.pdf
 final_paper_text.txt
