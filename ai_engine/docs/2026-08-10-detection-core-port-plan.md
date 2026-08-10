@@ -3012,6 +3012,85 @@ git commit -m "build: add a CPU-only install path for the AI engine"
 
 ---
 
+## Task 15: Write the AI engine README
+
+**Files:**
+
+- Create: `ai_engine/README.md`
+
+**Interfaces:**
+
+- Consumes: the finished state of every previous task.
+- Produces: the entry point someone reads before touching `ai_engine/`.
+
+Deliberately last. Written against the finished system, not against intentions — most of what a README would have described before Task 1 no longer exists afterwards.
+
+- [ ] **Step 1: Confirm what to document**
+
+```bash
+ls ai_engine/*.py
+uv run pytest ai_engine/tests/ -q
+```
+
+Document what is actually there and actually passing. If any statement below is not true of the code at this point, fix the code or fix the sentence — do not ship a README that describes intentions.
+
+- [ ] **Step 2: Write it**
+
+Create `ai_engine/README.md` covering, in this order:
+
+1. **What this is** — a Python worker that ingests RTSP streams, runs YOLO plus a temporal accumulator, and posts detected collisions to the backend over an `INTERNAL_API_KEY`-authenticated webhook.
+
+2. **How it decides.** A per-frame detector at `conf=0.15` plus an evidence accumulator; there is no tracker. Recall comes from the low confidence, precision from evidence persisting ~2 seconds in one place. Class 1 `vehicle` is a training foil, discarded at inference. Frames are converted to grayscale before inference — mandatory, not cosmetic.
+
+3. **Running it.**
+
+   ```bash
+   uv sync --extra ai              # or --extra ai-cpu without an NVIDIA GPU
+   uv run python ai_engine/calibrate.py
+   uv run python ai_engine/main.py
+   ```
+
+   Note the engine holds **no camera configuration**. It heartbeats the backend and is told which cameras exist and where to reach them; the address is built backend-side from `RTSP_URL_TEMPLATE`. It cannot run without the backend. For local streams, `mediamtx mediamtx.yml` or `.\scripts\start-sim.ps1`.
+
+4. **Module map** — one line each for `main.py`, `pipeline.py`, `detector.py`, `accumulate.py`, `camera.py`, `accident.py`, `outbox.py`, `supervisor.py`, `backend_client.py`, `events.py`, `config.py`, `machine_profile.py`, `calibrate.py`. Say which import cv2 and which do not, and why that split exists.
+
+5. **Things that will bite you**, each with its reason:
+   - `uv run python`, never bare `python` — PATH has 3.14, the project is pinned to 3.12.13.
+   - Run from the repo root — `ai_engine/` is not a package.
+   - **Never raise `DETECTOR_CONF`.** False alarms score _higher_ than real detections (0.869/0.844/0.649 versus 0.536/0.459/0.741), so any threshold that removes false alarms deletes crashes first.
+   - **Never edit `accumulate.py`.** It is byte-identical to the frozen reference; changing it invalidates every measurement in SPEC.md §4.
+   - **Never quote validation mAP.** It is leaked; a model already known to be broken scored 0.986 by the same measure.
+   - `adas_transfer/` is frozen — excluded from Ruff and Prettier, never edit it.
+   - One accumulator per camera, reset on reconnect, resume and restart. A shared instance goes permanently deaf.
+
+6. **Testing.**
+
+   ```bash
+   uv run pytest                   # CI tier, no GPU
+   uv run pytest -m clips          # needs a GPU and eval/clips populated
+   ```
+
+7. **Where to look next** — `docs/2026-08-10-detection-core-port-design.md` for why it is shaped this way, `adas_transfer/SPEC.md` for the measurements behind every constant, `adas_transfer/NOTICE.md` for licensing, `eval/README.md` for the measurement harness.
+
+- [ ] **Step 3: Verify every command in it actually runs**
+
+Copy each command out of the README and run it. A README with a command that fails is worse than no README.
+
+- [ ] **Step 4: Check formatting**
+
+```bash
+npx prettier --check ai_engine/README.md
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add ai_engine/README.md
+git commit -m "docs(ai-engine): document the ported engine"
+```
+
+---
+
 ## Post-implementation
 
 1. **Update `ai_engine/docs/paper-edits-required.md`** with anything the cadence sweep (Task 11) settled — particularly whether the 10 FPS lower bound now has a measured detection justification.
