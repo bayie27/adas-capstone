@@ -80,8 +80,12 @@ Gotchas that will cost you an hour each:
 what the FastAPI CLI normally does for `sys.path` (see `CLAUDE.md`).
 
 ```bash
-uv run uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000 --ssl-keyfile certs/adas-key.pem --ssl-certfile certs/adas-cert.pem
+uv run uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000 --ssl-keyfile certs/adas-key.pem --ssl-certfile certs/adas-cert.pem --ws-ping-interval 20 --ws-ping-timeout 20
 ```
+
+`--ws-ping-interval`/`--ws-ping-timeout` pin what would otherwise be an unstated library default (A4/F6) — this is
+the one launch command in the repo that can pin it at all; see `04_PKG_realtime.md` Step 5 for why the
+`fastapi dev`/`fastapi run` paths can't.
 
 Confirm in the startup log that `websockets` is the WS implementation (see A4/F6) and note
 uvicorn's default `--ws-ping-interval 20 --ws-ping-timeout 20`.

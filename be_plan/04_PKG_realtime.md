@@ -142,8 +142,23 @@ which the current implementation does not.
 
 ## Step 5 — Liveness and revocation
 
-- Configure protocol-level ping/pong (`websocket_ping_interval` / `websocket_ping_timeout` on the
-  Uvicorn config, documented in the deployment notes).
+- Protocol-level ping/pong is satisfied at the ASGI-server layer, not the application layer —
+  **verified, not built** (`be_audit/A4_realtime_hardening.md` F6, 2026-08-10). `websockets 16.0`
+  is installed and `wsproto` is not, so uvicorn's `ws="auto"` resolves to its `websockets`
+  implementation, whose `Config` defaults `ws_ping_interval=20.0` / `ws_ping_timeout=20.0`
+  (`uvicorn/config.py`). RFC 6455 keepalive is active and reaps a half-open socket in roughly
+  20–40s; a redundant app-level ping was **not** added on top of it. Confirmed live for both
+  launch paths that matter:
+  - `uv run fastapi dev backend/app/main.py` (dev) and `fastapi run` (what
+    `scripts/adas-maintenance.ps1 -Action Start/Restart` invokes) — the FastAPI CLI does not
+    expose `--ws-ping-interval`/`--ws-ping-timeout` at all (checked against
+    `fastapi_cli/cli.py`'s `_run()`, which calls `uvicorn.run()` without those kwargs), so both
+    always inherit the uvicorn library default. Started `fastapi dev` live this session and
+    confirmed `websockets 16.0` importable, `wsproto` not, in the same venv it runs from.
+  - `uv run uvicorn app.main:app --app-dir backend ...` (the direct-uvicorn TLS demo command,
+    `be_audit/A1_lan_tls_drill.md` step 2) — this is the one launch path that **can** pin the
+    setting explicitly, so it now does: `--ws-ping-interval 20 --ws-ping-timeout 20`. Started live
+    this session with those flags; server came up clean on `/healthz/live`.
 - Add a scheduler job (`ws_session_revalidation`, every 60s) that re-checks each connection's
   `auth_session` and closes with `4009` any whose session expired, was revoked, or whose user went
   inactive.
