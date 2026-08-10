@@ -66,9 +66,10 @@ torchvision = { index = "pytorch-cu130" }
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "ai_engine/tests"]
 cache_dir = "backend/.pytest_cache"
-addopts = "-q"
+addopts = "-q -m 'not clips'"
 markers = [
     "slow: marks tests as slow",
+    "clips: needs a GPU and ai_engine/eval/clips populated; excluded from CI",
 ]
 
 [tool.ruff]
