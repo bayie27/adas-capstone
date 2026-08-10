@@ -49,3 +49,12 @@ class AuditResult(StrEnum):
     SUCCESS = "success"
     DENIED = "denied"
     FAILURE = "failure"
+
+
+class HealthState(StrEnum):
+    """Overall /api/system/health/live state (D-009). Response-only —
+    never persisted."""
+
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    CRITICAL = "critical"

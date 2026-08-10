@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 from app.core.config import settings
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
+from app.core.monitor import HealthStore
 from app.core.security import decode_session_token
 from app.models import AuditResult, AuthSession, User, UserRole
 from app.services.audit import record_out_of_band
@@ -154,6 +155,12 @@ def get_realtime_manager(request: Request) -> RealtimeManager:
     must close the matching sockets (auth, users) depend on this instead of
     importing a module-level singleton — see app.services.realtime."""
     return request.app.state.realtime_manager
+
+
+def get_health_store(request: Request) -> HealthStore:
+    """routes/system_health.py (P5) depends on this instead of importing a
+    module-level singleton, same reasoning as get_realtime_manager."""
+    return request.app.state.health_store
 
 
 def get_scheduler(request: Request) -> "AsyncIOScheduler | None":

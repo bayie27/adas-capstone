@@ -137,6 +137,91 @@ class TestGetAllCameras:
         row = next(c for c in resp.json()["cameras"] if c["camera_id"] == cam.camera_id)
         assert row["connection_status"] == "Reconnecting"
 
+    def test_kpi_invariants_hold_across_every_combination(
+        self, client: TestClient, session: Session
+    ):
+        """06_PKG_system_health.md Step 5 — configuration, connection, and
+        AI state are independent dimensions (D-009). A disabled camera that
+        is still reporting Connected/Active must count as Connected/Active
+        in the breakdowns, not be silently reclassified as
+        Disconnected/Inactive just because it's disabled — nothing may
+        infer "disabled" from a connection or AI status."""
+        headers = _headers(client, session)
+        now = datetime.now(UTC)
+
+        make_camera(
+            session,
+            name="Enabled Connected",
+            channel_id=201,
+            connection_status="Connected",
+            ai_status="Active",
+            last_heartbeat_at=now,
+        )
+        make_camera(
+            session,
+            name="Enabled Disconnected",
+            channel_id=202,
+            connection_status="Disconnected",
+            ai_status="Inactive",
+            last_heartbeat_at=now,
+        )
+        make_camera(session, name="Enabled Never HB", channel_id=203)
+        make_camera(
+            session,
+            name="Enabled Stale",
+            channel_id=204,
+            connection_status="Connected",
+            ai_status="Active",
+            last_heartbeat_at=now - timedelta(seconds=30),
+        )
+        # The edge case from the package doc: disabled, but its last
+        # observed report was Connected/Active. presented_statuses() never
+        # treats a disabled camera as stale, so this must present as
+        # Connected/Active — counted there, not under Disconnected/Inactive.
+        disabled_but_connected = make_camera(
+            session,
+            name="Disabled But Connected",
+            channel_id=205,
+            is_enabled=False,
+            connection_status="Connected",
+            ai_status="Active",
+        )
+
+        resp = client.get("/api/cameras/", headers=headers)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+
+        kpis = body["kpis"]
+        conn = body["breakdowns"]["connection"]
+        ai = body["breakdowns"]["ai"]
+
+        assert kpis["total"] == 5
+        assert kpis["enabled"] == 4
+        assert kpis["total"] == kpis["enabled"] + 1  # Disabled is derived
+        assert sum(conn.values()) == kpis["total"]
+        assert sum(ai.values()) == kpis["total"]
+
+        rows = {c["camera_id"]: c for c in body["cameras"]}
+        assert (
+            rows[disabled_but_connected.camera_id]["connection_status"] == "Connected"
+        )
+        assert rows[disabled_but_connected.camera_id]["ai_status"] == "Active"
+        assert rows[disabled_but_connected.camera_id]["is_enabled"] is False
+
+        assert conn["connected"] == 2  # enabled_connected + disabled_but_connected
+        assert conn["disconnected"] == 1  # enabled_disconnected
+        assert conn["reconnecting"] == 1  # enabled_never_heartbeated
+        assert conn["unresponsive"] == 1  # enabled_stale
+        assert ai["active"] == 2  # enabled_connected + disabled_but_connected
+        # enabled_disconnected + enabled_never_heartbeated (never-heartbeated
+        # only overrides the presented *connection* status to Reconnecting;
+        # ai_status keeps its stored default of Inactive).
+        assert ai["inactive"] == 2
+        assert ai["unresponsive"] == 1  # enabled_stale
+
+        assert kpis["network_connected"] == conn["connected"]
+        assert kpis["active_detection"] == ai["active"]
+
     def test_disabled_camera_never_presented_as_unresponsive(
         self, client: TestClient, session: Session
     ):
