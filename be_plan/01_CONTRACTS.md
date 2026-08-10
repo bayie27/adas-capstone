@@ -607,10 +607,22 @@ Empty search results return `{"items": [], "top_faqs": [...]}` (UC-10).
 after every package. v2 is what the AI owner migrates to. Both authenticate with the `x-api-key`
 header compared using `secrets.compare_digest`.
 
+> **2026-08-10:** superseded — see the §6.1 note. `ai_engine/` finished migrating to v2 in P10, and
+> the A3 audit pack removed v1's remaining unused routes. Only v2 (§6.2, §6.3) is live.
+
 > A **missing** `x-api-key` header currently returns `422`, not `401`. Fix this in P1 by giving the
 > header parameter a default of `None` and raising `401 AUTH_REQUIRED` explicitly.
 
 ### 6.1 v1 — legacy, frozen (must not break)
+
+> **2026-08-10 (be_audit/A3_ai_seam.md, F3):** `GET /api/internal/cameras` and
+> `PATCH /api/internal/cameras/{id}/status` were **removed**. PR #67 had already removed their only
+> caller (`ai_engine/sync.py`); the PATCH route was also a second, unguarded writer of AI-owned
+> observed state, contradicting D-003's single-writer rule (`apply_observed()` is the only writer).
+> The table below is left as-is for the historical record; both rows are dead. `POST
+> /api/internal/alert`'s v1 payload branch (bare `snapshot_path`, backend-generated
+> `source_event_id`) was removed in the same pack — the route now only accepts the v2 shape in
+> §6.3. `backend/scripts/seed_alerts_via_api.py`, the only other v1 caller, was deleted.
 
 | M | Path | Behavior |
 |---|---|---|
