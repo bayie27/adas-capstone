@@ -1,6 +1,6 @@
 # ADAS — Intelligent Real-Time Road Accident Detection & Alert System
 
-> Last updated: August 8, 2026
+> Last updated: August 10, 2026
 
 A capstone project for De La Salle Lipa, Bachelor of Science in Information Technology, College of Information Technology and Engineering. ADAS automates vehicle-to-vehicle collision detection across a CCTV network, eliminating reliance on manual monitoring and reducing emergency notification latency to seconds.
 
@@ -25,26 +25,40 @@ adas-capstone/
 │   ├── best.pt / best.engine # YOLO weights (portable) / TensorRT engine (GPU-specific)
 │   └── snapshots/           # Saved incident snapshots (auto-created)
 ├── backend/
+│   ├── alembic/              # Schema migrations — see CONTRIBUTING.md's "Database migrations"
 │   ├── app/
 │   │   ├── main.py          # FastAPI app, lifespan, middleware, WebSocket
-│   │   ├── models.py        # SQLModel table definitions and Pydantic schemas
-│   │   ├── ws_manager.py    # WebSocket connection manager
+│   │   ├── models/          # SQLModel table definitions, one module per domain
+│   │   ├── schemas/         # Pydantic request/response schemas (not ORM models)
+│   │   ├── services/        # Business logic — incidents, cameras, snoozes, audit, realtime, reports, ...
+│   │   ├── maintenance/     # Backup/restore/archive/restart — also runnable as `python -m app.maintenance`
 │   │   ├── core/
-│   │   │   ├── config.py    # Settings loaded from .env
-│   │   │   ├── db.py        # Engine, WAL setup, session, DB init
-│   │   │   └── security.py  # Password hashing and JWT creation
+│   │   │   ├── config.py     # Settings loaded from .env
+│   │   │   ├── db.py         # Engine, WAL setup, session, DB init
+│   │   │   ├── migrations.py # Alembic startup revision check
+│   │   │   ├── types.py      # UtcDateTime — the only stored-timestamp type in this schema
+│   │   │   ├── security.py   # Password hashing (Argon2id) and JWT creation
+│   │   │   ├── scheduler.py  # APScheduler wiring (cooldowns, snoozes, health, exports)
+│   │   │   └── monitor.py    # System-health sampling, hourly rollup, retention pruning
 │   │   └── api/
-│   │       ├── dependencies.py          # Auth guards (JWT, API key, RBAC)
+│   │       ├── dependencies.py          # Auth guards (session cookie, x-api-key, RBAC)
 │   │       └── routes/
-│   │           ├── internal.py          # AI engine webhook and camera status
-│   │           ├── auth.py              # Login
+│   │           ├── internal.py          # AI engine webhook + heartbeat (v1 legacy and v2)
+│   │           ├── auth.py              # Login/logout (HttpOnly session cookie)
 │   │           ├── cameras.py           # Camera CRUD and management
-│   │           ├── alerts.py            # HITL workflow (confirm/dismiss/resolve)
+│   │           ├── alerts.py            # HITL workflow (confirm/dismiss/resolve/snooze) + exports
 │   │           ├── users.py             # User CRUD and self-service
-│   │           ├── analytics.py         # Dashboard KPIs and charts
-│   │           └── system.py            # (not yet implemented) System health telemetry
+│   │           ├── analytics.py         # Dashboard KPIs, AI performance, charts + exports
+│   │           ├── audit.py             # Append-only activity audit viewer + export (Admin only)
+│   │           ├── settings.py          # Per-user alarm settings
+│   │           ├── exports.py           # Async export jobs + retraining package
+│   │           ├── help.py              # Help Center articles (role-filtered, FTS5 search)
+│   │           ├── events.py            # WebSocket event schema support routes
+│   │           ├── system.py            # Unauthenticated `/healthz/live`, `/healthz/ready` probes
+│   │           ├── system_health.py     # Authenticated live/historical hardware telemetry
+│   │           └── maintenance.py       # Backup/restore API (Admin only)
 │   ├── scripts/             # Dev utilities — see backend/scripts/README.md
-│   ├── tests/               # Pytest test suite
+│   ├── tests/                # Pytest test suite, plus tests/perf/ (slow, opt-in — see CONTRIBUTING.md)
 │   └── README.md            # Backend-specific setup and API reference
 ├── frontend/
 │   ├── src/                 # React source (components, pages, hooks, stores)
@@ -53,6 +67,8 @@ adas-capstone/
 ├── e2e/                     # Playwright specs (CI-only, spans backend + frontend)
 ├── mediamtx.yml             # Camera simulation config — see "Simulate camera streams"
 ├── scripts/start-sim.ps1    # Preflighted wrapper around `mediamtx mediamtx.yml`
+├── scripts/adas-maintenance.ps1  # Windows demo orchestrator for backup/restore/restart
+├── alembic.ini               # Points at backend/alembic/ — see CONTRIBUTING.md
 ├── pyproject.toml
 ├── uv.lock
 ├── package.json             # Root pnpm workspace — see CONTRIBUTING.md for the script reference
@@ -74,7 +90,7 @@ adas-capstone/
 
 ## Environment Setup
 
-Copy `.env.example` to `.env` in the repo root and fill in all values:
+Copy `.env.example` to `.env` in the repo root and fill in all values — it documents every setting with its default, so treat it as the source of truth rather than this abbreviated list:
 
 ```env
 # Security
@@ -94,6 +110,21 @@ DSS_PORT=80
 DSS_USERNAME=admin
 DSS_PASS=your-vms-password
 ```
+
+Everything else (session lifetime, rate limiting, snooze/cooldown windows,
+health-sampling intervals, export row limits and TTLs, WebSocket connection
+limits, backup retention) has a safe default and only needs overriding for
+production. Three storage roots are worth knowing about up front since
+they're where the backend writes files outside the database:
+
+| Setting         | Default                      | What lives there                                                                                                             |
+| --------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `SNAPSHOT_ROOT` | `<repo>/ai_engine/snapshots` | Incident snapshot JPEGs, served only via the authenticated `GET /api/alerts/{log_id}/snapshot` — never a public static mount |
+| `BACKUP_DIR`    | `<repo>/var/backups`         | Verified online backups + `restore_state.json`                                                                               |
+| `EXPORT_DIR`    | `<repo>/var/exports`         | Generated CSV/PDF/ZIP export artifacts (expire after `EXPORT_ARTIFACT_TTL_HOURS`)                                            |
+
+`var/` is gitignored — safe scratch space for local backups, exports, and
+migration testing.
 
 ---
 
@@ -220,7 +251,7 @@ uv run python ai_engine/main.py
 uv run python backend/scripts/reseed_dev.py
 ```
 
-Always use `uv run python`, never a bare `python` — the `python` on PATH may be a different, unpinned interpreter (e.g. a system install) rather than the project's pinned 3.12.13. This gives you a fresh DB with an admin account, three cameras, and sample alerts across all detection statuses. See [`backend/scripts/README.md`](backend/scripts/README.md) for the full script reference.
+Always use `uv run python`, never a bare `python` — the `python` on PATH may be a different, unpinned interpreter (e.g. a system install) rather than the project's pinned 3.12.13. This gives you a fresh DB with an admin account, six cameras, and sample alerts across all detection statuses. Schema is provisioned by running `alembic upgrade head` under the hood, not `CREATE TABLE`-equivalent metadata calls — see [CONTRIBUTING.md](CONTRIBUTING.md)'s "Database migrations" section before changing a model. See [`backend/scripts/README.md`](backend/scripts/README.md) for the full script reference, including the `perf` profile (100,000 incidents, for measuring query/export performance against a realistic dataset size).
 
 **Run the test suite:**
 
@@ -228,7 +259,17 @@ Always use `uv run python`, never a bare `python` — the `python` on PATH may b
 uv run pytest
 ```
 
-Tests use an in-memory SQLite database and never touch `adas.db`. For the full pre-push/pre-PR command reference (`pnpm check`, `pnpm full:check`, individual lint/format/typecheck scripts), see [CONTRIBUTING.md](CONTRIBUTING.md).
+Tests use an in-memory SQLite database and never touch `adas.db`. This excludes `backend/tests/perf/` by default (slow — seeds a real 100,000-row database); run it explicitly with `uv run pytest -m slow backend/tests/perf/`. For the full pre-push/pre-PR command reference (`pnpm check`, `pnpm full:check`, individual lint/format/typecheck scripts), see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+**Back up or restore the local database:**
+
+```bash
+cd backend
+uv run python -m app.maintenance backup
+uv run python -m app.maintenance list
+```
+
+On Windows, `scripts\adas-maintenance.ps1` wraps the full backup/restore/restart lifecycle (stopping and restarting the backend/AI engine processes around the same Python maintenance core) — see that script's own header comment for every `-Action`.
 
 ---
 
@@ -250,13 +291,17 @@ Tests use an in-memory SQLite database and never touch `adas.db`. For the full p
                            ▼
 ┌──────────────────────────────────────────────────────────┐
 │                    FastAPI Backend                        │
-│  SQLite (WAL) · JWT auth · RBAC · WebSocket manager      │
+│  SQLite (WAL) · HttpOnly cookie sessions · RBAC · Alembic │
 │                                                          │
-│  /api/internal/*  ← AI engine only                       │
-│  /api/alerts/*    ← HITL workflow (confirm/dismiss/resolve) │
+│  /api/internal/*  ← AI engine only (x-api-key)            │
+│  /api/alerts/*    ← HITL workflow + exports               │
 │  /api/cameras/*   ← Camera management                    │
 │  /api/users/*     ← User management (Admin only)         │
-│  /ws/alerts       ← Real-time push to dashboard          │
+│  /api/audit-logs  ← Append-only activity audit (Admin)    │
+│  /api/system/*    ← Hardware telemetry + backup/restore   │
+│  /api/exports/*   ← Async export jobs + retraining ZIP    │
+│  /api/help/*      ← Role-filtered Help Center             │
+│  /ws/alerts       ← Real-time push to dashboard           │
 └──────────────────────────┬───────────────────────────────┘
                            │ WebSocket + REST
                            ▼
@@ -279,15 +324,11 @@ Tests use an in-memory SQLite database and never touch `adas.db`. For the full p
 
 **WAL mode on SQLite.** Allows the AI engine's high-frequency writes and the dashboard's concurrent reads to coexist without locking errors.
 
----
+**Cookie-based sessions, not a bearer token.** Login sets an `HttpOnly`, `Secure` (in production) session cookie backed by a revocable `auth_session` database row — the browser attaches it automatically to REST calls and the WebSocket handshake alike, and the frontend never holds a credential in JS-reachable storage. Logout, a password change, a role change, or account deactivation revokes every session for that user immediately.
 
-## What Is Not Yet Implemented
+**Append-only activity audit.** Every security- and operations-relevant action (incident transitions, camera/user changes, exports, backups) writes an `audit_log` row in the same transaction as the primary action; SQLite triggers reject any `UPDATE`/`DELETE` against that table.
 
-- `backend/app/api/routes/system.py` — hardware telemetry (CPU, GPU, RAM, temperature) endpoints (intentional 0-byte placeholder)
-- `backend/app/core/monitor.py` — background process that polls hardware metrics and writes to `sys_health_raw` (intentional 0-byte placeholder)
-- `backend/scripts/daily_restart.sh` — scheduled nightly restart script (intentional 0-byte placeholder)
-
-`backend/app/api/routes/analytics.py` is implemented (dashboard KPIs, accident frequency and peak-time charts) with a full pytest suite — it used to be listed here as planned, which was stale.
+**Alembic-managed schema.** One reviewed initial migration (`backend/alembic/versions/`) represents the full production schema; the app refuses to start against a database whose recorded revision doesn't match the code in production, and only warns in development. See [CONTRIBUTING.md](CONTRIBUTING.md)'s "Database migrations" section.
 
 ---
 
