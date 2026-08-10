@@ -2,7 +2,9 @@
 
 **Date:** 2026-08-10
 **Scope:** `ai_engine/` only. No backend or frontend changes.
-**Source material:** `ai_engine/adas_transfer/` (SPEC.md, NOTICE.md, `code/`, `eval/`, `clips/`), staged from the research repo `adas_detection`.
+**Source material:** `ai_engine/adas_transfer/` (SPEC.md, NOTICE.md, `code/`, `eval/`, `clips/`), staged from the research repo `adas_detection`; and `ai_engine/docs/Final-Paper.pdf`, the capstone paper, which is authoritative for deployment targets and acceptance criteria.
+
+**Companion document:** `ai_engine/docs/paper-edits-required.md` lists the paper changes this design makes necessary. The two must land together — several of the paper's test cases currently encode the pre-port detection design.
 
 ---
 
@@ -79,7 +81,11 @@ Rationale for a fixed cadence over free-running or per-camera threads:
 
 The optimum is therefore *as fast as the machine sustains, capped at the stream's native rate* — determined by measurement (§6), not by a hardcoded constant.
 
+**The target range is already fixed by the paper: 10–15 FPS per camera** (Final-Paper p.74, "Hardware Utilization & Computational Load Balancing", and TC-AI-402, which tests for a steady 10–15 FPS under a continuous RTSP feed). Calibration therefore selects a rate *within* that band based on what the machine sustains, rather than choosing an arbitrary number. A machine that cannot hold 10 FPS per camera at full camera count is recorded as degraded in its profile.
+
 Cadence is held stable at the rate sustainable with all cameras active, rather than raised when cameras pause. Stability keeps the deployed configuration comparable to whatever cadence was measured.
+
+**Batch shape is not a constraint.** The paper's TensorRT export configuration (p.84) already specifies `dynamic=True` and `batch=8`, so a batch that shrinks as cameras pause is handled natively. No batch padding is required.
 
 ### 4.3 One incident per tick per camera
 
@@ -147,9 +153,11 @@ The profile records verification as one of:
 
 ### 6.4 Expected capability by machine class
 
+The documented deployment target (paper p.73) is a Dell PowerEdge R760xa with 8× NVIDIA L4 Tensor Core GPUs, dual Xeon Platinum 8468, and 512 GB RAM. That is comfortably above the class where cadence is a concern, so the deployment box is expected to hold the top of the 10–15 FPS band. Calibration matters chiefly for teammates' development machines.
+
 | Machine | Expected outcome |
 |---|---|
-| T4-class or better | Full native camera rate. SPEC §4 numbers apply directly. |
+| Deployment box (8× L4) / T4-class or better | Top of the 10–15 FPS band. SPEC §4 numbers apply directly. |
 | RTX 3050 / GTX 1650 | Near native with an optimized build. Re-measure once to confirm. |
 | Older or weaker NVIDIA | Reduced cadence. Usable; expect a modestly higher false-alarm rate. |
 | Apple Silicon | Reduced cadence. Adequate for development and demos. |
@@ -168,11 +176,20 @@ The `DetectionLogCreateV2` contract is unchanged: same five keys, `extra="forbid
 Two mappings are decided here:
 
 - **`confidence_score` = the event's `peak_conf`.** The accumulator's `score`, `box` and `age_s` remain engine-side, used for logging and snapshot annotation.
-- **`detected_at` = `now - age_s`.** The event fires roughly 3 seconds after impact (SPEC §4: median +3.02s) and `age_s` measures back to when the region first appeared. Stamping at send time, as the current code does, logs every accident ~3 seconds late into the incident record and the peak-time analytics. Whoever owns the analytics package should be told this semantics change is landing.
+- **`detected_at` = `now - age_s`.** The event fires roughly 3 seconds after impact (SPEC §4: median +3.02s) and `age_s` measures back to when the region first appeared. Stamping at send time, as the current code does, logs every accident ~3 seconds late into the incident record and the peak-time analytics.
+
+**This mapping interacts with two of the paper's acceptance criteria, and they must be re-anchored differently.** Both were written when detection was a single frame, so "the moment of detection" and "the moment of impact" were the same instant. The accumulator separates them by ~3 seconds.
+
+- **TC-S-103** (operator confirms within 15s) **anchors to the crash** — i.e. to `detected_at` as redefined here. It is the metric that supports the study's central claim of reducing the notification gap (paper p.8), so it must honestly include the detector's own latency. Budget after the change: ~3s accumulating, <2s plumbing, leaving ~10s of operator time inside the 15s limit. Achievable, but tighter than the original wording implies, and worth confirming during live testing.
+- **TC-R-201** (UI alert modal within 2.0s) **stays anchored to alert emission**, not to `detected_at`. It measures backend→WebSocket→UI plumbing. Anchoring it to impact would fold ~3s of AI accumulation into a 2s budget and fail a path that is genuinely fast. The paper's wording needs to change from "the moment of detection" to "the moment the alert is emitted" — a clarification of what the test always measured, not a relaxation.
 
 **Snapshot:** the fire-time **colour** frame with the fired region drawn on it. Today's `main.py:90` passes `r.plot()`, which under grayscale input would annotate the tensor the model sees rather than something an operator can read.
 
-**`inference_latency_ms`** currently reports whole-batch latency to every camera (`main.py:89`). It becomes `batch_latency / len(batch)`, an amortized per-camera cost. This is a visible change in the system-health charts.
+**`inference_latency_ms`** currently reports whole-batch latency to every camera (`main.py:89`). It becomes `batch_latency / len(batch)`, an amortized per-camera cost.
+
+This is not a cosmetic change. The paper's **TC-AI-401** sets the budget at "strictly under 100 milliseconds **per frame**." Reporting whole-batch latency to every camera overstates per-frame cost by the batch size, so at five cameras the system would report ~5× the true figure and **fail a criterion it actually meets**. The amortized definition is what TC-AI-401 is written against.
+
+Consequence to communicate: the System Health page's `avg_inference_latency_ms` will drop by roughly the camera count. That is a corrected definition, not a performance improvement, and should not be reported as one.
 
 **Self-blindfold ordering is preserved:** on a fired event the camera pauses before any disk or network work, exactly as `accident.py` does today.
 
@@ -237,6 +254,7 @@ Expected per-clip results are committed as `ai_engine/eval/baseline_epoch50.json
 | `best.engine` silently preferred over the adopted model | Both stale files deleted in this work |
 | RTSP path has never run against real hardware | SPEC §2.3 flags this explicitly. Point the engine at one CDRRMO camera early, not at the defence |
 | Ultralytics AGPL-3.0 reaches network use; two dataset licences unestablished | NOTICE.md §"Outstanding". Submission blockers, not engineering ones — raise with the adviser |
+| Several paper test cases encode the pre-port design (a 0.75 confidence gate, an mAP acceptance threshold, a no-flicker requirement) and would fail or mislead against the ported detector | `ai_engine/docs/paper-edits-required.md`. The code change and the paper edits must land together |
 
 ## 11. Order of work
 
