@@ -274,3 +274,8 @@ playwright-report/
 # Written by ai_engine/calibrate.py. Machine-specific, like a TensorRT engine.
 ai_engine/machine_profile.json
 ai_engine/*.engine
+
+# Real accident footage, test-only, permanently. No public licence; shows identifiable
+# people/vehicles/locations. Already covered by *.mp4 above; this is belt-and-suspenders
+# so the rule holds even if a non-.mp4 file ever lands here.
+ai_engine/eval/clips/
