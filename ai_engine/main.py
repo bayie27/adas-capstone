@@ -1,43 +1,59 @@
-import time
-from pathlib import Path
+"""Wire-up only. Detection lives in detector.py, scheduling in pipeline.py,
+incident handling in accident.py.
+"""
 
-import cv2
+import logging
+
+import config
 import outbox
 from accident import AccidentManager
-from config import CONFIDENCE_THRESHOLD
+from detector import AccidentDetector
+from pipeline import InferencePipeline
 from supervisor import start_supervisor_thread
-from ultralytics import YOLO
 
-MODEL_DIR = Path(__file__).resolve().parent
-ENGINE_PATH = MODEL_DIR / "best.engine"
-WEIGHTS_PATH = MODEL_DIR / "best.pt"
+logger = logging.getLogger("ai_engine")
 
 
-def load_model():
-    """Prefer the TensorRT engine; fall back to portable .pt weights.
+def _load_capacity() -> int:
+    """Camera capacity from the machine profile, or a pessimistic default.
 
-    best.engine is built for one specific GPU + driver + TensorRT version and
-    will not load elsewhere, so a failure here is expected on other machines.
+    A missing profile is not an error — the engine runs, says so, and points
+    at calibrate.py. The import is inside the function and the whole thing is
+    guarded, so this works before Task 12 exists (ImportError) as well as
+    after (missing or malformed file).
     """
-    if ENGINE_PATH.exists():
-        try:
-            return YOLO(str(ENGINE_PATH))
-        except Exception as exc:
-            print(
-                f"TensorRT engine failed to load ({exc}); falling back to {WEIGHTS_PATH.name}"
-            )
-    return YOLO(str(WEIGHTS_PATH))
+    try:
+        from machine_profile import load_profile
+
+        profile = load_profile(config.PROFILE_PATH)
+    except Exception:
+        profile = None
+
+    if profile is None:
+        print(
+            "[SYSTEM] No machine profile found. Running with a conservative "
+            f"capacity of {config.FALLBACK_CAMERA_CAPACITY} camera(s). "
+            "Run `uv run python ai_engine/calibrate.py` to measure this machine."
+        )
+        return config.FALLBACK_CAMERA_CAPACITY
+
+    print(
+        f"[SYSTEM] Machine profile: {profile.device} · capacity "
+        f"{profile.capacity_at_max_fps} camera(s) @ {config.FPS_BAND_MAX:.0f} FPS · "
+        f"verification: {profile.verification}"
+    )
+    return profile.capacity_at_max_fps
 
 
-def run_multi_camera_inference():
+def run_multi_camera_inference() -> None:
     print("Initializing ADAS Edge Inference Server...")
 
-    # Load the optimized TensorRT Engine, falling back to portable weights
-    model = load_model()
-    alert_manager = AccidentManager()
+    capacity = _load_capacity()
+    detector = AccidentDetector(config.WEIGHTS_PATH)
+    print(f"[SYSTEM] Detector ready on device '{detector.device}'.")
 
-    # Change cameras from a list to a dictionary for dynamic lookup by ID
-    cameras = {}
+    alert_manager = AccidentManager()
+    cameras: dict = {}
 
     def _stop_camera(camera_id):
         cam = cameras.pop(camera_id, None)
@@ -49,65 +65,30 @@ def run_multi_camera_inference():
             cam.stop()
 
     # Drain anything persisted before a crash, then keep delivering new
-    # events in the background. This is the entire reason the outbox
-    # exists (be_plan/15 Step 6) — do it before the inference loop starts.
+    # events in the background. Do this before the inference loop starts.
     outbox.run_delivery_cycle(on_camera_gone=_stop_camera)
     outbox.start_delivery_worker(on_camera_gone=_stop_camera)
 
-    # Start the heartbeat/reconciliation thread (replaces the 3s poll)
     start_supervisor_thread(cameras)
+    print("Waiting for backend heartbeat... Ctrl+C to quit.")
 
-    print("Waiting for backend heartbeat... Press 'q' in any video window to quit.")
+    pipeline = InferencePipeline(
+        cameras,
+        detector,
+        alert_manager.handle_event,
+        capacity=capacity,
+    )
 
-    while True:
-        frames_to_process = []
-        active_cameras = []
-
-        # Gather frames ONLY from cameras that are online and NOT paused
-        # Use .copy() to prevent Threading RuntimeError if supervisor.py modifies the dict
-        for cam in list(cameras.copy().values()):
-            if not cam.is_paused:
-                frame = cam.read()
-                if frame is not None:
-                    frames_to_process.append(frame)
-                    active_cameras.append(cam)
-
-        # GPU BATCHING
-        if frames_to_process:
-            batch_start = time.perf_counter()
-            results = model(
-                frames_to_process,
-                stream=False,
-                device=0,
-                verbose=False,
-                conf=CONFIDENCE_THRESHOLD,
-            )
-            batch_latency_ms = (time.perf_counter() - batch_start) * 1000
-
-            for i, r in enumerate(results):
-                current_cam = active_cameras[i]
-                current_cam.inference_latency_ms = batch_latency_ms
-                annotated_frame = r.plot()
-
-                # Hand it to the manager to check for accidents and trigger webhooks
-                alert_manager.process_detections(current_cam, r, annotated_frame)
-
-                # cv2.imshow(f"ADAS Stream - Camera {current_cam.camera_id} (Ch. {current_cam.channel_id})", annotated_frame)
-
-        else:
-            # Yield the CPU to prevent starving the background sync thread
-            time.sleep(0.05)
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            print("Manual exit triggered.")
-            break
-
-    # Clean up operations
-    print("Shutting down worker threads...")
-    for cam in list(cameras.copy().values()):
-        cam.stop()
-    cv2.destroyAllWindows()
-    print("ADAS Edge Server safely powered down.")
+    try:
+        pipeline.run()
+    except KeyboardInterrupt:
+        print("\nManual exit triggered.")
+    finally:
+        pipeline.stop()
+        print("Shutting down worker threads...")
+        for cam in list(cameras.values()):
+            cam.stop()
+        print("ADAS Edge server safely powered down.")
 
 
 if __name__ == "__main__":

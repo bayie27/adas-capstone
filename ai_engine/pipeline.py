@@ -119,6 +119,7 @@ class InferencePipeline:
         that for free, so a failing batch is re-run frame by frame to find
         the culprit.
         """
+        self.last_batch_latency_ms = None
         frames = [read.frame for _, read in collected]
         started = time.perf_counter()
         try:
@@ -154,7 +155,17 @@ class InferencePipeline:
 
         self.degraded = len(collected) > self.capacity
 
-        for (camera, read), detection in self._infer(collected):
+        inferred = self._infer(collected)
+
+        if self.last_batch_latency_ms is not None and collected:
+            # TC-AI-401 budgets "under 100 ms per FRAME". Reporting whole-batch
+            # latency to every camera overstates per-frame cost by exactly the
+            # batch size, so the system would fail a criterion it meets.
+            per_camera = self.last_batch_latency_ms / len(collected)
+            for camera, _ in collected:
+                camera.inference_latency_ms = per_camera
+
+        for (camera, read), detection in inferred:
             accumulator = self.registry.resolve(
                 camera.camera_id, camera, read.segment_id
             )
