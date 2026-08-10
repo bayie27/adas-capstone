@@ -253,12 +253,22 @@ async def lifespan(app: FastAPI):
 async def request_id_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
     token = request_id_ctx.set(request_id)
+    # Also on request.state (backed by the ASGI scope, which survives into
+    # ServerErrorMiddleware's own `Request(scope)`) — the bare-`Exception`
+    # handler runs *outside* this middleware's try/finally, by which point
+    # `request_id_ctx` has already been reset, so it cannot rely on the
+    # contextvar the way every other handler does. See F8 in 00_FINDINGS.md.
+    request.state.request_id = request_id
     try:
         response = await call_next(request)
     finally:
         request_id_ctx.reset(token)
     response.headers["X-Request-ID"] = request_id
     return response
+
+
+def _request_id(request: Request) -> str:
+    return getattr(request.state, "request_id", None) or request_id_ctx.get()
 
 
 _UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -315,11 +325,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 async def operational_error_handler(request: Request, exc: OperationalError):
+    request_id = _request_id(request)
     if "database is locked" not in str(exc).lower():
         # Not the lock-timeout case D-005 calls out — treat like any other
         # unhandled exception rather than claiming a specific cause.
         logger.exception(
-            "Unhandled OperationalError on %s %s", request.method, request.url
+            "Unhandled OperationalError on %s %s [request_id=%s]",
+            request.method,
+            request.url,
+            request_id,
         )
         return JSONResponse(
             status_code=500,
@@ -327,13 +341,14 @@ async def operational_error_handler(request: Request, exc: OperationalError):
                 detail="An internal server error occurred.",
                 code="INTERNAL_SERVER_ERROR",
             ).model_dump(),
+            headers={"X-Request-ID": request_id},
         )
 
     logger.error(
         "SQLite busy-timeout exceeded on %s %s [request_id=%s]",
         request.method,
         request.url,
-        request_id_ctx.get(),
+        request_id,
     )
     return JSONResponse(
         status_code=503,
@@ -341,15 +356,22 @@ async def operational_error_handler(request: Request, exc: OperationalError):
             detail="The service is temporarily unavailable. Please retry shortly.",
             code="TEMPORARILY_UNAVAILABLE",
         ).model_dump(),
+        headers={"X-Request-ID": request_id},
     )
 
 
 async def global_exception_handler(request: Request, exc: Exception):
+    # F8 (00_FINDINGS.md): this handler is served by Starlette's
+    # ServerErrorMiddleware, which sits *outside* request_id_middleware —
+    # by the time we get here, request_id_ctx has already been reset to its
+    # "-" default. request.state survives (see request_id_middleware), so
+    # read the id from there instead of the contextvar.
+    request_id = _request_id(request)
     logger.exception(
         "Unhandled exception on %s %s [request_id=%s]",
         request.method,
         request.url,
-        request_id_ctx.get(),
+        request_id,
     )
     return JSONResponse(
         status_code=500,
@@ -357,6 +379,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             detail="An internal server error occurred.",
             code="INTERNAL_SERVER_ERROR",
         ).model_dump(),
+        headers={"X-Request-ID": request_id},
     )
 
 
@@ -428,9 +451,13 @@ async def websocket_alerts(
     try:
         while True:
             # Received messages are unused — clients never mutate state over
-            # the socket (D-008). This just blocks until the client
-            # disconnects.
-            await websocket.receive_text()
+            # the socket (D-008). `receive()` (not `receive_text()`) so a
+            # binary frame is just another ignored message instead of
+            # raising into the generic `except Exception` below and logging
+            # a stack trace for something that isn't an error (F16).
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                break
     except WebSocketDisconnect:
         pass
     except Exception:
