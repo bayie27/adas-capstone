@@ -25,15 +25,25 @@ Measured on the development GTX 1650: **8 cameras at 15 FPS, 12 at 10 FPS.** The
 
 ### What that leaves out
 
-- **Sustained load.** 2.6 s per batch size cannot reveal thermal throttling. The paper's entire justification for the 10–15 FPS band (p.74) is GPU thermal management, so the one effect the band exists for is the one the benchmark cannot see.
-- **The faster formats.** No export, so the numbers describe the slowest path the system will ever run.
-- **The rest of the pipeline.** Frame decode happens in per-camera threads and is off the tick's critical path, but the accumulator update, and the snapshot encode plus disk write on an event, are not counted.
-- **Co-resident processes.** A development machine also runs the backend, the frontend dev server and a browser.
-- **Head-room.** At capacity 8 the batch uses 64.3 ms of a 66.7 ms tick — 96 % utilisation, ~2.4 ms of slack for everything above.
+| Omission                                                                                                                                                                                                                                        | Addressed by              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| **Sustained load.** 2.6 s per batch size cannot reveal thermal throttling. The paper's entire justification for the 10–15 FPS band (p.74) is GPU thermal management, so the one effect the band exists for is the one the benchmark cannot see. | §4.5 soak                 |
+| **The faster formats.** No export, so the numbers describe the slowest path the system will ever run.                                                                                                                                           | §4.2–4.4                  |
+| **The accumulator and snapshot costs.** Only inference is timed.                                                                                                                                                                                | §4.1                      |
+| **Frame decoding.** Decode runs in per-camera threads, off the tick's critical path in time, but it competes for CPU cores.                                                                                                                     | §4.1                      |
+| **Co-resident processes.** A development machine also runs the backend, the frontend dev server and a browser.                                                                                                                                  | **not measurable — §4.6** |
+| **Head-room.** At capacity 8 the batch uses 64.3 ms of a 66.7 ms tick — 96 % utilisation, ~2.4 ms of slack for everything above.                                                                                                                | §4.5 soak                 |
+
+Four of the five are measurable and this design measures them. Only co-resident load is irreducible: calibration cannot know what else the operator will run, so it states the condition it measured under rather than applying a guess (§4.6).
 
 ## 3. Non-goals
 
-- **No safety margin is applied.** The operator derates by choosing a lower `--cameras`. Reporting a number already reduced by a hidden factor would make the measurement harder to reason about, not safer.
+- **No hidden safety multiplier.** Two different things get called head-room and only one is excluded here:
+  - **Operator derating** — choosing 4 when the machine measures 8. That stays the operator's, via `--cameras`. A number silently reduced by an invented factor is harder to reason about, not safer.
+  - **Costs the benchmark does not see** — decode, accumulator, thermal decay. Those are not a margin, they are a measurement missing terms, and §4.1 and §4.5 measure them instead of estimating them.
+
+  Every number written to the profile remains something that was observed.
+
 - **No multi-GPU scheduling.** Unchanged from the port design: capacity is per-device. The deployment box's 8× L4 and the paper's 418-camera figure depend on work that does not exist.
 - **No CPU-specific optimisation as a distinct code path.** Format selection is a probe, not a hardware matrix (§4.2).
 - **No change to `detector.py`.** Ultralytics exposes every export format behind the same `YOLO(path)` interface, so only the weights path changes.
@@ -41,9 +51,16 @@ Measured on the development GTX 1650: **8 cameras at 15 FPS, 12 at 10 FPS.** The
 
 ## 4. Design
 
-Five phases. Each one either measures something or checks the previous phase's prediction.
+Six phases. Each one either measures something or checks the previous phase's prediction.
 
 ### 4.1 Phase A — baseline on the plain `.pt`
+
+**What is timed is a whole tick, not just inference.** Rather than adding a correction term for the work `predict_batch()` leaves out, the measurement boundary moves to include it: a full `pipeline.tick_once()` driven by fake cameras that hand over pre-decoded frames. That captures inference, the accumulator update and the per-camera bookkeeping in one observed number.
+
+Two costs sit outside that boundary and are handled separately:
+
+- **Decoding** — real, but it runs in per-camera threads rather than on the tick's critical path. Its true cost is CPU contention, so the climb runs with **N background threads actually decoding a clip**, N matching the batch size under test. Contention is then present in the measurement rather than modelled.
+- **Snapshot encode and write** — only occurs when an event fires, so folding it into a per-tick average would misrepresent it. Measured once, separately, and reported as an occasional spike.
 
 Plain PyTorch accepts any batch size at runtime, so nothing needs choosing in advance. Start at 1 camera and **climb**, timing each size, stopping when either:
 
@@ -102,7 +119,22 @@ Export at the ceiling, then climb again **on the real engine**. Three outcomes:
 
 The search corrects in both directions, so a poor initial prediction is self-repairing rather than load-bearing. Termination bounds: **at most 3 re-exports**, and an absolute cap of **256**. Typical run is one export; a bad guess costs two.
 
-### 4.5 Phase E — report and record
+### 4.5 Phase E — soak, and the sustained number
+
+Everything up to here is a burst measurement: seconds of work on a GPU that has not had time to heat. The 10–15 FPS band exists **because of thermal management**, so a burst figure omits the exact effect the band was written for.
+
+After Phase D settles on a capacity N, run at batch N continuously for a **soak period** (default 10 minutes), sampling every second:
+
+- tick time
+- GPU temperature and clock speed, via `pynvml`
+
+Then compare the **first minute against the last**. If tick time has degraded, the GPU throttled, and the degradation is measured rather than assumed. Re-derive capacity from the sustained tick time.
+
+**The sustained figure is the headline.** The burst figure is retained beside it, because the gap between them is itself the useful signal — a large gap means the machine is thermally limited and would benefit more from cooling than from a faster export.
+
+If the soak shows no degradation, sustained equals burst and nothing is lost but the ten minutes.
+
+### 4.6 Phase F — report and record
 
 The profile stores the **search trail**, not only the final number:
 
@@ -113,44 +145,65 @@ exported at 64 → capacity 47 (clock-bound) ✅
 
 so the figure is auditable and it is visible that the ceiling was not the constraint.
 
-Reported output distinguishes the two ceilings, which are far apart and must not be conflated:
+Reported output separates the three numbers, which are far apart and must not be conflated:
 
 ```
 Device: NVIDIA GeForce GTX 1650 · format: engine (probed, 3.1× faster than .pt)
-Real-time pace:  25 cameras @ 15 FPS  ·  38 @ 10 FPS
-Memory allows:   up to 64
-Pick a batch at or above the camera count you intend to run.
+
+Sustained (10 min):  21 cameras @ 15 FPS  ·  32 @ 10 FPS   ← use this
+Burst:               25 cameras @ 15 FPS  ·  38 @ 10 FPS
+Memory allows:       up to 64
+
+GPU reached 82 °C, clocks fell 14 % — this machine is thermally limited.
+Snapshot write costs ~35 ms when an event fires.
+
+Measured on an otherwise-idle machine. Running the backend, the frontend dev
+server or a browser alongside will reduce these figures.
 ```
 
-Reporting only the memory ceiling would invite selecting a batch the machine cannot sustain, producing exactly the silent fall-behind that capacity exists to prevent.
+Two things that must not be dropped from the report:
+
+- **Reporting only the memory ceiling** would invite selecting a batch the machine cannot sustain, producing exactly the silent fall-behind that capacity exists to prevent.
+- **The idle-machine caveat** is the one omission this design cannot measure away, so it is stated rather than fudged. Co-resident load is the operator's judgment, and they are told plainly that it is theirs.
 
 ## 5. Two modes
 
 | Invocation                     | Behaviour                                                            | Cost                  |
 | ------------------------------ | -------------------------------------------------------------------- | --------------------- |
-| `calibrate.py`                 | Find the maximum: full Phase A–E search                              | 20–40 min             |
-| `calibrate.py --cameras 5`     | Confirm an intended count: export just above 5, verify it fits, stop | minutes               |
+| `calibrate.py`                 | Find the maximum: full Phase A–F                                     | 30–50 min             |
+| `calibrate.py --cameras 5`     | Confirm an intended count: export just above 5, verify it fits, soak | ~15 min               |
 | `calibrate.py --format engine` | Skip the format probe                                                | saves most of Phase B |
+| `calibrate.py --soak 0`        | Skip the soak — burst figures only, explicitly labelled as such      | saves 10 min          |
 | `calibrate.py --no-export`     | Phase A only — writes a `.pt`-only profile                           | ~1 min                |
+
+`--soak 0` exists because a quick re-run during development should not cost ten minutes. When it is used the profile records `sustained_verified: false`, so a burst-only figure can never be mistaken for a soaked one.
 
 ## 6. Profile changes
 
 `MachineProfile` gains:
 
-| Field                       | Purpose                                |
-| --------------------------- | -------------------------------------- |
-| `model_format`              | `pt` / `engine` / `onnx` / …           |
-| `format_selection`          | `probed` or `specified`                |
-| `format_speedup`            | measured multiple over `.pt`, or `1.0` |
-| `formats_skipped`           | name → reason, so absence is visible   |
-| `export_batch_ceiling`      | what was baked into the engine         |
-| `memory_ceiling`            | largest batch that allocated           |
-| `search_trail`              | the Phase D attempts                   |
-| `gpu_name`, `gpu_memory_mb` | from `pynvml`                          |
+| Field                                           | Purpose                                   |
+| ----------------------------------------------- | ----------------------------------------- |
+| `model_format`                                  | `pt` / `engine` / `onnx` / …              |
+| `format_selection`                              | `probed` or `specified`                   |
+| `format_speedup`                                | measured multiple over `.pt`, or `1.0`    |
+| `formats_skipped`                               | name → reason, so absence is visible      |
+| `export_batch_ceiling`                          | what was baked into the engine            |
+| `memory_ceiling`                                | largest batch that allocated              |
+| `search_trail`                                  | the Phase D attempts                      |
+| `gpu_name`, `gpu_memory_mb`                     | from `pynvml`                             |
+| `sustained_capacity_at_max_fps` / `_at_min_fps` | after the soak — **the headline figures** |
+| `sustained_verified`                            | `false` when `--soak 0` was used          |
+| `soak_seconds`                                  | how long the soak ran                     |
+| `thermal_degradation_pct`                       | tick-time change, first minute vs last    |
+| `gpu_temp_peak_c`, `gpu_clock_drop_pct`         | throttling evidence                       |
+| `snapshot_write_ms`                             | the event-time spike, measured once       |
+
+`capacity_at_max_fps` / `_at_min_fps` are retained as the **burst** figures, keeping the field names' existing meaning intact.
 
 `model_path` starts pointing at a built artefact rather than always the `.pt`.
 
-Existing consumers are unaffected: `main.py` reads `capacity_at_max_fps` and `chosen_camera_target`, both retained with unchanged meaning. `load_profile` must keep rejecting a malformed profile rather than half-applying it.
+**`main.py` should switch to the sustained figures** when present, falling back to the burst ones for a profile written before this change. That is the one consumer change required; `chosen_camera_target` is unaffected. `load_profile` must keep rejecting a malformed profile rather than half-applying it.
 
 ## 7. Failure handling
 
@@ -174,6 +227,10 @@ Following the existing split — pure logic in CI, hardware behind `-m clips`.
 - `format_selection` records `specified` when `--format` is passed
 - profile round-trips with the new fields; a malformed profile still raises
 - `--cameras N` skips the search
+- a soak showing degradation lowers the sustained figure below the burst one
+- a soak showing no degradation leaves sustained equal to burst
+- `--soak 0` sets `sustained_verified: false`, and the sustained figures are not presented as measured
+- `main.py` prefers the sustained figure, and falls back to burst on an older profile
 
 **Hardware:** one real end-to-end run, asserting only that a profile is produced and internally consistent — absolute numbers are machine-specific and must not be asserted.
 
@@ -193,7 +250,8 @@ Against `2026-08-10-detection-core-port-design.md` §6:
 ## 10. Risks and open questions
 
 - **TensorRT install remains hazardous.** Its PyPI stub downloads several GB inside a build step with no timeout and hung indefinitely twice, which is why it sits in an opt-in `ai-trt` extra. Phase B must degrade rather than hang; a first run on a new machine may need supervision.
-- **Runtime is 20–40 minutes** in maximum mode. Acceptable once per machine, not casually repeatable.
-- **Thermal throttling is still unmeasured.** Phase A's climb is short. GPU temperature and clocks are recorded via `pynvml` during the run, but a sustained soak test is not part of this design. The reported capacity remains a burst figure. If throttling is later found to bind, a soak phase is the natural addition.
-- **The rest of the pipeline is still uncounted.** Accumulator and snapshot costs sit outside the measurement. At intended camera counts well under capacity this is slack that exists anyway; it matters only when running near the ceiling.
+- **Runtime is 30–50 minutes** in maximum mode. Acceptable once per machine, not casually repeatable. `--soak 0` and `--format` exist to make development re-runs cheap.
+- **Ten minutes may not be long enough to reach thermal equilibrium**, particularly in a laptop chassis where heat soak into the case continues well beyond that. The soak length is configurable for this reason, and `soak_seconds` is recorded so a figure can be re-examined later. A degradation reading of zero means "none within the soak period", not "none ever".
+- **Co-resident load stays unmeasurable.** Calibration cannot know what else will run. It is stated as a condition of the measurement rather than estimated, and derating for it remains the operator's call.
+- **The soak measures one batch size, not the whole curve.** It re-derives capacity from the degradation observed at N. If throttling behaved very differently at other batch sizes the extrapolation would be imperfect — acceptable, since N is the size that will actually run.
 - **Export does not improve alert latency.** Crash-to-alert is roughly 2.3 s, dominated by the accumulator's evidence window; inference is about 8 ms of it. Export buys camera capacity, head-room and viability on weaker hardware — not responsiveness. This should be stated wherever capacity numbers are quoted, so the speedup is not mistaken for faster alerting.
