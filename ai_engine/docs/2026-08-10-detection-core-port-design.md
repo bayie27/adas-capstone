@@ -39,6 +39,7 @@ The integration plumbing landed in PR #67 — `outbox.py`, `supervisor.py`, `bac
 | `camera.py` | modified | Decode timestamps, segment counter, buffer sizing. | cv2-guarded |
 | `accident.py` | rewritten | Event → annotated snapshot → outbox enqueue. | cv2-guarded |
 | `main.py` | reduced to wire-up | Load profile, start outbox, start supervisor, run pipeline. | — |
+| `testing.py` | deleted | A hardcoded manual RTSP viewer pointed at `channel1`, imported by nothing. Superseded by `calibrate.py`'s probe and the fake-capture tests. | — |
 | `config.py` | modified | SPEC constants and defaults. | CI |
 | `eval/` | new | Ported measurement harness. | clips-marked |
 
@@ -111,6 +112,39 @@ If a tick produces multiple fired events for one camera, the highest-`peak_conf`
 
 On a fixed-length clip, multiple events mean multiple distinct locations (SPEC §6) and all are meaningful. In a live system the camera pauses itself on the first event, so one incident per pause cycle is the correct operator-facing semantics.
 
+### 4.4 Fault isolation in a shared inference thread
+
+The paper's **TC-R-302** (p.98) requires that a fatal error in one camera's AI processing leave the others running, and describes this in terms of per-camera worker threads. A single batched inference thread does not provide that by construction: an exception during `predict` would take down every camera at once.
+
+Batching is worth keeping (§4.2), so the guarantee is preserved by a different mechanism:
+
+1. The batched `predict` call is wrapped. On success, nothing else happens — this is the only path in normal operation.
+2. On exception, the tick falls back to running the frames **individually** to identify which camera's frame caused it.
+3. The offending camera is marked errored (`error_code`, surfaced through the existing heartbeat report) and excluded from subsequent batches until its stream restarts. Every other camera continues.
+4. If the individual re-runs all succeed, the failure was transient — the tick is logged and processing continues normally.
+
+This gives TC-R-302's guarantee — one camera's fault cannot silence the others — without per-camera models. Note that decode-side faults are *already* isolated: `CameraStream` runs its own reader thread per camera, so a dropped stream or a decode failure never crossed camera boundaries in the first place. Only inference was shared.
+
+TC-R-302's wording must change to describe this mechanism rather than per-camera threads. See `paper-edits-required.md`.
+
+### 4.5 Stale frames
+
+*Hypothesis-free but unmeasured: this guards a failure mode that has not been observed, and is cheap insurance rather than a response to a known bug.*
+
+The reader thread retains the newest decoded frame and the tick consumes whatever is present. A stream that half-stalls — still connected, still reporting `Connected`, but delivering a frame every few seconds — would therefore have an increasingly old frame processed as though it were current, silently polluting that camera's scorecard.
+
+The tick skips any camera whose newest frame is older than a configured maximum age. The camera stays connected and keeps reporting; it simply contributes no samples until fresh frames arrive. `measured_fps` already surfaces the underlying condition through the heartbeat.
+
+### 4.6 Restart behaviour
+
+Accumulator state is in-memory only and is deliberately not persisted. A restart discards every in-flight scorecard, so a collision that was mid-accumulation at that moment is missed.
+
+This is accepted rather than solved. Persisting partial evidence across a process boundary would add meaningful complexity to protect a sub-second window, and on restart the honest position is the same one §5.2 takes for a stream outage: across the gap, what happened is unknown.
+
+It is worth stating explicitly because the system restarts itself on a schedule — the paper's **TC-R-303** (p.99) specifies an automated restart in a designated low-traffic window (e.g. 3 AM). That creates a small, recurring, predictable blind spot. At 3 AM on Lipa roads this is a reasonable trade, but it should be a documented limitation rather than a discovery.
+
+**Cross-team dependency:** `backend/scripts/daily_restart.sh` is currently a 0-byte placeholder and TC-R-303 tests against it. Whoever implements it needs to decide whether the AI engine is cycled alongside the backend services; the engine tolerates either, but the answer determines how often this blind spot occurs.
+
 ## 5. Accumulator lifecycle
 
 ### 5.1 The defect being worked around
@@ -144,8 +178,10 @@ The engine must run on the deployment box, on teammates' laptops with assorted N
 `uv run python ai_engine/calibrate.py`, run once per machine after install:
 
 1. **Probe.** Resolve the device — CUDA, MPS, or CPU — and record the GPU name and available memory where applicable.
+
+   **Single device by design.** The deployment box has 8× L4 (p.73), and the paper's 418-camera capacity implicitly depends on using all of them. Multi-GPU distribution is deliberately out of scope here: it cannot be developed or tested on any machine the team has, and the prototype's camera counts do not need it. The design must not preclude it — device resolution returns one device from an enumerable set, and capacity is per-device — but scheduling across devices is left unbuilt. Any claim about 418-camera capacity depends on work that does not exist yet and should be described as such.
 2. **Build.** Export `epoch50.pt` to the fastest format that machine actually supports, probing availability rather than assuming: TensorRT where present, otherwise the platform's best available export, falling back to plain PyTorch weights. Half precision where the device supports it.
-3. **Benchmark, and report capacity.** Run a fixed number of frames at batch sizes 1 through 8 (the export's configured maximum), recording milliseconds per batch at each size. Convert that curve into the headline output: **how many cameras this machine can carry at the required frame rate**, reported at both ends of the band — for example *"8 cameras at 15 FPS, or 12 at 10 FPS."* Capacity, not a tick rate, is what a person can act on.
+3. **Benchmark, and report capacity.** Warm the model first — the first inferences after loading are substantially slower than steady state, and timing them would understate capacity. Then run a fixed number of frames at batch sizes 1 through 8 (the export's configured maximum), recording milliseconds per batch at each size. Convert that curve into the headline output: **how many cameras this machine can carry at the required frame rate**, reported at both ends of the band — for example *"8 cameras at 15 FPS, or 12 at 10 FPS."* Capacity, not a tick rate, is what a person can act on.
 
    The chosen target is then the operator's, defaulting to the maximum at 15 FPS. A lower value is a legitimate choice on a development machine that is also running the frontend dev server and a browser, where leaving GPU headroom matters more than maximum camera count.
 4. **Verify.** See §6.3.
@@ -246,6 +282,10 @@ Runs in `uv run pytest` on every push.
 - one incident per tick per camera, highest `peak_conf` wins
 - paused cameras excluded from the batch
 - tick pacing, and overrun slipping rather than queueing
+- **fault isolation (§4.4)**: a batch raising an exception isolates the offending camera by individual re-run, marks it errored, and leaves every other camera processing — the TC-R-302 guarantee
+- a transient batch failure whose individual re-runs all succeed is logged and does not error any camera
+- **stale-frame skip (§4.5)**: a camera whose newest frame exceeds the maximum age contributes no samples and does not disturb its accumulator
+- camera capacity: within capacity picks the higher rate, over capacity drops to the band floor and marks the run degraded without dropping any camera
 
 **`test_machine_profile.py`** — profile round-trips, missing profile yields conservative defaults, malformed profile is rejected rather than half-applied.
 

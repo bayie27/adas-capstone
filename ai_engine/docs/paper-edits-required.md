@@ -80,6 +80,20 @@ Night is the exception and is worth keeping — 8 of 17 clips are night footage,
 
 ---
 
+### 2.5 Fault isolation mechanism — TC-R-302, p.98
+
+**Currently:** *"A deliberate Python exception is injected into Camera 1's YOLO worker thread. Camera 1's thread crashes safely. The FastAPI application and the parallel AI threads for Cameras 2 and 3 remain entirely unaffected and continue processing."*
+
+**Change to:** the same guarantee, described against the batched pipeline. Suggested:
+
+> A deliberate exception is injected into the inference step for Camera 1's frame. Expected: the engine isolates the failure to Camera 1, marks that camera as errored in its heartbeat report, and continues processing Cameras 2 and 3 in subsequent cycles without interruption. The FastAPI application is unaffected.
+
+**Why.** The wording assumes one inference thread per camera. The ported engine batches all active cameras through a single inference call, which is what makes multi-camera throughput viable on one GPU. The isolation guarantee is preserved — a failing batch is re-run frame by frame to identify the culprit, which is then excluded — but the mechanism is different, and a test written against per-camera threads would not describe what is actually being verified.
+
+Note that decode-side isolation is unchanged and already matches the original wording: each camera has its own reader thread, so a dropped stream never affected its neighbours.
+
+---
+
 ## Priority 3 — Timing anchors
 
 Both were written when detection was a single frame, so "the moment of detection" and "the moment of impact" were the same instant. The accumulator separates them by ~3 seconds. They must now be anchored differently.
