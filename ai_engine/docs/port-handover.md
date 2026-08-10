@@ -10,13 +10,15 @@ Progress ledger: `.superpowers/sdd/progress.md` — **gitignored**, per-task sta
 
 ## Where things stand
 
-| Phase                         | Tasks | Status                 |
-| ----------------------------- | ----- | ---------------------- |
-| A — the port, no GPU          | 1–7   | ✅ complete, 122 tests |
-| B — verification, GPU + clips | 8–11  | ✅ complete            |
-| C — portability               | 12–15 | ⬜ not started         |
+| Phase                         | Tasks | Status                     |
+| ----------------------------- | ----- | -------------------------- |
+| A — the port, no GPU          | 1–7   | ✅ complete, 122 tests     |
+| B — verification, GPU + clips | 8–11  | ✅ complete                |
+| C — portability               | 12–15 | 🔶 12 done, 13–15 to start |
 
-**Task 12 is next** (`machine_profile.py`). Its brief is already generated at `.superpowers/sdd/task-12-brief.md`, as are 13–15.
+**Task 13 is next** (`calibrate.py`). Its brief is already generated at `.superpowers/sdd/task-13-brief.md`, as are 14–15.
+
+⚠️ **Task 13's brief is stale on one point.** `BATCH_SIZES` must be contiguous `[1, 2, 3, 4, 5, 6, 7, 8]`, not the brief's `[1, 2, 4, 8]` — Task 12 found that the sparse grid makes `capacity_from_latency` unable to return 3, 5, 6 or 7, which understates capacity and flattens the FPS band's only lever. The plan doc is corrected and `test_a_sparse_grid_understates_capacity` pins it; the generated brief is not.
 
 ### The two results that matter
 
