@@ -34,21 +34,3 @@ def parse_utc_query_datetime(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
-
-
-def parse_legacy_local_datetime(value: datetime) -> datetime:
-    """v1 AI-engine alert payloads send `datetime.datetime.now().isoformat()`
-    (ai_engine/accident.py) — naive **server-local** time, not UTC.
-
-    This is deliberately the opposite interpretation from
-    parse_utc_query_datetime(): treating this value as UTC would shift every
-    legacy detection by the server's UTC offset (8 hours in Philippine
-    time). Do not "simplify" this to reuse parse_utc_query_datetime.
-
-    A value that already carries an offset is trusted and converted
-    normally — only a naive value gets the local-time treatment.
-    """
-    if value.tzinfo is not None:
-        return value.astimezone(UTC)
-    local_tzinfo = datetime.now().astimezone().tzinfo
-    return value.replace(tzinfo=local_tzinfo).astimezone(UTC)

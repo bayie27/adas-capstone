@@ -1,5 +1,4 @@
 import logging
-import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -10,14 +9,9 @@ from app.api.dependencies import get_realtime_manager, verify_internal_api_key
 from app.core.config import settings
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
-from app.core.types import parse_legacy_local_datetime, parse_utc_query_datetime
-from app.models import AIStatus, Camera, DetectionLog, DetectionStatus
-from app.schemas import (
-    CameraRead,
-    CameraStatusUpdate,
-    DetectionLogCreate,
-    DetectionLogCreateV2,
-)
+from app.core.types import parse_utc_query_datetime
+from app.models import Camera, DetectionLog, DetectionStatus
+from app.schemas import DetectionLogCreateV2
 from app.schemas.internal import (
     HeartbeatCameraSnapshot,
     HeartbeatRequest,
@@ -40,20 +34,56 @@ _HEARTBEAT_INTERVAL_SECONDS = 3
 
 _OPEN_STATUSES = (DetectionStatus.UNVERIFIED.value, DetectionStatus.ONGOING.value)
 
-_legacy_alert_warned = False
+# F9 (be_audit/A3_ai_seam.md) — a clock badly out of sync with the server
+# poisons detected_at/last_heartbeat_at math without ever erroring, so this
+# is a log-only tripwire, not a validation failure.
+_CLOCK_SKEW_WARNING_SECONDS = 10
+
+# F9 / edge case 1.18 (two engine instances) — process-lifetime, last-seen-
+# engine tracker. A warning is sufficient: the backend is not the right
+# place to arbitrate a lease, and rejecting the second engine could take
+# down a legitimate failover. Not thread-safety-hardened on purpose — a
+# missed or duplicate warning under a genuine race is an acceptable cost
+# for a diagnostic-only signal.
+_last_seen_engine: tuple[str, datetime] | None = None
 
 
-def _warn_legacy_alert_once() -> None:
-    """Step 8 — a one-time, process-lifetime warning so the v1-to-v2 cutover
-    is visible in the logs without spamming on every legacy detection."""
-    global _legacy_alert_warned
-    if not _legacy_alert_warned:
+def _check_engine_identity(engine_id: str, now: datetime) -> None:
+    global _last_seen_engine
+    if _last_seen_engine is not None:
+        last_engine_id, last_seen_at = _last_seen_engine
+        if (
+            last_engine_id != engine_id
+            and (now - last_seen_at).total_seconds() < settings.HEARTBEAT_STALE_SECONDS
+        ):
+            logger.warning(
+                "Heartbeat from engine_id=%r arrived while engine_id=%r was "
+                "still within the staleness window (edge case 1.18: two "
+                "engine instances). Both will receive the full authoritative "
+                "snapshot; any duplicate detections are absorbed by "
+                "ux_detection_open_camera as 409s. Not rejected.",
+                engine_id,
+                last_engine_id,
+            )
+    _last_seen_engine = (engine_id, now)
+
+
+def _check_clock_skew(engine_id: str, sent_at: datetime, now: datetime) -> None:
+    # A naive sent_at is assumed UTC (parse_utc_query_datetime's convention)
+    # rather than raising — this is a diagnostic warning, not validation,
+    # and must never turn a missing offset into a 500.
+    sent_at = parse_utc_query_datetime(sent_at)
+    skew_seconds = abs((now - sent_at).total_seconds())
+    if skew_seconds > _CLOCK_SKEW_WARNING_SECONDS:
         logger.warning(
-            "Received a v1 legacy AI alert payload (no source_event_id). "
-            "detected_at is interpreted as naive server-local time per "
-            "01_CONTRACTS.md §6.1 — do not 'simplify' this to UTC."
+            "Heartbeat from engine_id=%r has a %.1fs clock skew from the "
+            "server (sent_at=%s, server now=%s) — check the AI engine "
+            "host's clock.",
+            engine_id,
+            skew_seconds,
+            sent_at.isoformat(),
+            now.isoformat(),
         )
-        _legacy_alert_warned = True
 
 
 def _build_rtsp_url(channel_id: int) -> str:
@@ -73,18 +103,15 @@ def _build_rtsp_url(channel_id: int) -> str:
 
 @router.post("/alert", response_model=DetectionLog)
 def receive_ai_alert(
-    alert_in: DetectionLogCreate | DetectionLogCreateV2,
+    alert_in: DetectionLogCreateV2,
     response: Response,
     session: Session = Depends(get_session),
     manager: RealtimeManager = Depends(get_realtime_manager),
 ) -> DetectionLog:
-    """Accepts both the v1 legacy payload (01_CONTRACTS.md §6.1, frozen —
-    ai_engine/ sends this today) and the v2 idempotent payload (§6.3).
-    `alert_in`'s actual type discriminates which one arrived — Pydantic's
-    union validation, not dict-sniffing.
-    """
-    is_v2 = isinstance(alert_in, DetectionLogCreateV2)
-
+    """01_CONTRACTS.md §6.3 — the v2 idempotent AI-engine payload. The v1
+    legacy shape (bare `snapshot_path`, no `source_event_id`) was removed by
+    the A3 audit pack (be_audit/A3_ai_seam.md, F3): its only caller,
+    ai_engine/sync.py, was already gone as of PR #67."""
     camera = session.get(Camera, alert_in.camera_id)
     if not camera or not camera.is_active or not camera.is_enabled:
         raise HTTPException(
@@ -92,25 +119,19 @@ def receive_ai_alert(
             detail=f"Camera with ID {alert_in.camera_id} not found, inactive, or disabled.",
         )
 
-    if is_v2:
-        source_event_id = alert_in.source_event_id
-        snapshot_key = alert_in.snapshot_key
-        detected_at = parse_utc_query_datetime(alert_in.detected_at)
-        # Idempotent retry (01_CONTRACTS.md §6.3): a pre-check here is safe
-        # (unlike the open-camera check below) because a genuinely
-        # concurrent duplicate is still caught by the ux_detection_source_event
-        # unique constraint as a backstop.
-        existing = session.exec(
-            select(DetectionLog).where(DetectionLog.source_event_id == source_event_id)
-        ).first()
-        if existing is not None:
-            response.status_code = 200
-            return existing
-    else:
-        _warn_legacy_alert_once()
-        source_event_id = str(uuid.uuid4())
-        snapshot_key = alert_in.snapshot_path
-        detected_at = parse_legacy_local_datetime(alert_in.detected_at)
+    source_event_id = alert_in.source_event_id
+    snapshot_key = alert_in.snapshot_key
+    detected_at = parse_utc_query_datetime(alert_in.detected_at)
+    # Idempotent retry (01_CONTRACTS.md §6.3): a pre-check here is safe
+    # (unlike the open-camera check below) because a genuinely
+    # concurrent duplicate is still caught by the ux_detection_source_event
+    # unique constraint as a backstop.
+    existing = session.exec(
+        select(DetectionLog).where(DetectionLog.source_event_id == source_event_id)
+    ).first()
+    if existing is not None:
+        response.status_code = 200
+        return existing
 
     now = datetime.now(UTC)
     db_alert = DetectionLog(
@@ -132,17 +153,14 @@ def receive_ai_alert(
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        if is_v2:
-            existing = session.exec(
-                select(DetectionLog).where(
-                    DetectionLog.source_event_id == source_event_id
-                )
-            ).first()
-            if existing is not None:
-                # A concurrent duplicate committed first — this is the
-                # ux_detection_source_event backstop, not the open-camera one.
-                response.status_code = 200
-                return existing
+        existing = session.exec(
+            select(DetectionLog).where(DetectionLog.source_event_id == source_event_id)
+        ).first()
+        if existing is not None:
+            # A concurrent duplicate committed first — this is the
+            # ux_detection_source_event backstop, not the open-camera one.
+            response.status_code = 200
+            return existing
         open_alert = session.exec(
             select(DetectionLog).where(
                 col(DetectionLog.camera_id) == alert_in.camera_id,
@@ -167,7 +185,7 @@ def receive_ai_alert(
     manager.broadcast(new_detection_event(db_alert, camera_name=camera.camera_name))
     manager.broadcast(camera_status_update_event(camera))
 
-    response.status_code = 201 if is_v2 else 200
+    response.status_code = 201
     return db_alert
 
 
@@ -182,6 +200,8 @@ def receive_heartbeat(
     snapshot of every active camera's desired state — a change list would
     make recovery after either side restarts nondeterministic (D-003)."""
     now = datetime.now(UTC)
+    _check_engine_identity(heartbeat_in.engine_id, now)
+    _check_clock_skew(heartbeat_in.engine_id, heartbeat_in.sent_at, now)
 
     reported_ids = [report.camera_id for report in heartbeat_in.cameras]
     cameras_by_id: dict[int, Camera] = {}
@@ -244,84 +264,3 @@ def receive_heartbeat(
         heartbeat_interval_seconds=_HEARTBEAT_INTERVAL_SECONDS,
         cameras=snapshot,
     )
-
-
-@router.get("/cameras", response_model=list[CameraRead])
-def get_enabled_cameras(session: Session = Depends(get_session)) -> list[CameraRead]:
-    """v1 legacy poll (01_CONTRACTS.md §6.1) — ai_engine/sync.py polls this
-    every 3 seconds and reads `ai_status` to decide whether to pause/resume,
-    which is desired-state semantics. This route therefore reports
-    `desired_ai_state` under the `ai_status` field name — a deliberate,
-    documented divergence from what `ai_status` means everywhere else
-    (the true AI-reported observed status). Only `is_enabled AND is_active`
-    cameras are returned, so `desired_ai_state` here is never `Inactive`.
-    """
-    cameras = session.exec(
-        select(Camera).where(
-            col(Camera.is_enabled).is_(True),
-            col(Camera.is_active).is_(True),
-        )
-    ).all()
-    results = []
-    for camera in cameras:
-        camera_read = CameraRead.model_validate(camera)
-        camera_read.ai_status = camera.desired_ai_state
-        results.append(camera_read)
-    return results
-
-
-@router.patch("/cameras/{camera_id}/status", response_model=CameraRead)
-async def update_camera_status(
-    camera_id: int,
-    status_update: CameraStatusUpdate,
-    session: Session = Depends(get_session),
-    manager: RealtimeManager = Depends(get_realtime_manager),
-) -> CameraRead:
-    """
-    AI engine calls this to report connection and/or AI status changes.
-    Updates DB and broadcasts to all connected FE clients.
-    """
-    camera = session.get(Camera, camera_id)
-    if not camera or not camera.is_active or not camera.is_enabled:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Camera with ID {camera_id} not found, inactive, or disabled.",
-        )
-
-    # Guard against the AI engine overruling an operator-driven pause.
-    # If the camera has an open (Unverified or Ongoing) alert, reject any attempt
-    # to set ai_status=Active — the HITL state machine owns that transition.
-    if status_update.ai_status == AIStatus.ACTIVE:
-        open_alert = session.exec(
-            select(DetectionLog).where(
-                col(DetectionLog.camera_id) == camera_id,
-                col(DetectionLog.detection_status).in_(
-                    [
-                        DetectionStatus.UNVERIFIED.value,
-                        DetectionStatus.ONGOING.value,
-                    ]
-                ),
-            )
-        ).first()
-        if open_alert:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Camera {camera_id} has an open alert (log_id={open_alert.log_id}, "
-                    f"status={open_alert.detection_status}). "
-                    "ai_status cannot be set to Active while a HITL resolution is pending."
-                ),
-            )
-
-    if status_update.connection_status is not None:
-        camera.connection_status = status_update.connection_status.value
-    if status_update.ai_status is not None:
-        camera.ai_status = status_update.ai_status.value
-
-    session.add(camera)
-    session.commit()
-    session.refresh(camera)
-
-    manager.broadcast(camera_status_update_event(camera))
-
-    return CameraRead.model_validate(camera)

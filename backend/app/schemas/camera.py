@@ -4,7 +4,7 @@ from pydantic import field_validator
 from sqlmodel import Field, SQLModel
 
 from app.core.validation import reject_null_bytes
-from app.models import AIStatus, CameraBase, ConnectionStatus
+from app.models import CameraBase
 
 
 class CameraCreate(CameraBase):
@@ -76,8 +76,3 @@ class CameraUpdate(SQLModel):
         if v is not None and isinstance(v, str):
             v = v.strip()
         return reject_null_bytes(v)
-
-
-class CameraStatusUpdate(SQLModel):
-    connection_status: ConnectionStatus | None = None
-    ai_status: AIStatus | None = None

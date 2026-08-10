@@ -9,6 +9,7 @@ file's "trigger a broadcast and read it" shape.
 
 import asyncio
 import logging
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import app.main as main_module
@@ -224,13 +225,14 @@ def test_event_ids_are_unique_across_broadcasts(client: TestClient, session: Ses
                     "x-api-key": default_settings.INTERNAL_API_KEY.get_secret_value()
                 },
                 json={
+                    "source_event_id": str(uuid.uuid4()),
                     "camera_id": camera.camera_id,
                     "detected_at": datetime.now(UTC).isoformat(),
-                    "snapshot_path": "ws/uniq.jpg",
+                    "snapshot_key": "ws/uniq.jpg",
                     "confidence_score": 0.9,
                 },
             )
-            assert resp.status_code == 200
+            assert resp.status_code == 201
 
         detection_one = websocket.receive_json()
         websocket.receive_json()  # CAMERA_STATUS_UPDATE for camera_one

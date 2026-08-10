@@ -84,7 +84,7 @@ backend/
 │   └── api/
 │       ├── dependencies.py   # Session-cookie auth, x-api-key auth, RBAC guards
 │       └── routes/
-│           ├── internal.py          # AI engine bridge — v1 legacy webhook + v2 heartbeat/idempotent alert ingestion
+│           ├── internal.py          # AI engine bridge — v2 heartbeat + idempotent alert ingestion
 │           ├── auth.py              # POST /api/auth/login, POST /api/auth/logout
 │           ├── cameras.py           # Camera CRUD, KPI/breakdown response shape
 │           ├── alerts.py            # HITL workflow (confirm/dismiss/resolve/snooze) + CSV/PDF export
@@ -103,7 +103,6 @@ backend/
 │   ├── _bootstrap.py
 │   ├── reset_db.py
 │   ├── seed_dev_data.py     # demo / analytics / edge / perf profiles
-│   ├── seed_alerts_via_api.py
 │   ├── reseed_dev.py
 │   ├── offline_restore.sh
 │   └── daily_restart.sh
@@ -130,14 +129,12 @@ backend/
 
 ### Internal — AI Engine Bridge (`/api/internal`)
 
-Protected by `x-api-key` (the `INTERNAL_API_KEY` from `.env`, compared with `secrets.compare_digest`), never by the session cookie. Two contract versions run side by side — v1 is frozen/legacy, v2 is the current heartbeat-based contract (`be_plan/01_CONTRACTS.md` §6 has the full payload shapes).
+Protected by `x-api-key` (the `INTERNAL_API_KEY` from `.env`, compared with `secrets.compare_digest`), never by the session cookie. The v1 poll/PATCH routes were removed by the A3 audit pack (`be_audit/A3_ai_seam.md`, F3) — no caller since PR #67; `be_plan/01_CONTRACTS.md` §6 has the full v2 payload shapes.
 
-| Method  | Path                                       | Description                                                                                                   |
-| ------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `GET`   | `/api/internal/cameras`                    | v1 — flat list of enabled/active cameras. `ai_status` here reports **desired** state, not observed.           |
-| `POST`  | `/api/internal/alert`                      | v1/v2 — accepts either payload shape; v2 adds `source_event_id` (idempotent) and `snapshot_key`.              |
-| `PATCH` | `/api/internal/cameras/{camera_id}/status` | v1 — AI-reported `connection_status`/`ai_status`. Writes **observed** state only.                             |
-| `POST`  | `/api/internal/heartbeat`                  | v2 — every 3s. Request: per-camera observed state. Response: a complete authoritative desired-state snapshot. |
+| Method | Path                      | Description                                                                                              |
+| ------ | ------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `POST` | `/api/internal/alert`     | v2 idempotent ingestion — `source_event_id` (idempotent retry key) and `snapshot_key`.                   |
+| `POST` | `/api/internal/heartbeat` | Every 3s. Request: per-camera observed state. Response: a complete authoritative desired-state snapshot. |
 
 ### Cameras — `/api/cameras`
 

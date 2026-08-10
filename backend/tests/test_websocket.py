@@ -24,6 +24,7 @@ values, and the relative order between NEW_DETECTION/ALERT_STATUS_UPDATE and
 CAMERA_STATUS_UPDATE) are unchanged from before P3.
 """
 
+import uuid
 from datetime import UTC, datetime
 
 from app.models import AIStatus, ConnectionStatus, DetectionStatus, UserRole
@@ -73,14 +74,15 @@ def test_internal_alert_broadcasts_to_websocket_client(
             "/api/internal/alert",
             headers=internal_headers(),
             json={
+                "source_event_id": str(uuid.uuid4()),
                 "camera_id": camera.camera_id,
                 "detected_at": datetime(2026, 4, 26, 12, 0, tzinfo=UTC).isoformat(),
-                "snapshot_path": "ws/alert.jpg",
+                "snapshot_key": "ws/alert.jpg",
                 "confidence_score": 0.94,
             },
         )
 
-        assert resp.status_code == 200
+        assert resp.status_code == 201
 
         detection_data = _assert_envelope(websocket.receive_json(), "NEW_DETECTION")
         status_data = _assert_envelope(websocket.receive_json(), "CAMERA_STATUS_UPDATE")
@@ -106,7 +108,7 @@ def test_internal_alert_broadcasts_to_websocket_client(
     }
 
 
-def test_status_patch_broadcasts_to_all_connected_websocket_clients(
+def test_heartbeat_status_change_broadcasts_to_all_connected_websocket_clients(
     client: TestClient,
     session: Session,
 ):
@@ -128,12 +130,19 @@ def test_status_patch_broadcasts_to_all_connected_websocket_clients(
         _assert_envelope(ws_one.receive_json(), "CONNECTION_READY")
         _assert_envelope(ws_two.receive_json(), "CONNECTION_READY")
 
-        resp = client.patch(
-            f"/api/internal/cameras/{camera.camera_id}/status",
+        resp = client.post(
+            "/api/internal/heartbeat",
             headers=internal_headers(),
             json={
-                "connection_status": ConnectionStatus.CONNECTED.value,
-                "ai_status": AIStatus.ACTIVE.value,
+                "engine_id": "adas-ai-1",
+                "sent_at": datetime.now(UTC).isoformat(),
+                "cameras": [
+                    {
+                        "camera_id": camera.camera_id,
+                        "connection_status": ConnectionStatus.CONNECTED.value,
+                        "ai_status": AIStatus.ACTIVE.value,
+                    }
+                ],
             },
         )
 
