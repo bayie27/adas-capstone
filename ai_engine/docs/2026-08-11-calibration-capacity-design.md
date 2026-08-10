@@ -234,7 +234,11 @@ Following the existing split — pure logic in CI, hardware behind `-m clips`.
 
 **Hardware:** one real end-to-end run, asserting only that a profile is produced and internally consistent — absolute numbers are machine-specific and must not be asserted.
 
-This sits behind the existing `clips` marker, which is the repository's only GPU-gated tier. The fit is imperfect: this test needs a GPU but not the clips, whereas the marker is documented as "needs a GPU **and** `ai_engine/eval/clips` populated". Either widen that marker's description or add a separate `gpu` marker — a decision for the implementation plan, not a blocker here.
+**A new `gpu` marker is added** for tests needing a GPU but not the clips, and `addopts` becomes `-m 'not clips and not gpu'`.
+
+Reusing `clips` was rejected: the clips are gitignored, so a fresh clone has a GPU and no clips. Those are genuinely different populations, and one marker cannot describe both — someone with a GPU would be unable to run a calibration test that does not need clips, because the only label available also excludes it.
+
+CI needs no change: the workflow runs a bare `uv run pytest`, so it inherits `addopts` from `pyproject.toml` and picks up the new exclusion automatically.
 
 Mutation-check the parts where a silent error would survive, as in Task 13: swapped capacities, an always-false ceiling check, an ignored `--cameras`.
 
