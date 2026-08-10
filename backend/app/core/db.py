@@ -3,10 +3,11 @@ import logging
 from fastapi import Depends
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, create_engine, select
 from starlette.requests import HTTPConnection
 
 from app.core.config import Settings, settings
+from app.core.migrations import check_schema_revision
 from app.core.security import get_password_hash
 from app.models import UserRole
 from app.services.help import seed_help_articles
@@ -66,7 +67,15 @@ def init_db(
     target_engine = target_engine if target_engine is not None else engine
     target_settings = target_settings if target_settings is not None else settings
 
-    SQLModel.metadata.create_all(target_engine)
+    # D-005 — ordinary application startup never silently changes the
+    # production schema. Schema creation/upgrades happen exclusively
+    # through `alembic upgrade head`, run explicitly (by an operator, by
+    # backend/scripts/reset_db.py, or automatically for a fresh
+    # development/test database — see check_schema_revision).
+    # SQLModel.metadata.create_all() is reserved for fast isolated
+    # unit-test fixtures (backend/tests/conftest.py's `session` fixture),
+    # never called from here.
+    check_schema_revision(target_engine, target_settings)
 
     # Seed the default Administrator account
     with Session(target_engine) as session:

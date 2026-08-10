@@ -8,15 +8,15 @@ database in `backend/adas.db`.
 From the repo root:
 
 ```powershell
-python backend\scripts\reseed_dev.py
-python backend\scripts\reseed_dev.py --profile analytics
+uv run python backend\scripts\reseed_dev.py
+uv run python backend\scripts\reseed_dev.py --profile analytics
 ```
 
 From the `backend` directory:
 
 ```powershell
-python scripts\reseed_dev.py
-python scripts\reseed_dev.py --profile edge
+uv run python scripts\reseed_dev.py
+uv run python scripts\reseed_dev.py --profile edge
 ```
 
 That will:
@@ -40,8 +40,8 @@ Then recreates tables and the default admin account.
 Usage:
 
 ```powershell
-python scripts\reset_db.py
-python scripts\reset_db.py --no-init
+uv run python scripts\reset_db.py
+uv run python scripts\reset_db.py --no-init
 ```
 
 Notes:
@@ -65,9 +65,11 @@ Includes:
 Usage:
 
 ```powershell
-python scripts\seed_dev_data.py
-python scripts\seed_dev_data.py --profile analytics
-python scripts\seed_dev_data.py --profile edge
+uv run python scripts\seed_dev_data.py
+uv run python scripts\seed_dev_data.py --profile analytics
+uv run python scripts\seed_dev_data.py --profile edge
+uv run python scripts\seed_dev_data.py --profile perf
+uv run python scripts\seed_dev_data.py --profile perf --count 20000
 ```
 
 Profiles:
@@ -75,6 +77,19 @@ Profiles:
 - `demo`: balanced manual-testing dataset
 - `analytics`: denser, chart-friendly dataset with many more alerts across 14 days
 - `edge`: smaller dataset focused on unusual workflow combinations
+- `perf`: **100,000** `detection_log` rows (NFR-08), bulk-inserted via batched
+  SQLAlchemy Core `insert()` calls rather than 100,000 ORM objects — measured
+  at ~33s on the demo laptop (see `be_plan/EVIDENCE.md`). Spread over ~18
+  months across the six seeded cameras, with a realistic
+  Resolved/Dismissed/Ongoing/Unverified mix that still respects
+  `ux_detection_open_camera` (at most one open incident per camera survives;
+  every other open candidate is demoted to `Resolved`). Snapshot files are
+  not generated — a handful of reused fake keys exercise the
+  missing-snapshot-file path. `--count` overrides the row target for a
+  faster smoke run. This is what `backend/tests/perf/` seeds itself with a
+  fresh copy of, but the CLI profile is also useful on its own for manually
+  poking at `GET /api/alerts/` or the export routes against a realistically
+  sized dataset.
 
 Seeded operator accounts:
 
@@ -94,8 +109,8 @@ Convenience command for a fully fresh local DB.
 Usage:
 
 ```powershell
-python scripts\reseed_dev.py
-python scripts\reseed_dev.py --profile analytics
+uv run python scripts\reseed_dev.py
+uv run python scripts\reseed_dev.py --profile analytics
 ```
 
 Use this when you want to reset everything and start from a known state.
@@ -113,9 +128,9 @@ inserting alert rows directly into SQLite.
 Usage:
 
 ```powershell
-python scripts\seed_alerts_via_api.py
-python scripts\seed_alerts_via_api.py --camera-id 1 --camera-id 2
-python scripts\seed_alerts_via_api.py --base-url http://127.0.0.1:8000
+uv run python scripts\seed_alerts_via_api.py
+uv run python scripts\seed_alerts_via_api.py --camera-id 1 --camera-id 2
+uv run python scripts\seed_alerts_via_api.py --base-url http://127.0.0.1:8000
 ```
 
 Notes:
@@ -129,7 +144,7 @@ Notes:
 ### Fresh local DB for frontend/manual testing
 
 ```powershell
-python scripts\reseed_dev.py
+uv run python scripts\reseed_dev.py
 ```
 
 ### Add more alerts through the real API
@@ -137,13 +152,13 @@ python scripts\reseed_dev.py
 Start the backend, then run:
 
 ```powershell
-python scripts\seed_alerts_via_api.py --camera-id 1 --camera-id 2
+uv run python scripts\seed_alerts_via_api.py --camera-id 1 --camera-id 2
 ```
 
 ### Wipe the DB completely
 
 ```powershell
-python scripts\reset_db.py --no-init
+uv run python scripts\reset_db.py --no-init
 ```
 
 ## Why `_bootstrap.py` Exists
@@ -153,11 +168,11 @@ The scripts can be run from either:
 - repo root
 - `backend`
 
-`_bootstrap.py` makes sure:
-
-- `app...` imports work
-- the working directory is normalized to `backend`
-- relative SQLite paths still point to the correct `adas.db`
-
-Without that, running the same script from different folders could create or
-target the wrong SQLite file.
+`_bootstrap.py` makes sure `app...` imports work regardless of which one, by
+putting `backend/` on `sys.path`. It does **not** change the working
+directory anymore — `DATABASE_URL` is anchored to the repo root by
+`Settings`'s own field validator (`backend/app/core/config.py`), so relative
+SQLite paths resolve correctly without a `chdir`. (An earlier version of
+this script did normalize the CWD; that responsibility moved into `Settings`
+itself during the DX cleanup package, and this doc had gone stale describing
+the old behavior.)

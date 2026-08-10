@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = "==3.12.13"
 dependencies = [
+    "alembic>=1.19.1",
     "apscheduler>=3.11.3",
     "argon2-cffi>=25.1.0",
     "fastapi[standard]>=0.136.1",
@@ -49,9 +50,12 @@ torchvision = { index = "pytorch-cu130" }
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "ai_engine/tests"]
 cache_dir = "backend/.pytest_cache"
-addopts = "-q"
+# -m "not slow": backend/tests/perf/ (10_PKG_migration_evidence.md Step 3)
+# seeds a real 100,000-row database every session and is excluded from the
+# default run. An explicit `-m slow` on the command line overrides this.
+addopts = "-q -m \"not slow\""
 markers = [
-    "slow: marks tests as slow",
+    "slow: marks tests as slow (excluded from the default run — see backend/tests/perf/)",
 ]
 
 [tool.ruff]
