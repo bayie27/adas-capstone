@@ -10,15 +10,17 @@ Progress ledger: `.superpowers/sdd/progress.md` — **gitignored**, per-task sta
 
 ## Where things stand
 
-| Phase                         | Tasks | Status                        |
-| ----------------------------- | ----- | ----------------------------- |
-| A — the port, no GPU          | 1–7   | ✅ complete, 122 tests        |
-| B — verification, GPU + clips | 8–11  | ✅ complete                   |
-| C — portability               | 12–15 | 🔶 12–13 done, 14–15 to start |
+| Phase                         | Tasks | Status                     |
+| ----------------------------- | ----- | -------------------------- |
+| A — the port, no GPU          | 1–7   | ✅ complete, 122 tests     |
+| B — verification, GPU + clips | 8–11  | ✅ complete                |
+| C — portability               | 12–15 | 🔶 12–14 done, 15 to start |
 
-**Task 14 is next** (CPU-only install path). Its brief is at `.superpowers/sdd/task-14-brief.md`, as is 15's.
+**Task 15 is next** (the AI engine README). Its brief is at `.superpowers/sdd/task-15-brief.md`.
 
 Full suite is **799 passing**, 2 skipped, 19 deselected.
+
+✅ **`pnpm check` now passes end to end** — prettier, Ruff format + lint, ESLint, typecheck, 799 pytest, 13 frontend tests. It had been failing since the harness port (`4158991`) on two pre-existing causes: `eval/probe_raw.py` was committed as-copied and never linted, and Prettier was scanning the gitignored `.superpowers/` working directory.
 
 ### This machine's measured capacity (Task 13)
 
@@ -114,9 +116,11 @@ ADAS_EVAL_EVENTS_DIR=<dir> uv run --no-sync pytest ai_engine/tests/test_clip_reg
 - `pipeline.py`'s `degraded` counts cameras with a fresh frame this tick, while `run()`'s active count uses paused/isolated state — the two can diverge on an idle tick. Never drops a camera.
 - `test_camera.py` uses fixed 0.1s settle sleeps where condition-polls would be sturdier.
 - `test_accumulate.py::_load_reference` re-executes the module per test; a fixture would avoid it.
-- `probe_raw.py` still has a B905 lint issue (untouched since the harness copy).
+- ~~`probe_raw.py` still has a B905 lint issue~~ — fixed in Task 14; it was blocking `pnpm check`.
 
 ## Still to do beyond the plan
+
+- ⚠️ **`CLAUDE.md` is stale.** Its "hard-won gotcha" describing `best.engine` falling back to `best.pt` refers to two files Task 2 deleted. `main.py` now loads `config.WEIGHTS_PATH` (`epoch50.pt`) directly with no fallback at all. Left unedited deliberately — it is the project instruction file — but it will actively mislead until corrected.
 
 - **Decide on calibration's missing build + verify steps.** Design doc §8 specifies probe → **build** → benchmark → **verify** → write; the plan's Task 13 dropped build and verify, and Task 13 shipped that way. Consequences: every capacity figure is a floor (no TensorRT/ONNX export), `model_path` always records the `.pt`, and `verification` is always `unverified`. Both omissions are defensible — the TensorRT stub hangs on install, and only the clip regression can promote verification — but the design doc and the implementation currently disagree, so one of them should move.
 - Push the branch and open a PR — nothing is pushed yet.
