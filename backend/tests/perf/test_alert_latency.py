@@ -10,6 +10,7 @@ pre-seeded rows.
 """
 
 import time
+import uuid
 
 from fastapi.testclient import TestClient
 
@@ -23,9 +24,10 @@ def _post_alert(client: TestClient, settings, *, camera_id: int, label: str) -> 
         "/api/internal/alert",
         headers=internal_headers(settings),
         json={
+            "source_event_id": str(uuid.uuid4()),
             "camera_id": camera_id,
             "detected_at": "2026-08-10T12:00:00+00:00",
-            "snapshot_path": f"perf/{label}.jpg",
+            "snapshot_key": f"perf/{label}.jpg",
             "confidence_score": 0.93,
         },
     )

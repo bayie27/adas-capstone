@@ -1,9 +1,11 @@
 """
 Tests for /api/internal.
-Covers AI-engine alert ingestion (v1 legacy + v2 idempotent), camera
-polling, status updates, the v2 heartbeat, and internal auth.
+Covers AI-engine v2 idempotent alert ingestion, the v2 heartbeat, and
+internal auth. The v1 poll/PATCH routes were removed by the A3 audit pack
+(be_audit/A3_ai_seam.md, F3) — no caller since PR #67.
 """
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -29,154 +31,6 @@ def _capture_broadcasts(
 
     monkeypatch.setattr(client.app.state.realtime_manager, "broadcast", fake_broadcast)
     return payloads
-
-
-class TestReceiveAiAlertV1Legacy:
-    def test_v1_creates_log_pauses_camera_and_broadcasts(
-        self,
-        client: TestClient,
-        session: Session,
-        monkeypatch: pytest.MonkeyPatch,
-    ):
-        payloads = _capture_broadcasts(client, monkeypatch)
-
-        camera = make_camera(
-            session,
-            name="Ingress Cam",
-            channel_id=11,
-            connection_status=ConnectionStatus.CONNECTED.value,
-            ai_status=AIStatus.ACTIVE.value,
-            desired_ai_state="Active",
-        )
-
-        resp = client.post(
-            "/api/internal/alert",
-            headers=internal_headers(),
-            json={
-                "camera_id": camera.camera_id,
-                "detected_at": datetime(2026, 4, 26, 12, 0).isoformat(),
-                "snapshot_path": "snapshots/ingress.jpg",
-                "confidence_score": 0.97,
-            },
-        )
-
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["camera_id"] == camera.camera_id
-        assert body["detection_status"] == DetectionStatus.UNVERIFIED.value
-
-        session.refresh(camera)
-        assert camera.desired_ai_state == "Paused"
-        assert camera.desired_state_reason == "incident"
-
-        logs = session.exec(
-            select(DetectionLog).where(DetectionLog.camera_id == camera.camera_id)
-        ).all()
-        assert len(logs) == 1
-        assert logs[0].snapshot_key == "snapshots/ingress.jpg"
-        assert logs[0].detected_at.tzinfo is not None
-
-        assert [payload["type"] for payload in payloads] == [
-            "NEW_DETECTION",
-            "CAMERA_STATUS_UPDATE",
-        ]
-        assert payloads[0]["data"]["camera_id"] == camera.camera_id
-
-    def test_v1_naive_local_time_is_not_treated_as_utc(
-        self, client: TestClient, session: Session
-    ):
-        """05_PKG_incidents_cameras.md Step 8 — the exact bug this package
-        exists to avoid: treating a naive v1 timestamp as UTC would shift
-        every legacy detection by the server's local offset."""
-        camera = make_camera(session, name="TZ Cam", channel_id=12)
-        naive_local = datetime(2026, 4, 26, 20, 0, 0)
-
-        resp = client.post(
-            "/api/internal/alert",
-            headers=internal_headers(),
-            json={
-                "camera_id": camera.camera_id,
-                "detected_at": naive_local.isoformat(),
-                "snapshot_path": "cam12.jpg",
-                "confidence_score": 0.9,
-            },
-        )
-
-        assert resp.status_code == 200
-        log = session.exec(
-            select(DetectionLog).where(DetectionLog.camera_id == camera.camera_id)
-        ).first()
-        # The value must be interpreted in the server's actual local offset,
-        # not blindly stamped as UTC — assert against the dynamically
-        # computed expected value rather than a fixed offset, since the
-        # test (and CI runners) may run in UTC themselves, where the two
-        # interpretations would otherwise coincide and mask the bug.
-        local_tzinfo = datetime.now().astimezone().tzinfo
-        expected = naive_local.replace(tzinfo=local_tzinfo).astimezone(UTC)
-        assert log.detected_at == expected
-
-    def test_v1_generates_its_own_source_event_id(
-        self, client: TestClient, session: Session
-    ):
-        camera = make_camera(session, name="UUID Cam", channel_id=13)
-        resp = client.post(
-            "/api/internal/alert",
-            headers=internal_headers(),
-            json={
-                "camera_id": camera.camera_id,
-                "detected_at": datetime.now(UTC).isoformat(),
-                "snapshot_path": "x.jpg",
-                "confidence_score": 0.9,
-            },
-        )
-        assert resp.status_code == 200
-        assert uuid.UUID(resp.json()["source_event_id"])
-
-    @pytest.mark.parametrize(
-        ("is_enabled", "is_active"),
-        [
-            (False, True),
-            (True, False),
-        ],
-    )
-    def test_v1_rejects_disabled_or_inactive_camera(
-        self,
-        client: TestClient,
-        session: Session,
-        monkeypatch: pytest.MonkeyPatch,
-        is_enabled: bool,
-        is_active: bool,
-    ):
-        payloads = _capture_broadcasts(client, monkeypatch)
-
-        camera = make_camera(
-            session,
-            name=f"Rejected Cam {is_enabled}-{is_active}",
-            channel_id=20 if is_enabled else 21,
-            is_enabled=is_enabled,
-            is_active=is_active,
-        )
-
-        resp = client.post(
-            "/api/internal/alert",
-            headers=internal_headers(),
-            json={
-                "camera_id": camera.camera_id,
-                "detected_at": datetime.now(UTC).isoformat(),
-                "snapshot_path": "snapshots/rejected.jpg",
-                "confidence_score": 0.91,
-            },
-        )
-
-        assert resp.status_code == 404
-        assert "inactive, or disabled" in resp.json()["detail"]
-        assert (
-            session.exec(
-                select(DetectionLog).where(DetectionLog.camera_id == camera.camera_id)
-            ).all()
-            == []
-        )
-        assert payloads == []
 
 
 class TestReceiveAiAlertV2:
@@ -317,6 +171,43 @@ class TestReceiveAiAlertV2:
         )
         assert resp.status_code == 404
 
+    @pytest.mark.parametrize(
+        ("is_enabled", "is_active"),
+        [
+            (False, True),
+            (True, False),
+        ],
+    )
+    def test_v2_rejects_disabled_or_inactive_camera(
+        self,
+        client: TestClient,
+        session: Session,
+        is_enabled: bool,
+        is_active: bool,
+    ):
+        camera = make_camera(
+            session,
+            name=f"Rejected V2 Cam {is_enabled}-{is_active}",
+            channel_id=39 if is_enabled else 40,
+            is_enabled=is_enabled,
+            is_active=is_active,
+        )
+
+        resp = client.post(
+            "/api/internal/alert",
+            headers=internal_headers(),
+            json=self._payload(camera.camera_id),
+        )
+
+        assert resp.status_code == 404
+        assert "inactive, or disabled" in resp.json()["detail"]
+        assert (
+            session.exec(
+                select(DetectionLog).where(DetectionLog.camera_id == camera.camera_id)
+            ).all()
+            == []
+        )
+
     def test_v2_future_detected_at_is_accepted(
         self, client: TestClient, session: Session
     ):
@@ -363,230 +254,29 @@ class TestReceiveAiAlertV2:
 
 
 class TestInternalAuth:
+    def _valid_heartbeat_body(self) -> dict:
+        return {
+            "engine_id": "adas-ai-1",
+            "sent_at": datetime.now(UTC).isoformat(),
+            "cameras": [],
+        }
+
     def test_internal_routes_require_valid_api_key(self, client: TestClient):
-        resp = client.get("/api/internal/cameras", headers={"x-api-key": "wrong-key"})
+        resp = client.post(
+            "/api/internal/heartbeat",
+            headers={"x-api-key": "wrong-key"},
+            json=self._valid_heartbeat_body(),
+        )
 
         assert resp.status_code == 401
         assert resp.json()["detail"] == "Invalid Internal API Key"
 
     def test_internal_routes_reject_missing_api_key(self, client: TestClient):
         """Edge case 8.13 — an absent x-api-key header must 401, not 422."""
-        resp = client.get("/api/internal/cameras")
+        resp = client.post("/api/internal/heartbeat", json=self._valid_heartbeat_body())
 
         assert resp.status_code == 401
         assert resp.json()["detail"] == "Invalid Internal API Key"
-
-
-class TestLegacyCameraPoll:
-    def test_returns_only_enabled_and_active(
-        self,
-        client: TestClient,
-        session: Session,
-    ):
-        included_one = make_camera(
-            session,
-            name="Poll Cam 1",
-            channel_id=41,
-            connection_status=ConnectionStatus.CONNECTED.value,
-        )
-        included_two = make_camera(
-            session,
-            name="Poll Cam 2",
-            channel_id=42,
-            connection_status=ConnectionStatus.RECONNECTING.value,
-        )
-        make_camera(session, name="Disabled Poll Cam", channel_id=43, is_enabled=False)
-        make_camera(session, name="Inactive Poll Cam", channel_id=44, is_active=False)
-
-        resp = client.get("/api/internal/cameras", headers=internal_headers())
-
-        assert resp.status_code == 200
-        body = resp.json()
-        returned = {camera["camera_id"]: camera for camera in body}
-        assert set(returned) == {included_one.camera_id, included_two.camera_id}
-
-    def test_ai_status_field_reports_desired_state_not_observed(
-        self, client: TestClient, session: Session
-    ):
-        """Step 8 — the field named `ai_status` here means desired_ai_state,
-        not the true observed status, because ai_engine/sync.py's pause/
-        resume logic reads it as backend intent."""
-        camera = make_camera(
-            session,
-            name="Divergence Cam",
-            channel_id=45,
-            ai_status=AIStatus.INACTIVE.value,  # true observed status
-            desired_ai_state="Paused",  # what this route must report
-        )
-
-        resp = client.get("/api/internal/cameras", headers=internal_headers())
-
-        row = next(c for c in resp.json() if c["camera_id"] == camera.camera_id)
-        assert row["ai_status"] == "Paused"
-
-
-class TestUpdateCameraStatus:
-    def test_updates_fields_and_broadcasts(
-        self,
-        client: TestClient,
-        session: Session,
-        monkeypatch: pytest.MonkeyPatch,
-    ):
-        payloads = _capture_broadcasts(client, monkeypatch)
-
-        camera = make_camera(
-            session,
-            name="Patch Cam",
-            channel_id=51,
-            connection_status=ConnectionStatus.DISCONNECTED.value,
-            ai_status=AIStatus.INACTIVE.value,
-        )
-
-        resp = client.patch(
-            f"/api/internal/cameras/{camera.camera_id}/status",
-            headers=internal_headers(),
-            json={
-                "connection_status": ConnectionStatus.CONNECTED.value,
-                "ai_status": AIStatus.ACTIVE.value,
-            },
-        )
-
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["connection_status"] == ConnectionStatus.CONNECTED.value
-        assert body["ai_status"] == AIStatus.ACTIVE.value
-
-        session.refresh(camera)
-        assert camera.connection_status == ConnectionStatus.CONNECTED.value
-        assert camera.ai_status == AIStatus.ACTIVE.value
-        assert [p["type"] for p in payloads] == ["CAMERA_STATUS_UPDATE"]
-
-    def test_supports_partial_updates(
-        self,
-        client: TestClient,
-        session: Session,
-    ):
-        camera = make_camera(
-            session,
-            name="Partial Patch Cam",
-            channel_id=52,
-            connection_status=ConnectionStatus.DISCONNECTED.value,
-            ai_status=AIStatus.PAUSED.value,
-        )
-
-        resp = client.patch(
-            f"/api/internal/cameras/{camera.camera_id}/status",
-            headers=internal_headers(),
-            json={"connection_status": ConnectionStatus.RECONNECTING.value},
-        )
-
-        assert resp.status_code == 200
-        session.refresh(camera)
-        assert camera.connection_status == ConnectionStatus.RECONNECTING.value
-        assert camera.ai_status == AIStatus.PAUSED.value
-
-    @pytest.mark.parametrize(
-        ("is_enabled", "is_active"),
-        [
-            (False, True),
-            (True, False),
-        ],
-    )
-    def test_rejects_disabled_or_inactive_camera(
-        self,
-        client: TestClient,
-        session: Session,
-        is_enabled: bool,
-        is_active: bool,
-    ):
-        camera = make_camera(
-            session,
-            name=f"Unavailable Patch Cam {is_enabled}-{is_active}",
-            channel_id=60 if is_enabled else 61,
-            is_enabled=is_enabled,
-            is_active=is_active,
-        )
-
-        resp = client.patch(
-            f"/api/internal/cameras/{camera.camera_id}/status",
-            headers=internal_headers(),
-            json={"connection_status": ConnectionStatus.CONNECTED.value},
-        )
-
-        assert resp.status_code == 404
-
-    @pytest.mark.parametrize(
-        "alert_status",
-        [DetectionStatus.UNVERIFIED, DetectionStatus.ONGOING],
-    )
-    def test_rejects_active_override_while_alert_is_open(
-        self,
-        client: TestClient,
-        session: Session,
-        monkeypatch: pytest.MonkeyPatch,
-        alert_status: DetectionStatus,
-    ):
-        payloads = _capture_broadcasts(client, monkeypatch)
-
-        camera = make_camera(
-            session,
-            name=f"Conflict Cam {alert_status.value}",
-            channel_id=70 if alert_status == DetectionStatus.UNVERIFIED else 71,
-            ai_status=AIStatus.PAUSED.value,
-            connection_status=ConnectionStatus.CONNECTED.value,
-        )
-        make_detection(session, camera, status=alert_status)
-
-        resp = client.patch(
-            f"/api/internal/cameras/{camera.camera_id}/status",
-            headers=internal_headers(),
-            json={"ai_status": AIStatus.ACTIVE.value},
-        )
-
-        assert resp.status_code == 409
-        session.refresh(camera)
-        assert camera.ai_status == AIStatus.PAUSED.value
-        assert payloads == []
-
-    @pytest.mark.parametrize(
-        "closed_status",
-        [DetectionStatus.DISMISSED, DetectionStatus.RESOLVED],
-    )
-    def test_allows_active_when_no_open_alert_exists(
-        self,
-        client: TestClient,
-        session: Session,
-        closed_status: DetectionStatus,
-    ):
-        camera = make_camera(
-            session,
-            name=f"Closed Alert Cam {closed_status.value}",
-            channel_id=80 if closed_status == DetectionStatus.DISMISSED else 81,
-            ai_status=AIStatus.PAUSED.value,
-        )
-        make_detection(session, camera, status=closed_status)
-
-        resp = client.patch(
-            f"/api/internal/cameras/{camera.camera_id}/status",
-            headers=internal_headers(),
-            json={"ai_status": AIStatus.ACTIVE.value},
-        )
-
-        assert resp.status_code == 200
-        session.refresh(camera)
-        assert camera.ai_status == AIStatus.ACTIVE.value
-
-    def test_invalid_enum_returns_422(self, client: TestClient, session: Session):
-        camera = make_camera(session, name="Enum Cam", channel_id=90)
-
-        resp = client.patch(
-            f"/api/internal/cameras/{camera.camera_id}/status",
-            headers=internal_headers(),
-            json={"ai_status": "Sleeping"},
-        )
-
-        assert resp.status_code == 422
-        assert resp.json()["code"] == "VALIDATION_ERROR"
 
 
 class TestHeartbeat:
@@ -667,6 +357,99 @@ class TestHeartbeat:
         assert resp.status_code == 200
         assert payloads == []
 
+    def test_self_reported_active_does_not_override_the_hitl_pause(
+        self, client: TestClient, session: Session
+    ):
+        """The HITL guard `TestUpdateCameraStatus.test_rejects_active_override_
+        while_alert_is_open` asserted against the now-deleted v1 PATCH route,
+        ported here: v2 doesn't reject the engine's self-report (ai_status is
+        purely observed state, recorded as-is by apply_observed()), but the
+        engine reporting `ai_status=Active` while an incident is open must
+        NOT change what the backend tells it to do next — desired_ai_state in
+        the returned snapshot must still say Paused."""
+        camera = make_camera(
+            session,
+            name="Rebel Cam",
+            channel_id=106,
+            ai_status=AIStatus.PAUSED.value,
+            connection_status=ConnectionStatus.CONNECTED.value,
+            desired_ai_state="Paused",
+            desired_state_reason="incident",
+        )
+        make_detection(session, camera, status=DetectionStatus.UNVERIFIED)
+
+        resp = client.post(
+            "/api/internal/heartbeat",
+            headers=internal_headers(),
+            json={
+                "engine_id": "adas-ai-1",
+                "sent_at": datetime.now(UTC).isoformat(),
+                "cameras": [
+                    {
+                        "camera_id": camera.camera_id,
+                        "connection_status": ConnectionStatus.CONNECTED.value,
+                        "ai_status": AIStatus.ACTIVE.value,
+                    }
+                ],
+            },
+        )
+
+        assert resp.status_code == 200
+        row = next(
+            c for c in resp.json()["cameras"] if c["camera_id"] == camera.camera_id
+        )
+        assert row["desired_ai_state"] == "Paused"
+
+        session.refresh(camera)
+        # The observed report is still recorded as-is (D-003: apply_observed
+        # is a pure recorder, not a gate) — it's the desired-state snapshot
+        # that keeps the engine honest, not a rejection of this request.
+        assert camera.ai_status == AIStatus.ACTIVE.value
+        assert camera.desired_ai_state == "Paused"
+
+    def test_disabled_camera_report_is_accepted_not_rejected(
+        self, client: TestClient, session: Session
+    ):
+        """The v1 PATCH route 404'd on a disabled camera
+        (`TestUpdateCameraStatus.test_rejects_disabled_or_inactive_camera`).
+        v2 has no such per-report rejection — a disabled camera's observed
+        state is still recorded, and the reconciliation snapshot tells the
+        engine to stop it (is_enabled: false), matching P10's documented
+        divergence from the legacy poll (be_plan/15_PKG_ai_engine_integration.md
+        Step 4)."""
+        camera = make_camera(
+            session,
+            name="Disabled HB Cam",
+            channel_id=107,
+            is_enabled=False,
+        )
+
+        resp = client.post(
+            "/api/internal/heartbeat",
+            headers=internal_headers(),
+            json={
+                "engine_id": "adas-ai-1",
+                "sent_at": datetime.now(UTC).isoformat(),
+                "cameras": [
+                    {
+                        "camera_id": camera.camera_id,
+                        "connection_status": ConnectionStatus.CONNECTED.value,
+                        "ai_status": AIStatus.ACTIVE.value,
+                    }
+                ],
+            },
+        )
+
+        assert resp.status_code == 200
+        session.refresh(camera)
+        assert camera.connection_status == ConnectionStatus.CONNECTED.value
+
+        row = next(
+            c for c in resp.json()["cameras"] if c["camera_id"] == camera.camera_id
+        )
+        assert row["is_enabled"] is False
+        assert row["desired_ai_state"] == "Inactive"
+
     def test_unknown_camera_id_ignored_not_an_error(
         self, client: TestClient, session: Session
     ):
@@ -731,6 +514,85 @@ class TestHeartbeat:
             },
         )
         assert resp.status_code == 422
+
+    def test_overlong_engine_id_is_422(self, client: TestClient, session: Session):
+        resp = client.post(
+            "/api/internal/heartbeat",
+            headers=internal_headers(),
+            json={
+                "engine_id": "x" * 129,
+                "sent_at": "2026-07-12T10:30:05.120+00:00",
+                "cameras": [],
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_null_byte_in_engine_id_is_422(self, client: TestClient, session: Session):
+        resp = client.post(
+            "/api/internal/heartbeat",
+            headers=internal_headers(),
+            json={
+                "engine_id": "adas-ai-\x00-1",
+                "sent_at": "2026-07-12T10:30:05.120+00:00",
+                "cameras": [],
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_overlong_cameras_list_is_422(self, client: TestClient, session: Session):
+        cameras = [
+            {
+                "camera_id": i,
+                "connection_status": "Connected",
+                "ai_status": "Active",
+            }
+            for i in range(1, 2002)
+        ]
+        resp = client.post(
+            "/api/internal/heartbeat",
+            headers=internal_headers(),
+            json={
+                "engine_id": "adas-ai-1",
+                "sent_at": "2026-07-12T10:30:05.120+00:00",
+                "cameras": cameras,
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_second_engine_id_within_staleness_window_logs_warning(
+        self, client: TestClient, session: Session, caplog: pytest.LogCaptureFixture
+    ):
+        """Edge case 1.18 — two engine instances. A distinct engine_id
+        heartbeating within the staleness window must be logged, not
+        rejected: rejecting could take down a legitimate failover, and
+        arbitrating a lease is deliberately out of scope for the backend
+        (be_audit/A3_ai_seam.md F9)."""
+        with caplog.at_level(logging.WARNING, logger="uvicorn.error"):
+            first = client.post(
+                "/api/internal/heartbeat",
+                headers=internal_headers(),
+                json={
+                    "engine_id": "adas-ai-fixture-primary",
+                    "sent_at": datetime.now(UTC).isoformat(),
+                    "cameras": [],
+                },
+            )
+            assert first.status_code == 200
+
+            second = client.post(
+                "/api/internal/heartbeat",
+                headers=internal_headers(),
+                json={
+                    "engine_id": "adas-ai-fixture-secondary",
+                    "sent_at": datetime.now(UTC).isoformat(),
+                    "cameras": [],
+                },
+            )
+            assert second.status_code == 200
+
+        assert "adas-ai-fixture-primary" in caplog.text
+        assert "adas-ai-fixture-secondary" in caplog.text
+        assert "two engine instances" in caplog.text
 
     def test_error_message_is_redacted_before_storage(
         self, client: TestClient, session: Session

@@ -116,43 +116,12 @@ uv run python scripts\reseed_dev.py --profile analytics
 Use this when you want to reset everything and start from a known state.
 This is the easiest way to switch profiles cleanly.
 
-### `seed_alerts_via_api.py`
-
-Creates sample alerts through the real internal API route:
-
-- `POST /api/internal/alert`
-
-This is useful when you want to exercise the application path instead of
-inserting alert rows directly into SQLite.
-
-Usage:
-
-```powershell
-uv run python scripts\seed_alerts_via_api.py
-uv run python scripts\seed_alerts_via_api.py --camera-id 1 --camera-id 2
-uv run python scripts\seed_alerts_via_api.py --base-url http://127.0.0.1:8000
-```
-
-Notes:
-
-- the backend server must already be running
-- the target camera IDs must already exist
-- the script uses `INTERNAL_API_KEY` from `.env`
-
 ## Suggested Workflow
 
 ### Fresh local DB for frontend/manual testing
 
 ```powershell
 uv run python scripts\reseed_dev.py
-```
-
-### Add more alerts through the real API
-
-Start the backend, then run:
-
-```powershell
-uv run python scripts\seed_alerts_via_api.py --camera-id 1 --camera-id 2
 ```
 
 ### Wipe the DB completely

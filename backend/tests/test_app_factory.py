@@ -5,6 +5,7 @@ Tests for the create_app() factory and test-harness isolation (P1 Step 6).
 import inspect
 import sqlite3
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.config import Settings, settings
@@ -129,13 +130,23 @@ class TestConcurrentWriteLockHandling:
             blocking_conn = sqlite3.connect(str(db_path), timeout=0)
             blocking_conn.execute("BEGIN EXCLUSIVE")
             try:
-                resp = client.patch(
-                    f"/api/internal/cameras/{camera_id}/status",
+                resp = client.post(
+                    "/api/internal/heartbeat",
                     # verify_internal_api_key checks the process-global
                     # `settings`, not this app's own per-instance settings —
                     # see app/api/dependencies.py.
                     headers={"x-api-key": settings.INTERNAL_API_KEY.get_secret_value()},
-                    json={"connection_status": "Connected"},
+                    json={
+                        "engine_id": "adas-ai-1",
+                        "sent_at": datetime.now(UTC).isoformat(),
+                        "cameras": [
+                            {
+                                "camera_id": camera_id,
+                                "connection_status": "Connected",
+                                "ai_status": "Active",
+                            }
+                        ],
+                    },
                 )
             finally:
                 blocking_conn.execute("ROLLBACK")
