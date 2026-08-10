@@ -5,7 +5,7 @@
 Answers "how many cameras can this machine carry at the required frame
 rate?" — a number a person can act on — rather than picking a tick rate.
 
-NOT the five-step probe/build/benchmark/verify/write of design doc section 8.
+NOT the five-step probe/build/benchmark/verify/write of design doc section 6.1.
 Two of those steps are deliberately absent, and the numbers here must be read
 with that in mind:
 
