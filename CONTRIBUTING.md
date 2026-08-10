@@ -72,6 +72,50 @@ Conventional Commits, matching the existing history. No fixed scope list — use
 
 CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`, but **requiring those checks to pass before merge is a manual GitHub repo setting** (Settings → Branches → branch protection rules) — it can't be committed as a file. `gh` CLI is available if you'd rather script it than click through the UI.
 
+## Database migrations
+
+D-005: the dev database is disposable until the schema is decision-complete; it no longer is. Every schema change now goes through a reviewed Alembic migration — never `SQLModel.metadata.create_all()` against a real file, which is reserved for the fast in-memory unit-test fixture in `backend/tests/conftest.py`.
+
+**Resetting your local dev database:**
+
+```bash
+uv run python backend/scripts/reset_db.py
+```
+
+This deletes the SQLite files and re-provisions the schema by running `alembic upgrade head` automatically (development-only convenience — see `app/core/migrations.py::check_schema_revision`). It is **not** a `create_all()` shortcut; it exercises the same migration a real deployment would.
+
+**Writing a new migration**, once you've changed a model in `backend/app/models/`:
+
+```bash
+uv run alembic revision --autogenerate -m "short description"
+```
+
+Then **review the generated file line by line** before trusting it. Alembic's SQLite autogenerate reliably misses:
+
+- partial indexes (`sqlite_where=...`)
+- expression indexes (e.g. `func.lower(...)`) — these are silently skipped with a warning, not generated incorrectly
+- anything attached via a SQLAlchemy `after_create` event rather than declarative metadata (the `audit_log` immutability triggers, the `help_article_fts` virtual table and its sync triggers)
+
+Every one of those needs a hand-written `op.execute(...)`, mirrored in both `upgrade()` and `downgrade()`. `backend/alembic/versions/09e6d3163265_initial_production_schema.py`'s module docstring is a worked example.
+
+Test the new migration against a fresh empty file before committing it:
+
+```bash
+DATABASE_URL="sqlite:///var/tmp/migration_check.db" uv run alembic upgrade head
+DATABASE_URL="sqlite:///var/tmp/migration_check.db" uv run alembic downgrade base
+```
+
+(`var/` is gitignored — safe scratch space.)
+
+**Startup revision check.** The running app refuses to start in production against a database whose Alembic revision doesn't match the code's head (older, newer, or missing entirely) — see `app/core/migrations.py::check_schema_revision`. In development it only warns, except for a genuinely fresh/uninitialized database, which it provisions automatically. `ordinary application startup never silently changes the production schema` (D-005) — schema changes always come from an explicit `alembic upgrade head`, run by a human or a deploy script, never implicitly by the app booting.
+
+**Post-deployment migration policy**, once a database has real production data:
+
+1. Before running a migration: take and verify a WAL-safe backup (`POST /api/system/backups`, or `(cd backend && uv run python -m app.maintenance backup)`).
+2. Run `alembic upgrade head`.
+3. After: run `PRAGMA integrity_check` and confirm the recorded Alembic revision matches head. The backup manifest's `schema_revision` field records this automatically for every new backup going forward.
+4. If something goes wrong once new-version data has been written, **do not attempt a destructive schema downgrade.** Restore the verified pre-migration backup instead — `app.maintenance.restore` already rejects restoring a backup whose recorded schema revision isn't one this codebase's migration chain recognizes, so a stale/incompatible restore fails loudly instead of silently running the wrong schema.
+
 ## Troubleshooting
 
 - **Hooks aren't firing.** You probably ran `pnpm install` inside `frontend/` instead of the repo root. Run it at the root.

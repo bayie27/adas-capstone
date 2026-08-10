@@ -161,6 +161,19 @@ def write_restore_request(
     return state
 
 
+def _is_revision_compatible(revision: str) -> bool:
+    """P9 — a backup's recorded schema revision must be one this codebase's
+    own Alembic migration chain recognizes. Imports app.core.migrations
+    lazily (alembic + Settings only, no ORM session) rather than at module
+    scope, matching this package's existing preference for a minimal,
+    late-bound dependency footprint (see record_restore_outcome_audit's
+    docstring)."""
+    from app.core.config import settings as app_settings
+    from app.core.migrations import is_known_schema_revision
+
+    return is_known_schema_revision(app_settings, revision)
+
+
 def _remove_sidecars(path: Path) -> None:
     """Removes `path`'s own `-wal`/`-shm` companions. Needed for the
     *temporary* restore/rollback copy too, not just the final `db_path` —
@@ -223,7 +236,11 @@ def perform_offline_restore(
             write_restore_state(backup_dir, state)
 
             # Step 4 — re-verify the selected backup is still a valid restore
-            # point: checksum, full integrity_check, foreign_key_check.
+            # point: checksum, full integrity_check, foreign_key_check, and
+            # (P9) that its recorded schema revision is one this codebase's
+            # migration chain actually recognizes — restoring a backup with
+            # an unrecognized/incompatible schema would silently run the
+            # current code against the wrong table shape.
             with _timed_step(state, "verify_selected_backup"):
                 manifest = read_manifest(backup_dir, backup_id)
                 if manifest is None or not manifest.valid:
@@ -242,6 +259,14 @@ def perform_offline_restore(
                     raise RestoreError(f"Backup {backup_id} failed integrity_check.")
                 if not run_foreign_key_check(selected_path):
                     raise RestoreError(f"Backup {backup_id} failed foreign_key_check.")
+                if manifest.schema_revision is None or not _is_revision_compatible(
+                    manifest.schema_revision
+                ):
+                    raise RestoreError(
+                        f"Backup {backup_id} has schema revision "
+                        f"{manifest.schema_revision!r}, which this build's "
+                        "migration chain does not recognize as compatible."
+                    )
 
             # Step 5 — restore to a temporary path and validate again.
             tmp_restore_path = db_path.with_name(db_path.name + ".restoring.tmp")

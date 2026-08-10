@@ -70,6 +70,9 @@ from tests.conftest import auth_headers, make_admin, make_operator
 
 
 def _make_real_db(db_path, *, seed_value="seed"):
+    from app.core.config import settings as app_settings
+    from app.core.migrations import get_code_head_revision
+
     conn = sqlite3.connect(db_path)
     # WAL mode, matching every real adas.db (app.core.db.install_sqlite_pragmas)
     # — without this, sqlite3.Connection.backup() never carries WAL mode
@@ -79,6 +82,17 @@ def _make_real_db(db_path, *, seed_value="seed"):
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
     conn.execute("INSERT INTO t (v) VALUES (?)", (seed_value,))
+    # P9 — stamp the real code head so backups of this fixture pass
+    # restore.py's schema-revision compatibility check, same as any real
+    # post-P9 adas.db would.
+    conn.execute(
+        "CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL, "
+        "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"
+    )
+    conn.execute(
+        "INSERT INTO alembic_version (version_num) VALUES (?)",
+        (get_code_head_revision(app_settings),),
+    )
     conn.commit()
     conn.close()
 

@@ -23,6 +23,7 @@ from app.maintenance.manifest import (
     list_manifests,
     manifest_path_for,
     new_backup_id,
+    read_schema_revision,
     tmp_path_for,
     write_manifest,
 )
@@ -161,7 +162,7 @@ def _perform_backup_write(
         created_at=datetime.now(UTC).isoformat(),
         origin=origin,
         app_version=APP_VERSION,
-        schema_revision=None,  # Alembic doesn't exist yet; completed in P9.
+        schema_revision=read_schema_revision(final_path),
         file_size=file_size,
         sha256=sha256,
         checks=checks,
