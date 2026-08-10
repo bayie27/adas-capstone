@@ -194,12 +194,10 @@ async def lifespan(app: FastAPI):
             days=1,
         )
 
-        # P6 — export jobs (D-010). Any job left `queued`/`processing` by a
-        # crash is restarted from the beginning (07_PKG_reports.md Step 5);
-        # the worker task(s) then drain the freshly re-populated queue.
-        for job_id in recover_interrupted_jobs(engine):
-            app.state.export_queue.queue.put_nowait(job_id)
-        app.state.export_queue.start(engine, app_settings.EXPORT_JOB_WORKERS)
+        # P6 — export jobs (D-010). The artifact-cleanup sweep rides the
+        # scheduler like everything else above; the worker pool itself is
+        # started below, gated on its own knob (F7) so a scheduler-off boot
+        # doesn't accept jobs into a queue nothing ever drains.
         add_job(
             scheduler,
             lambda: cleanup_expired_artifacts(engine),
@@ -229,6 +227,19 @@ async def lifespan(app: FastAPI):
         logger.info("Scheduler started.")
     else:
         app.state.scheduler = None
+
+    # F7 — independent of SCHEDULER_ENABLED: exports must keep working (or
+    # keep being *rejected* by the F7 fix's own EXPORT_JOB_WORKERS==0 case)
+    # regardless of whether the scheduler is on. Any job left `queued`/
+    # `processing` by a crash is restarted from the beginning
+    # (07_PKG_reports.md Step 5); the worker task(s) then drain the freshly
+    # re-populated queue. ExportJobQueue.start() runs max(1, worker_count)
+    # workers, so EXPORT_JOB_WORKERS==0 must skip the call entirely rather
+    # than pass 0 through.
+    if app_settings.EXPORT_JOB_WORKERS > 0:
+        for job_id in recover_interrupted_jobs(engine):
+            app.state.export_queue.queue.put_nowait(job_id)
+        app.state.export_queue.start(engine, app_settings.EXPORT_JOB_WORKERS)
 
     yield
     # Anything here runs when the server shuts down
@@ -505,6 +516,11 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # F5 — only 7 "simple" response headers are readable from JS
+        # cross-origin by default. frontend/src/utils/download.ts reads
+        # Content-Disposition to name every export download, and
+        # X-Request-ID is useless for support if the browser can't read it.
+        expose_headers=["Content-Disposition", "X-Request-ID"],
     )
 
     application.middleware("http")(

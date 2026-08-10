@@ -152,6 +152,33 @@ class Settings(BaseSettings):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
 
+    @field_validator("RTSP_URL_TEMPLATE")
+    @classmethod
+    def validate_rtsp_url_template(cls, v: str) -> str:
+        """F2 — fail at boot, not on every 3s heartbeat. A typo'd placeholder
+        or an unbalanced brace in this operator-editable value would otherwise
+        raise inside _build_rtsp_url() on every heartbeat in production,
+        knocking every camera to Unresponsive."""
+        sentinels = {
+            "channel_id": 1,
+            "dss_ip": "sentinel",
+            "dss_port": 0,
+            "dss_username": "sentinel",
+            "dss_password": "sentinel",
+        }
+        try:
+            v.format(**sentinels)
+        except KeyError as exc:
+            raise ValueError(
+                f"RTSP_URL_TEMPLATE references unknown placeholder {exc}. "
+                f"Supported placeholders: {', '.join(sorted(sentinels))}."
+            ) from exc
+        except (ValueError, IndexError) as exc:
+            raise ValueError(
+                f"RTSP_URL_TEMPLATE is not a valid format string: {exc}"
+            ) from exc
+        return v
+
     @model_validator(mode="after")
     def validate_production_secret_key(self) -> "Settings":
         if (
