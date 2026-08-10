@@ -8,6 +8,7 @@ dependencies = [
     "apscheduler>=3.11.3",
     "argon2-cffi>=25.1.0",
     "fastapi[standard]>=0.136.1",
+    "fpdf2>=2.8.8",
     "nvidia-ml-py>=13.590.20",
     "passlib[argon2]>=1.7.4",
     "psutil>=7.2.2",
@@ -30,6 +31,7 @@ ai = [
 
 [dependency-groups]
 dev = [
+    "pypdf>=6.15.0",
     "pytest>=9.0.3",
     "pytest-cov>=6.0",
     "ruff>=0.9",

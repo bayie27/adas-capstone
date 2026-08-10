@@ -4,9 +4,9 @@ analytics.py — Dashboard Analytics (FR-15) and AI Performance (FR-14) endpoint
 Two UI modules, four endpoints:
 
   GET  /api/analytics/dashboard            — composite BFF: KPIs + charts
-  GET  /api/analytics/export/dashboard     — CSV export of confirmed accidents
+  GET  /api/analytics/export/dashboard     — CSV/PDF export
   GET  /api/analytics/performance          — global KPIs + per-camera breakdown
-  GET  /api/analytics/export/performance   — CSV export of per-camera table
+  GET  /api/analytics/export/performance   — CSV/PDF export
 
 Accident definition (from the paper, FR-09 / Use Case 8):
   "Accidents" = Ongoing + Resolved  (operator-verified true positives)
@@ -18,19 +18,26 @@ Precision formula (Use Case 7 / paper §Precision Calibration):
   Returns None when no detections exist in the window (zero-division guard).
 """
 
-import csv
-import io
-from datetime import datetime
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, func, select
 
 from app.api.dependencies import get_current_user
 from app.core.db import get_session
-from app.models import Camera, DetectionLog, DetectionStatus
-from app.services.filters import validate_common_filters
+from app.core.errors import AppHTTPException
+from app.models import AuditResult, Camera, DetectionLog, DetectionStatus, User
+from app.schemas import DashboardAnalyticsResponse, PerformanceAnalyticsResponse
+from app.services.filters import (
+    IncidentFilters,
+    apply_incident_filters,
+    validate_common_filters,
+)
 from app.services.formatting import format_user_name
+from app.services.reports.common import check_row_limit, record_export_attempt
+from app.services.reports.csv_writer import csv_response
+from app.services.reports.pdf_writer import build_dashboard_pdf, build_performance_pdf
 
 router = APIRouter(
     prefix="/api/analytics",
@@ -43,8 +50,8 @@ router = APIRouter(
 # Module-level constants
 # ---------------------------------------------------------------------------
 
-_ACCIDENT_STATUSES = [DetectionStatus.ONGOING.value, DetectionStatus.RESOLVED.value]
-_DISMISSED_STATUSES = [DetectionStatus.DISMISSED.value]
+_ACCIDENT_STATUSES = (DetectionStatus.ONGOING, DetectionStatus.RESOLVED)
+_DISMISSED_STATUSES = (DetectionStatus.DISMISSED,)
 
 
 # ---------------------------------------------------------------------------
@@ -52,18 +59,8 @@ _DISMISSED_STATUSES = [DetectionStatus.DISMISSED.value]
 # ---------------------------------------------------------------------------
 
 
-def _apply_log_filters(query, *, start_date, end_date, camera_ids):
-    """
-    Apply the three common query-time filters (date window, camera whitelist)
-    to any SELECT that already targets DetectionLog.
-    """
-    if start_date:
-        query = query.where(col(DetectionLog.detected_at) >= start_date)
-    if end_date:
-        query = query.where(col(DetectionLog.detected_at) <= end_date)
-    if camera_ids:
-        query = query.where(col(DetectionLog.camera_id).in_(camera_ids))
-    return query
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
 
 
 def _compute_precision(confirmed: int, dismissed: int) -> float | None:
@@ -75,17 +72,119 @@ def _compute_precision(confirmed: int, dismissed: int) -> float | None:
     return round(confirmed / total, 4) if total > 0 else None
 
 
-def _format_pct(value: float | None) -> str:
-    """Format a 0-1 float as a percentage string for CSV export, or 'N/A'."""
-    return f"{value * 100:.1f}%" if value is not None else "N/A"
-
-
 # ---------------------------------------------------------------------------
 # Module 1 — Dashboard Analytics  (FR-15)
 # ---------------------------------------------------------------------------
 
 
-@router.get("/dashboard")
+def _compute_dashboard_data(
+    session: Session,
+    *,
+    start_date: datetime | None,
+    end_date: datetime | None,
+    camera_id: list[int] | None,
+) -> dict:
+    filters = IncidentFilters(
+        start_date=start_date, end_date=end_date, camera_ids=tuple(camera_id or ())
+    )
+
+    # --- KPI counts (one query, GROUP BY status) --------------------------
+    # GROUP BY instead of two separate COUNT queries halves the round trips.
+
+    status_counts_query = apply_incident_filters(
+        select(
+            DetectionLog.detection_status,
+            func.count(DetectionLog.log_id).label("n"),
+        )
+        .where(
+            col(DetectionLog.detection_status).in_(
+                [s.value for s in _ACCIDENT_STATUSES]
+            )
+        )
+        .group_by(DetectionLog.detection_status),
+        filters,
+    )
+
+    status_counts: dict[str, int] = {
+        row[0]: row[1] for row in session.exec(status_counts_query).all()
+    }
+
+    ongoing_count = status_counts.get(DetectionStatus.ONGOING.value, 0)
+    resolved_count = status_counts.get(DetectionStatus.RESOLVED.value, 0)
+    total_accidents = ongoing_count + resolved_count
+
+    # --- Accident frequency by location -----------------------------------
+
+    freq_query = apply_incident_filters(
+        select(
+            Camera.camera_name,
+            func.count(DetectionLog.log_id).label("accident_count"),
+        )
+        .join(Camera, DetectionLog.camera_id == Camera.camera_id)
+        .where(
+            col(DetectionLog.detection_status).in_(
+                [s.value for s in _ACCIDENT_STATUSES]
+            )
+        )
+        .group_by(Camera.camera_id, Camera.camera_name)
+        .order_by(
+            func.count(DetectionLog.log_id).desc(),
+            Camera.camera_name.asc(),
+            Camera.camera_id.asc(),
+        ),
+        filters,
+        camera_joined=True,
+    )
+
+    frequency_by_location = [
+        {"camera_name": row[0], "accident_count": row[1]}
+        for row in session.exec(freq_query).all()
+    ]
+
+    # --- Peak accident times (hour-of-day distribution) -------------------
+    # SQLite strftime('%H', datetime_column) extracts the UTC hour as a
+    # zero-padded two-character string ("00"-"23"). This is SQLite-only —
+    # D-005 locks SQLite, so that's a deliberate, not accidental, coupling.
+
+    hour_query = apply_incident_filters(
+        select(
+            func.strftime("%H", DetectionLog.detected_at).label("hour_str"),
+            func.count(DetectionLog.log_id).label("n"),
+        )
+        .join(Camera, DetectionLog.camera_id == Camera.camera_id)
+        .where(
+            col(DetectionLog.detection_status).in_(
+                [s.value for s in _ACCIDENT_STATUSES]
+            )
+        )
+        .group_by(func.strftime("%H", DetectionLog.detected_at))
+        .order_by(func.strftime("%H", DetectionLog.detected_at)),
+        filters,
+        camera_joined=True,
+    )
+
+    hour_map: dict[int, int] = {
+        int(row[0]): row[1]
+        for row in session.exec(hour_query).all()
+        if row[0]
+        is not None  # guard against NULL detected_at (schema forbids it, but be safe)
+    }
+
+    # Always emit all 24 buckets so the chart has a stable x-axis
+    peak_accident_times = [{"hour": h, "count": hour_map.get(h, 0)} for h in range(24)]
+
+    return {
+        "kpis": {
+            "ongoing": ongoing_count,
+            "total_accidents": total_accidents,
+            "total_resolved": resolved_count,
+        },
+        "frequency_by_location": frequency_by_location,
+        "peak_accident_times": peak_accident_times,
+    }
+
+
+@router.get("/dashboard", response_model=DashboardAnalyticsResponse)
 def get_dashboard_analytics(
     start_date: datetime | None = Query(
         default=None,
@@ -122,129 +221,167 @@ def get_dashboard_analytics(
         end_date=end_date,
         camera_ids=camera_id,
     )
-
-    # --- KPI counts (one query, GROUP BY status) --------------------------
-    # GROUP BY instead of two separate COUNT queries halves the round trips.
-
-    status_counts_query = _apply_log_filters(
-        select(
-            DetectionLog.detection_status,
-            func.count(DetectionLog.log_id).label("n"),
-        )
-        .where(col(DetectionLog.detection_status).in_(_ACCIDENT_STATUSES))
-        .group_by(DetectionLog.detection_status),
-        start_date=start_date,
-        end_date=end_date,
-        camera_ids=camera_id,
+    return _compute_dashboard_data(
+        session, start_date=start_date, end_date=end_date, camera_id=camera_id
     )
 
-    status_counts: dict[str, int] = {
-        row[0]: row[1] for row in session.exec(status_counts_query).all()
-    }
 
-    ongoing_count = status_counts.get(DetectionStatus.ONGOING.value, 0)
-    resolved_count = status_counts.get(DetectionStatus.RESOLVED.value, 0)
-    total_accidents = ongoing_count + resolved_count
-
-    # --- Accident frequency by location -----------------------------------
-
-    freq_query = _apply_log_filters(
-        select(
-            Camera.camera_name,
-            func.count(DetectionLog.log_id).label("accident_count"),
+def _dashboard_filters_summary(
+    *,
+    start_date: datetime | None,
+    end_date: datetime | None,
+    camera_id: list[int] | None,
+) -> list[str]:
+    lines = []
+    if start_date or end_date:
+        lines.append(
+            f"Date range: {start_date.isoformat() if start_date else '…'} "
+            f"to {end_date.isoformat() if end_date else '…'}"
         )
-        .join(Camera, DetectionLog.camera_id == Camera.camera_id)
-        .where(col(DetectionLog.detection_status).in_(_ACCIDENT_STATUSES))
-        .group_by(Camera.camera_id, Camera.camera_name)
-        .order_by(
-            func.count(DetectionLog.log_id).desc(),
-            Camera.camera_name.asc(),
-            Camera.camera_id.asc(),
-        ),
-        start_date=start_date,
-        end_date=end_date,
-        camera_ids=camera_id,
-    )
-
-    frequency_by_location = [
-        {"camera_name": row[0], "accident_count": row[1]}
-        for row in session.exec(freq_query).all()
-    ]
-
-    # --- Peak accident times (hour-of-day distribution) -------------------
-    # SQLite strftime('%H', datetime_column) extracts the UTC hour as a
-    # zero-padded two-character string ("00"-"23"). We cast to int in Python.
-
-    hour_query = _apply_log_filters(
-        select(
-            func.strftime("%H", DetectionLog.detected_at).label("hour_str"),
-            func.count(DetectionLog.log_id).label("n"),
-        )
-        .join(Camera, DetectionLog.camera_id == Camera.camera_id)
-        .where(col(DetectionLog.detection_status).in_(_ACCIDENT_STATUSES))
-        .group_by(func.strftime("%H", DetectionLog.detected_at))
-        .order_by(func.strftime("%H", DetectionLog.detected_at)),
-        start_date=start_date,
-        end_date=end_date,
-        camera_ids=camera_id,
-    )
-
-    hour_map: dict[int, int] = {
-        int(row[0]): row[1]
-        for row in session.exec(hour_query).all()
-        if row[0]
-        is not None  # guard against NULL detected_at (schema forbids it, but be safe)
-    }
-
-    # Always emit all 24 buckets so the chart has a stable x-axis
-    peak_accident_times = [{"hour": h, "count": hour_map.get(h, 0)} for h in range(24)]
-
-    return {
-        "kpis": {
-            "ongoing": ongoing_count,
-            "total_accidents": total_accidents,
-            "total_resolved": resolved_count,
-        },
-        "frequency_by_location": frequency_by_location,
-        "peak_accident_times": peak_accident_times,
-    }
+    if camera_id:
+        lines.append("Camera IDs: " + ", ".join(str(c) for c in camera_id))
+    return lines
 
 
 @router.get("/export/dashboard")
-def export_dashboard_csv(
+def export_dashboard(
+    request: Request,
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
     camera_id: list[int] | None = Query(default=None),
+    format: str = Query(default="csv", pattern="^(csv|pdf)$"),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Export confirmed accident logs (Ongoing + Resolved) matching the
-    active dashboard filters as a downloadable CSV.
+    Export the dashboard's supporting data as CSV or PDF (`?format=csv|pdf`).
+
+    The CSV is the underlying confirmed-accident (Ongoing + Resolved) log
+    rows behind the dashboard — matching the active date/camera filters —
+    so an analyst can drill from the KPI cards into the records that back
+    them. The PDF instead renders the KPI/frequency/peak-times summary
+    itself (D-010's "Dashboard report — filtered KPIs, location frequency,
+    and peak-time results"), since that's what a print-ready dashboard
+    report means.
     """
     validate_common_filters(
         start_date=start_date,
         end_date=end_date,
         camera_ids=camera_id,
     )
+    filters = IncidentFilters(
+        start_date=start_date, end_date=end_date, camera_ids=tuple(camera_id or ())
+    )
+    filters_dict = {
+        "start_date": start_date.isoformat() if start_date else None,
+        "end_date": end_date.isoformat() if end_date else None,
+        "camera_id": list(camera_id or ()),
+    }
+    source_ip = _client_ip(request)
 
-    logs_query = _apply_log_filters(
+    # A count query, not a materialized id list: `WHERE log_id IN (...)`
+    # with tens of thousands of bind parameters exceeds SQLite's default
+    # variable limit (999) — found live-drilling a 50,000-row export.
+    count_stmt = apply_incident_filters(
+        select(func.count(col(DetectionLog.log_id))).where(
+            col(DetectionLog.detection_status).in_(
+                [s.value for s in _ACCIDENT_STATUSES]
+            )
+        ),
+        filters,
+    )
+    row_count = session.exec(count_stmt).one()
+
+    try:
+        check_row_limit(row_count, format=format)
+    except AppHTTPException:
+        record_export_attempt(
+            session,
+            action="REPORT_EXPORT",
+            report_type="dashboard",
+            format=format,
+            actor=current_user,
+            filters=filters_dict,
+            row_count=row_count,
+            result=AuditResult.FAILURE,
+            failure_category="row_limit_exceeded",
+            source_ip=source_ip,
+        )
+        session.commit()
+        raise
+
+    record_export_attempt(
+        session,
+        action="REPORT_EXPORT",
+        report_type="dashboard",
+        format=format,
+        actor=current_user,
+        filters=filters_dict,
+        row_count=row_count,
+        result=AuditResult.SUCCESS,
+        source_ip=source_ip,
+    )
+    session.commit()
+
+    filters_summary = _dashboard_filters_summary(
+        start_date=start_date, end_date=end_date, camera_id=camera_id
+    )
+
+    if format == "pdf":
+        data = _compute_dashboard_data(
+            session, start_date=start_date, end_date=end_date, camera_id=camera_id
+        )
+        pdf_bytes = build_dashboard_pdf(
+            kpis=data["kpis"],
+            frequency_by_location=data["frequency_by_location"],
+            peak_accident_times=data["peak_accident_times"],
+            filters_summary=filters_summary,
+            requested_by=format_user_name(current_user) or current_user.username,
+            generated_at=datetime.now(UTC),
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": 'attachment; filename="adas_dashboard_export.pdf"'
+            },
+        )
+
+    logs_stmt = apply_incident_filters(
         select(DetectionLog)
         .options(
             selectinload(DetectionLog.camera),
             selectinload(DetectionLog.verified_by),
             selectinload(DetectionLog.closed_by),
         )
-        .where(col(DetectionLog.detection_status).in_(_ACCIDENT_STATUSES))
+        .where(
+            col(DetectionLog.detection_status).in_(
+                [s.value for s in _ACCIDENT_STATUSES]
+            )
+        )
         .order_by(col(DetectionLog.detected_at).desc()),
-        start_date=start_date,
-        end_date=end_date,
-        camera_ids=camera_id,
+        filters,
     )
-    logs = session.exec(logs_query).all()
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(
+    def _row(log: DetectionLog) -> list:
+        return [
+            log.log_id,
+            log.detected_at.isoformat(),
+            log.camera_id,
+            log.camera.camera_name if log.camera else None,
+            log.detection_status,
+            log.confidence_score,
+            log.verified_by_id,
+            format_user_name(log.verified_by),
+            log.verified_at.isoformat() if log.verified_at else None,
+            log.closed_by_id,
+            format_user_name(log.closed_by),
+            log.closed_at.isoformat() if log.closed_at else None,
+        ]
+
+    rows_iter = (_row(log) for log in session.exec(logs_stmt).yield_per(500))
+    return csv_response(
+        "adas_dashboard_export.csv",
         [
             "Log ID",
             "Detected At",
@@ -258,32 +395,9 @@ def export_dashboard_csv(
             "Closed By ID",
             "Closed By Name",
             "Closed At",
-        ]
+        ],
+        rows_iter,
     )
-
-    for log in logs:
-        writer.writerow(
-            [
-                log.log_id,
-                log.detected_at.isoformat(),
-                log.camera_id,
-                log.camera.camera_name if log.camera else "N/A",
-                log.detection_status,
-                _format_pct(log.confidence_score),
-                log.verified_by_id or "N/A",
-                format_user_name(log.verified_by) or "N/A",
-                log.verified_at.isoformat() if log.verified_at else "N/A",
-                log.closed_by_id or "N/A",
-                format_user_name(log.closed_by) or "N/A",
-                log.closed_at.isoformat() if log.closed_at else "N/A",
-            ]
-        )
-
-    response = Response(content=output.getvalue(), media_type="text/csv")
-    response.headers["Content-Disposition"] = (
-        "attachment; filename=adas_dashboard_export.csv"
-    )
-    return response
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +408,7 @@ def export_dashboard_csv(
 def _fetch_per_camera_stats(
     session: Session,
     *,
-    statuses: list[str],
+    statuses: tuple[DetectionStatus, ...],
     start_date: datetime | None,
     end_date: datetime | None,
     camera_ids: list[int] | None,
@@ -303,22 +417,36 @@ def _fetch_per_camera_stats(
     Return {camera_id: (count, avg_confidence)} for all logs whose
     detection_status is in `statuses`, within the filter window.
     """
-    query = _apply_log_filters(
+    filters = IncidentFilters(
+        start_date=start_date,
+        end_date=end_date,
+        statuses=statuses,
+        camera_ids=tuple(camera_ids or ()),
+    )
+    query = apply_incident_filters(
         select(
             DetectionLog.camera_id,
             func.count(DetectionLog.log_id).label("n"),
             func.avg(DetectionLog.confidence_score).label("avg_conf"),
-        )
-        .where(col(DetectionLog.detection_status).in_(statuses))
-        .group_by(DetectionLog.camera_id),
-        start_date=start_date,
-        end_date=end_date,
-        camera_ids=camera_ids,
+        ).group_by(DetectionLog.camera_id),
+        filters,
     )
     return {
         row[0]: (row[1], float(row[2]) if row[2] is not None else None)
         for row in session.exec(query).all()
     }
+
+
+def _matching_camera_ids(session: Session, search: str | None) -> set[int] | None:
+    """Performance's `search` filters the per-camera table by camera name.
+    07_PKG_reports.md Step 1 — moved into the query (a SQL lookup against
+    `camera`) instead of a Python substring check applied after fetching."""
+    if not search:
+        return None
+    rows = session.exec(
+        select(Camera.camera_id).where(col(Camera.camera_name).icontains(search))
+    ).all()
+    return set(rows)
 
 
 def _weighted_avg(stat_map: dict[int, tuple[int, float | None]]) -> float | None:
@@ -341,46 +469,14 @@ def _weighted_avg(stat_map: dict[int, tuple[int, float | None]]) -> float | None
     return round(weighted_sum / total_weight, 4)
 
 
-@router.get("/performance")
-def get_ai_performance(
-    start_date: datetime | None = Query(
-        default=None,
-        description="ISO 8601 start of window, e.g. 2026-01-01T00:00:00Z",
-    ),
-    end_date: datetime | None = Query(
-        default=None,
-        description="ISO 8601 end of window, e.g. 2026-12-31T23:59:59Z",
-    ),
-    camera_id: list[int] | None = Query(
-        default=None,
-        description="Filter by camera ID(s), e.g. ?camera_id=1&camera_id=2",
-    ),
-    search: str | None = Query(
-        default=None,
-        min_length=1,
-        max_length=100,
-        description="Filter per-camera table by camera name (case-insensitive substring)",
-    ),
-    session: Session = Depends(get_session),
-):
-    """
-    AI Performance module (FR-14).
-
-    **global_kpis** — five keycards covering the entire filtered window:
-    Total Accidents, Total Dismissed, Precision Score, Avg Accident Confidence,
-    Avg Dismissed Confidence. Confidence and Precision are null when no data exists.
-
-    **per_camera** — same five metrics broken down per camera, sorted by total
-    activity (accidents + dismissed) descending. Optionally filtered by camera
-    name via `?search=`. Only cameras that have at least one detection in the
-    filtered window appear in the table.
-    """
-    validate_common_filters(
-        start_date=start_date,
-        end_date=end_date,
-        camera_ids=camera_id,
-    )
-
+def _compute_performance_data(
+    session: Session,
+    *,
+    start_date: datetime | None,
+    end_date: datetime | None,
+    camera_id: list[int] | None,
+    search: str | None,
+) -> dict:
     # Two focused queries rather than a single GROUP BY (status, camera_id) pivot,
     # which would require more complex unpacking and is harder to read and test.
     confirmed_map = _fetch_per_camera_stats(
@@ -398,7 +494,9 @@ def get_ai_performance(
         camera_ids=camera_id,
     )
 
-    # --- Global KPIs ------------------------------------------------------
+    # --- Global KPIs --------------------------------------------------------
+    # Deliberately computed from the *unfiltered-by-search* maps — `search`
+    # only narrows the per-camera table below, same as today's behavior.
 
     global_confirmed = sum(v[0] for v in confirmed_map.values())
     global_dismissed = sum(v[0] for v in dismissed_map.values())
@@ -406,9 +504,12 @@ def get_ai_performance(
     global_avg_accident_conf = _weighted_avg(confirmed_map)
     global_avg_dismissed_conf = _weighted_avg(dismissed_map)
 
-    # --- Per-camera breakdown ---------------------------------------------
+    # --- Per-camera breakdown -------------------------------------------------
 
     all_camera_ids = set(confirmed_map.keys()) | set(dismissed_map.keys())
+    matching_ids = _matching_camera_ids(session, search)
+    if matching_ids is not None:
+        all_camera_ids &= matching_ids
 
     # Resolve camera names in one query rather than N individual lookups
     camera_name_map: dict[int, str] = {}
@@ -423,10 +524,6 @@ def get_ai_performance(
     per_camera: list[dict] = []
     for cam_id in all_camera_ids:
         cam_name = camera_name_map.get(cam_id, f"Camera {cam_id}")
-
-        # Apply search filter (case-insensitive substring match on camera name)
-        if search and search.lower() not in cam_name.lower():
-            continue
 
         conf_count, acc_avg = confirmed_map.get(cam_id, (0, None))
         dis_count, dis_avg = dismissed_map.get(cam_id, (0, None))
@@ -468,32 +565,164 @@ def get_ai_performance(
     }
 
 
-@router.get("/export/performance")
-def export_performance_csv(
-    start_date: datetime | None = Query(default=None),
-    end_date: datetime | None = Query(default=None),
-    camera_id: list[int] | None = Query(default=None),
-    search: str | None = Query(default=None, min_length=1, max_length=100),
+@router.get("/performance", response_model=PerformanceAnalyticsResponse)
+def get_ai_performance(
+    start_date: datetime | None = Query(
+        default=None,
+        description="ISO 8601 start of window, e.g. 2026-01-01T00:00:00Z",
+    ),
+    end_date: datetime | None = Query(
+        default=None,
+        description="ISO 8601 end of window, e.g. 2026-12-31T23:59:59Z",
+    ),
+    camera_id: list[int] | None = Query(
+        default=None,
+        description="Filter by camera ID(s), e.g. ?camera_id=1&camera_id=2",
+    ),
+    search: str | None = Query(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description="Filter per-camera table by camera name (case-insensitive substring)",
+    ),
     session: Session = Depends(get_session),
 ):
     """
-    Export the per-camera AI performance breakdown as a downloadable CSV.
-    Applies the same filters as GET /api/analytics/performance so the CSV
-    always matches exactly what the operator sees on screen.
+    AI Performance module (FR-14).
+
+    **global_kpis** — five keycards covering the entire filtered window:
+    Total Accidents, Total Dismissed, Precision Score, Avg Accident Confidence,
+    Avg Dismissed Confidence. Confidence and Precision are null when no data exists.
+
+    **per_camera** — same five metrics broken down per camera, sorted by total
+    activity (accidents + dismissed) descending. Optionally filtered by camera
+    name via `?search=`. Only cameras that have at least one detection in the
+    filtered window appear in the table.
     """
-    # Delegate entirely to the performance endpoint so filter logic lives in
-    # one place and the export is guaranteed to stay in sync with the UI.
-    data = get_ai_performance(
+    validate_common_filters(
+        start_date=start_date,
+        end_date=end_date,
+        camera_ids=camera_id,
+    )
+    return _compute_performance_data(
+        session,
         start_date=start_date,
         end_date=end_date,
         camera_id=camera_id,
         search=search,
-        session=session,
     )
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(
+
+@router.get("/export/performance")
+def export_performance(
+    request: Request,
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
+    camera_id: list[int] | None = Query(default=None),
+    search: str | None = Query(default=None, min_length=1, max_length=100),
+    format: str = Query(default="csv", pattern="^(csv|pdf)$"),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Export the per-camera AI performance breakdown as CSV or PDF.
+    Applies the same filters as GET /api/analytics/performance so the
+    export always matches exactly what the operator sees on screen.
+    """
+    validate_common_filters(
+        start_date=start_date,
+        end_date=end_date,
+        camera_ids=camera_id,
+    )
+    filters_dict = {
+        "start_date": start_date.isoformat() if start_date else None,
+        "end_date": end_date.isoformat() if end_date else None,
+        "camera_id": list(camera_id or ()),
+        "search": search,
+    }
+    source_ip = _client_ip(request)
+
+    data = _compute_performance_data(
+        session,
+        start_date=start_date,
+        end_date=end_date,
+        camera_id=camera_id,
+        search=search,
+    )
+    row_count = len(data["per_camera"])
+
+    try:
+        check_row_limit(row_count, format=format)
+    except AppHTTPException:
+        record_export_attempt(
+            session,
+            action="REPORT_EXPORT",
+            report_type="performance",
+            format=format,
+            actor=current_user,
+            filters=filters_dict,
+            row_count=row_count,
+            result=AuditResult.FAILURE,
+            failure_category="row_limit_exceeded",
+            source_ip=source_ip,
+        )
+        session.commit()
+        raise
+
+    record_export_attempt(
+        session,
+        action="REPORT_EXPORT",
+        report_type="performance",
+        format=format,
+        actor=current_user,
+        filters=filters_dict,
+        row_count=row_count,
+        result=AuditResult.SUCCESS,
+        source_ip=source_ip,
+    )
+    session.commit()
+
+    filters_summary = []
+    if start_date or end_date:
+        filters_summary.append(
+            f"Date range: {start_date.isoformat() if start_date else '…'} "
+            f"to {end_date.isoformat() if end_date else '…'}"
+        )
+    if camera_id:
+        filters_summary.append("Camera IDs: " + ", ".join(str(c) for c in camera_id))
+    if search:
+        filters_summary.append(f"Search: {search!r}")
+
+    if format == "pdf":
+        pdf_bytes = build_performance_pdf(
+            global_kpis=data["global_kpis"],
+            per_camera=data["per_camera"],
+            filters_summary=filters_summary,
+            requested_by=format_user_name(current_user) or current_user.username,
+            generated_at=datetime.now(UTC),
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": 'attachment; filename="adas_performance_export.pdf"'
+            },
+        )
+
+    rows = (
+        [
+            row["camera_id"],
+            row["camera_name"],
+            row["total_accidents"],
+            row["total_dismissed"],
+            row["precision_score"],
+            row["avg_accident_confidence"],
+            row["avg_dismissed_confidence"],
+        ]
+        for row in data["per_camera"]
+    )
+    return csv_response(
+        "adas_performance_export.csv",
         [
             "Camera ID",
             "Camera Name",
@@ -502,24 +731,6 @@ def export_performance_csv(
             "Precision Score",
             "Avg Accident Confidence",
             "Avg Dismissed Confidence",
-        ]
+        ],
+        rows,
     )
-
-    for row in data["per_camera"]:
-        writer.writerow(
-            [
-                row["camera_id"],
-                row["camera_name"],
-                row["total_accidents"],
-                row["total_dismissed"],
-                _format_pct(row["precision_score"]),
-                _format_pct(row["avg_accident_confidence"]),
-                _format_pct(row["avg_dismissed_confidence"]),
-            ]
-        )
-
-    response = Response(content=output.getvalue(), media_type="text/csv")
-    response.headers["Content-Disposition"] = (
-        "attachment; filename=adas_performance_export.csv"
-    )
-    return response

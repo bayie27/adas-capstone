@@ -367,7 +367,9 @@ class TestExportAlerts:
         assert resp.headers["content-type"].startswith("text/csv")
         assert "adas_incident_export.csv" in resp.headers["content-disposition"]
 
-        rows = list(csv.reader(StringIO(resp.text)))
+        # D-010 — a UTF-8 BOM is prefixed for Excel compatibility.
+        assert resp.text.startswith("﻿")
+        rows = list(csv.reader(StringIO(resp.text[1:])))
         assert rows[0] == [
             "Log ID",
             "Detected At",
@@ -386,12 +388,85 @@ class TestExportAlerts:
         assert rows[1][0] == str(log.log_id)
         assert rows[1][3] == "CSV Cam"
         assert rows[1][4] == "Unverified"
-        assert rows[1][5] == "87.0%"
-        assert rows[1][6] == "http://testserver/snapshots/exports/test_snapshot.jpg"
+        # D-010 — raw machine-readable value, not a presentation percentage.
+        assert rows[1][5] == "0.8700"
+        assert rows[1][6] == f"/api/alerts/{log.log_id}/snapshot"
         assert rows[1][7] == str(operator.user_id)
         assert rows[1][8] == "Test Operator"
         assert rows[1][10] == str(operator.user_id)
         assert rows[1][11] == "Test Operator"
+
+    def test_export_alerts_neutralizes_formula_injection(
+        self, client: TestClient, session: Session
+    ):
+        """14_EDGE_CASES.md 4.1 — a camera named to look like a spreadsheet
+        formula must not execute when the CSV is opened in Excel."""
+        operator, headers = operator_with_headers(client, session, username="csvinj")
+        camera = make_camera(session, name="=cmd|'/c calc'!A1", channel_id=2)
+        make_alert(session, camera, status=DetectionStatus.UNVERIFIED)
+
+        resp = client.get("/api/alerts/export", headers=headers)
+
+        assert resp.status_code == 200
+        rows = list(csv.reader(StringIO(resp.text[1:])))
+        assert rows[1][3] == "'=cmd|'/c calc'!A1"
+
+    def test_export_alerts_pdf(self, client: TestClient, session: Session):
+        operator, headers = operator_with_headers(client, session, username="pdfexp")
+        camera = make_camera(session, name="PDF Cam", channel_id=3)
+        make_alert(
+            session, camera, status=DetectionStatus.UNVERIFIED, confidence_score=0.5
+        )
+
+        resp = client.get("/api/alerts/export?format=pdf", headers=headers)
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "application/pdf"
+        assert "adas_incident_export.pdf" in resp.headers["content-disposition"]
+        assert resp.content.startswith(b"%PDF")
+
+    def test_export_alerts_empty_dataset_still_has_headers(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="csvempty")
+
+        resp = client.get(
+            "/api/alerts/export?status=Resolved",
+            headers=headers,
+        )
+
+        assert resp.status_code == 200
+        rows = list(csv.reader(StringIO(resp.text[1:])))
+        assert len(rows) == 1
+        assert rows[0][0] == "Log ID"
+
+    def test_export_alerts_rejects_invalid_sort_by(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="csvsort")
+
+        resp = client.get("/api/alerts/export?sort_by=snapshot_key", headers=headers)
+
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "VALIDATION_ERROR"
+
+    def test_export_alerts_over_row_limit_returns_413(
+        self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
+    ):
+        from app.core import config as config_module
+
+        monkeypatch.setattr(config_module.settings, "EXPORT_CSV_MAX_ROWS", 1)
+        operator, headers = operator_with_headers(client, session, username="csvlimit")
+        camera = make_camera(session, name="Limit Cam", channel_id=4)
+        make_alert(session, camera, status=DetectionStatus.UNVERIFIED)
+        other_camera = make_camera(session, name="Limit Cam 2", channel_id=5)
+        make_alert(session, other_camera, status=DetectionStatus.UNVERIFIED)
+
+        resp = client.get("/api/alerts/export", headers=headers)
+
+        assert resp.status_code == 413
+        assert resp.json()["code"] == "PAYLOAD_TOO_LARGE"
+        assert "/api/exports/jobs" in resp.json()["detail"]
 
 
 class TestGetAlertDetails:

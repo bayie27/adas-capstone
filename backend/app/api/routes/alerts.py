@@ -1,11 +1,9 @@
-import csv
-import io
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session, col, func, or_, select
+from sqlmodel import Session, col, func, select
 
 from app.api.dependencies import get_current_user, get_realtime_manager, get_scheduler
 from app.core.config import settings
@@ -20,7 +18,12 @@ from app.services.events import (
     camera_status_update_event,
     snooze_activated_event,
 )
-from app.services.filters import validate_common_filters
+from app.services.filters import (
+    IncidentFilters,
+    apply_incident_filters,
+    apply_sort,
+    validate_common_filters,
+)
 from app.services.formatting import format_user_name
 from app.services.incidents import (
     ConflictState,
@@ -30,6 +33,9 @@ from app.services.incidents import (
     transition,
 )
 from app.services.realtime import RealtimeManager
+from app.services.reports.common import check_row_limit, record_export_attempt
+from app.services.reports.csv_writer import csv_response
+from app.services.reports.pdf_writer import build_incident_pdf
 from app.services.snapshots import resolve as resolve_snapshot
 from app.services.snoozes import schedule_snooze_job, snooze_incident
 
@@ -38,6 +44,21 @@ router = APIRouter(
     tags=["Alerts & Accident Management"],
     dependencies=[Depends(get_current_user)],
 )
+
+# 01_CONTRACTS.md §1.5 — the allowlisted `sort_by` fields for incident
+# list/export routes. `log_id` is the tie-breaker so equal-`detected_at`
+# rows (e.g. a seeded batch) never shuffle between pages.
+ALERT_SORT_FIELDS = {
+    "log_id",
+    "detected_at",
+    "confidence_score",
+    "detection_status",
+    "camera_id",
+    "verified_at",
+    "closed_at",
+    "created_at",
+    "updated_at",
+}
 
 # Module-level singleton (ruff B008 — a Depends() default must not call a
 # function inline): the empty-body default for the snooze route below.
@@ -88,49 +109,111 @@ def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
-def _apply_alert_filters(
-    query,
+def _incident_filters_from_query(
     *,
-    search: str | None,
     start_date: datetime | None,
     end_date: datetime | None,
-    status_values: list[DetectionStatus] | None,
-    camera_ids: list[int] | None,
-    user_ids: list[int] | None,
-):
-    if search:
-        query = query.join(Camera)
-        if search.isdigit():
-            query = query.where(
-                or_(
-                    DetectionLog.log_id == int(search),
-                    col(Camera.camera_name).icontains(search),
-                )
-            )
-        else:
-            query = query.where(col(Camera.camera_name).icontains(search))
+    status: list[DetectionStatus] | None,
+    camera_id: list[int] | None,
+    user_id: list[int] | None,
+    search: str | None,
+) -> IncidentFilters:
+    return IncidentFilters(
+        start_date=start_date,
+        end_date=end_date,
+        statuses=tuple(status or ()),
+        camera_ids=tuple(camera_id or ()),
+        user_ids=tuple(user_id or ()),
+        search=search,
+    )
 
-    if start_date:
-        query = query.where(col(DetectionLog.detected_at) >= start_date)
-    if end_date:
-        query = query.where(col(DetectionLog.detected_at) <= end_date)
-    if status_values:
-        query = query.where(
-            col(DetectionLog.detection_status).in_(
-                [status.value for status in status_values]
-            )
-        )
-    if camera_ids:
-        query = query.where(col(DetectionLog.camera_id).in_(camera_ids))
-    if user_ids:
-        query = query.where(
-            or_(
-                col(DetectionLog.verified_by_id).in_(user_ids),
-                col(DetectionLog.closed_by_id).in_(user_ids),
-            )
-        )
 
-    return query
+def _filters_as_dict(f: IncidentFilters) -> dict:
+    return {
+        "start_date": f.start_date.isoformat() if f.start_date else None,
+        "end_date": f.end_date.isoformat() if f.end_date else None,
+        "status": [s.value for s in f.statuses],
+        "camera_id": list(f.camera_ids),
+        "user_id": list(f.user_ids),
+        "search": f.search,
+    }
+
+
+def _filters_summary(f: IncidentFilters, *, sort_by: str, sort_order: str) -> list[str]:
+    lines = []
+    if f.start_date or f.end_date:
+        lines.append(
+            f"Date range: {f.start_date.isoformat() if f.start_date else '…'} "
+            f"to {f.end_date.isoformat() if f.end_date else '…'}"
+        )
+    if f.statuses:
+        lines.append("Status: " + ", ".join(s.value for s in f.statuses))
+    if f.camera_ids:
+        lines.append("Camera IDs: " + ", ".join(str(c) for c in f.camera_ids))
+    if f.user_ids:
+        lines.append("User IDs: " + ", ".join(str(u) for u in f.user_ids))
+    if f.search:
+        lines.append(f"Search: {f.search!r}")
+    lines.append(f"Sort: {sort_by} {sort_order}")
+    return lines
+
+
+def _incident_csv_row(log: DetectionLog) -> list:
+    return [
+        log.log_id,
+        log.detected_at.isoformat(),
+        log.camera_id,
+        log.camera.camera_name if log.camera else None,
+        log.detection_status,
+        log.confidence_score,
+        f"/api/alerts/{log.log_id}/snapshot",
+        log.verified_by_id,
+        format_user_name(log.verified_by),
+        log.verified_at.isoformat() if log.verified_at else None,
+        log.closed_by_id,
+        format_user_name(log.closed_by),
+        log.closed_at.isoformat() if log.closed_at else None,
+    ]
+
+
+INCIDENT_CSV_COLUMNS = [
+    "Log ID",
+    "Detected At",
+    "Camera ID",
+    "Camera Name",
+    "Status",
+    "Confidence",
+    "Snapshot URL",
+    "Verified By ID",
+    "Verified By Name",
+    "Verified At",
+    "Closed By ID",
+    "Closed By Name",
+    "Closed At",
+]
+
+
+def _incident_pdf_row(log: DetectionLog) -> list:
+    return [
+        log.log_id,
+        log.detected_at.isoformat(),
+        log.camera.camera_name if log.camera else None,
+        log.detection_status,
+        log.confidence_score,
+        format_user_name(log.verified_by),
+        log.verified_at.isoformat() if log.verified_at else None,
+        format_user_name(log.closed_by),
+        log.closed_at.isoformat() if log.closed_at else None,
+    ]
+
+
+def _incident_query_stmt(filters: IncidentFilters):
+    stmt = select(DetectionLog).options(
+        selectinload(DetectionLog.camera),
+        selectinload(DetectionLog.verified_by),
+        selectinload(DetectionLog.closed_by),
+    )
+    return apply_incident_filters(stmt, filters)
 
 
 @router.get("/", response_model=DetectionLogListResponse)
@@ -157,6 +240,8 @@ def get_alerts(
         ),
     ),
     search: str | None = Query(default=None, min_length=1, max_length=100),
+    sort_by: str = Query(default="detected_at"),
+    sort_order: str = Query(default="desc"),
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
@@ -176,22 +261,24 @@ def get_alerts(
         camera_ids=camera_id,
         user_ids=user_id,
     )
-
-    query = select(DetectionLog).options(
-        selectinload(DetectionLog.camera),
-        selectinload(DetectionLog.verified_by),
-        selectinload(DetectionLog.closed_by),
-    )
-    query = _apply_alert_filters(
-        query,
-        search=search,
+    filters = _incident_filters_from_query(
         start_date=start_date,
         end_date=end_date,
-        status_values=status,
-        camera_ids=camera_id,
-        user_ids=user_id,
+        status=status,
+        camera_id=camera_id,
+        user_id=user_id,
+        search=search,
     )
-    query = query.order_by(col(DetectionLog.detected_at).desc())
+
+    query = _incident_query_stmt(filters)
+    query = apply_sort(
+        query,
+        DetectionLog,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        allowed=ALERT_SORT_FIELDS,
+        tie_breaker="log_id",
+    )
 
     total_filtered = session.exec(
         select(func.count()).select_from(query.subquery())
@@ -207,7 +294,7 @@ def get_alerts(
 
 
 @router.get("/export")
-def export_alerts_csv(
+def export_alerts(
     request: Request,
     start_date: datetime | None = Query(
         default=None, description="ISO 8601 format, e.g. 2026-01-01T00:00:00Z"
@@ -219,79 +306,104 @@ def export_alerts_csv(
     camera_id: list[int] | None = Query(default=None),
     user_id: list[int] | None = Query(default=None),
     search: str | None = Query(default=None, min_length=1, max_length=100),
+    sort_by: str = Query(default="detected_at"),
+    sort_order: str = Query(default="desc"),
+    format: str = Query(default="csv", pattern="^(csv|pdf)$"),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    """Exports the filtered logs directly to a downloadable CSV file."""
+    """Exports the filtered incident logs as CSV or PDF (`?format=csv|pdf`,
+    default `csv`) — the same filter/sort builders as `GET /api/alerts/`,
+    so an export always matches the screen exactly (D-010)."""
     validate_common_filters(
         start_date=start_date,
         end_date=end_date,
         camera_ids=camera_id,
         user_ids=user_id,
     )
-
-    query = select(DetectionLog).options(
-        selectinload(DetectionLog.camera),
-        selectinload(DetectionLog.verified_by),
-        selectinload(DetectionLog.closed_by),
-    )
-    query = _apply_alert_filters(
-        query,
-        search=search,
+    filters = _incident_filters_from_query(
         start_date=start_date,
         end_date=end_date,
-        status_values=status,
-        camera_ids=camera_id,
-        user_ids=user_id,
+        status=status,
+        camera_id=camera_id,
+        user_id=user_id,
+        search=search,
     )
-    query = query.order_by(col(DetectionLog.detected_at).desc())
-    logs = session.exec(query).all()
+    filters_dict = _filters_as_dict(filters)
+    sort_dict = {"sort_by": sort_by, "sort_order": sort_order}
+    source_ip = _client_ip(request)
 
-    base_url = str(request.base_url).rstrip("/")
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(
-        [
-            "Log ID",
-            "Detected At",
-            "Camera ID",
-            "Camera Name",
-            "Status",
-            "Confidence",
-            "Snapshot URL",
-            "Verified By ID",
-            "Verified By Name",
-            "Verified At",
-            "Closed By ID",
-            "Closed By Name",
-            "Closed At",
-        ]
+    # A count query, not a materialized id list: `WHERE log_id IN (...)`
+    # with tens of thousands of bind parameters exceeds SQLite's default
+    # variable limit (999) — found live-drilling a 50,000-row export.
+    count_stmt = apply_incident_filters(
+        select(func.count(col(DetectionLog.log_id))), filters
+    )
+    row_count = session.exec(count_stmt).one()
+
+    try:
+        check_row_limit(row_count, format=format)
+    except AppHTTPException:
+        record_export_attempt(
+            session,
+            action="REPORT_EXPORT",
+            report_type="incidents",
+            format=format,
+            actor=current_user,
+            filters=filters_dict,
+            sort=sort_dict,
+            row_count=row_count,
+            result=AuditResult.FAILURE,
+            failure_category="row_limit_exceeded",
+            source_ip=source_ip,
+        )
+        session.commit()
+        raise
+
+    record_export_attempt(
+        session,
+        action="REPORT_EXPORT",
+        report_type="incidents",
+        format=format,
+        actor=current_user,
+        filters=filters_dict,
+        sort=sort_dict,
+        row_count=row_count,
+        result=AuditResult.SUCCESS,
+        source_ip=source_ip,
+    )
+    session.commit()
+
+    stmt = _incident_query_stmt(filters)
+    stmt = apply_sort(
+        stmt,
+        DetectionLog,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        allowed=ALERT_SORT_FIELDS,
+        tie_breaker="log_id",
     )
 
-    for log in logs:
-        snapshot_url = f"{base_url}/snapshots/{log.snapshot_key}"
-        writer.writerow(
-            [
-                log.log_id,
-                log.detected_at.isoformat(),
-                log.camera_id,
-                log.camera.camera_name if log.camera else "N/A",
-                log.detection_status,
-                f"{log.confidence_score * 100:.1f}%",
-                snapshot_url,
-                log.verified_by_id or "N/A",
-                format_user_name(log.verified_by) or "N/A",
-                log.verified_at.isoformat() if log.verified_at else "N/A",
-                log.closed_by_id or "N/A",
-                format_user_name(log.closed_by) or "N/A",
-                log.closed_at.isoformat() if log.closed_at else "N/A",
-            ]
+    if format == "pdf":
+        logs = session.exec(stmt).all()
+        pdf_bytes = build_incident_pdf(
+            rows=[_incident_pdf_row(log) for log in logs],
+            filters_summary=_filters_summary(
+                filters, sort_by=sort_by, sort_order=sort_order
+            ),
+            requested_by=format_user_name(current_user) or current_user.username,
+            generated_at=datetime.now(UTC),
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": 'attachment; filename="adas_incident_export.pdf"'
+            },
         )
 
-    response = Response(content=output.getvalue(), media_type="text/csv")
-    response.headers["Content-Disposition"] = (
-        "attachment; filename=adas_incident_export.csv"
-    )
-    return response
+    rows_iter = (_incident_csv_row(log) for log in session.exec(stmt).yield_per(500))
+    return csv_response("adas_incident_export.csv", INCIDENT_CSV_COLUMNS, rows_iter)
 
 
 @router.get("/{log_id}", response_model=DetectionLogRead)
