@@ -75,8 +75,11 @@ A single inference thread ticks at a fixed period. Each tick:
 Rationale for a fixed cadence over free-running or per-camera threads:
 
 - The accumulator integrates `conf × dt`, so **accumulation rate is sampling-rate independent** — a 2-second crash takes 2 seconds at any rate. Recall is therefore insensitive to cadence within reason.
-- **Variance is not.** Fewer samples per unit time means a short run of spurious detections carries proportionally more weight and is more likely to cross the threshold by chance. Higher cadence reduces false alarms without changing recall.
-- **There is a floor.** Regions are linked frame-to-frame by IoU of their boxes (SPEC §2.2). Sample too slowly and boxes stop overlapping between samples, so evidence never accumulates. Crash scenes are largely static, which is forgiving, but this bounds how far cadence can degrade before recall is affected.
+- **⚠️ Two further effects are hypothesised here and are NOT established.** Both are mechanism-based reasoning introduced by this design, not findings from the research repo. They are recorded as hypotheses to be measured (§9), not as constraints to design around:
+  - *Variance.* Fewer samples per unit time may mean a short run of spurious detections carries proportionally more weight, raising false alarms without changing recall. Untested.
+  - *A low-rate floor.* Regions link frame-to-frame by IoU of their boxes (SPEC §2.2), so sampling too slowly might stop boxes overlapping between samples and prevent evidence accumulating. Note this is probably weak for the case that matters: SPEC §2.2 states "a real wreck stays put so IoU holds it together", and a stationary wreck's boxes overlap heavily even at low rates. The effect, if any, applies to the brief dynamic moment of impact and to box jitter — not to the sustained aftermath that builds most of the score.
+
+  **What SPEC.md actually says is the opposite of a floor.** §2.3 and §3 both state that "a stream running at 12 fps accumulates at the same rate per second as one at 30 fps", presenting rate-independence as a deliberate property of the design. No minimum frame rate is documented anywhere in the research repo, and the paper's 10–15 FPS band (p.74) is justified by GPU thermal management, not by any detection requirement.
 - **There is a ceiling.** Running faster than the camera's own frame rate re-processes identical frames for no gain.
 
 The optimum is therefore *as fast as the machine sustains, capped at the stream's native rate* — determined by measurement (§6), not by a hardcoded constant.
@@ -92,7 +95,9 @@ Calibration therefore expresses a machine's capability as **the number of camera
 At runtime the engine compares the live camera count from the heartbeat against its profiled capacity:
 
 - **Within capacity** — run at the highest rate in the band that the count affords.
-- **Over capacity** — run at the 10 FPS floor, log the profiled capacity alongside the actual count, and mark the run degraded. The backend remains authoritative over *which* cameras run; the engine never silently drops one.
+- **Over capacity** — run at the band's lower bound (10 FPS), log the profiled capacity alongside the actual count, and mark the run degraded. The backend remains authoritative over *which* cameras run; the engine never silently drops one.
+
+The lower bound is currently the paper's, adopted as-is. Whether it is also a *detection* floor is unknown until the cadence sweep runs (§9); if the sweep shows headroom below it, this bound should be revisited rather than treated as fixed.
 
 Cadence is held stable across a tick rather than raised when individual cameras pause, so a camera going into the self-blindfold does not change the sampling rate of its neighbours mid-incident.
 
@@ -181,7 +186,7 @@ Capacity below is what each class is *expected* to report. None of it is measure
 | RTX 3050 / GTX 1650 | Enough for local development with an optimized build; confirm by calibrating. |
 | Older or weaker NVIDIA | A small number of cameras. Usable, but capacity is the binding limit. |
 | Apple Silicon | A small number of cameras. Adequate for development and demos. |
-| CPU only | Effectively zero — **below the IoU-linking floor** described in §4.2 even for one camera. |
+| CPU only | Effectively zero at the paper's 10 FPS lower bound, even for one camera. Whether it is usable at some lower rate depends on the cadence sweep (§9) and is currently unknown. |
 
 The CPU-only case runs, connects, and is useful for anyone working on integration, but it is not a detection platform and the engine states so on startup. No performance claim may be drawn from it.
 
@@ -260,7 +265,9 @@ Not run in CI. `uv run pytest -m clips` on a machine with `ai_engine/eval/clips/
 
 - **Port parity** — the ported pipeline against `adas_transfer/code/run.py` over the same clip, asserting identical events. SPEC §8 step 3.
 - **Per-clip regression** — asserts the exact HIT/miss pattern of SPEC §4's 17-row table and a false-positive count of 3. Deliberately not the 8/16 aggregate: the total can hide a compensating swap that gains one crash and loses another.
-- **Cadence measurement** — clips decimated to each end of the 10–15 FPS band, producing recall and false-alarms-per-minute at the rates the system actually runs at. SPEC §4's figures remain the native-rate baseline; these are the deployed-rate figures alongside it, and they are what quantifies the cost of running at the 10 FPS floor when a machine is over capacity.
+- **Cadence sweep** — clips decimated to 15, 12, 10, 6 and 3 FPS, producing recall and false-alarms-per-minute at each. SPEC §4's figures remain the native-rate baseline.
+
+  This is the measurement that settles the two hypotheses in §4.2, and it should be run early rather than treated as a final validation step, because **the answer changes the design**. If recall and false alarms hold well below 10 FPS, the band's lower bound is a thermal constraint only, weak machines gain far more camera capacity than §6.4 assumes, and the CPU-only verdict may be too harsh. If they degrade near 10 FPS, the paper's band gains a measured detection justification it does not currently have — a materially stronger claim to defend than thermal management alone.
 
 Expected per-clip results are committed as `ai_engine/eval/baseline_epoch50.json`, derived from SPEC §4's table. The clips themselves live at a gitignored `ai_engine/eval/clips/` and must be copied in, consistent with NOTICE.md — they may move between this project's own repositories but must not be published.
 
@@ -268,7 +275,8 @@ Expected per-clip results are committed as `ai_engine/eval/baseline_epoch50.json
 
 | Risk | Mitigation |
 |---|---|
-| Cadence differs from the conditions SPEC §4 was measured under | Tier 3 cadence measurement produces an honest deployed-rate figure |
+| Cadence differs from the conditions SPEC §4 was measured under | Tier 3 cadence sweep produces honest per-rate figures |
+| **This design introduces two unmeasured claims about sampling rate** (§4.2) — that low rates raise false alarms via variance, and that IoU linking imposes a low-rate floor. Neither appears in SPEC.md, which argues rate-independence instead. Designing around them without measuring is the exact failure mode SPEC.md's "closed levers" section exists to prevent | Both are labelled as hypotheses in §4.2 and are resolved by the cadence sweep (§9), which is sequenced early precisely because the answer changes the design rather than merely validating it |
 | An optimized build shifts detection behaviour | Recorded in the machine profile as drift with specifics; build is kept, citation discipline in §6.3 |
 | Resume never arrives, leaving a camera deaf | Reconnect and restart also reset; covered by a pipeline test |
 | `best.engine` silently preferred over the adopted model | Both stale files deleted in this work |
