@@ -85,7 +85,16 @@ The optimum is therefore *as fast as the machine sustains, capped at the stream'
 
 **There is no fixed camera count to design against, and none should be assumed.** The repository states none — `mediamtx.yml`'s five channels are a dev-simulation convenience and `seed_dev_data.py` seeds six. The paper uses three concurrent streams for its integration, VRAM and endurance tests (TC-I-104, TC-AI-403, TC-R-401), five only for a bandwidth test (TC-R-102), exports TensorRT at `batch=8` (p.84), and targets 418 cameras at full deployment (p.73). Camera count is also genuinely dynamic at runtime: the heartbeat snapshot decides which cameras run, and TC-I-303 has an operator adding one that spawns ingestion immediately.
 
-The machine profile therefore stores a **latency curve, not a single rate** — measured milliseconds per batch at sizes 1 through 8, matching the export configuration. At each tick the engine derives its target rate from the curve using the number of cameras currently active, clamped to the 10–15 FPS band. If more cameras are active than the curve covers, it extrapolates, targets the bottom of the band, and records the run as degraded in its profile.
+**Per-camera frame rate is the fixed quantity; camera count is the free one.** The 10–15 FPS band is a detector requirement, not a preference, so it must not float. Letting cadence sag as cameras are added would degrade detection for every camera at once, invisibly and gradually — the failure mode hardest to notice and hardest to explain afterwards.
+
+Calibration therefore expresses a machine's capability as **the number of cameras it can carry at the required rate** (§6), which is also how the paper reasons about the deployment hardware: 418 cameras is stated as the array's maximum capacity, beyond which VRAM is exceeded (p.75).
+
+At runtime the engine compares the live camera count from the heartbeat against its profiled capacity:
+
+- **Within capacity** — run at the highest rate in the band that the count affords.
+- **Over capacity** — run at the 10 FPS floor, log the profiled capacity alongside the actual count, and mark the run degraded. The backend remains authoritative over *which* cameras run; the engine never silently drops one.
+
+Cadence is held stable across a tick rather than raised when individual cameras pause, so a camera going into the self-blindfold does not change the sampling rate of its neighbours mid-incident.
 
 Cadence is held stable across a tick rather than raised when individual cameras pause, so a camera going into the self-blindfold does not change the sampling rate of its neighbours mid-incident.
 
@@ -131,13 +140,17 @@ The engine must run on the deployment box, on teammates' laptops with assorted N
 
 1. **Probe.** Resolve the device — CUDA, MPS, or CPU — and record the GPU name and available memory where applicable.
 2. **Build.** Export `epoch50.pt` to the fastest format that machine actually supports, probing availability rather than assuming: TensorRT where present, otherwise the platform's best available export, falling back to plain PyTorch weights. Half precision where the device supports it.
-3. **Benchmark.** Run a fixed number of frames at batch sizes 1 through 8 (the export's configured maximum), recording milliseconds per batch at each size. This curve — not a single rate — is what the profile stores, because camera count is dynamic and no fixed value can be assumed (§4.2).
+3. **Benchmark, and report capacity.** Run a fixed number of frames at batch sizes 1 through 8 (the export's configured maximum), recording milliseconds per batch at each size. Convert that curve into the headline output: **how many cameras this machine can carry at the required frame rate**, reported at both ends of the band — for example *"8 cameras at 15 FPS, or 12 at 10 FPS."* Capacity, not a tick rate, is what a person can act on.
+
+   The chosen target is then the operator's, defaulting to the maximum at 15 FPS. A lower value is a legitimate choice on a development machine that is also running the frontend dev server and a browser, where leaving GPU headroom matters more than maximum camera count.
 4. **Verify.** See §6.3.
 5. **Write** `ai_engine/machine_profile.json` (gitignored, machine-specific, exactly like the TensorRT engine).
 
 ### 6.2 Profile contents and startup behaviour
 
-The profile records the model build path, the resolved device, the measured latency curve across batch sizes, and the verification result. The tick rate is derived from the curve at runtime against the live camera count rather than stored as a fixed value. `main.py` reads it at startup. If it is absent, the engine runs at a conservative default cadence and logs that `calibrate.py` has not been run; it does not fail.
+The profile records the model build path, the resolved device, the measured latency curve across batch sizes, the derived camera capacity at each end of the band, the operator's chosen target count, and the verification result.
+
+The engine logs its capacity and the live camera count together on startup — for example `capacity 8 cameras @ 15 FPS · 6 active · OK`, or `capacity 2 cameras @ 15 FPS · 6 active · DEGRADED, running 10 FPS floor`. A machine that cannot carry a single camera at the required rate reports a capacity of zero and states plainly that it is not a detection platform (§6.4). `main.py` reads it at startup. If it is absent, the engine runs at a conservative default cadence and logs that `calibrate.py` has not been run; it does not fail.
 
 The engine logs the profile's verification status on startup so whoever is running it knows what they have.
 
@@ -157,15 +170,18 @@ The profile records verification as one of:
 
 ### 6.4 Expected capability by machine class
 
-The documented deployment target (paper p.73) is a Dell PowerEdge R760xa with 8× NVIDIA L4 Tensor Core GPUs, dual Xeon Platinum 8468, and 512 GB RAM. That is comfortably above the class where cadence is a concern, so the deployment box is expected to hold the top of the 10–15 FPS band. Calibration matters chiefly for teammates' development machines.
+The documented deployment target (paper p.73) is a Dell PowerEdge R760xa with 8× NVIDIA L4 Tensor Core GPUs, dual Xeon Platinum 8468, and 512 GB RAM. Capacity is not a concern there, so the deployment box is expected to hold the top of the band. Calibration matters chiefly for teammates' development machines, where capacity is the binding constraint.
 
-| Machine | Expected outcome |
+Capacity below is what each class is *expected* to report. None of it is measured — calibration produces the real number per machine, and that number is what the profile records.
+
+| Machine | Expected capacity at 15 FPS |
 |---|---|
-| Deployment box (8× L4) / T4-class or better | Top of the 10–15 FPS band. SPEC §4 numbers apply directly. |
-| RTX 3050 / GTX 1650 | Near native with an optimized build. Re-measure once to confirm. |
-| Older or weaker NVIDIA | Reduced cadence. Usable; expect a modestly higher false-alarm rate. |
-| Apple Silicon | Reduced cadence. Adequate for development and demos. |
-| CPU only | Far below the 10–15 FPS band even at the paper's three-stream test size, and **below the IoU-linking floor** described in §4.2. |
+| Deployment box (8× L4) | Many cameras per GPU. SPEC §4 numbers apply directly. |
+| T4-class or better | Comfortably above any development camera count. |
+| RTX 3050 / GTX 1650 | Enough for local development with an optimized build; confirm by calibrating. |
+| Older or weaker NVIDIA | A small number of cameras. Usable, but capacity is the binding limit. |
+| Apple Silicon | A small number of cameras. Adequate for development and demos. |
+| CPU only | Effectively zero — **below the IoU-linking floor** described in §4.2 even for one camera. |
 
 The CPU-only case runs, connects, and is useful for anyone working on integration, but it is not a detection platform and the engine states so on startup. No performance claim may be drawn from it.
 
@@ -201,7 +217,7 @@ Consequence to communicate: the System Health page's `avg_inference_latency_ms` 
 
 `CONFIDENCE_THRESHOLD = 0.90` is renamed to **`DETECTOR_CONF = 0.15`**. The rename is deliberate: "threshold" invites tuning, and SPEC §3 closes this lever with measurement. The constant carries that evidence in a comment.
 
-Added: `DETECTOR_IMGSZ = 640`, `ACC_THRESHOLD = 1.0`, `ACC_DECAY = 0.30`, `ACC_IOU_LINK = 0.30`, `ACC_EMA = 0.5`, and a default tick rate used only when no machine profile exists.
+Added: `DETECTOR_IMGSZ = 640`, `ACC_THRESHOLD = 1.0`, `ACC_DECAY = 0.30`, `ACC_IOU_LINK = 0.30`, `ACC_EMA = 0.5`, the 10–15 FPS band bounds, and a conservative fallback camera capacity used only when no machine profile exists.
 
 **`best.pt` and `best.engine` are deleted from the repository.** Both are tracked. Leaving them in place with the current loader means the port silently runs the superseded model with no error — the highest-severity failure mode in this work. `epoch50.pt` is added; the engine-fallback *pattern* is retained but keyed to calibration output.
 
@@ -244,7 +260,7 @@ Not run in CI. `uv run pytest -m clips` on a machine with `ai_engine/eval/clips/
 
 - **Port parity** — the ported pipeline against `adas_transfer/code/run.py` over the same clip, asserting identical events. SPEC §8 step 3.
 - **Per-clip regression** — asserts the exact HIT/miss pattern of SPEC §4's 17-row table and a false-positive count of 3. Deliberately not the 8/16 aggregate: the total can hide a compensating swap that gains one crash and loses another.
-- **Cadence measurement** — clips decimated to the deployed tick rate, producing recall and false-alarms-per-minute *for the deployed configuration*. SPEC §4's figures remain the native-rate baseline; this produces the deployed-rate figure alongside it.
+- **Cadence measurement** — clips decimated to each end of the 10–15 FPS band, producing recall and false-alarms-per-minute at the rates the system actually runs at. SPEC §4's figures remain the native-rate baseline; these are the deployed-rate figures alongside it, and they are what quantifies the cost of running at the 10 FPS floor when a machine is over capacity.
 
 Expected per-clip results are committed as `ai_engine/eval/baseline_epoch50.json`, derived from SPEC §4's table. The clips themselves live at a gitignored `ai_engine/eval/clips/` and must be copied in, consistent with NOTICE.md — they may move between this project's own repositories but must not be published.
 
