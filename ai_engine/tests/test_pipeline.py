@@ -9,6 +9,7 @@ literal 0.0 would look tens of thousands of seconds old on any machine with
 nonzero uptime and get filtered as stale before ever reaching the detector.
 """
 
+import math
 import time
 
 import config
@@ -331,3 +332,70 @@ def test_accumulators_are_pruned_when_a_camera_is_stopped():
     pipeline.tick_once()
 
     assert set(pipeline.registry.camera_ids()) == {1}
+
+
+def test_reported_latency_is_the_per_camera_share_of_the_batch():
+    """Task 7's fix: TC-AI-401 budgets "strictly under 100 ms PER FRAME".
+    Reporting whole-batch latency to every camera (the pre-Task-7 behaviour)
+    overstates per-frame cost by exactly the camera count, and gets worse as
+    cameras are added -- a criterion the system actually meets would then
+    read as failing. Nothing else in this file reads inference_latency_ms
+    or last_batch_latency_ms, so without this test that division is
+    unprotected.
+    """
+    sleep_s = 0.05  # long enough to dominate scheduler/timer noise
+
+    class SlowDetector:
+        def predict_batch(self, frames):
+            time.sleep(sleep_s)
+            return [FakeDetection([BOX], [0.6]) for _ in frames]
+
+    now = time.monotonic()
+    camera_count = 4
+    cameras = {
+        i: FakeCamera(i, [FakeFrameRead(now, 0)]) for i in range(1, camera_count + 1)
+    }
+    pipeline = InferencePipeline(cameras, SlowDetector(), lambda *a: None, capacity=8)
+    pipeline.tick_once()
+
+    batch_ms = pipeline.last_batch_latency_ms
+    assert batch_ms is not None
+    # Sanity: the fake detector actually took measurable time, so a
+    # regression that reports 0 or the raw sleep everywhere can't hide.
+    assert batch_ms >= sleep_s * 1000 * 0.5
+
+    for camera in cameras.values():
+        # Both sides are derived from the SAME measured batch_ms, so this
+        # is an exact relationship, not a wall-clock guess -- rel_tol=1e-9
+        # only allows for float rounding, not for timing jitter. This is
+        # what actually pins the division: under the reverted mutation
+        # (per_camera = last_batch_latency_ms, no division) every camera
+        # would report batch_ms instead of batch_ms / camera_count, and
+        # this assertion fails outright.
+        assert math.isclose(
+            camera.inference_latency_ms, batch_ms / camera_count, rel_tol=1e-9
+        )
+        # Belt-and-suspenders, independent of the exact-ratio check above:
+        # with 4 cameras sharing one batch, the per-camera figure must be
+        # clearly below the whole-batch figure -- comfortably outside any
+        # plausible timing noise.
+        assert camera.inference_latency_ms < batch_ms * 0.5
+
+
+def test_a_fully_failed_batch_leaves_no_stale_batch_latency():
+    """_infer() clears last_batch_latency_ms as its first line, before the
+    batched predict is even attempted, so a batch that raises can't leave a
+    previous tick's timing sitting around to be misread as current."""
+
+    class AlwaysFailingDetector:
+        def predict_batch(self, frames):
+            raise RuntimeError("CUDA error: injected")
+
+    now = time.monotonic()
+    cameras = {1: FakeCamera(1, [FakeFrameRead(now, 0)])}
+    pipeline = InferencePipeline(
+        cameras, AlwaysFailingDetector(), lambda *a: None, capacity=8
+    )
+    pipeline.tick_once()
+
+    assert pipeline.last_batch_latency_ms is None
