@@ -81,9 +81,13 @@ Rationale for a fixed cadence over free-running or per-camera threads:
 
 The optimum is therefore *as fast as the machine sustains, capped at the stream's native rate* — determined by measurement (§6), not by a hardcoded constant.
 
-**The target range is already fixed by the paper: 10–15 FPS per camera** (Final-Paper p.74, "Hardware Utilization & Computational Load Balancing", and TC-AI-402, which tests for a steady 10–15 FPS under a continuous RTSP feed). Calibration therefore selects a rate *within* that band based on what the machine sustains, rather than choosing an arbitrary number. A machine that cannot hold 10 FPS per camera at full camera count is recorded as degraded in its profile.
+**The target range is already fixed by the paper: 10–15 FPS per camera** (Final-Paper p.74, "Hardware Utilization & Computational Load Balancing", and TC-AI-402, which tests for a steady 10–15 FPS under a continuous RTSP feed). Calibration therefore selects a rate *within* that band based on what the machine sustains, rather than choosing an arbitrary number.
 
-Cadence is held stable at the rate sustainable with all cameras active, rather than raised when cameras pause. Stability keeps the deployed configuration comparable to whatever cadence was measured.
+**There is no fixed camera count to design against, and none should be assumed.** The repository states none — `mediamtx.yml`'s five channels are a dev-simulation convenience and `seed_dev_data.py` seeds six. The paper uses three concurrent streams for its integration, VRAM and endurance tests (TC-I-104, TC-AI-403, TC-R-401), five only for a bandwidth test (TC-R-102), exports TensorRT at `batch=8` (p.84), and targets 418 cameras at full deployment (p.73). Camera count is also genuinely dynamic at runtime: the heartbeat snapshot decides which cameras run, and TC-I-303 has an operator adding one that spawns ingestion immediately.
+
+The machine profile therefore stores a **latency curve, not a single rate** — measured milliseconds per batch at sizes 1 through 8, matching the export configuration. At each tick the engine derives its target rate from the curve using the number of cameras currently active, clamped to the 10–15 FPS band. If more cameras are active than the curve covers, it extrapolates, targets the bottom of the band, and records the run as degraded in its profile.
+
+Cadence is held stable across a tick rather than raised when individual cameras pause, so a camera going into the self-blindfold does not change the sampling rate of its neighbours mid-incident.
 
 **Batch shape is not a constraint.** The paper's TensorRT export configuration (p.84) already specifies `dynamic=True` and `batch=8`, so a batch that shrinks as cameras pause is handled natively. No batch padding is required.
 
@@ -127,13 +131,13 @@ The engine must run on the deployment box, on teammates' laptops with assorted N
 
 1. **Probe.** Resolve the device — CUDA, MPS, or CPU — and record the GPU name and available memory where applicable.
 2. **Build.** Export `epoch50.pt` to the fastest format that machine actually supports, probing availability rather than assuming: TensorRT where present, otherwise the platform's best available export, falling back to plain PyTorch weights. Half precision where the device supports it.
-3. **Benchmark.** Run a fixed number of frames at batch sizes 1..N, recording milliseconds per batch. Derive the sustainable tick rate for the full camera count, capped at the stream's native rate.
+3. **Benchmark.** Run a fixed number of frames at batch sizes 1 through 8 (the export's configured maximum), recording milliseconds per batch at each size. This curve — not a single rate — is what the profile stores, because camera count is dynamic and no fixed value can be assumed (§4.2).
 4. **Verify.** See §6.3.
 5. **Write** `ai_engine/machine_profile.json` (gitignored, machine-specific, exactly like the TensorRT engine).
 
 ### 6.2 Profile contents and startup behaviour
 
-The profile records the model build path, resolved device, measured milliseconds per batch size, the chosen tick rate, and the verification result. `main.py` reads it at startup. If it is absent, the engine runs at a conservative default cadence and logs that `calibrate.py` has not been run; it does not fail.
+The profile records the model build path, the resolved device, the measured latency curve across batch sizes, and the verification result. The tick rate is derived from the curve at runtime against the live camera count rather than stored as a fixed value. `main.py` reads it at startup. If it is absent, the engine runs at a conservative default cadence and logs that `calibrate.py` has not been run; it does not fail.
 
 The engine logs the profile's verification status on startup so whoever is running it knows what they have.
 
@@ -161,7 +165,7 @@ The documented deployment target (paper p.73) is a Dell PowerEdge R760xa with 8�
 | RTX 3050 / GTX 1650 | Near native with an optimized build. Re-measure once to confirm. |
 | Older or weaker NVIDIA | Reduced cadence. Usable; expect a modestly higher false-alarm rate. |
 | Apple Silicon | Reduced cadence. Adequate for development and demos. |
-| CPU only | Under ~1 frame/second/camera at 5 cameras. **Below the IoU-linking floor.** |
+| CPU only | Far below the 10–15 FPS band even at the paper's three-stream test size, and **below the IoU-linking floor** described in §4.2. |
 
 The CPU-only case runs, connects, and is useful for anyone working on integration, but it is not a detection platform and the engine states so on startup. No performance claim may be drawn from it.
 
@@ -187,7 +191,7 @@ Two mappings are decided here:
 
 **`inference_latency_ms`** currently reports whole-batch latency to every camera (`main.py:89`). It becomes `batch_latency / len(batch)`, an amortized per-camera cost.
 
-This is not a cosmetic change. The paper's **TC-AI-401** sets the budget at "strictly under 100 milliseconds **per frame**." Reporting whole-batch latency to every camera overstates per-frame cost by the batch size, so at five cameras the system would report ~5× the true figure and **fail a criterion it actually meets**. The amortized definition is what TC-AI-401 is written against.
+This is not a cosmetic change. The paper's **TC-AI-401** sets the budget at "strictly under 100 milliseconds **per frame**." Reporting whole-batch latency to every camera overstates per-frame cost by exactly the batch size, so the reported figure inflates as cameras are added and the system would **fail a criterion it actually meets**. The amortized definition is what TC-AI-401 is written against.
 
 Consequence to communicate: the System Health page's `avg_inference_latency_ms` will drop by roughly the camera count. That is a corrected definition, not a performance improvement, and should not be reported as one.
 
