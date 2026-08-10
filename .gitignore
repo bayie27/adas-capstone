@@ -270,3 +270,7 @@ Thumbs.db
 test-results/
 playwright-report/
 .playwright/
+
+# Written by ai_engine/calibrate.py. Machine-specific, like a TensorRT engine.
+ai_engine/machine_profile.json
+ai_engine/*.engine
