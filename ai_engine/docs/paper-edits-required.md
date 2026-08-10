@@ -4,7 +4,7 @@
 **Applies to:** `ai_engine/docs/Final-Paper.pdf`
 **Companion:** `ai_engine/docs/2026-08-10-detection-core-port-design.md`
 
-The AI engine is being replaced with the detector actually built and measured in the research repo (see `ai_engine/adas_transfer/SPEC.md`). Several passages in the paper describe the *previous* detection design — a single-frame decision behind a high confidence gate. Against the ported detector those passages are either untestable, wrong, or would fail a criterion the system actually meets.
+The AI engine is being replaced with the detector actually built and measured in the research repo (see `ai_engine/adas_transfer/SPEC.md`). Several passages in the paper describe the _previous_ detection design — a single-frame decision behind a high confidence gate. Against the ported detector those passages are either untestable, wrong, or would fail a criterion the system actually meets.
 
 Edits are grouped by priority. Each gives the location, what it says now, what it should say, and why.
 
@@ -14,7 +14,7 @@ Edits are grouped by priority. Each gives the location, what it says now, what i
 
 ### 1.1 Remove mAP as an acceptance criterion — TC-AI-101, p.95
 
-**Currently:** *"achieving an operational accuracy that meets or exceeds the strictly defined 85% mAP and 0.50 IoU baseline thresholds."*
+**Currently:** _"achieving an operational accuracy that meets or exceeds the strictly defined 85% mAP and 0.50 IoU baseline thresholds."_
 
 **Change to:** an event-level criterion measured on held-out deployment footage. Suggested wording:
 
@@ -30,7 +30,7 @@ The replacement is stronger, not weaker: recall and false-alarms-per-minute on r
 
 ### 1.2 Report the hard-difficulty result honestly — new text, near TC-AI-101
 
-**Add.** The clip set was stratified into `standard` and `hard` *before any model was run*. Every `hard` clip is missed, without exception. This is a data-coverage limit — the training source never contained crashes of that geometry — not a tuning shortfall.
+**Add.** The clip set was stratified into `standard` and `hard` _before any model was run_. Every `hard` clip is missed, without exception. This is a data-coverage limit — the training source never contained crashes of that geometry — not a tuning shortfall.
 
 **Why.** Stating it plainly, with the pre-registration, converts an apparent weakness into evidence of honest methodology. Discovered by a panel instead, it looks like a concealed failure.
 
@@ -40,7 +40,7 @@ The replacement is stronger, not weaker: recall and false-alarms-per-minute on r
 
 ### 2.1 Confidence thresholding — TC-U-302, p.89
 
-**Currently:** *"YOLO mock outputs [0.45, 0.88, 0.60] against a set threshold of 0.75. Expected: the filtering function strips out the 0.45 and 0.60 values, returning only the 0.88 detection object."*
+**Currently:** _"YOLO mock outputs [0.45, 0.88, 0.60] against a set threshold of 0.75. Expected: the filtering function strips out the 0.45 and 0.60 values, returning only the 0.88 detection object."_
 
 **Change to:** a test of class filtering and accumulator hand-off, not confidence gating. Suggested:
 
@@ -50,7 +50,7 @@ The replacement is stronger, not weaker: recall and false-alarms-per-minute on r
 
 ### 2.2 Sub-threshold false-positive suppression — TC-AI-301, p.96
 
-**Currently:** *"System threshold is 75%. Video shows a 'near-miss' or heavy braking, yielding a 60% AI confidence score. Expected: the threshold filter successfully intercepts the detection and drops it."*
+**Currently:** _"System threshold is 75%. Video shows a 'near-miss' or heavy braking, yielding a 60% AI confidence score. Expected: the threshold filter successfully intercepts the detection and drops it."_
 
 **Change to:** a persistence test. Suggested:
 
@@ -60,13 +60,13 @@ The replacement is stronger, not weaker: recall and false-alarms-per-minute on r
 
 ### 2.3 Sustained tracking / flicker — TC-AI-103, p.95
 
-**Currently:** *"The model consistently outputs bounding box coordinates across the entire 10-second sequence without the detection 'flickering' or dropping."*
+**Currently:** _"The model consistently outputs bounding box coordinates across the entire 10-second sequence without the detection 'flickering' or dropping."_
 
 **Change to:** a test of the accumulator's tolerance for gaps. Suggested:
 
 > Across a 10-second sequence of a stationary wreck, the accumulator maintains a single linked region and fires exactly one event, despite intermittent frames in which the detector produces no box.
 
-**Why.** The detector *does* flicker, and the design assumes it will. The postmortem in the research repo records a clip holding 302 candidate frames and 12.35s of dwell that never assembled an unbroken run under the old logic, and emitted nothing. The accumulator replaced that logic precisely so a dropped frame costs progress rather than erasing it. Requiring no flicker asks for a property the system neither has nor needs.
+**Why.** The detector _does_ flicker, and the design assumes it will. The postmortem in the research repo records a clip holding 302 candidate frames and 12.35s of dwell that never assembled an unbroken run under the old logic, and emitted nothing. The accumulator replaced that logic precisely so a dropped frame costs progress rather than erasing it. Requiring no flicker asks for a property the system neither has nor needs.
 
 ### 2.4 Environmental robustness claims — TC-AI-202 / 203 / 204, pp.95–96
 
@@ -76,13 +76,13 @@ The replacement is stronger, not weaker: recall and false-alarms-per-minute on r
 
 **Why.** None of the 17 evaluation clips cover rain, glare, or partial occlusion, so there is no evidence supporting any of these expected results. TC-AI-204 is the most exposed: a fully-occluded clip was **deliberately excluded** from the label set on the grounds that no camera-based system could detect it, which makes a 30%-occlusion success claim hard to defend.
 
-Night is the exception and is worth keeping — 8 of 17 clips are night footage, and night recall *exceeds* day recall. Night is a precision weakness only: all three false positives are night-time.
+Night is the exception and is worth keeping — 8 of 17 clips are night footage, and night recall _exceeds_ day recall. Night is a precision weakness only: all three false positives are night-time.
 
 ---
 
 ### 2.5 Fault isolation mechanism — TC-R-302, p.98
 
-**Currently:** *"A deliberate Python exception is injected into Camera 1's YOLO worker thread. Camera 1's thread crashes safely. The FastAPI application and the parallel AI threads for Cameras 2 and 3 remain entirely unaffected and continue processing."*
+**Currently:** _"A deliberate Python exception is injected into Camera 1's YOLO worker thread. Camera 1's thread crashes safely. The FastAPI application and the parallel AI threads for Cameras 2 and 3 remain entirely unaffected and continue processing."_
 
 **Change to:** the same guarantee, described against the batched pipeline. Suggested:
 
@@ -100,19 +100,19 @@ Both were written when detection was a single frame, so "the moment of detection
 
 ### 3.1 UI alert latency — TC-R-201, p.98
 
-**Currently:** *"A stopwatch is initiated at the moment of detection... in strictly under 2.0 seconds."*
+**Currently:** _"A stopwatch is initiated at the moment of detection... in strictly under 2.0 seconds."_
 
-**Change to:** *"A stopwatch is initiated at the moment the alert is emitted by the AI engine... in strictly under 2.0 seconds."*
+**Change to:** _"A stopwatch is initiated at the moment the alert is emitted by the AI engine... in strictly under 2.0 seconds."_
 
 **Why.** This test measures backend → WebSocket → UI plumbing. Anchoring it to impact folds ~3 seconds of AI accumulation into a 2-second budget, failing a path that is genuinely fast. This is a clarification of what the test always measured, not a relaxation of it.
 
 ### 3.2 Operator response time — TC-S-103, p.100
 
-**Currently:** *"...click 'Confirm' in strictly under 15 seconds from the moment of actual detection."*
+**Currently:** _"...click 'Confirm' in strictly under 15 seconds from the moment of actual detection."_
 
-**Change to:** *"...click 'Confirm' in strictly under 15 seconds from the moment of collision."*
+**Change to:** _"...click 'Confirm' in strictly under 15 seconds from the moment of collision."_
 
-**Why.** This is the metric that supports the study's central claim of reducing the notification gap from minutes to seconds (p.8), so it should honestly include the detector's own latency. After the port, `detected_at` in the database *is* the estimated collision time, so this becomes directly measurable as `verified_at − detected_at`.
+**Why.** This is the metric that supports the study's central claim of reducing the notification gap from minutes to seconds (p.8), so it should honestly include the detector's own latency. After the port, `detected_at` in the database _is_ the estimated collision time, so this becomes directly measurable as `verified_at − detected_at`.
 
 **Budget check:** ~3s accumulating + <2s plumbing leaves ~10s of operator time. Achievable, but tighter than the original wording implies — confirm during live testing before committing to the 15s figure.
 
@@ -154,11 +154,25 @@ Both were written when detection was a single frame, so "the moment of detection
 
 ---
 
+### 4.5 The 10–15 FPS band is a thermal constraint — say so, and say it is not a detection limit
+
+**Currently:** p.74 justifies the 10–15 FPS cap by GPU thermal throttling. That is correct and needs no change.
+
+**Add**, near it or in the limitations discussion:
+
+> Detection performance was measured across sampling rates from 3 to 30 frames per second on the full clip set. Event-level recall was unchanged (8 of 16 at every rate but one), and false-alarm counts varied between 2 and 5 with no relationship to rate. The 10–15 FPS operating band is therefore a compute and thermal constraint, not a detection requirement: the accumulator integrates evidence over elapsed time rather than counting frames, so sampling less often does not slow evidence accumulation.
+
+**Why.** This is a genuine measured finding and it strengthens the design section — it shows the frame-rate choice was validated rather than assumed, and it explains _why_ the architecture tolerates the frame drops a live RTSP feed produces. Source: `ai_engine/docs/cadence-measurement.md`.
+
+**Do not overclaim it.** 16 crashes and 2–5 false positives per run is a small sample; the honest statement is "no measured effect", not "no effect". Nothing below 3 FPS was tested.
+
+---
+
 ## Not changing
 
 These were checked against the ported design and are correct as written:
 
-- **p.74** — 10–15 FPS per camera. The ported scheduler targets this band explicitly.
+- **p.74** — 10–15 FPS per camera, justified by thermal management. The ported scheduler targets this band explicitly, and the cadence sweep confirms the justification is the right one (see 4.5 above for an addition, not a correction).
 - **TC-AI-402**, p.97 — steady 10–15 FPS under a continuous feed.
 - **TC-AI-401**, p.97 — under 100ms per frame. The engine's per-camera latency reporting is being corrected specifically so this is measured correctly; whole-batch reporting would have overstated it by the batch size.
 - **p.84** — TensorRT `half=True`, `dynamic=True`, `batch=8`. Dynamic shapes mean a batch shrinking as cameras pause needs no special handling.

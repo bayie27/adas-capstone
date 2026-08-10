@@ -1,0 +1,282 @@
+{
+  "15": {
+    "clips": {
+      "airbase": {
+        "hit": false
+      },
+      "armored-car-car": {
+        "hit": false
+      },
+      "car-motor-far": {
+        "hit": false
+      },
+      "car-motor-motor": {
+        "hit": false
+      },
+      "car-motor": {
+        "hit": true
+      },
+      "car-uturn-motor": {
+        "hit": false
+      },
+      "dekwatro": {
+        "hit": true
+      },
+      "dpwh-red-car-motor": {
+        "hit": true
+      },
+      "jeep-car": {
+        "hit": false
+      },
+      "jeep-motor": {
+        "hit": true
+      },
+      "jeep-yellow-car": {
+        "hit": true
+      },
+      "motor-motor-night": {
+        "hit": false
+      },
+      "motor-motor": {
+        "hit": false
+      },
+      "red-car-motor": {
+        "hit": true
+      },
+      "tric-motor-car": {
+        "hit": true
+      },
+      "truck-car": {
+        "hit": false
+      },
+      "truck-student-car": {
+        "hit": false
+      }
+    },
+    "false_positives": 5
+  },
+  "12": {
+    "clips": {
+      "airbase": {
+        "hit": false
+      },
+      "armored-car-car": {
+        "hit": false
+      },
+      "car-motor-far": {
+        "hit": false
+      },
+      "car-motor-motor": {
+        "hit": false
+      },
+      "car-motor": {
+        "hit": true
+      },
+      "car-uturn-motor": {
+        "hit": false
+      },
+      "dekwatro": {
+        "hit": true
+      },
+      "dpwh-red-car-motor": {
+        "hit": true
+      },
+      "jeep-car": {
+        "hit": false
+      },
+      "jeep-motor": {
+        "hit": true
+      },
+      "jeep-yellow-car": {
+        "hit": true
+      },
+      "motor-motor-night": {
+        "hit": false
+      },
+      "motor-motor": {
+        "hit": false
+      },
+      "red-car-motor": {
+        "hit": true
+      },
+      "tric-motor-car": {
+        "hit": true
+      },
+      "truck-car": {
+        "hit": false
+      },
+      "truck-student-car": {
+        "hit": false
+      }
+    },
+    "false_positives": 5
+  },
+  "10": {
+    "clips": {
+      "airbase": {
+        "hit": false
+      },
+      "armored-car-car": {
+        "hit": false
+      },
+      "car-motor-far": {
+        "hit": false
+      },
+      "car-motor-motor": {
+        "hit": false
+      },
+      "car-motor": {
+        "hit": true
+      },
+      "car-uturn-motor": {
+        "hit": false
+      },
+      "dekwatro": {
+        "hit": true
+      },
+      "dpwh-red-car-motor": {
+        "hit": true
+      },
+      "jeep-car": {
+        "hit": false
+      },
+      "jeep-motor": {
+        "hit": true
+      },
+      "jeep-yellow-car": {
+        "hit": true
+      },
+      "motor-motor-night": {
+        "hit": true
+      },
+      "motor-motor": {
+        "hit": false
+      },
+      "red-car-motor": {
+        "hit": true
+      },
+      "tric-motor-car": {
+        "hit": true
+      },
+      "truck-car": {
+        "hit": false
+      },
+      "truck-student-car": {
+        "hit": false
+      }
+    },
+    "false_positives": 3
+  },
+  "6": {
+    "clips": {
+      "airbase": {
+        "hit": false
+      },
+      "armored-car-car": {
+        "hit": false
+      },
+      "car-motor-far": {
+        "hit": false
+      },
+      "car-motor-motor": {
+        "hit": false
+      },
+      "car-motor": {
+        "hit": true
+      },
+      "car-uturn-motor": {
+        "hit": false
+      },
+      "dekwatro": {
+        "hit": true
+      },
+      "dpwh-red-car-motor": {
+        "hit": true
+      },
+      "jeep-car": {
+        "hit": false
+      },
+      "jeep-motor": {
+        "hit": true
+      },
+      "jeep-yellow-car": {
+        "hit": true
+      },
+      "motor-motor-night": {
+        "hit": true
+      },
+      "motor-motor": {
+        "hit": false
+      },
+      "red-car-motor": {
+        "hit": true
+      },
+      "tric-motor-car": {
+        "hit": true
+      },
+      "truck-car": {
+        "hit": false
+      },
+      "truck-student-car": {
+        "hit": false
+      }
+    },
+    "false_positives": 2
+  },
+  "3": {
+    "clips": {
+      "airbase": {
+        "hit": false
+      },
+      "armored-car-car": {
+        "hit": false
+      },
+      "car-motor-far": {
+        "hit": false
+      },
+      "car-motor-motor": {
+        "hit": false
+      },
+      "car-motor": {
+        "hit": true
+      },
+      "car-uturn-motor": {
+        "hit": false
+      },
+      "dekwatro": {
+        "hit": true
+      },
+      "dpwh-red-car-motor": {
+        "hit": true
+      },
+      "jeep-car": {
+        "hit": false
+      },
+      "jeep-motor": {
+        "hit": true
+      },
+      "jeep-yellow-car": {
+        "hit": true
+      },
+      "motor-motor-night": {
+        "hit": true
+      },
+      "motor-motor": {
+        "hit": false
+      },
+      "red-car-motor": {
+        "hit": true
+      },
+      "tric-motor-car": {
+        "hit": true
+      },
+      "truck-car": {
+        "hit": false
+      },
+      "truck-student-car": {
+        "hit": false
+      }
+    },
+    "false_positives": 5
+  }
+}

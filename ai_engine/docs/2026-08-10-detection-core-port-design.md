@@ -29,19 +29,19 @@ The integration plumbing landed in PR #67 — `outbox.py`, `supervisor.py`, `bac
 
 ## 3. Module layout
 
-| Module | Status | Purpose | Test tier |
-|---|---|---|---|
-| `accumulate.py` | new, verbatim copy | Evidence accumulator. No cv2, no model. | CI |
-| `pipeline.py` | new | Fixed-cadence batcher, per-camera accumulator registry, reset seams, event dispatch. | CI (fakes) |
-| `detector.py` | new | Owns the model. Grayscale conversion, class-0 filtering, batched predict, device resolution. | cv2-guarded |
-| `calibrate.py` | new | One-shot per-machine setup: probe, build, benchmark, verify, write profile. | cv2-guarded |
-| `machine_profile.py` | new | Read/write/validate the machine profile. No cv2. | CI |
-| `camera.py` | modified | Decode timestamps, segment counter, buffer sizing. | cv2-guarded |
-| `accident.py` | rewritten | Event → annotated snapshot → outbox enqueue. | cv2-guarded |
-| `main.py` | reduced to wire-up | Load profile, start outbox, start supervisor, run pipeline. | — |
-| `testing.py` | deleted | A hardcoded manual RTSP viewer pointed at `channel1`, imported by nothing. Superseded by `calibrate.py`'s probe and the fake-capture tests. | — |
-| `config.py` | modified | SPEC constants and defaults. | CI |
-| `eval/` | new | Ported measurement harness. | clips-marked |
+| Module               | Status             | Purpose                                                                                                                                     | Test tier    |
+| -------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `accumulate.py`      | new, verbatim copy | Evidence accumulator. No cv2, no model.                                                                                                     | CI           |
+| `pipeline.py`        | new                | Fixed-cadence batcher, per-camera accumulator registry, reset seams, event dispatch.                                                        | CI (fakes)   |
+| `detector.py`        | new                | Owns the model. Grayscale conversion, class-0 filtering, batched predict, device resolution.                                                | cv2-guarded  |
+| `calibrate.py`       | new                | One-shot per-machine setup: probe, build, benchmark, verify, write profile.                                                                 | cv2-guarded  |
+| `machine_profile.py` | new                | Read/write/validate the machine profile. No cv2.                                                                                            | CI           |
+| `camera.py`          | modified           | Decode timestamps, segment counter, buffer sizing.                                                                                          | cv2-guarded  |
+| `accident.py`        | rewritten          | Event → annotated snapshot → outbox enqueue.                                                                                                | cv2-guarded  |
+| `main.py`            | reduced to wire-up | Load profile, start outbox, start supervisor, run pipeline.                                                                                 | —            |
+| `testing.py`         | deleted            | A hardcoded manual RTSP viewer pointed at `channel1`, imported by nothing. Superseded by `calibrate.py`'s probe and the fake-capture tests. | —            |
+| `config.py`          | modified           | SPEC constants and defaults.                                                                                                                | CI           |
+| `eval/`              | new                | Ported measurement harness.                                                                                                                 | clips-marked |
 
 `outbox.py`, `backend_client.py`, `events.py`, `supervisor.py` are unchanged.
 
@@ -76,16 +76,19 @@ A single inference thread ticks at a fixed period. Each tick:
 Rationale for a fixed cadence over free-running or per-camera threads:
 
 - The accumulator integrates `conf × dt`, so **accumulation rate is sampling-rate independent** — a 2-second crash takes 2 seconds at any rate. Recall is therefore insensitive to cadence within reason.
-- **⚠️ Two further effects are hypothesised here and are NOT established.** Both are mechanism-based reasoning introduced by this design, not findings from the research repo. They are recorded as hypotheses to be measured (§9), not as constraints to design around:
-  - *Variance.* Fewer samples per unit time may mean a short run of spurious detections carries proportionally more weight, raising false alarms without changing recall. Untested.
-  - *A low-rate floor.* Regions link frame-to-frame by IoU of their boxes (SPEC §2.2), so sampling too slowly might stop boxes overlapping between samples and prevent evidence accumulating. Note this is probably weak for the case that matters: SPEC §2.2 states "a real wreck stays put so IoU holds it together", and a stationary wreck's boxes overlap heavily even at low rates. The effect, if any, applies to the brief dynamic moment of impact and to box jitter — not to the sustained aftermath that builds most of the score.
+- **✅ RESOLVED 2026-08-11 — both hypotheses below were MEASURED AND REFUTED.** See `cadence-measurement.md`. Recall is flat at 8/16 from 3 to 30 FPS, and false positives show no relationship to rate (3, 5, 5, 3, 2, 5 as rate falls — the fewest occur at nearly the lowest rate tested). The variation is sampling _phase_, not rate: the sequence is non-monotonic, and 9.97 and 5.98 FPS match or beat native. SPEC.md's rate-independence claim was correct and this document's reasoning was wrong. Consequences are listed in the measurement doc; the most important are that the 10–15 FPS band is a thermal constraint only, and that §6.4's capability table is too pessimistic. The original text is kept below so the error stays visible rather than being quietly deleted.
+
+- **⚠️ Two further effects were hypothesised here and were NOT established when written.** Both were mechanism-based reasoning introduced by this design, not findings from the research repo:
+  - _Variance._ Fewer samples per unit time may mean a short run of spurious detections carries proportionally more weight, raising false alarms without changing recall. Untested.
+  - _A low-rate floor._ Regions link frame-to-frame by IoU of their boxes (SPEC §2.2), so sampling too slowly might stop boxes overlapping between samples and prevent evidence accumulating. Note this is probably weak for the case that matters: SPEC §2.2 states "a real wreck stays put so IoU holds it together", and a stationary wreck's boxes overlap heavily even at low rates. The effect, if any, applies to the brief dynamic moment of impact and to box jitter — not to the sustained aftermath that builds most of the score.
 
   **What SPEC.md actually says is the opposite of a floor.** §2.3 and §3 both state that "a stream running at 12 fps accumulates at the same rate per second as one at 30 fps", presenting rate-independence as a deliberate property of the design. No minimum frame rate is documented anywhere in the research repo, and the paper's 10–15 FPS band (p.74) is justified by GPU thermal management, not by any detection requirement.
+
 - **There is a ceiling.** Running faster than the camera's own frame rate re-processes identical frames for no gain.
 
-The optimum is therefore *as fast as the machine sustains, capped at the stream's native rate* — determined by measurement (§6), not by a hardcoded constant.
+The optimum is therefore _as fast as the machine sustains, capped at the stream's native rate_ — determined by measurement (§6), not by a hardcoded constant.
 
-**The target range is already fixed by the paper: 10–15 FPS per camera** (Final-Paper p.74, "Hardware Utilization & Computational Load Balancing", and TC-AI-402, which tests for a steady 10–15 FPS under a continuous RTSP feed). Calibration therefore selects a rate *within* that band based on what the machine sustains, rather than choosing an arbitrary number.
+**The target range is already fixed by the paper: 10–15 FPS per camera** (Final-Paper p.74, "Hardware Utilization & Computational Load Balancing", and TC-AI-402, which tests for a steady 10–15 FPS under a continuous RTSP feed). Calibration therefore selects a rate _within_ that band based on what the machine sustains, rather than choosing an arbitrary number.
 
 **There is no fixed camera count to design against, and none should be assumed.** The repository states none — `mediamtx.yml`'s five channels are a dev-simulation convenience and `seed_dev_data.py` seeds six. The paper uses three concurrent streams for its integration, VRAM and endurance tests (TC-I-104, TC-AI-403, TC-R-401), five only for a bandwidth test (TC-R-102), exports TensorRT at `batch=8` (p.84), and targets 418 cameras at full deployment (p.73). Camera count is also genuinely dynamic at runtime: the heartbeat snapshot decides which cameras run, and TC-I-303 has an operator adding one that spawns ingestion immediately.
 
@@ -96,9 +99,9 @@ Calibration therefore expresses a machine's capability as **the number of camera
 At runtime the engine compares the live camera count from the heartbeat against its profiled capacity:
 
 - **Within capacity** — run at the highest rate in the band that the count affords.
-- **Over capacity** — run at the band's lower bound (10 FPS), log the profiled capacity alongside the actual count, and mark the run degraded. The backend remains authoritative over *which* cameras run; the engine never silently drops one.
+- **Over capacity** — run at the band's lower bound (10 FPS), log the profiled capacity alongside the actual count, and mark the run degraded. The backend remains authoritative over _which_ cameras run; the engine never silently drops one.
 
-The lower bound is currently the paper's, adopted as-is. Whether it is also a *detection* floor is unknown until the cadence sweep runs (§9); if the sweep shows headroom below it, this bound should be revisited rather than treated as fixed.
+The lower bound is currently the paper's, adopted as-is. Whether it is also a _detection_ floor is unknown until the cadence sweep runs (§9); if the sweep shows headroom below it, this bound should be revisited rather than treated as fixed.
 
 Cadence is held stable across a tick rather than raised when individual cameras pause, so a camera going into the self-blindfold does not change the sampling rate of its neighbours mid-incident.
 
@@ -123,13 +126,13 @@ Batching is worth keeping (§4.2), so the guarantee is preserved by a different 
 3. The offending camera is marked errored (`error_code`, surfaced through the existing heartbeat report) and excluded from subsequent batches until its stream restarts. Every other camera continues.
 4. If the individual re-runs all succeed, the failure was transient — the tick is logged and processing continues normally.
 
-This gives TC-R-302's guarantee — one camera's fault cannot silence the others — without per-camera models. Note that decode-side faults are *already* isolated: `CameraStream` runs its own reader thread per camera, so a dropped stream or a decode failure never crossed camera boundaries in the first place. Only inference was shared.
+This gives TC-R-302's guarantee — one camera's fault cannot silence the others — without per-camera models. Note that decode-side faults are _already_ isolated: `CameraStream` runs its own reader thread per camera, so a dropped stream or a decode failure never crossed camera boundaries in the first place. Only inference was shared.
 
 TC-R-302's wording must change to describe this mechanism rather than per-camera threads. See `paper-edits-required.md`.
 
 ### 4.5 Stale frames
 
-*Hypothesis-free but unmeasured: this guards a failure mode that has not been observed, and is cheap insurance rather than a response to a known bug.*
+_Hypothesis-free but unmeasured: this guards a failure mode that has not been observed, and is cheap insurance rather than a response to a known bug._
 
 The reader thread retains the newest decoded frame and the tick consumes whatever is present. A stream that half-stalls — still connected, still reporting `Connected`, but delivering a frame every few seconds — would therefore have an increasingly old frame processed as though it were current, silently polluting that camera's scorecard.
 
@@ -149,7 +152,7 @@ It is worth stating explicitly because the system restarts itself on a schedule 
 
 ### 5.1 The defect being worked around
 
-SPEC §6: `cooldown_until` is dead code. `fired` is never reset to `False`, so the cooldown branch is only ever evaluated for regions that have never fired, where `cooldown_until` is `-1.0` and always passes. Repeat alerts are suppressed *spatially* instead — the retention filter `r.score > 0.0 or r.fired` keeps fired regions forever, and they keep absorbing detections at that location. Two consequences: every location that alerts goes permanently deaf, and `regions` grows without bound.
+SPEC §6: `cooldown_until` is dead code. `fired` is never reset to `False`, so the cooldown branch is only ever evaluated for regions that have never fired, where `cooldown_until` is `-1.0` and always passes. Repeat alerts are suppressed _spatially_ instead — the retention filter `r.score > 0.0 or r.fired` keeps fired regions forever, and they keep absorbing detections at that location. Two consequences: every location that alerts goes permanently deaf, and `regions` grows without bound.
 
 ### 5.2 The fix, at the integration layer
 
@@ -180,10 +183,12 @@ The engine must run on the deployment box, on teammates' laptops with assorted N
 1. **Probe.** Resolve the device — CUDA, MPS, or CPU — and record the GPU name and available memory where applicable.
 
    **Single device by design.** The deployment box has 8× L4 (p.73), and the paper's 418-camera capacity implicitly depends on using all of them. Multi-GPU distribution is deliberately out of scope here: it cannot be developed or tested on any machine the team has, and the prototype's camera counts do not need it. The design must not preclude it — device resolution returns one device from an enumerable set, and capacity is per-device — but scheduling across devices is left unbuilt. Any claim about 418-camera capacity depends on work that does not exist yet and should be described as such.
+
 2. **Build.** Export `epoch50.pt` to the fastest format that machine actually supports, probing availability rather than assuming: TensorRT where present, otherwise the platform's best available export, falling back to plain PyTorch weights. Half precision where the device supports it.
-3. **Benchmark, and report capacity.** Warm the model first — the first inferences after loading are substantially slower than steady state, and timing them would understate capacity. Then run a fixed number of frames at batch sizes 1 through 8 (the export's configured maximum), recording milliseconds per batch at each size. Convert that curve into the headline output: **how many cameras this machine can carry at the required frame rate**, reported at both ends of the band — for example *"8 cameras at 15 FPS, or 12 at 10 FPS."* Capacity, not a tick rate, is what a person can act on.
+3. **Benchmark, and report capacity.** Warm the model first — the first inferences after loading are substantially slower than steady state, and timing them would understate capacity. Then run a fixed number of frames at batch sizes 1 through 8 (the export's configured maximum), recording milliseconds per batch at each size. Convert that curve into the headline output: **how many cameras this machine can carry at the required frame rate**, reported at both ends of the band — for example _"8 cameras at 15 FPS, or 12 at 10 FPS."_ Capacity, not a tick rate, is what a person can act on.
 
    The chosen target is then the operator's, defaulting to the maximum at 15 FPS. A lower value is a legitimate choice on a development machine that is also running the frontend dev server and a browser, where leaving GPU headroom matters more than maximum camera count.
+
 4. **Verify.** See §6.3.
 5. **Write** `ai_engine/machine_profile.json` (gitignored, machine-specific, exactly like the TensorRT engine).
 
@@ -213,16 +218,18 @@ The profile records verification as one of:
 
 The documented deployment target (paper p.73) is a Dell PowerEdge R760xa with 8× NVIDIA L4 Tensor Core GPUs, dual Xeon Platinum 8468, and 512 GB RAM. Capacity is not a concern there, so the deployment box is expected to hold the top of the band. Calibration matters chiefly for teammates' development machines, where capacity is the binding constraint.
 
-Capacity below is what each class is *expected* to report. None of it is measured — calibration produces the real number per machine, and that number is what the profile records.
+Capacity below is what each class is _expected_ to report. None of it is measured — calibration produces the real number per machine, and that number is what the profile records.
 
-| Machine | Expected capacity at 15 FPS |
-|---|---|
-| Deployment box (8× L4) | Many cameras per GPU. SPEC §4 numbers apply directly. |
-| T4-class or better | Comfortably above any development camera count. |
-| RTX 3050 / GTX 1650 | Enough for local development with an optimized build; confirm by calibrating. |
-| Older or weaker NVIDIA | A small number of cameras. Usable, but capacity is the binding limit. |
-| Apple Silicon | A small number of cameras. Adequate for development and demos. |
-| CPU only | Effectively zero at the paper's 10 FPS lower bound, even for one camera. Whether it is usable at some lower rate depends on the cadence sweep (§9) and is currently unknown. |
+| Machine                | Expected capacity at 15 FPS                                                                                                                                                                                                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deployment box (8× L4) | Many cameras per GPU. SPEC §4 numbers apply directly.                                                                                                                                                                                                                                                           |
+| T4-class or better     | Comfortably above any development camera count.                                                                                                                                                                                                                                                                 |
+| RTX 3050 / GTX 1650    | Enough for local development with an optimized build; confirm by calibrating.                                                                                                                                                                                                                                   |
+| Older or weaker NVIDIA | A small number of cameras. Usable, but capacity is the binding limit.                                                                                                                                                                                                                                           |
+| Apple Silicon          | A small number of cameras. Adequate for development and demos.                                                                                                                                                                                                                                                  |
+| CPU only               | Untested. Previously called "effectively zero", reasoning from the 10 FPS lower bound — but the cadence sweep (`cadence-measurement.md`) found no detection cost down to ~6 FPS, so that reasoning no longer holds. Needs measuring on actual CPU throughput, which is a different question from sampling rate. |
+
+**⚠️ This whole table is now too pessimistic.** It was written assuming ~15 FPS per camera was required. The cadence sweep found no measured detection cost at ~6 FPS, so capacity — which is `sustainable_inference_rate / required_per_camera_rate` — is roughly triple what these rows assume. Revise once `calibrate.py` produces real per-machine numbers rather than replacing one estimate with another.
 
 The CPU-only case runs, connects, and is useful for anyone working on integration, but it is not a detection platform and the engine states so on startup. No performance claim may be drawn from it.
 
@@ -260,7 +267,7 @@ Consequence to communicate: the System Health page's `avg_inference_latency_ms` 
 
 Added: `DETECTOR_IMGSZ = 640`, `ACC_THRESHOLD = 1.0`, `ACC_DECAY = 0.30`, `ACC_IOU_LINK = 0.30`, `ACC_EMA = 0.5`, the 10–15 FPS band bounds, and a conservative fallback camera capacity used only when no machine profile exists.
 
-**`best.pt` and `best.engine` are deleted from the repository.** Both are tracked. Leaving them in place with the current loader means the port silently runs the superseded model with no error — the highest-severity failure mode in this work. `epoch50.pt` is added; the engine-fallback *pattern* is retained but keyed to calibration output.
+**`best.pt` and `best.engine` are deleted from the repository.** Both are tracked. Leaving them in place with the current loader means the port silently runs the superseded model with no error — the highest-severity failure mode in this work. `epoch50.pt` is added; the engine-fallback _pattern_ is retained but keyed to calibration output.
 
 ## 9. Testing
 
@@ -271,11 +278,13 @@ Three tiers, matching the existing `ai_engine/tests/` convention (`conftest.py` 
 Runs in `uv run pytest` on every push.
 
 **`test_accumulate.py`** — the research repo's 11 assertions ported, plus:
+
 - `reset()` clears both `regions` and `_prev_t`
 - the fired-region absorption behaviour, pinned as documented-defect so a future edit to `accumulate.py` is caught
 - SPEC §3's units table as an executable regression: seconds fires at 2.00s, frame index at 0.07s, milliseconds at 0.03s
 
 **`test_pipeline.py`** — fake detector and fake cameras:
+
 - **per-camera accumulator isolation** — the regression for SPEC §6's measured failure, where a second identical sequence through a shared instance produces zero events
 - reset on each of the three segment bumps: reconnect, resume, restart
 - accumulator pruning when a camera leaves the dict
@@ -313,16 +322,16 @@ Expected per-clip results are committed as `ai_engine/eval/baseline_epoch50.json
 
 ## 10. Risks
 
-| Risk | Mitigation |
-|---|---|
-| Cadence differs from the conditions SPEC §4 was measured under | Tier 3 cadence sweep produces honest per-rate figures |
+| Risk                                                                                                                                                                                                                                                                                                                                                                   | Mitigation                                                                                                                                                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cadence differs from the conditions SPEC §4 was measured under                                                                                                                                                                                                                                                                                                         | Tier 3 cadence sweep produces honest per-rate figures                                                                                                                                         |
 | **This design introduces two unmeasured claims about sampling rate** (§4.2) — that low rates raise false alarms via variance, and that IoU linking imposes a low-rate floor. Neither appears in SPEC.md, which argues rate-independence instead. Designing around them without measuring is the exact failure mode SPEC.md's "closed levers" section exists to prevent | Both are labelled as hypotheses in §4.2 and are resolved by the cadence sweep (§9), which is sequenced early precisely because the answer changes the design rather than merely validating it |
-| An optimized build shifts detection behaviour | Recorded in the machine profile as drift with specifics; build is kept, citation discipline in §6.3 |
-| Resume never arrives, leaving a camera deaf | Reconnect and restart also reset; covered by a pipeline test |
-| `best.engine` silently preferred over the adopted model | Both stale files deleted in this work |
-| RTSP path has never run against real hardware | SPEC §2.3 flags this explicitly. Point the engine at one CDRRMO camera early, not at the defence |
-| Ultralytics AGPL-3.0 reaches network use; two dataset licences unestablished | NOTICE.md §"Outstanding". Submission blockers, not engineering ones — raise with the adviser |
-| Several paper test cases encode the pre-port design (a 0.75 confidence gate, an mAP acceptance threshold, a no-flicker requirement) and would fail or mislead against the ported detector | `ai_engine/docs/paper-edits-required.md`. The code change and the paper edits must land together |
+| An optimized build shifts detection behaviour                                                                                                                                                                                                                                                                                                                          | Recorded in the machine profile as drift with specifics; build is kept, citation discipline in §6.3                                                                                           |
+| Resume never arrives, leaving a camera deaf                                                                                                                                                                                                                                                                                                                            | Reconnect and restart also reset; covered by a pipeline test                                                                                                                                  |
+| `best.engine` silently preferred over the adopted model                                                                                                                                                                                                                                                                                                                | Both stale files deleted in this work                                                                                                                                                         |
+| RTSP path has never run against real hardware                                                                                                                                                                                                                                                                                                                          | SPEC §2.3 flags this explicitly. Point the engine at one CDRRMO camera early, not at the defence                                                                                              |
+| Ultralytics AGPL-3.0 reaches network use; two dataset licences unestablished                                                                                                                                                                                                                                                                                           | NOTICE.md §"Outstanding". Submission blockers, not engineering ones — raise with the adviser                                                                                                  |
+| Several paper test cases encode the pre-port design (a 0.75 confidence gate, an mAP acceptance threshold, a no-flicker requirement) and would fail or mislead against the ported detector                                                                                                                                                                              | `ai_engine/docs/paper-edits-required.md`. The code change and the paper edits must land together                                                                                              |
 
 ## 11. Order of work
 
