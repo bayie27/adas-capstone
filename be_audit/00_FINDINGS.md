@@ -31,9 +31,9 @@ columns and name the pack that found it.
 | F3 | Two clientless v1 routes survive PR #67. `PATCH /api/internal/cameras/{id}/status` writes AI-owned observed columns **directly, bypassing `apply_observed()`** — no fps sanity check, no `error_message` redaction, no `last_heartbeat_at` stamp. A second writer of observed state, contradicting D-003's single-writer rule. | `backend/app/api/routes/internal.py:249`, `:273` | High | open · verified · **owner decision: delete both** | A3 |
 | F4 | `SESSION_COOKIE_SECURE=true` over plain `http://<lan-ip>` — browsers exempt `localhost`, **not** a LAN IP. The cookie is silently dropped; login "succeeds" and every later request is 401. Guaranteed second-laptop failure. The paper also promises HTTPS, which nothing implements. | `backend/app/core/config.py`, `core/security.py::set_session_cookie` | High | **fixed** — real self-signed TLS (`certs/adas-cert.pem`, SAN `adas.local`/`localhost`/`127.0.0.1`/`192.168.50.1`), backend on `https://` via uvicorn `--ssl-keyfile/--ssl-certfile`, frontend opt-in TLS via `ADAS_TLS_CERT_DIR`. Live-verified 2026-08-10: `Set-Cookie` carried `Secure; HttpOnly; SameSite=strict`, follow-up `GET /api/users/me` → 200 | A1 |
 | F5 | `CORSMiddleware` sets no `expose_headers`, so browser JS **cannot read `Content-Disposition`** cross-origin. `frontend/src/utils/download.ts:24` reads exactly that to name every CSV/PDF download → every export silently lands under the fallback filename. Invisible to `TestClient` and to the frontend unit tests. | `backend/app/main.py:475` | Med-High | open · **confirmed** 2026-08-10 — real cross-origin request (`Origin: https://localhost:5173` → `https://localhost:8000/api/alerts/export`) returned `content-disposition` on the wire but no `access-control-expose-headers`, which is what actually gates JS visibility regardless of browser. Fix still owned by A2 | A1 → A2 |
-| F6 | `04_PKG_realtime.md` Step 5 specifies WebSocket ping/pong and the application never implements one. **Downgraded on 2026-08-10:** `websockets 16.0` is installed and `wsproto` is not, so uvicorn runs its websockets impl with `ping_interval=20s` / `ping_timeout=20s` by default — RFC 6455 keepalive *is* active and a half-open socket *is* reaped. Remaining work is to confirm the setting survives the real launch command and to document it, **not** to build a redundant app-level ping. | `backend/app/main.py:352`, `services/realtime.py` | ~~Med-High~~ **Low** | open · verified | A4 |
+| F6 | `04_PKG_realtime.md` Step 5 specifies WebSocket ping/pong and the application never implements one. **Downgraded on 2026-08-10:** `websockets 16.0` is installed and `wsproto` is not, so uvicorn runs its websockets impl with `ping_interval=20s` / `ping_timeout=20s` by default — RFC 6455 keepalive *is* active and a half-open socket *is* reaped. Remaining work is to confirm the setting survives the real launch command and to document it, **not** to build a redundant app-level ping. | `backend/app/main.py:352`, `services/realtime.py` | ~~Med-High~~ **Low** | **fixed** (doc + pin) 2026-08-10 — see resolution log | A4 |
 | F7 | Export workers start **inside** `if SCHEDULER_ENABLED:`. With the scheduler off, `POST /api/exports/jobs` still returns 202 and the job queues forever. Silent, no error. | `backend/app/main.py:200-202` | Med | open · verified | A2 |
-| F8 | `add_exception_handler(Exception, …)` is served by Starlette's `ServerErrorMiddleware`, **outside** the user middleware stack — so on a 500 the `request_id_ctx` is already reset and no `X-Request-ID` header is attached. The one error class that most needs correlation is the one that loses it. `test_logging.py` covers 200s and 404s only. | `backend/app/main.py:336`, `:242` | Med | open · **confirmed** 2026-08-10 — forced a real unhandled exception via a temporary debug route (added, tested, removed same session; `git diff` clean after). The `500` carried no `X-Request-ID`; server log read `[request_id=-]`. Fix still owned by A4 | A1 → A4 |
+| F8 | `add_exception_handler(Exception, …)` is served by Starlette's `ServerErrorMiddleware`, **outside** the user middleware stack — so on a 500 the `request_id_ctx` is already reset and no `X-Request-ID` header is attached. The one error class that most needs correlation is the one that loses it. `test_logging.py` covers 200s and 404s only. | `backend/app/main.py:336`, `:242` | Med | **fixed** 2026-08-10 — see resolution log | A1 → A4 |
 | F9 | Heartbeat input hardening gaps: `engine_id` has no `max_length` and no null-byte validator (inconsistent with `error_code`/`error_message` beside it) and **is accepted and never used**; `cameras` is an unbounded list; `sent_at` is parsed and discarded (no clock-skew detection). Edge case 1.18 (two engine instances) degrades quietly rather than being noticed. | `backend/app/schemas/internal.py:33` | Med | open · verified | A3 |
 | F10 | `services/reports/jobs.py` imports row-shaping helpers **from `app/api/routes/*` at call time** — services depending on routes, inverting the layering `CLAUDE.md` states. Deliberate (byte-identical output) but the correct fix is a shared module both sides import. | `backend/app/services/reports/jobs.py` | Med | open · verified | A8 |
 | F11 | Of the edge cases `14_EDGE_CASES.md` flags in bold as "Not covered": **1.7** (AI event arriving while an operator disables that camera) and **1.14** (export artifact cleanup firing during a streaming download) are genuinely open. **1.12** (restore while a backup runs) is already handled — `routes/maintenance.py:237` takes the same shared `maintenance_lock` — and needs only a cross-operation test. Rows 5.5, 6.2, 6.10 and 8.1 have since been covered. | `be_plan/14_EDGE_CASES.md` | Med | open · verified | A5 |
@@ -41,7 +41,7 @@ columns and name the pack that found it.
 | F13 | `MANUAL_TESTS.md`'s nine procedures are **written but none executed** — item 6 of P9's own nine-box definition of done. For deployment-first, the NFR-18 60-second restore drill and the NFR-13 / TC-R-401/402 endurance run matter most. | `be_plan/MANUAL_TESTS.md` | Med | open · verified | A6 |
 | F14 | ~20 paper-vs-implementation divergences **not on the 5-item amendment list**: HTTPS promised and unplanned; **NFR-22 and NFR-12 appear nowhere in `be_plan`**; the Data Dictionary says bcrypt (P2 removed it for Argon2id) and `gputil` (P5 removed it); the paper specifies the `sqlite3 .backup` **CLI** where P7 uses the Python API; restore documented as systemd-only; `snapshot_path` → `snapshot_key`; FR-15 says "Connecting" where everything else says "Reconnecting"; **UC-4 requires a synchronous RTSP handshake on camera create, which P4 deliberately inverted**; `auth_session` / `export_job` / `help_article` missing from the ERD. | `final_paper_text.txt` vs `be_plan/` | Med | open · verified | A7 |
 | F15 | `00_INDEX.md` still shows P9 as "🔶 implemented, not pushed/PR'd" — it merged as PR #70 (`336a967`). Its nine-box definition of done is **all unchecked** though 7–8 are now satisfied. `CONTRIBUTING.md` claims startup "hard-fails if any of the 10 keys are missing"; only **3** are required. `final_paper_text.txt` is untracked despite being a declared source of truth. | `be_plan/00_INDEX.md`, `CONTRIBUTING.md` | Low-Med | open · verified | A7 |
-| F16 | Housekeeping: stray 0-byte `backend/adas.db`; orphan bytecode `app/__pycache__/{models,ws_manager}.cpython-312.pyc` for modules deleted in P1/P3; `GET /api/events/schema` is fully unauthenticated (leaks the internal event contract); WS `receive_text()` on a binary client frame raises into the generic handler and logs as an unexpected error. | various | Low | open · verified | A8 |
+| F16 | Housekeeping: stray 0-byte `backend/adas.db`; orphan bytecode `app/__pycache__/{models,ws_manager}.cpython-312.pyc` for modules deleted in P1/P3; `GET /api/events/schema` is fully unauthenticated (leaks the internal event contract); WS `receive_text()` on a binary client frame raises into the generic handler and logs as an unexpected error. | various | Low | open · verified — **the WS binary-frame item is fixed** 2026-08-10 by A4, see resolution log; the other three sub-items remain owned by A8 | A8 (+A4 partial) |
 | F17 | **The live database sits inside a cloud-sync folder.** The repo root is `C:\Users\Dani\OneDrive - dlsl.edu.ph\…`, so `adas.db` and its `-wal`/`-shm` sidecars, plus `ai_engine/snapshots/`, `var/backups/` and `var/exports/`, are all continuously synced by OneDrive. SQLite in WAL mode under a sync client that opens, locks and uploads those files is a known-bad combination — file-locking errors, sync-conflict copies of the database, partially uploaded snapshots. It also silently undermines D-011's backup integrity story. Immediate mitigation is to pause OneDrive for any demo or drill; the real fix is to relocate the runtime data directories outside the synced tree. | repo root layout; `core/config.py` path validators | Med-High | open · verified | A1 (mitigate) → owner decision (fix) |
 
 ---
@@ -95,3 +95,44 @@ Append one dated line per state change. Newest last.
   why. `uv run pytest` and `pnpm check` both pass with the TLS changes inert
   (`ADAS_TLS_CERT_DIR` unset). `.prettierignore` gained a `be_audit/` entry (mirroring the existing
   `be_plan/` exclusion) since `pnpm check` otherwise fails on this pack's own working docs.
+- `2026-08-10` — A4 executed.
+  **F6 fixed (verify-and-document, as scoped — not a build job).** Confirmed live, not just by
+  reading the dependency list: started `uv run fastapi dev backend/app/main.py` and, separately,
+  `uv run uvicorn app.main:app --app-dir backend ...` (plain HTTP this session — no `certs/` in
+  this worktree — but the WS implementation selection is identical under TLS) and, in the same
+  venv both run from, confirmed `websockets 16.0` importable and `wsproto` absent. Read
+  `fastapi_cli/cli.py`'s `_run()`: it calls `uvicorn.run()` without `ws_ping_interval`/
+  `ws_ping_timeout` kwargs and neither `fastapi dev` nor `fastapi run` expose those flags on their
+  CLI signatures at all — so `uv run fastapi dev backend/app/main.py` (CLAUDE.md's documented dev
+  command) and `fastapi run backend/app/main.py` (what `scripts/adas-maintenance.ps1
+  -Action Start/Restart` invokes) can **only** ever inherit the uvicorn library default
+  (`ws_ping_interval=20.0`/`ws_ping_timeout=20.0`, confirmed by reading the installed
+  `uvicorn/config.py`) — there is no way to pin it explicitly on those two paths without dropping
+  the FastAPI CLI for a direct `uvicorn` invocation, which is out of scope for a verify-and-document
+  item. The one launch command that already drives uvicorn directly —
+  `A1_lan_tls_drill.md` step 2, the actual demo-day server command — now pins it explicitly with
+  `--ws-ping-interval 20 --ws-ping-timeout 20`; started live this session and confirmed a clean
+  boot on `/healthz/live`. `be_plan/04_PKG_realtime.md` Step 5 amended to record all of this so a
+  future reader does not re-raise F6 or attempt to build a redundant application-level ping.
+  **F8 fixed.** `request_id_middleware` now also stamps `request.state.request_id` (backed by the
+  ASGI `scope`, which survives into `ServerErrorMiddleware`'s own `Request(scope)` reconstruction),
+  so `global_exception_handler` — which runs *outside* the middleware whose `finally` resets
+  `request_id_ctx` — reads the id from `request.state` instead and attaches `X-Request-ID` to the
+  500 response itself. Same treatment applied to `operational_error_handler`'s 500 and 503
+  branches (that handler already had the *correct* id via the still-live contextvar, since it runs
+  inside `ExceptionMiddleware`, but was never attaching it as a header either — F8's fix note calls
+  this out explicitly). Two new regression tests in `backend/tests/test_logging.py`
+  (`TestRequestIdOnErrorResponses`) hit a real route through a temporary per-test app route and
+  assert the response's `X-Request-ID` header matches the id embedded in the corresponding log
+  line, for both the unhandled-500 and the lock-timeout-503 paths.
+  **F16 (binary-frame sub-item only) fixed.** `websocket_alerts`'s read loop now calls
+  `websocket.receive()` and branches on `message["type"]`, breaking only on
+  `"websocket.disconnect"` — a binary frame is just another ignored message instead of raising into
+  the generic `except Exception` and logging a spurious "Unexpected error" stack trace. New test
+  `test_binary_frame_is_ignored_and_not_logged_as_error` in `backend/tests/test_realtime.py` sends
+  a real binary frame over a `TestClient` websocket, asserts no such log line appears, asserts a
+  broadcast still reaches the connection afterward (proving the loop wasn't torn down), and asserts
+  the connection deregisters exactly once when the socket actually closes. The other three F16
+  sub-items (stray 0-byte db, orphan bytecode, unauthenticated `/api/events/schema`) remain owned
+  by A8. `pnpm check` green after these changes — `uv run pytest` 712 passed / 2 skipped / 10
+  deselected, frontend `vitest` 16 passed, lint/format/typecheck all clean.
