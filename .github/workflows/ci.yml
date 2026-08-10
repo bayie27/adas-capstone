@@ -25,7 +25,7 @@ jobs:
       - run: uv sync
       - run: uv run ruff format --check .
       - run: uv run ruff check .
-      - run: cp .env.example .env && uv run pytest --cov=backend/app --cov-report=term-missing
+      - run: cp .env.example .env && uv run pytest -n auto --cov=backend/app --cov-report=term-missing
 
   # 10_PKG_migration_evidence.md Step 7 — catches a hand-edited migration
   # drifting from the models. Fresh checkout, empty database, real

@@ -23,10 +23,12 @@
     "typecheck": "pnpm --filter frontend typecheck",
     "build": "pnpm --filter frontend build",
     "test:fe": "pnpm --filter frontend test:run",
-    "test:be": "uv run pytest",
+    "test:be": "uv run pytest -n auto",
     "test": "run-s test:be test:fe",
     "test:e2e": "playwright test",
-    "check": "run-s format:check lint typecheck test",
+    "check:be": "run-s format:check:ruff lint:ruff test:be",
+    "check:fe": "run-s format:check:prettier lint:frontend typecheck test:fe",
+    "check": "run-p -l check:be check:fe",
     "full:check": "run-s check build test:e2e"
   },
   "devDependencies": {

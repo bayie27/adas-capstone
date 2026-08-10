@@ -63,6 +63,28 @@ from sqlmodel import Session, select
 
 from tests.conftest import auth_headers, make_admin, make_operator
 
+
+@pytest.fixture
+def lifespan_db_dir(tmp_path):
+    """Overrides conftest's session-scoped fixture, for this module only.
+
+    Everywhere else the app's on-disk database is write-only scaffolding —
+    `get_session`/`get_engine` are overridden to the in-memory `session`
+    engine, so nothing reads it and one migrated file can be shared by the
+    whole session. This module is the exception: `maintenance_settings`
+    points BACKUP_DIR/DATABASE_URL at that very file, and
+    `_audit_rows_on_disk` reads back rows the background backup job wrote
+    through `app.state.engine`. Sharing it would let BACKUP_TRIGGER rows
+    accumulate across tests, and `assert len(rows) == 1` would count its
+    neighbours' work.
+
+    So: back to one fresh migrated database per test here, and pay the
+    `alembic upgrade head` for it. Correctness is worth ~20s in a suite
+    that runs in well under two minutes.
+    """
+    return tmp_path
+
+
 # ---------------------------------------------------------------------------
 # Pure-function fixtures: a real file-based SQLite DB, independent of the
 # in-memory ORM session the rest of the suite uses.

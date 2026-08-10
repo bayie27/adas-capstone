@@ -24,22 +24,27 @@ Without it, `git blame` will stop at the repo's one bulk formatting commit (`sty
 
 ## The one command
 
-Run `pnpm check` before pushing. Run `pnpm full:check` before opening a PR — it's everything `pnpm check` does, plus a production build and the E2E suite.
+`pnpm check` is what pre-push runs, so **you don't need to run it yourself first** — just push. Run `pnpm full:check` before opening a PR; it's everything `pnpm check` does, plus a production build and the E2E suite.
 
-| Script                | Runs                                                                    |
-| --------------------- | ----------------------------------------------------------------------- |
-| `pnpm format`         | `prettier --write .` + `uv run ruff format .`                           |
-| `pnpm format:check`   | Same, in check mode (no writes)                                         |
-| `pnpm lint`           | `pnpm --filter frontend lint` + `uv run ruff check .`                   |
-| `pnpm lint:fix`       | Same, with `--fix`                                                      |
-| `pnpm typecheck`      | `pnpm --filter frontend typecheck` (`tsc --noEmit`)                     |
-| `pnpm test:be`        | `uv run pytest`                                                         |
-| `pnpm test:fe`        | `pnpm --filter frontend test:run` (Vitest)                              |
-| `pnpm test`           | `test:be` then `test:fe`                                                |
-| `pnpm test:e2e`       | `playwright test` — boots both servers, CI-only, not in `check`         |
-| `pnpm build`          | `pnpm --filter frontend build`                                          |
-| **`pnpm check`**      | `format:check` → `lint` → `typecheck` → `test` — **what pre-push runs** |
-| **`pnpm full:check`** | `check` → `build` → `test:e2e` — the pre-PR command                     |
+`check` is two independent language lanes run in parallel, because nothing in the Python lane depends on anything in the TypeScript lane. `run-p -l` prefixes each output line with its lane so a failure in either is still readable.
+
+| Script                | Runs                                                                |
+| --------------------- | ------------------------------------------------------------------- |
+| `pnpm format`         | `prettier --write .` + `uv run ruff format .`                       |
+| `pnpm format:check`   | Same, in check mode (no writes)                                     |
+| `pnpm lint`           | `pnpm --filter frontend lint` + `uv run ruff check .`               |
+| `pnpm lint:fix`       | Same, with `--fix`                                                  |
+| `pnpm test:be`        | `uv run pytest -n auto` (xdist, one worker per core)                |
+| `pnpm test:fe`        | `pnpm --filter frontend test:run` (Vitest)                          |
+| `pnpm test`           | `test:be` then `test:fe`                                            |
+| `pnpm test:e2e`       | `playwright test` — boots both servers, CI-only, not in `check`     |
+| `pnpm build`          | `pnpm --filter frontend build`                                      |
+| `pnpm check:be`       | `format:check:ruff` → `lint:ruff` → `test:be`                       |
+| `pnpm check:fe`       | `format:check:prettier` → `lint:frontend` → `typecheck` → `test:fe` |
+| **`pnpm check`**      | `check:be` ‖ `check:fe`, in parallel — **what pre-push runs**       |
+| **`pnpm full:check`** | `check` → `build` → `test:e2e` — the pre-PR command                 |
+
+**Running the backend suite directly:** `uv run pytest -n auto` for everything, or just `uv run pytest backend/tests/test_alerts.py` for one area — a targeted run skips xdist's worker startup and gives cleaner tracebacks.
 
 ## What the hooks do, and when
 
@@ -47,7 +52,7 @@ Hooks live in `.husky/` and only activate after `pnpm install` has run at the re
 
 - **pre-commit** — runs `lint-staged`: Prettier/ESLint/Ruff against only the files you staged. Fast (~1-3s), auto-fixes in place.
 - **commit-msg** — runs `commitlint` against your commit message. Rejects anything that isn't [Conventional Commits](https://www.conventionalcommits.org/).
-- **pre-push** — runs `pnpm check` (format check, lint, typecheck, both test suites) against the whole repo. Slower; this is the real gate.
+- **pre-push** — runs `pnpm check` (format check, lint, typecheck, both test suites) against the whole repo. This is the real gate. It used to take ~15 minutes; it's now well under two. If it ever creeps back up, profile it (`uv run pytest --durations=20`) rather than deleting checks from it — the last regression was ~900 full-cost Argon2 hashes and 352 redundant `alembic upgrade head` runs hiding inside the `client` fixture, none of which any test was asserting on.
 
 ## Commit conventions
 
@@ -71,6 +76,14 @@ Conventional Commits, matching the existing history. No fixed scope list — use
 ## Branch protection
 
 CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`, but **requiring those checks to pass before merge is a manual GitHub repo setting** (Settings → Branches → branch protection rules) — it can't be committed as a file. `gh` CLI is available if you'd rather script it than click through the UI.
+
+**This is currently not enabled**, which means CI is advisory: a red PR can still be merged. Turning it on is what makes CI the real gate rather than the pre-push hook. Settings → Branches → Add branch ruleset, targeting `main`:
+
+- Require a pull request before merging
+- Require status checks to pass, selecting: `backend`, `frontend`, `format`, `migration`, `e2e`
+- Require branches to be up to date before merging
+
+The `migration` job is the one worth caring about most — the `alembic upgrade head` → `verify_migration_schema.py` → `alembic downgrade base` round-trip is the only check in the whole system that **no local gate covers**. `pnpm check` will never catch a migration that drifts from the models.
 
 ## Database migrations
 
