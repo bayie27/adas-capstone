@@ -119,6 +119,24 @@ ADAS_EVAL_EVENTS_DIR=<dir> uv run --no-sync pytest ai_engine/tests/test_clip_reg
 - ~~`probe_raw.py` still has a B905 lint issue~~ — fixed in Task 14; it was blocking `pnpm check`.
 - `main.py`'s `_resolve_capacity()` wraps `load_profile` in a bare `except Exception`, so a **malformed** profile is reported to the operator as "No machine profile found". The behaviour is safe (conservative fallback to one camera) but the message is a false statement — `load_profile` raises `ValueError` specifically so a corrupt file can be told apart from a missing one, and that distinction is then discarded. The guard originally existed to tolerate Task 12 not existing yet.
 
+## 🔴 Found by running the engine (2026-08-11): an unclamped `dt` can fire an alert from a single frame
+
+The engine was run end to end against a real clip and **detected correctly** — annotated snapshot, webhook, self-blindfold, all working. But the event fired with **`0.0s of evidence`**, where the parity gate for the same clip records `age_s = 2.31`.
+
+Mechanism, confirmed in the code:
+
+- `accumulate.py:78` — `dt = t - self._prev_t`, floored at 0 but **not capped**
+- `accumulate.py:98` — a **new** region is born with `score = conf * dt`
+- `pipeline.py:172` passes `read.t` straight through; nothing clamps the gap
+
+So if the interval between two consecutive frames for a camera exceeds roughly `threshold / conf` (≈1.85 s at conf 0.54), the next detection creates a region already at or above threshold and **fires immediately, with no temporal corroboration at all.** That defeats the mechanism the system's entire precision claim rests on.
+
+`MAX_FRAME_AGE_SECONDS` does **not** prevent it: it checks frame _freshness_ (`now - read.t`), and a frame decoded just now after a five-second stall is perfectly fresh while still carrying `dt = 5 s`.
+
+The `segment_id` reset does **not** cover it either: that fires on reconnect. A stream that merely _stalls_ — congestion, a long tick, GC, thermal throttle — keeps its segment and accumulates the gap.
+
+In this run the long gaps came from a file source hitting EOF, which exaggerates it. **Whether it bites in normal RTSP operation is unproven, but the code path is real and needs a deliberate decision.** Likely fix: clamp in `pipeline.py` — when the gap since a camera's last processed frame exceeds some multiple of the tick period, reset that accumulator instead of passing the gap through. That reuses the existing reset seam and keeps `accumulate.py` unedited.
+
 ## Still to do beyond the plan
 
 - ⚠️ **`CLAUDE.md` is stale.** Its "hard-won gotcha" describing `best.engine` falling back to `best.pt` refers to two files Task 2 deleted. `main.py` now loads `config.WEIGHTS_PATH` (`epoch50.pt`) directly with no fallback at all. Left unedited deliberately — it is the project instruction file — but it will actively mislead until corrected.
