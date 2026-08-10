@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import random
+import time
 import uuid
 from collections import Counter
 from dataclasses import dataclass, replace
@@ -24,10 +26,18 @@ from app.models import (
     UserRole,
 )
 from app.services.cameras import reconcile_camera_desired_states
+from sqlalchemy import func
+from sqlalchemy import insert as sa_insert
 from sqlmodel import Session, select
 
 DEFAULT_SEED_PROFILE = "demo"
-SEED_PROFILES = ("demo", "analytics", "edge")
+PERF_PROFILE = "perf"
+SEED_PROFILES = ("demo", "analytics", "edge", PERF_PROFILE)
+
+# 10_PKG_migration_evidence.md Step 2 — NFR-08's 100,000-incident dataset.
+PERF_TARGET_INCIDENT_COUNT = 100_000
+PERF_SPREAD_DAYS = 548  # ~18 months
+PERF_BATCH_SIZE = 2000
 
 # Deterministic per-run UUIDs (uuid5 of a stable label) so re-seeding a
 # non-reset database stays idempotent — a fresh uuid4() every run would
@@ -745,6 +755,45 @@ def _seed_audit_log_rows(
     print(f"Seeded {len(rows)} audit_log row(s).")
 
 
+def ensure_default_operators(session: Session) -> dict[str, User]:
+    """The four seeded operator accounts, shared by every profile (demo,
+    analytics, edge, perf)."""
+    return {
+        "dsahagun": ensure_user(
+            session,
+            username="dsahagun",
+            first_name="Daniel Luis",
+            last_name="Sahagun",
+            role=UserRole.OPERATOR,
+            password="operator123",
+        ),
+        "ealonzo": ensure_user(
+            session,
+            username="ealonzo",
+            first_name="Enjey Kashlee",
+            last_name="Alonzo",
+            role=UserRole.OPERATOR,
+            password="operator123",
+        ),
+        "smeer": ensure_user(
+            session,
+            username="smeer",
+            first_name="Sebastian Angelo",
+            last_name="Meer",
+            role=UserRole.OPERATOR,
+            password="operator123",
+        ),
+        "jtenorio": ensure_user(
+            session,
+            username="jtenorio",
+            first_name="Jhon Paulo",
+            last_name="Tenorio",
+            role=UserRole.OPERATOR,
+            password="operator123",
+        ),
+    }
+
+
 def seed_cameras_only() -> None:
     init_db()
     with Session(engine) as session:
@@ -762,49 +811,12 @@ def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
         if not admin:
             raise RuntimeError("Expected default admin to exist after init_db().")
 
-        operator_1 = ensure_user(
-            session,
-            username="dsahagun",
-            first_name="Daniel Luis",
-            last_name="Sahagun",
-            role=UserRole.OPERATOR,
-            password="operator123",
-        )
-        operator_2 = ensure_user(
-            session,
-            username="ealonzo",
-            first_name="Enjey Kashlee",
-            last_name="Alonzo",
-            role=UserRole.OPERATOR,
-            password="operator123",
-        )
-        operator_3 = ensure_user(
-            session,
-            username="smeer",
-            first_name="Sebastian Angelo",
-            last_name="Meer",
-            role=UserRole.OPERATOR,
-            password="operator123",
-        )
-        operator_4 = ensure_user(
-            session,
-            username="jtenorio",
-            first_name="Jhon Paulo",
-            last_name="Tenorio",
-            role=UserRole.OPERATOR,
-            password="operator123",
-        )
+        operators = ensure_default_operators(session)
 
         camera_1, camera_2, camera_3, camera_4, camera_5, camera_6 = (
             seed_sample_cameras(session)
         )
 
-        operators = {
-            "dsahagun": operator_1,
-            "ealonzo": operator_2,
-            "smeer": operator_3,
-            "jtenorio": operator_4,
-        }
         cameras = {
             "ayala": camera_1,
             "southbound": camera_2,
@@ -930,6 +942,210 @@ def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
     reconcile_camera_desired_states(engine)
 
 
+# ---------------------------------------------------------------------------
+# perf profile — 10_PKG_migration_evidence.md Step 2
+#
+# The 100,000-row NFR-08 performance dataset. Deliberately *not* built on
+# ensure_alert()'s one-row-at-a-time ORM pattern (a SELECT existence check
+# plus an individual commit per row) — that path is fine for ~20-200 hand
+# written specs, but would take unreasonably long at 100,000 rows. This
+# builds plain dict rows and bulk-inserts them in batches via SQLAlchemy
+# Core (`session.execute(insert(DetectionLog), batch)`), which is a single
+# executemany per batch rather than 100,000 individual INSERT statements.
+# ---------------------------------------------------------------------------
+
+# Snapshot files are not generated for perf rows — a handful of reused
+# fake keys exercise the missing-snapshot-file path (§7.1 "resolution
+# order" / the 404 branch of GET /api/alerts/{log_id}/snapshot), which is
+# realistic anyway: no perf dataset should carry 100,000 real JPEGs.
+_PERF_SNAPSHOT_POOL = [
+    "2025/03/14/camera_1/perf-sample-a.jpg",
+    "2025/07/02/camera_2/perf-sample-b.jpg",
+    "2025/11/20/camera_3/perf-sample-c.jpg",
+    "2026/01/09/camera_4/perf-sample-d.jpg",
+    "2026/04/18/camera_5/perf-sample-e.jpg",
+]
+
+
+def _perf_pick_status(rng: random.Random) -> DetectionStatus:
+    """Roughly 60% Resolved / 25% Dismissed / 14% (candidate) Ongoing / 1%
+    (candidate) Unverified, per the package doc. The Ongoing/Unverified
+    shares are only *candidates* — ux_detection_open_camera allows at most
+    one open incident per camera, so _enforce_open_camera_limit below
+    demotes every extra candidate to Resolved, same as the hand-written
+    demo/analytics/edge profiles already do via
+    _enforce_one_open_incident_per_camera."""
+    roll = rng.random()
+    if roll < 0.61:
+        return DetectionStatus.RESOLVED
+    if roll < 0.86:
+        return DetectionStatus.DISMISSED
+    if roll < 0.99:
+        return DetectionStatus.ONGOING
+    return DetectionStatus.UNVERIFIED
+
+
+def _build_perf_rows(
+    *,
+    now: datetime,
+    camera_ids: list[int],
+    operator_ids: list[int],
+    target_count: int,
+    seed: int = 20260810,
+) -> list[dict]:
+    """Deterministic (fixed `seed`) so re-running the perf profile against
+    an already-seeded database is reproducible, matching the rest of this
+    script's idempotency conventions."""
+    rng = random.Random(seed)
+    rows: list[dict] = []
+
+    for i in range(target_count):
+        camera_id = camera_ids[i % len(camera_ids)]
+        days_ago = rng.uniform(0, PERF_SPREAD_DAYS)
+        detected_at = (now - timedelta(days=days_ago)).replace(microsecond=0)
+        status = _perf_pick_status(rng)
+        confidence_score = round(rng.uniform(0.35, 0.99), 4)
+        snapshot_key = _PERF_SNAPSHOT_POOL[i % len(_PERF_SNAPSHOT_POOL)]
+
+        verified_by_id: int | None = None
+        verified_at: datetime | None = None
+        closed_by_id: int | None = None
+        closed_at: datetime | None = None
+
+        if status in (DetectionStatus.RESOLVED, DetectionStatus.ONGOING):
+            # Confirm: verified_by/verified_at set, closed fields empty
+            # (10.1 in 01_CONTRACTS.md).
+            verified_by_id = operator_ids[i % len(operator_ids)]
+            verified_at = detected_at + timedelta(minutes=rng.randint(1, 8))
+        if status == DetectionStatus.RESOLVED:
+            # Resolve: closed_by/closed_at added, verifier retained.
+            closed_by_id = operator_ids[(i + 1) % len(operator_ids)]
+            closed_at = verified_at + timedelta(minutes=rng.randint(5, 60))
+        elif status == DetectionStatus.DISMISSED:
+            if rng.random() < 0.2:
+                # Correction (Ongoing -> Dismissed): original verifier
+                # retained, correcting actor recorded as closer.
+                verified_by_id = operator_ids[i % len(operator_ids)]
+                verified_at = detected_at + timedelta(minutes=rng.randint(1, 8))
+                closed_by_id = operator_ids[(i + 1) % len(operator_ids)]
+                closed_at = verified_at + timedelta(minutes=rng.randint(2, 20))
+            else:
+                # Immediate dismiss: verified_by/verified_at set, closed
+                # fields stay empty (01_CONTRACTS.md §10.1).
+                verified_by_id = operator_ids[i % len(operator_ids)]
+                verified_at = detected_at + timedelta(minutes=rng.randint(1, 5))
+
+        rows.append(
+            {
+                "camera_id": camera_id,
+                "source_event_id": _seed_source_event_id(f"perf_{i}"),
+                "detected_at": detected_at,
+                "snapshot_key": snapshot_key,
+                "confidence_score": confidence_score,
+                "detection_status": status.value,
+                "verified_by_id": verified_by_id,
+                "verified_at": verified_at,
+                "closed_by_id": closed_by_id,
+                "closed_at": closed_at,
+                "created_at": detected_at,
+                "updated_at": closed_at or verified_at or detected_at,
+            }
+        )
+
+    return rows
+
+
+def _enforce_open_camera_limit(
+    rows: list[dict], *, operator_ids: list[int]
+) -> list[dict]:
+    """Bulk-row equivalent of _enforce_one_open_incident_per_camera:
+    ux_detection_open_camera is a real partial-unique index (at most one
+    Unverified/Ongoing row per camera_id), not merely a convention the
+    generator needs to respect voluntarily. Keeps the most recently
+    detected open row per camera and demotes every earlier one to
+    Resolved with a synthesized verifier/closer."""
+    open_by_camera: dict[int, list[dict]] = {}
+    for row in rows:
+        if row["detection_status"] in (
+            DetectionStatus.UNVERIFIED.value,
+            DetectionStatus.ONGOING.value,
+        ):
+            open_by_camera.setdefault(row["camera_id"], []).append(row)
+
+    for camera_rows in open_by_camera.values():
+        camera_rows.sort(key=lambda r: r["detected_at"], reverse=True)
+        for row in camera_rows[1:]:
+            detected_at = row["detected_at"]
+            verified_by_id = row["verified_by_id"] or operator_ids[0]
+            verified_at = row["verified_at"] or detected_at + timedelta(minutes=4)
+            closed_by_id = row["closed_by_id"] or verified_by_id
+            closed_at = verified_at + timedelta(minutes=20)
+            row.update(
+                detection_status=DetectionStatus.RESOLVED.value,
+                verified_by_id=verified_by_id,
+                verified_at=verified_at,
+                closed_by_id=closed_by_id,
+                closed_at=closed_at,
+                updated_at=closed_at,
+            )
+
+    return rows
+
+
+def seed_perf_data(*, target_count: int = PERF_TARGET_INCIDENT_COUNT) -> None:
+    init_db()
+    now = datetime.now(UTC)
+
+    with Session(engine) as session:
+        admin = session.exec(select(User).where(User.username == "admin")).first()
+        if not admin:
+            raise RuntimeError("Expected default admin to exist after init_db().")
+
+        operators = ensure_default_operators(session)
+        cameras = seed_sample_cameras(session)
+        camera_ids = [c.camera_id for c in cameras]
+        if any(cid is None for cid in camera_ids):
+            raise RuntimeError("Cameras must be persisted before perf seeding.")
+        operator_ids = [u.user_id for u in operators.values()]
+
+        existing_count = session.exec(
+            select(func.count()).select_from(DetectionLog)
+        ).one()
+        if existing_count >= target_count:
+            print(
+                f"detection_log already has {existing_count} rows "
+                f"(>= target {target_count}); skipping bulk insert."
+            )
+            reconcile_camera_desired_states(engine)
+            return
+
+        print(f"Generating {target_count} detection_log rows...")
+        rows = _build_perf_rows(
+            now=now,
+            camera_ids=camera_ids,
+            operator_ids=operator_ids,
+            target_count=target_count,
+        )
+        rows = _enforce_open_camera_limit(rows, operator_ids=operator_ids)
+
+        print(f"Bulk-inserting {len(rows)} rows in batches of {PERF_BATCH_SIZE}...")
+        started_at = time.perf_counter()
+        for batch_start in range(0, len(rows), PERF_BATCH_SIZE):
+            batch = rows[batch_start : batch_start + PERF_BATCH_SIZE]
+            session.execute(sa_insert(DetectionLog), batch)
+        session.commit()
+        elapsed = time.perf_counter() - started_at
+
+        print(
+            f"Perf profile: inserted {len(rows)} rows in {elapsed:.2f}s "
+            f"({len(rows) / elapsed:.0f} rows/sec)."
+        )
+
+    # Derive desired_ai_state/reason/cooldown_until from the incidents just
+    # seeded (D-003), same as every other profile.
+    reconcile_camera_desired_states(engine)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Seed predictable local dev data for demos, analytics, or edge-case testing."
@@ -942,12 +1158,22 @@ def main() -> None:
             "Seed profile to load: "
             "'demo' for a balanced dataset, "
             "'analytics' for denser chart-friendly data, "
-            "or 'edge' for tricky workflow combinations."
+            "'edge' for tricky workflow combinations, or "
+            "'perf' for the NFR-08 100,000-incident performance dataset."
         ),
+    )
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=PERF_TARGET_INCIDENT_COUNT,
+        help="Row count for --profile perf only (default: 100,000).",
     )
     args = parser.parse_args()
 
-    seed_dev_data(profile=args.profile)
+    if args.profile == PERF_PROFILE:
+        seed_perf_data(target_count=args.count)
+    else:
+        seed_dev_data(profile=args.profile)
 
 
 if __name__ == "__main__":
