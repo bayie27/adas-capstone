@@ -1,8 +1,8 @@
 # Detection core port — handover / resume notes
 
-**Written 2026-08-11**, mid-execution, so work can resume in a fresh session.
+**Written 2026-08-11**, updated as work progressed. **All 15 tasks are now complete.**
 
-Branch: `feat/ai-p11-detection-core-port` (27 commits, **not pushed**)
+Branch: `feat/ai-p11-detection-core-port` (41 commits, **not pushed**)
 Plan: `2026-08-10-detection-core-port-plan.md` — 15 tasks
 Progress ledger: `.superpowers/sdd/progress.md` — **gitignored**, per-task status and findings
 
@@ -10,15 +10,15 @@ Progress ledger: `.superpowers/sdd/progress.md` — **gitignored**, per-task sta
 
 ## Where things stand
 
-| Phase                         | Tasks | Status                     |
-| ----------------------------- | ----- | -------------------------- |
-| A — the port, no GPU          | 1–7   | ✅ complete, 122 tests     |
-| B — verification, GPU + clips | 8–11  | ✅ complete                |
-| C — portability               | 12–15 | 🔶 12–14 done, 15 to start |
+| Phase                         | Tasks | Status                 |
+| ----------------------------- | ----- | ---------------------- |
+| A — the port, no GPU          | 1–7   | ✅ complete, 122 tests |
+| B — verification, GPU + clips | 8–11  | ✅ complete            |
+| C — portability               | 12–15 | ✅ complete            |
 
-**Task 15 is next** (the AI engine README). Its brief is at `.superpowers/sdd/task-15-brief.md`.
+**The plan is finished.** What remains is in "Still to do beyond the plan" below — the branch has never been pushed.
 
-Full suite is **799 passing**, 2 skipped, 19 deselected.
+Full suite is **799 passing**, 2 skipped, 19 deselected, plus 13 frontend tests.
 
 ✅ **`pnpm check` now passes end to end** — prettier, Ruff format + lint, ESLint, typecheck, 799 pytest, 13 frontend tests. It had been failing since the harness port (`4158991`) on two pre-existing causes: `eval/probe_raw.py` was committed as-copied and never linted, and Prettier was scanning the gitignored `.superpowers/` working directory.
 
@@ -117,6 +117,7 @@ ADAS_EVAL_EVENTS_DIR=<dir> uv run --no-sync pytest ai_engine/tests/test_clip_reg
 - `test_camera.py` uses fixed 0.1s settle sleeps where condition-polls would be sturdier.
 - `test_accumulate.py::_load_reference` re-executes the module per test; a fixture would avoid it.
 - ~~`probe_raw.py` still has a B905 lint issue~~ — fixed in Task 14; it was blocking `pnpm check`.
+- `main.py`'s `_resolve_capacity()` wraps `load_profile` in a bare `except Exception`, so a **malformed** profile is reported to the operator as "No machine profile found". The behaviour is safe (conservative fallback to one camera) but the message is a false statement — `load_profile` raises `ValueError` specifically so a corrupt file can be told apart from a missing one, and that distinction is then discarded. The guard originally existed to tolerate Task 12 not existing yet.
 
 ## Still to do beyond the plan
 
@@ -124,7 +125,7 @@ ADAS_EVAL_EVENTS_DIR=<dir> uv run --no-sync pytest ai_engine/tests/test_clip_reg
 
 - **Decide on calibration's missing build + verify steps.** Design doc §8 specifies probe → **build** → benchmark → **verify** → write; the plan's Task 13 dropped build and verify, and Task 13 shipped that way. Consequences: every capacity figure is a floor (no TensorRT/ONNX export), `model_path` always records the `.pt`, and `verification` is always `unverified`. Both omissions are defensible — the TensorRT stub hangs on install, and only the clip regression can promote verification — but the design doc and the implementation currently disagree, so one of them should move.
 - Push the branch and open a PR — nothing is pushed yet.
-- `pnpm check` before the PR (the pre-push gate).
+- ~~`pnpm check` before the PR~~ — passing as of Task 14; re-run it immediately before pushing.
 - Apply `paper-edits-required.md` to the paper. Priority 1 is the mAP acceptance criterion.
 - `NOTICE.md`'s outstanding licence items, including the Ultralytics AGPL-3.0 question.
 - Point the engine at one real CDRRMO camera — the RTSP path has still never run against real hardware.
