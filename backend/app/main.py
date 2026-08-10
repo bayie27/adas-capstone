@@ -27,6 +27,7 @@ from app.api.routes import (
     auth,
     cameras,
     events,
+    exports,
     help,
     internal,
     maintenance,
@@ -60,6 +61,11 @@ from app.services.cameras import (
 )
 from app.services.realtime import CloseCode, RealtimeManager
 from app.services.realtime_revalidation import ws_session_revalidation
+from app.services.reports.jobs import (
+    ExportJobQueue,
+    cleanup_expired_artifacts,
+    recover_interrupted_jobs,
+)
 from app.services.sessions import expire_stale_sessions
 from app.services.snoozes import (
     reconcile_snoozes,
@@ -188,6 +194,20 @@ async def lifespan(app: FastAPI):
             days=1,
         )
 
+        # P6 — export jobs (D-010). Any job left `queued`/`processing` by a
+        # crash is restarted from the beginning (07_PKG_reports.md Step 5);
+        # the worker task(s) then drain the freshly re-populated queue.
+        for job_id in recover_interrupted_jobs(engine):
+            app.state.export_queue.queue.put_nowait(job_id)
+        app.state.export_queue.start(engine, app_settings.EXPORT_JOB_WORKERS)
+        add_job(
+            scheduler,
+            lambda: cleanup_expired_artifacts(engine),
+            job_id="export_artifact_cleanup",
+            trigger="interval",
+            hours=1,
+        )
+
         # A plain `lambda` here would NOT be awaited by APScheduler's
         # AsyncIOExecutor: it dispatches based on
         # `inspect.iscoroutinefunction(job.func)`, and a lambda wrapping a
@@ -215,6 +235,7 @@ async def lifespan(app: FastAPI):
     if app.state.scheduler is not None:
         app.state.scheduler.shutdown(wait=False)
         logger.info("Scheduler shut down.")
+    app.state.export_queue.stop()
     logger.info("Server shutting down...")
 
 
@@ -445,6 +466,9 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     # On app.state, not a module global, same reasoning as realtime_manager
     # above — each app instance gets its own retained live sample.
     application.state.health_store = HealthStore()
+    # On app.state, same reasoning — each app instance gets its own queue
+    # and worker task(s) (P6 Step 5).
+    application.state.export_queue = ExportJobQueue()
 
     application.middleware("http")(request_id_middleware)
 
@@ -473,6 +497,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(events.router)
     application.include_router(help.router)
     application.include_router(settings.router)
+    application.include_router(exports.router)
 
     application.add_exception_handler(HTTPException, http_exception_handler)
     application.add_exception_handler(

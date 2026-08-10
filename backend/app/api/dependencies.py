@@ -8,6 +8,8 @@ from sqlmodel import Session
 if TYPE_CHECKING:
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+    from app.services.reports.jobs import ExportJobQueue
+
 from app.core.config import settings
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
@@ -169,3 +171,9 @@ def get_scheduler(request: Request) -> "AsyncIOScheduler | None":
     None when SCHEDULER_ENABLED=False (the test suite) — callers must skip
     scheduling in that case, same as main.py's lifespan already does."""
     return request.app.state.scheduler
+
+
+def get_export_queue(request: Request) -> "ExportJobQueue":
+    """routes/exports.py (P6 Step 5) depends on this instead of importing a
+    module-level singleton, same reasoning as get_realtime_manager."""
+    return request.app.state.export_queue
