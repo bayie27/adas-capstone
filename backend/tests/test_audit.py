@@ -4,6 +4,9 @@ and 14_EDGE_CASES.md rows 3.14, 9.2, plus the package doc's "Tests to write"
 table for audit coupling, redaction, multi-action, and the viewer.
 """
 
+import csv
+from io import StringIO
+
 import pytest
 from app.core.config import settings
 from app.core.security import create_session_token
@@ -408,3 +411,80 @@ class TestAuditViewer:
         delete_resp = client.delete(f"/api/audit-logs/{row.audit_id}", headers=headers)
         assert patch_resp.status_code in (404, 405)
         assert delete_resp.status_code in (404, 405)
+
+
+class TestAuditExport:
+    def test_export_csv_does_not_contain_its_own_audit_export_row(
+        self, client: TestClient, session: Session
+    ):
+        """07_PKG_reports.md Step 4 / the audit recursion trap: an
+        AUDIT_EXPORT written by this very call must never appear in the
+        file it produces."""
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        session.add(AuditLog(actor_type="system", action="LOGOUT", result="success"))
+        session.commit()
+
+        resp = client.get("/api/audit-logs/export", headers=headers)
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/csv")
+        rows = list(csv.DictReader(StringIO(resp.text[1:])))
+        assert all(row["Action"] != "AUDIT_EXPORT" for row in rows)
+
+        # But the attempt itself was audited, after the snapshot was taken.
+        export_rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "AUDIT_EXPORT")
+        ).all()
+        assert len(export_rows) == 1
+        assert export_rows[0].result == "success"
+
+    def test_export_pdf(self, client: TestClient, session: Session):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        session.add(AuditLog(actor_type="system", action="LOGOUT", result="success"))
+        session.commit()
+
+        resp = client.get("/api/audit-logs/export?format=pdf", headers=headers)
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "application/pdf"
+        assert "adas_audit_export.pdf" in resp.headers["content-disposition"]
+        assert resp.content.startswith(b"%PDF")
+
+    def test_export_forbidden_for_operator(self, client: TestClient, session: Session):
+        make_operator(session)
+        headers = auth_headers(client, "operator", "Operator123")
+
+        resp = client.get("/api/audit-logs/export", headers=headers)
+
+        assert resp.status_code == 403
+
+    def test_export_rejects_invalid_sort_by(self, client: TestClient, session: Session):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+
+        resp = client.get("/api/audit-logs/export?sort_by=detail", headers=headers)
+
+        assert resp.status_code == 422
+
+    def test_export_filters_match_the_list_endpoint(
+        self, client: TestClient, session: Session
+    ):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        session.add(AuditLog(actor_type="system", action="LOGOUT", result="success"))
+        session.add(
+            AuditLog(actor_type="system", action="CAMERA_DELETE", result="success")
+        )
+        session.commit()
+
+        list_resp = client.get("/api/audit-logs/?action=LOGOUT", headers=headers)
+        export_resp = client.get(
+            "/api/audit-logs/export?action=LOGOUT", headers=headers
+        )
+
+        list_ids = [i["audit_id"] for i in list_resp.json()["items"]]
+        rows = list(csv.DictReader(StringIO(export_resp.text[1:])))
+        export_ids = [int(row["Audit ID"]) for row in rows]
+        assert list_ids == export_ids

@@ -1,6 +1,15 @@
 """Pydantic request/response models. SQLModel table definitions live in
 app.models, not here — see 02_PKG_foundation.md Step 3."""
 
+from app.schemas.analytics import (
+    DashboardAnalyticsResponse,
+    DashboardKpis,
+    LocationFrequency,
+    PeakAccidentHour,
+    PerformanceAnalyticsResponse,
+    PerformanceCameraRow,
+    PerformanceGlobalKpis,
+)
 from app.schemas.audit import AuditLogListResponse, AuditLogRead
 from app.schemas.auth import LoginResponse
 from app.schemas.camera import (
@@ -33,6 +42,12 @@ from app.schemas.events import (
     ReAlarmData,
     SnoozeActivatedData,
     make_event,
+)
+from app.schemas.exports import (
+    ExportJobCreate,
+    ExportJobCreateResponse,
+    ExportJobRead,
+    RetrainingExportRequest,
 )
 from app.schemas.health import (
     GpuRead,
@@ -90,6 +105,8 @@ __all__ = [
     "CameraUpdate",
     "ConnectionBreakdown",
     "ConnectionReadyData",
+    "DashboardAnalyticsResponse",
+    "DashboardKpis",
     "DetectionLogCreate",
     "DetectionLogListResponse",
     "DetectionLogRead",
@@ -97,6 +114,9 @@ __all__ = [
     "DetectionLogCreateV2",
     "EventEnvelope",
     "EventType",
+    "ExportJobCreate",
+    "ExportJobCreateResponse",
+    "ExportJobRead",
     "GpuRead",
     "HealthHistoryPoint",
     "HealthHistoryResponse",
@@ -105,12 +125,18 @@ __all__ = [
     "HelpArticleListResponse",
     "HelpArticleSummary",
     "IncidentPayload",
+    "LocationFrequency",
     "LoginResponse",
     "MaintenanceNoticeData",
+    "PeakAccidentHour",
+    "PerformanceAnalyticsResponse",
+    "PerformanceCameraRow",
+    "PerformanceGlobalKpis",
     "RestoreRequestIn",
     "RestoreStateRead",
     "RestoreStepRead",
     "RestoreTriggerResponse",
+    "RetrainingExportRequest",
     "make_event",
     "ReAlarmData",
     "SnoozeActivatedData",

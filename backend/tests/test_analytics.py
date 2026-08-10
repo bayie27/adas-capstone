@@ -206,16 +206,34 @@ class TestDashboardAnalytics:
         assert resp.headers["content-type"].startswith("text/csv")
         assert "adas_dashboard_export.csv" in resp.headers["content-disposition"]
 
-        rows = list(csv.DictReader(StringIO(resp.text)))
+        rows = list(csv.DictReader(StringIO(resp.text[1:])))
         assert len(rows) == 2
         assert [row["Status"] for row in rows] == ["Resolved", "Ongoing"]
         assert rows[0]["Camera Name"] == "Export Camera"
-        assert rows[0]["Confidence"] == "65.0%"
+        assert rows[0]["Confidence"] == "0.6500"
         assert rows[0]["Closed By ID"] == str(operator.user_id)
         assert rows[0]["Closed By Name"] == "Test Operator"
-        assert rows[1]["Confidence"] == "87.0%"
+        assert rows[1]["Confidence"] == "0.8700"
         assert rows[1]["Verified By ID"] == str(operator.user_id)
         assert rows[1]["Verified By Name"] == "Test Operator"
+
+    def test_export_dashboard_pdf(self, client: TestClient, session: Session):
+        operator, headers = operator_with_headers(client, session, username="dashpdf")
+        camera = make_camera(session, name="PDF Dash Camera", channel_id=22)
+        make_analytics_log(
+            session,
+            camera,
+            detected_at=datetime(2026, 2, 4, 11, 0, tzinfo=UTC),
+            status=DetectionStatus.ONGOING,
+            confidence_score=0.9,
+        )
+
+        resp = client.get("/api/analytics/export/dashboard?format=pdf", headers=headers)
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "application/pdf"
+        assert "adas_dashboard_export.pdf" in resp.headers["content-disposition"]
+        assert resp.content.startswith(b"%PDF")
 
 
 class TestPerformanceAnalytics:
@@ -398,18 +416,38 @@ class TestPerformanceAnalytics:
         assert resp.headers["content-type"].startswith("text/csv")
         assert "adas_performance_export.csv" in resp.headers["content-disposition"]
 
-        rows = list(csv.DictReader(StringIO(resp.text)))
+        rows = list(csv.DictReader(StringIO(resp.text[1:])))
         assert rows == [
             {
                 "Camera ID": str(zulu.camera_id),
                 "Camera Name": "zulu Tunnel",
                 "Total Accidents": "1",
                 "Total Dismissed": "0",
-                "Precision Score": "100.0%",
-                "Avg Accident Confidence": "95.0%",
+                "Precision Score": "1.0000",
+                "Avg Accident Confidence": "0.9500",
                 "Avg Dismissed Confidence": "N/A",
             }
         ]
+
+    def test_export_performance_pdf(self, client: TestClient, session: Session):
+        operator, headers = operator_with_headers(client, session, username="perfpdf")
+        camera = make_camera(session, name="PDF Perf Camera", channel_id=53)
+        make_analytics_log(
+            session,
+            camera,
+            detected_at=datetime(2026, 4, 3, 8, 0, tzinfo=UTC),
+            status=DetectionStatus.ONGOING,
+            confidence_score=0.7,
+        )
+
+        resp = client.get(
+            "/api/analytics/export/performance?format=pdf", headers=headers
+        )
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "application/pdf"
+        assert "adas_performance_export.pdf" in resp.headers["content-disposition"]
+        assert resp.content.startswith(b"%PDF")
 
 
 @pytest.mark.parametrize(
@@ -545,7 +583,7 @@ def test_export_dashboard_csv_returns_header_only_when_no_confirmed_logs(
     resp = client.get("/api/analytics/export/dashboard", headers=headers)
 
     assert resp.status_code == 200
-    rows = list(csv.reader(StringIO(resp.text)))
+    rows = list(csv.reader(StringIO(resp.text[1:])))
     assert rows == [
         [
             "Log ID",
@@ -608,7 +646,7 @@ def test_export_performance_csv_returns_header_only_when_no_analytics_rows(
     resp = client.get("/api/analytics/export/performance", headers=headers)
 
     assert resp.status_code == 200
-    rows = list(csv.reader(StringIO(resp.text)))
+    rows = list(csv.reader(StringIO(resp.text[1:])))
     assert rows == [
         [
             "Camera ID",
