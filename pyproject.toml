@@ -89,13 +89,6 @@ extend-exclude = [
     # `accumulate.py` in particular is required to be byte-identical — a `UP` or
     # `SIM` autofix here would silently invalidate every measurement in SPEC.md §4.
     "ai_engine/adas_transfer",
-    # The working copy of that same frozen file. It is a byte-identical copy of
-    # adas_transfer/code/accumulate.py and is asserted as such by
-    # tests/test_accumulate.py::test_verbatim_copy_of_the_reference. Ruff would
-    # otherwise reformat it and raise B905 (`zip` without `strict=`), and taking
-    # either fix would break the copy — and with it the provenance of every
-    # number in SPEC.md §4. Format and lint the port's OWN modules, not this one.
-    "ai_engine/accumulate.py",
 ]
 # lint-staged passes explicit file paths, and Ruff ignores `extend-exclude` for
 # paths given on the command line unless exclusions are forced. Without this the

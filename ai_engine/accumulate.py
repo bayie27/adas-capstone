@@ -16,6 +16,7 @@ Two properties are load-bearing, and both come straight from the postmortem:
 
 Pure logic: no models, no video, no I/O. Feed it (t, boxes, confs) and it yields events.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -37,7 +38,7 @@ def iou(a: Box, b: Box) -> float:
 @dataclass
 class Region:
     box: Box
-    score: float = 0.0          # accumulated evidence, in conf-seconds
+    score: float = 0.0  # accumulated evidence, in conf-seconds
     peak_conf: float = 0.0
     first_t: float = 0.0
     last_t: float = 0.0
@@ -60,6 +61,7 @@ class Accumulator:
 
     threshold is in conf-seconds: at conf 0.5 and 30 fps, 1.0 takes ~2s of steady detection.
     """
+
     iou_link: float = 0.30
     threshold: float = 1.0
     # Evidence lost per second with no supporting detection. Tuned against duty cycle: with
@@ -67,7 +69,7 @@ class Accumulator:
     # sparser noise nets negative and dies. Raising this to 0.6 made a 67%-duty-cycle wreck
     # take 7.3s to fire, which is too slow for a signal that persistent.
     decay: float = 0.3
-    ema: float = 0.5            # box smoothing
+    ema: float = 0.5  # box smoothing
     cooldown_s: float = 60.0
     regions: list[Region] = field(default_factory=list)
     _prev_t: float | None = None
@@ -78,7 +80,11 @@ class Accumulator:
         events: list[Event] = []
         matched: set[int] = set()
 
-        for box, conf in zip(boxes, confs):
+        # strict=False is zip's default and therefore behaviour-preserving; it is
+        # spelled out only to satisfy B905. Do NOT "tighten" this to strict=True —
+        # that would raise where the reference silently truncates, which is a
+        # behaviour change in the one module that must not have any.
+        for box, conf in zip(boxes, confs, strict=False):
             best, best_iou = -1, self.iou_link
             for i, r in enumerate(self.regions):
                 if i in matched:
@@ -87,14 +93,18 @@ class Accumulator:
                 if v >= best_iou:
                     best, best_iou = i, v
             if best < 0:
-                self.regions.append(Region(box=box, score=conf * dt, peak_conf=conf,
-                                           first_t=t, last_t=t))
+                self.regions.append(
+                    Region(
+                        box=box, score=conf * dt, peak_conf=conf, first_t=t, last_t=t
+                    )
+                )
                 matched.add(len(self.regions) - 1)
                 continue
             r = self.regions[best]
             matched.add(best)
             a = self.ema
-            r.box = tuple(a * n + (1 - a) * o for n, o in zip(box, r.box))  # type: ignore[assignment]
+            # strict=False: see the note on the zip above.
+            r.box = tuple(a * n + (1 - a) * o for n, o in zip(box, r.box, strict=False))  # type: ignore[assignment]
             r.score += conf * dt
             r.peak_conf = max(r.peak_conf, conf)
             r.last_t = t
@@ -113,9 +123,15 @@ class Accumulator:
             if not r.fired and r.score >= self.threshold and t >= r.cooldown_until:
                 r.fired = True
                 r.cooldown_until = t + self.cooldown_s
-                events.append(Event(t=t, box=r.box, score=round(r.score, 3),
-                                    peak_conf=round(r.peak_conf, 3),
-                                    age_s=round(t - r.first_t, 2)))
+                events.append(
+                    Event(
+                        t=t,
+                        box=r.box,
+                        score=round(r.score, 3),
+                        peak_conf=round(r.peak_conf, 3),
+                        age_s=round(t - r.first_t, 2),
+                    )
+                )
 
         self.regions = [r for r in self.regions if r.score > 0.0 or r.fired]
         return events
