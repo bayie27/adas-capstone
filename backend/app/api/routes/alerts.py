@@ -207,17 +207,13 @@ def _incident_pdf_row(log: DetectionLog) -> list:
     ]
 
 
-def _incident_query_stmt(filters: IncidentFilters, *, ids: list[int] | None = None):
+def _incident_query_stmt(filters: IncidentFilters):
     stmt = select(DetectionLog).options(
         selectinload(DetectionLog.camera),
         selectinload(DetectionLog.verified_by),
         selectinload(DetectionLog.closed_by),
     )
-    if ids is not None:
-        stmt = stmt.where(col(DetectionLog.log_id).in_(ids))
-    else:
-        stmt = apply_incident_filters(stmt, filters)
-    return stmt
+    return apply_incident_filters(stmt, filters)
 
 
 @router.get("/", response_model=DetectionLogListResponse)
@@ -337,16 +333,13 @@ def export_alerts(
     sort_dict = {"sort_by": sort_by, "sort_order": sort_order}
     source_ip = _client_ip(request)
 
-    id_stmt = apply_sort(
-        apply_incident_filters(select(DetectionLog.log_id), filters),
-        DetectionLog,
-        sort_by=sort_by,
-        sort_order=sort_order,
-        allowed=ALERT_SORT_FIELDS,
-        tie_breaker="log_id",
+    # A count query, not a materialized id list: `WHERE log_id IN (...)`
+    # with tens of thousands of bind parameters exceeds SQLite's default
+    # variable limit (999) — found live-drilling a 50,000-row export.
+    count_stmt = apply_incident_filters(
+        select(func.count(col(DetectionLog.log_id))), filters
     )
-    matching_ids = list(session.exec(id_stmt).all())
-    row_count = len(matching_ids)
+    row_count = session.exec(count_stmt).one()
 
     try:
         check_row_limit(row_count, format=format)
@@ -381,7 +374,7 @@ def export_alerts(
     )
     session.commit()
 
-    stmt = _incident_query_stmt(filters, ids=matching_ids)
+    stmt = _incident_query_stmt(filters)
     stmt = apply_sort(
         stmt,
         DetectionLog,

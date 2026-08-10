@@ -219,12 +219,15 @@ def export_audit_logs(
     §5.7). Same filters as the list endpoint (D-010 screen/export parity).
 
     **The recursion trap**: this call itself writes an `AUDIT_EXPORT` row.
-    To guarantee that row never appears in its own export, the set of
-    matching `audit_id`s is captured *before* the new row is created or
-    committed, and the actual export re-selects strictly by that static id
-    list — never by re-evaluating the original filter predicate, which
-    could otherwise pick up the just-inserted row depending on commit
-    timing.
+    To guarantee that row never appears in its own export, a *watermark*
+    (the newest existing `audit_id`) is captured before that new row is
+    created or committed, and the actual export adds `audit_id <=
+    watermark` on top of the normal filters. Since `audit_log` is
+    append-only with a monotonically increasing primary key, this call's
+    own row always gets a higher id, so it can never be included —
+    regardless of commit timing, and without materializing a potentially
+    huge id list (a `WHERE audit_id IN (...)` with tens of thousands of
+    entries exceeds SQLite's default bind-variable limit).
     """
     validate_common_filters(start_date=start_date, end_date=end_date, user_ids=user_id)
 
@@ -241,8 +244,14 @@ def export_audit_logs(
     sort_dict = {"sort_by": sort_by, "sort_order": sort_order}
     source_ip = _client_ip(request)
 
-    id_stmt = _apply_audit_filters(
-        select(AuditLog.audit_id),
+    # Captured BEFORE the AUDIT_EXPORT row is created — this watermark is
+    # what the recursion trap depends on. Defaults to 0 (excludes every
+    # real row, since audit_id autoincrements from 1) when the table is
+    # currently empty.
+    watermark = session.exec(select(func.max(AuditLog.audit_id))).one() or 0
+
+    count_stmt = _apply_audit_filters(
+        select(func.count(col(AuditLog.audit_id))),
         action=action,
         user_id=user_id,
         result=result,
@@ -251,11 +260,8 @@ def export_audit_logs(
         start_date=start_date,
         end_date=end_date,
         search=search,
-    )
-    # Materialized BEFORE the AUDIT_EXPORT row is created — this snapshot is
-    # what the recursion trap depends on.
-    matching_ids = list(session.exec(id_stmt).all())
-    row_count = len(matching_ids)
+    ).where(col(AuditLog.audit_id) <= watermark)
+    row_count = session.exec(count_stmt).one()
 
     try:
         check_row_limit(row_count, format=format)
@@ -290,7 +296,17 @@ def export_audit_logs(
     )
     session.commit()
 
-    stmt = select(AuditLog).where(col(AuditLog.audit_id).in_(matching_ids))
+    stmt = _apply_audit_filters(
+        select(AuditLog),
+        action=action,
+        user_id=user_id,
+        result=result,
+        target_type=target_type,
+        target_ref=target_ref,
+        start_date=start_date,
+        end_date=end_date,
+        search=search,
+    ).where(col(AuditLog.audit_id) <= watermark)
     stmt = apply_sort(
         stmt,
         AuditLog,

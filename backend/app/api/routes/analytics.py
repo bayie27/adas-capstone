@@ -279,16 +279,18 @@ def export_dashboard(
     }
     source_ip = _client_ip(request)
 
-    id_stmt = apply_incident_filters(
-        select(DetectionLog.log_id).where(
+    # A count query, not a materialized id list: `WHERE log_id IN (...)`
+    # with tens of thousands of bind parameters exceeds SQLite's default
+    # variable limit (999) — found live-drilling a 50,000-row export.
+    count_stmt = apply_incident_filters(
+        select(func.count(col(DetectionLog.log_id))).where(
             col(DetectionLog.detection_status).in_(
                 [s.value for s in _ACCIDENT_STATUSES]
             )
         ),
         filters,
     )
-    matching_ids = list(session.exec(id_stmt).all())
-    row_count = len(matching_ids)
+    row_count = session.exec(count_stmt).one()
 
     try:
         check_row_limit(row_count, format=format)
@@ -345,15 +347,20 @@ def export_dashboard(
             },
         )
 
-    logs_stmt = (
+    logs_stmt = apply_incident_filters(
         select(DetectionLog)
         .options(
             selectinload(DetectionLog.camera),
             selectinload(DetectionLog.verified_by),
             selectinload(DetectionLog.closed_by),
         )
-        .where(col(DetectionLog.log_id).in_(matching_ids))
-        .order_by(col(DetectionLog.detected_at).desc())
+        .where(
+            col(DetectionLog.detection_status).in_(
+                [s.value for s in _ACCIDENT_STATUSES]
+            )
+        )
+        .order_by(col(DetectionLog.detected_at).desc()),
+        filters,
     )
 
     def _row(log: DetectionLog) -> list:

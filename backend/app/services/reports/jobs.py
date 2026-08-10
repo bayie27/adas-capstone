@@ -22,7 +22,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy.engine import Engine
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, func, select
 
 from app.core.config import settings
 from app.models import AuditResult, DetectionLog, DetectionStatus, ExportJob, User
@@ -162,24 +162,23 @@ def _generate_dashboard(session: Session, job: ExportJob) -> tuple[bytes, int]:
     filters = IncidentFilters(
         start_date=start_date, end_date=end_date, camera_ids=tuple(camera_id or ())
     )
-    id_stmt = apply_incident_filters(
-        sql_select(DetectionLog.log_id).where(
-            col(DetectionLog.detection_status).in_(
-                [s.value for s in _ACCIDENT_STATUSES]
-            )
-        ),
-        filters,
-    )
-    matching_ids = list(session.exec(id_stmt).all())
-    logs_stmt = (
+    # Filtered directly, not via a materialized id list: `WHERE log_id IN
+    # (...)` with tens of thousands of entries exceeds SQLite's default
+    # bind-variable limit (999) — found live-drilling a 50,000-row export.
+    logs_stmt = apply_incident_filters(
         sql_select(DetectionLog)
         .options(
             selectinload(DetectionLog.camera),
             selectinload(DetectionLog.verified_by),
             selectinload(DetectionLog.closed_by),
         )
-        .where(col(DetectionLog.log_id).in_(matching_ids))
-        .order_by(col(DetectionLog.detected_at).desc())
+        .where(
+            col(DetectionLog.detection_status).in_(
+                [s.value for s in _ACCIDENT_STATUSES]
+            )
+        )
+        .order_by(col(DetectionLog.detected_at).desc()),
+        filters,
     )
 
     def _row(log: DetectionLog) -> list:
@@ -333,23 +332,24 @@ def _generate_audit(session: Session, job: ExportJob) -> tuple[bytes, int]:
 
     from sqlmodel import select as sql_select
 
-    id_stmt = _apply_audit_filters(
-        sql_select(AuditLog.audit_id),
-        action=action,
-        user_id=filters_dict.get("user_id") or None,
-        result=result_filter,
-        target_type=filters_dict.get("target_type"),
-        target_ref=filters_dict.get("target_ref"),
-        start_date=start_date,
-        end_date=end_date,
-        search=filters_dict.get("search"),
-    )
-    # Same recursion-trap discipline as the synchronous export: the id
-    # snapshot is taken here, before this job's own AUDIT_EXPORT row exists.
-    matching_ids = list(session.exec(id_stmt).all())
+    # Same recursion-trap discipline as the synchronous export, and same
+    # watermark (not a materialized id list, which breaks past SQLite's
+    # bind-variable limit at scale): captured here, before this job's own
+    # AUDIT_EXPORT row is created later in process_export_job.
+    watermark = session.exec(select(func.max(AuditLog.audit_id))).one() or 0
 
     stmt = apply_sort(
-        sql_select(AuditLog).where(col(AuditLog.audit_id).in_(matching_ids)),
+        _apply_audit_filters(
+            sql_select(AuditLog),
+            action=action,
+            user_id=filters_dict.get("user_id") or None,
+            result=result_filter,
+            target_type=filters_dict.get("target_type"),
+            target_ref=filters_dict.get("target_ref"),
+            start_date=start_date,
+            end_date=end_date,
+            search=filters_dict.get("search"),
+        ).where(col(AuditLog.audit_id) <= watermark),
         AuditLog,
         sort_by=sort_by,
         sort_order=sort_order,
