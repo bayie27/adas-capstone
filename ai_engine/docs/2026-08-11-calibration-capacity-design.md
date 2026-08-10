@@ -248,7 +248,16 @@ Against `2026-08-10-detection-core-port-design.md` §6:
 
 - **§6.1 step 3** said batch sizes "1 through 8 (the export's configured maximum)". Replaced by the unbounded climb of §4.1. The implementation plan had further degraded this to `[1, 2, 4, 8]`, which cannot express a capacity of 3, 5, 6 or 7.
 - **§6.1 step 2 (Build)** is reinstated, delegated to `benchmark()` plus `export()` rather than hand-written.
-- **§6.1 step 4 / §6.3 (Verify)** stays unimplemented, and the reasoning is now explicit: verification exists to catch numerical drift from repackaging. It is coupled to build, not independent of it. Reinstating build means drift becomes possible again, so §6.3 should be implemented alongside — **using the 17 clips, never `benchmark()`'s validation metric.** Until then `verification` remains `unverified`, and that value is weaker than §6.3 defines it, since no reduced sanity pass runs.
+- **§6.1 step 4 / §6.3 (Verify)** becomes a **separate command**, not part of calibration.
+
+  The reasoning is now explicit: verification exists to catch numerical drift from repackaging. It is coupled to build, not independent of it — which is why dropping it alongside build was coherent, and why reinstating build makes it necessary again. Exporting to TensorRT, particularly at half precision, shifts confidences slightly, so the exported engine is not numerically the model that scored 8/10 standard recall.
+
+  It is kept separate rather than folded into calibration because it needs the 17 clips and roughly 30 minutes, neither of which a machine being calibrated necessarily has. Calibration would otherwise be unable to finish on a clip-less machine, or would run for over an hour.
+
+  Mechanism: the existing Task 10 clip regression, run against the exported engine. **Using the 17 clips, never `benchmark()`'s validation metric.** Calibration writes `verification: "unverified"` and prints the command to promote it; the verify command rewrites that field to `matched` or `drifted`.
+
+  Per §6.3 a drifting build is **kept**, not rejected — the drift is recorded. Falling back to a slower build could push a machine below a usable frame rate, trading a small measured deviation for a large invisible one.
+
 - **§6.4's capability table** can now be replaced with measurements for any machine that has been calibrated. Its ⚠️ note predicted it was too pessimistic; it was — it expected the GTX 1650 to need an optimised build for local development, and the machine reaches 8 cameras at 15 FPS without one.
 
 ## 10. Risks and open questions
