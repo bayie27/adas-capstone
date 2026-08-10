@@ -47,6 +47,17 @@ def main() -> None:
     ap.add_argument("--device", default=None, help="Ultralytics device string")
     ap.add_argument("--events", required=True, help="write events JSON here")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument(
+        "--sample-fps",
+        type=float,
+        default=None,
+        help=(
+            "run inference on only every Nth frame, approximating this rate "
+            "(default: every frame, at native fps). t is ALWAYS computed as "
+            "idx / native_fps — decimation changes how often we look, never "
+            "what the clock says. See accumulate.py's conf-seconds accumulator."
+        ),
+    )
     args = ap.parse_args()
 
     detector = AccidentDetector(
@@ -59,31 +70,44 @@ def main() -> None:
     cap = cv2.VideoCapture(args.video)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
 
+    # Decimation stride: process every `stride`-th frame to approximate
+    # --sample-fps. round(), not int()/floor(), so 15 FPS against a 29.97 fps
+    # clip lands on stride=2 rather than drifting to stride=1 (no-op) via
+    # truncation. stride=1 (native rate) when --sample-fps is unset, <=0, or
+    # >= native fps.
+    stride = 1
+    if args.sample_fps and args.sample_fps > 0:
+        stride = max(1, round(fps / args.sample_fps))
+
     events = []
     idx = 0
     while True:
         ok, frame = cap.read()
         if not ok:
             break
-        detection = detector.predict_batch([frame])[0]
-        # t = frame_index / fps: matches tests/test_clip_parity.py's ported
-        # path exactly, which is what every recorded SPEC.md figure assumes.
-        for ev in accumulator.update(idx / fps, detection.boxes, detection.confs):
-            events.append(
-                {
-                    "t": round(ev.t, 2),
-                    "box": [round(v, 1) for v in ev.box],
-                    "score": ev.score,
-                    "peak_conf": ev.peak_conf,
-                    "age_s": ev.age_s,
-                }
-            )
-            if not args.quiet:
-                print(
-                    f"[DETECTION] t={ev.t:.2f}s score={ev.score} "
-                    f"peak_conf={ev.peak_conf}",
-                    flush=True,
+        if idx % stride == 0:
+            detection = detector.predict_batch([frame])[0]
+            # t = frame_index / native_fps: the real elapsed seconds of the
+            # clip, ALWAYS — not idx-among-sampled-frames / sample_fps. That
+            # rescaling is exactly the bug SPEC.md §3 documents: the
+            # accumulator integrates conf * dt in conf-seconds, so a rescaled
+            # clock silently produces wrong scores with no exception.
+            for ev in accumulator.update(idx / fps, detection.boxes, detection.confs):
+                events.append(
+                    {
+                        "t": round(ev.t, 2),
+                        "box": [round(v, 1) for v in ev.box],
+                        "score": ev.score,
+                        "peak_conf": ev.peak_conf,
+                        "age_s": ev.age_s,
+                    }
                 )
+                if not args.quiet:
+                    print(
+                        f"[DETECTION] t={ev.t:.2f}s score={ev.score} "
+                        f"peak_conf={ev.peak_conf}",
+                        flush=True,
+                    )
         idx += 1
     cap.release()
 
@@ -101,6 +125,7 @@ def main() -> None:
         "gray": True,
         "conf": args.conf,
         "imgsz": args.imgsz,
+        "sample_fps": args.sample_fps,
         "events": events,
     }
     events_dir = os.path.dirname(os.path.abspath(args.events))

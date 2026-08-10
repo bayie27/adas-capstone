@@ -86,6 +86,16 @@ def main() -> None:
         action="store_true",
         help="score existing event files without re-running detection",
     )
+    ap.add_argument(
+        "--sample-fps",
+        type=float,
+        default=None,
+        help=(
+            "forwarded to run_one_clip.py: run inference on only every Nth "
+            "frame to approximate this rate, while t stays idx / native_fps "
+            "(see run_one_clip.py). Default: every frame, at native fps."
+        ),
+    )
     args = ap.parse_args()
 
     if not os.path.exists(args.weights):
@@ -128,6 +138,8 @@ def main() -> None:
                 "--events",
                 out,
             ]
+            if args.sample_fps is not None:
+                cmd += ["--sample-fps", str(args.sample_fps)]
             r = subprocess.run(cmd)
             if r.returncode != 0:
                 print(f"[error] detection failed on {clip} (exit {r.returncode})")
