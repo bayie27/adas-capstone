@@ -2826,15 +2826,9 @@ from machine_profile import (
     save_profile,
 )
 
-# CONTIGUOUS, not powers of two. capacity_from_latency can only return a
-# batch size it was actually handed, so a [1, 2, 4, 8] grid cannot express a
-# capacity of 3, 5, 6 or 7 — it would understate a 7-camera machine as 4, and
-# would report the SAME capacity at both ends of the FPS band, making
-# capacity_at_min_fps a dead field and pipeline.target_fps's band-drop lever
-# look pointless. Pinned by test_a_sparse_grid_understates_capacity.
-# Benchmarking the missing points costs a few seconds once per machine and
-# keeps every number in the profile a measurement rather than an interpolation.
-BATCH_SIZES = [1, 2, 3, 4, 5, 6, 7, 8]
+# CONTIGUOUS, not powers of two, and running to 16 rather than 8. See the
+# note below the script — both bounds were set by measurement, not guessed.
+BATCH_SIZES = list(range(1, 17))
 WARMUP_ITERATIONS = 10
 TIMED_ITERATIONS = 30
 
@@ -2922,6 +2916,32 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 ```
+
+**What the shipped `calibrate.py` added beyond the sketch above.** The file is
+the source of truth; these are the deltas and why each exists.
+
+- **`BATCH_SIZES = list(range(1, 17))`.** Two separate failures, both found by
+  running it. A powers-of-two grid cannot express a capacity of 3, 5, 6 or 7.
+  A contiguous grid ending at 8 was then saturated by the GTX 1650 — batch 8
+  ran in 63.6 ms against the 66.7 ms tick — so capacity came back as 8 at both
+  ends of the band. Either way the two capacity fields come out equal and the
+  band-drop lever looks pointless. At 1–16 the machine measures **8 cameras at
+  15 FPS, 12 at 10 FPS**.
+- **`_grid_limited()`.** Any grid can be saturated by a fast enough machine, so
+  a capacity equal to the largest batch measured is reported as a floor rather
+  than returned as if it were the answer.
+- **OOM tolerance.** A failing batch stops the sweep and keeps the smaller
+  measurements. Crashing would leave a weaker machine with no profile at all,
+  which is the opposite of what a portability task is for.
+- **`--sample-frame`.** The blank default gives NMS almost nothing to do, which
+  in principle flatters the machine. Measured against `dekwatro.mp4` the gap is
+  inside run-to-run noise (batch 8: 63.6 ms blank vs 63.4 ms real) — the
+  forward pass dominates. The concern was real but does not survive
+  measurement; the flag exists so that can be re-checked on other hardware.
+- **`ai_engine/tests/test_calibrate.py`.** The plan specified no tests here.
+  `calibrate.py` writes the profile that governs capacity, and swapping
+  `capacity_at_max_fps` with `capacity_at_min_fps` is silent — it would invert
+  the band-drop decision with nothing to catch it.
 
 - [ ] **Step 2: Run it**
 
