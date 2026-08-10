@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 import pytest
 from app.core.config import Settings, settings
-from app.core.db import get_engine, get_session
+from app.core.db import get_engine, get_session, install_sqlite_pragmas
 from app.core.security import get_password_hash
 from app.main import create_app
 from app.models import (
@@ -38,6 +38,10 @@ def session_fixture():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    # F1 — must be registered before anything opens StaticPool's single
+    # connection, or the pragmas never apply. Matches production (app.core.db)
+    # so tests enforce the same foreign_keys=ON guarantees as the real app.
+    install_sqlite_pragmas(engine, settings.SQLITE_BUSY_TIMEOUT_MS)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
