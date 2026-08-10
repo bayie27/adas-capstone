@@ -10,15 +10,21 @@ Progress ledger: `.superpowers/sdd/progress.md` — **gitignored**, per-task sta
 
 ## Where things stand
 
-| Phase                         | Tasks | Status                     |
-| ----------------------------- | ----- | -------------------------- |
-| A — the port, no GPU          | 1–7   | ✅ complete, 122 tests     |
-| B — verification, GPU + clips | 8–11  | ✅ complete                |
-| C — portability               | 12–15 | 🔶 12 done, 13–15 to start |
+| Phase                         | Tasks | Status                        |
+| ----------------------------- | ----- | ----------------------------- |
+| A — the port, no GPU          | 1–7   | ✅ complete, 122 tests        |
+| B — verification, GPU + clips | 8–11  | ✅ complete                   |
+| C — portability               | 12–15 | 🔶 12–13 done, 14–15 to start |
 
-**Task 13 is next** (`calibrate.py`). Its brief is already generated at `.superpowers/sdd/task-13-brief.md`, as are 14–15.
+**Task 14 is next** (CPU-only install path). Its brief is at `.superpowers/sdd/task-14-brief.md`, as is 15's.
 
-⚠️ **Task 13's brief is stale on one point.** `BATCH_SIZES` must be contiguous `[1, 2, 3, 4, 5, 6, 7, 8]`, not the brief's `[1, 2, 4, 8]` — Task 12 found that the sparse grid makes `capacity_from_latency` unable to return 3, 5, 6 or 7, which understates capacity and flattens the FPS band's only lever. The plan doc is corrected and `test_a_sparse_grid_understates_capacity` pins it; the generated brief is not.
+Full suite is **799 passing**, 2 skipped, 19 deselected.
+
+### This machine's measured capacity (Task 13)
+
+**8 cameras at 15 FPS, 12 at 10 FPS** on the GTX 1650, benchmarked contiguously over batches 1–16. `machine_profile.json` is written and gitignored; re-run `uv run --no-sync python ai_engine/calibrate.py` on any other machine.
+
+The capacity grid failed twice before landing there, both times collapsing `capacity_at_max_fps` and `capacity_at_min_fps` to the same number and hiding the band-drop lever: a powers-of-two grid cannot express 3/5/6/7, and a contiguous grid ending at 8 was saturated outright (batch 8 = 63.6 ms against the 66.7 ms tick). Full reasoning in `ai_engine/eval/README.md`.
 
 ### The two results that matter
 
