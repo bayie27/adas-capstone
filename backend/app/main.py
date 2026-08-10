@@ -440,9 +440,13 @@ async def websocket_alerts(
     try:
         while True:
             # Received messages are unused — clients never mutate state over
-            # the socket (D-008). This just blocks until the client
-            # disconnects.
-            await websocket.receive_text()
+            # the socket (D-008). `receive()` (not `receive_text()`) so a
+            # binary frame is just another ignored message instead of
+            # raising into the generic `except Exception` below and logging
+            # a stack trace for something that isn't an error (F16).
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                break
     except WebSocketDisconnect:
         pass
     except Exception:
