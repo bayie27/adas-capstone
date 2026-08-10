@@ -85,3 +85,17 @@ explicitly when capacity lands on the largest batch measured; treat that
 number as a floor and extend `BATCH_SIZES`. If a batch runs out of memory
 partway up, the sweep stops and keeps the smaller measurements rather than
 leaving the machine with no profile.
+
+### What calibration does not do
+
+The design doc describes calibration as probe → **build** → benchmark →
+**verify** → write. The build and verify steps are not implemented:
+
+- The sweep times the plain PyTorch weights. It does **not** export
+  `epoch50.pt` to TensorRT or ONNX first, so every capacity figure is a
+  **floor** — a built engine would raise it. TensorRT sits outside the `ai`
+  extra on purpose (its PyPI stub hangs indefinitely during install), so that
+  path is not exercised.
+- `verification` is always written as `unverified`. Calibration measures
+  speed, not correctness; only `uv run pytest -m clips` can promote it, and
+  only a machine whose verification matched may be cited for reported numbers.

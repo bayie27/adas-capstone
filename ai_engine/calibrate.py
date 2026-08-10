@@ -1,9 +1,25 @@
-"""One-shot per-machine setup: probe, build, benchmark, verify, write.
+"""One-shot per-machine setup: probe, benchmark, write.
 
     uv run python ai_engine/calibrate.py
 
 Answers "how many cameras can this machine carry at the required frame
 rate?" — a number a person can act on — rather than picking a tick rate.
+
+NOT the five-step probe/build/benchmark/verify/write of design doc section 8.
+Two of those steps are deliberately absent, and the numbers here must be read
+with that in mind:
+
+- **No build.** The design doc calls for exporting epoch50.pt to the fastest
+  format the machine supports (TensorRT where available). This benchmarks the
+  plain PyTorch weights, so the capacity reported is a FLOOR — a TensorRT or
+  ONNX build would raise it. TensorRT is deliberately outside the `ai` extra
+  because its PyPI stub hangs indefinitely on install, so that path cannot be
+  exercised here.
+- **No verify.** `verification` is always written as unverified. Only the
+  clip regression can promote it, and that needs clips this machine may not
+  have.
+
+`model_path` therefore always records the .pt, never a built artifact.
 """
 
 import argparse
