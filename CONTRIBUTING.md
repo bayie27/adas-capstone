@@ -105,7 +105,13 @@ DATABASE_URL="sqlite:///var/tmp/migration_check.db" uv run alembic upgrade head
 DATABASE_URL="sqlite:///var/tmp/migration_check.db" uv run alembic downgrade base
 ```
 
-(`var/` is gitignored — safe scratch space.)
+(`var/` is gitignored — safe scratch space.) Then confirm the migrated schema is identical to what `SQLModel.metadata` describes — the exact check the CI `migration` job runs on every PR, against a fresh checkout:
+
+```bash
+uv run python backend/scripts/verify_migration_schema.py
+```
+
+It builds two disposable databases (one via your migration, one via `create_all()`) and diffs every table/index/trigger object-by-object, tolerating only constraint-ordering noise. A missing index, a forgotten trigger, or a hand-edit that drifted from the model shows up here as a real failure.
 
 **Startup revision check.** The running app refuses to start in production against a database whose Alembic revision doesn't match the code's head (older, newer, or missing entirely) — see `app/core/migrations.py::check_schema_revision`. In development it only warns, except for a genuinely fresh/uninitialized database, which it provisions automatically. `ordinary application startup never silently changes the production schema` (D-005) — schema changes always come from an explicit `alembic upgrade head`, run by a human or a deploy script, never implicitly by the app booting.
 
@@ -115,6 +121,27 @@ DATABASE_URL="sqlite:///var/tmp/migration_check.db" uv run alembic downgrade bas
 2. Run `alembic upgrade head`.
 3. After: run `PRAGMA integrity_check` and confirm the recorded Alembic revision matches head. The backup manifest's `schema_revision` field records this automatically for every new backup going forward.
 4. If something goes wrong once new-version data has been written, **do not attempt a destructive schema downgrade.** Restore the verified pre-migration backup instead — `app.maintenance.restore` already rejects restoring a backup whose recorded schema revision isn't one this codebase's migration chain recognizes, so a stale/incompatible restore fails loudly instead of silently running the wrong schema.
+
+## Performance evidence suite
+
+`backend/tests/perf/` measures NFR-04 (alert delivery), NFR-06 (export speed), NFR-08 (100,000-row query performance), and D-008 (slow-client isolation) against a real file-backed 100,000-row database — see `be_plan/EVIDENCE.md` for the current recorded numbers and machine spec. It's marked `@pytest.mark.slow` and excluded from the default `pytest` run (`pyproject.toml`'s `addopts = "-q -m \"not slow\""`), since seeding alone takes ~30s.
+
+```bash
+uv run pytest -m slow backend/tests/perf/ -s
+```
+
+`-s` matters — the tests print their measured numbers (`[PERF] ...` lines), which is the whole point of the suite. In CI, this runs as the `perf` job, `workflow_dispatch`-only (too slow for every PR) — trigger it manually from the Actions tab, results are uploaded as a `perf-results` artifact.
+
+## CI jobs
+
+| Job         | Runs on                                   | What it does                                                                                                           |
+| ----------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `backend`   | every PR/push                             | format check, lint, `pytest` (with `--cov` reporting — no coverage gate, per the testing policy)                       |
+| `migration` | every PR/push                             | `alembic upgrade head` against a fresh empty DB, asserts it matches `SQLModel.metadata`, then `alembic downgrade base` |
+| `frontend`  | every PR/push                             | ESLint, typecheck, Vitest, production build                                                                            |
+| `format`    | every PR/push                             | repo-wide Prettier check                                                                                               |
+| `e2e`       | every PR/push, after `backend`+`frontend` | Playwright against both real servers                                                                                   |
+| `perf`      | manual (`workflow_dispatch`) only         | seeds the 100,000-row `perf` profile, runs `backend/tests/perf/`, uploads timings as an artifact                       |
 
 ## Troubleshooting
 

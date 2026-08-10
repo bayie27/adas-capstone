@@ -5,6 +5,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # perf job only — too slow for every PR/push. Trigger manually from the
+  # Actions tab (10_PKG_migration_evidence.md Step 7).
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,7 +25,54 @@ jobs:
       - run: uv sync
       - run: uv run ruff format --check .
       - run: uv run ruff check .
-      - run: cp .env.example .env && uv run pytest
+      - run: cp .env.example .env && uv run pytest --cov=backend/app --cov-report=term-missing
+
+  # 10_PKG_migration_evidence.md Step 7 — catches a hand-edited migration
+  # drifting from the models. Fresh checkout, empty database, real
+  # `alembic upgrade head`, then diff the result against
+  # SQLModel.metadata object-by-object (backend/scripts/verify_migration_schema.py).
+  migration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12.13"
+      - run: uv sync
+      - run: cp .env.example .env
+      - name: Apply the initial migration to a fresh empty database
+        run: uv run alembic upgrade head
+      - name: Assert the migrated schema matches SQLModel.metadata exactly
+        run: uv run python backend/scripts/verify_migration_schema.py
+      - name: Downgrade to base (proves downgrade() is complete and correct)
+        run: uv run alembic downgrade base
+
+  # workflow_dispatch only — seeds the real 100,000-row NFR-08 dataset and
+  # times query/export/alert-delivery performance against it. Too slow for
+  # every PR. Uploads the numbers as an artifact rather than gating on them
+  # (be_plan/EVIDENCE.md already documents one known-slow case — 10k-row
+  # PDF export — as a recorded finding, not a pass/fail).
+  perf:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12.13"
+      - run: uv sync
+      - run: cp .env.example .env
+      - run: uv run python backend/scripts/seed_dev_data.py --profile perf
+      - name: Run the perf suite and capture timings
+        run: uv run pytest -m slow backend/tests/perf/ -s -v | tee perf-results.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-results
+          path: perf-results.txt
+          retention-days: 30
 
   frontend:
     runs-on: ubuntu-latest
