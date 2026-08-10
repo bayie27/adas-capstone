@@ -270,3 +270,6 @@ Thumbs.db
 test-results/
 playwright-report/
 .playwright/
+
+# TLS certs (LAN demo profile) — never commit a private key
+certs/
