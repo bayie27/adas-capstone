@@ -59,7 +59,9 @@ The repo's `.venv` is a **junction** to `D:\adas-venv`, so plain `uv run` resolv
 
 `tensorrt` on PyPI is a wheel-stub that downloads several GB from NVIDIA's index inside a PEP 517 build step **with no timeout**. It hung indefinitely twice. Because it sat in the `ai` extra it took every plain `uv run` down with it, not just the install.
 
-It now lives in an opt-in `ai-trt` extra. **The GPU works without it** — CUDA comes from torch. TensorRT is only a speed optimisation, and `calibrate.py` is designed to probe for it and fall back.
+It now lives in an opt-in `ai-trt` extra. **The GPU works without it** — CUDA comes from torch. TensorRT is only a speed optimisation.
+
+⚠️ `calibrate.py` does **not** probe for it or build an engine — see "Still to do" below. It benchmarks the plain `.pt` weights, so the 8/12-camera capacity is a floor.
 
 ```bash
 uv sync --extra ai              # what you want
@@ -116,6 +118,7 @@ ADAS_EVAL_EVENTS_DIR=<dir> uv run --no-sync pytest ai_engine/tests/test_clip_reg
 
 ## Still to do beyond the plan
 
+- **Decide on calibration's missing build + verify steps.** Design doc §8 specifies probe → **build** → benchmark → **verify** → write; the plan's Task 13 dropped build and verify, and Task 13 shipped that way. Consequences: every capacity figure is a floor (no TensorRT/ONNX export), `model_path` always records the `.pt`, and `verification` is always `unverified`. Both omissions are defensible — the TensorRT stub hangs on install, and only the clip regression can promote verification — but the design doc and the implementation currently disagree, so one of them should move.
 - Push the branch and open a PR — nothing is pushed yet.
 - `pnpm check` before the PR (the pre-push gate).
 - Apply `paper-edits-required.md` to the paper. Priority 1 is the mAP acceptance criterion.
