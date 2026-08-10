@@ -57,6 +57,9 @@ def _build_test_settings(tmp_path) -> Settings:
         DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
         DATABASE_URL=f"sqlite:///{tmp_path / 'lifespan-only.db'}",
         SCHEDULER_ENABLED=False,
+        # F7 — tests drive export jobs directly via process_export_job(),
+        # not through the worker pool; a live pool would race those calls.
+        EXPORT_JOB_WORKERS=0,
     )
 
 
