@@ -2,10 +2,16 @@
 Pure logic — no cv2, no model — so this runs in CI on every push.
 
 Our copy is formatted and linted to this repo's standards like any other
-module. What must not drift is its BEHAVIOUR, which is what SPEC.md §8 step 3
-actually requires ("assert the emitted events are identical") and what every
-number in SPEC.md §4 depends on. The differential test below asserts that
-directly against the frozen reference, rather than comparing source bytes.
+module. What must not drift is its BEHAVIOUR — that is what every number in
+SPEC.md §4 depends on, not the source text. The differential test below
+asserts that directly against the frozen reference instead of comparing bytes.
+
+Scope: this is an ACCUMULATOR-LEVEL check against
+`adas_transfer/code/accumulate.py`, using generated sequences. It is not the
+port-parity gate. That gate is Task 9, which runs the whole pipeline and the
+research repo's own `detect/run.py` over real clips and compares the emitted
+events (SPEC.md §8 step 3). This test catches drift in this module early; it
+does not substitute for that.
 
 The units test near the end is the other important one: SPEC.md §3 measures
 that passing `t` in the wrong unit fails SILENTLY — no exception, no warning,
@@ -88,13 +94,12 @@ def _random_sequence(seed, *, steps=400, fps=30.0):
 
 
 def test_port_emits_identical_events_to_the_frozen_reference():
-    """The real guarantee. SPEC.md §8 step 3 defines the port's correctness as
-    emitting identical events, not as identical source text — so this compares
-    outputs, which survives formatting and lint fixes that cannot change
-    behaviour.
+    """Compares outputs rather than source text, so it survives formatting and
+    lint fixes that cannot change behaviour while still catching anything that
+    can: a reordered branch, a changed default, an altered comparison.
 
-    A `strict=True` on either zip, a reordered branch, a changed default: all
-    would surface here. Formatting would not, correctly.
+    Not the port-parity gate — see the module docstring. This is the early,
+    cheap, CI-runnable check on one module.
     """
     reference = _load_reference()
     total_events = 0

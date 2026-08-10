@@ -86,8 +86,10 @@ extend-exclude = [
     # Frozen artifact staged from the research repo `adas_detection`. It is the
     # reference the ported detector is diffed against to prove the port changed
     # no behaviour (SPEC.md §8 step 3), so it must stay a faithful copy.
-    # `accumulate.py` in particular is required to be byte-identical — a `UP` or
-    # `SIM` autofix here would silently invalidate every measurement in SPEC.md §4.
+    # This covers the STAGED COPY under adas_transfer/ only. The port's own
+    # working module, ai_engine/accumulate.py, is formatted and linted normally;
+    # its equivalence to this reference is asserted behaviourally by
+    # tests/test_accumulate.py, not by comparing source text.
     "ai_engine/adas_transfer",
 ]
 # lint-staged passes explicit file paths, and Ruff ignores `extend-exclude` for
