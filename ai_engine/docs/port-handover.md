@@ -103,6 +103,7 @@ ADAS_EVAL_EVENTS_DIR=<dir> uv run --no-sync pytest ai_engine/tests/test_clip_reg
 ## Invariants that are easy to break
 
 - **`segment_id` must be consumed as an equality check, never a delta or count.** `+= 1` is not atomic; equality still detects the change and fires exactly one accumulator reset. Comparing deltas turns a lost increment into a missed reset.
+- **There are FOUR accumulator reset seams, not three.** Reconnect, resume and restart all bump `segment_id`; the fourth is a long frame gap (`MAX_FRAME_GAP_SECONDS`), which no `segment_id` bump accompanies because the stream never dropped. Removing it re-opens a single frame firing an alert with no corroboration.
 - **`accumulate.py` behaviour must not drift.** It is formatted and linted normally — byte-identity was deliberately abandoned as the wrong guarantee — but `test_accumulate.py` asserts it emits identical events to the frozen reference. Do not "tighten" its two `zip(..., strict=False)` calls: the reference truncates, and `strict=True` would raise instead.
 - **`DETECTOR_CONF = 0.15` is a closed lever.** False positives score _higher_ than true detections (0.869/0.844/0.649 vs 0.536/0.459/0.741), so raising it deletes crashes first.
 - **`adas_transfer/` is frozen.** Excluded from Ruff and Prettier. It is the reference the parity gate diffs against.
@@ -119,7 +120,7 @@ ADAS_EVAL_EVENTS_DIR=<dir> uv run --no-sync pytest ai_engine/tests/test_clip_reg
 - ~~`probe_raw.py` still has a B905 lint issue~~ — fixed in Task 14; it was blocking `pnpm check`.
 - `main.py`'s `_resolve_capacity()` wraps `load_profile` in a bare `except Exception`, so a **malformed** profile is reported to the operator as "No machine profile found". The behaviour is safe (conservative fallback to one camera) but the message is a false statement — `load_profile` raises `ValueError` specifically so a corrupt file can be told apart from a missing one, and that distinction is then discarded. The guard originally existed to tolerate Task 12 not existing yet.
 
-## 🔴 Found by running the engine (2026-08-11): an unclamped `dt` can fire an alert from a single frame
+## ✅ Fixed 2026-08-11: an unclamped `dt` could fire an alert from a single frame
 
 The engine was run end to end against a real clip and **detected correctly** — annotated snapshot, webhook, self-blindfold, all working. But the event fired with **`0.0s of evidence`**, where the parity gate for the same clip records `age_s = 2.31`.
 
@@ -135,7 +136,13 @@ So if the interval between two consecutive frames for a camera exceeds roughly `
 
 The `segment_id` reset does **not** cover it either: that fires on reconnect. A stream that merely _stalls_ — congestion, a long tick, GC, thermal throttle — keeps its segment and accumulates the gap.
 
-In this run the long gaps came from a file source hitting EOF, which exaggerates it. **Whether it bites in normal RTSP operation is unproven, but the code path is real and needs a deliberate decision.** Likely fix: clamp in `pipeline.py` — when the gap since a camera's last processed frame exceeds some multiple of the tick period, reset that accumulator instead of passing the gap through. That reuses the existing reset seam and keeps `accumulate.py` unedited.
+In this run the long gaps came from a file source hitting EOF, which exaggerates it. It is most reachable on **CPU-only machines** — now a supported install path — where inference measured ~900 ms+ per batch.
+
+**Fixed** by a fourth reset seam in `AccumulatorRegistry`: when the gap since a camera's last processed frame exceeds `config.MAX_FRAME_GAP_SECONDS` (0.5 s), that camera gets a fresh accumulator. `accumulate.py` is untouched, so the parity gate still holds — verified.
+
+0.5 s sits between the two bounds that matter: 5× the loosest normal interval (100 ms at 10 FPS), and 2.3× below the smallest dangerous gap (1.15 s at conf 0.869). **Note this implies a hard floor of 2 FPS** — below that every frame would reset. The band's floor is 10 FPS, so there is 5× margin, but a future cadence experiment below 2 FPS would need this raised.
+
+Reset rather than a clamped `dt`: a gap means the period was never observed, so both the evidence _and_ the decay across it are unknown. Discarding is the honest response.
 
 ## Still to do beyond the plan
 
