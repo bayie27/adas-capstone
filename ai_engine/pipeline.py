@@ -42,16 +42,20 @@ class AccumulatorRegistry:
     """
 
     def __init__(self):
-        self._entries: dict[int, tuple[object, Accumulator, int]] = {}
+        self._entries: dict[int, tuple[object, Accumulator, int, float | None]] = {}
 
-    def resolve(self, camera_id: int, stream, segment_id: int) -> Accumulator:
+    def resolve(
+        self, camera_id: int, stream, segment_id: int, t: float | None = None
+    ) -> Accumulator:
         entry = self._entries.get(camera_id)
         if entry is not None:
-            known_stream, accumulator, known_segment = entry
+            known_stream, accumulator, known_segment, last_t = entry
             # The identity check catches a REAPPLY_CONFIG restart, whose new
             # CameraStream starts at segment 0 and would otherwise look
             # unchanged.
-            if known_stream is stream and known_segment == segment_id:
+            unchanged = known_stream is stream and known_segment == segment_id
+            if unchanged and not self._gapped(last_t, t):
+                self._entries[camera_id] = (stream, accumulator, segment_id, t)
                 return accumulator
 
         accumulator = Accumulator(
@@ -60,8 +64,25 @@ class AccumulatorRegistry:
             decay=config.ACC_DECAY,
             ema=config.ACC_EMA,
         )
-        self._entries[camera_id] = (stream, accumulator, segment_id)
+        self._entries[camera_id] = (stream, accumulator, segment_id, t)
         return accumulator
+
+    @staticmethod
+    def _gapped(last_t: float | None, t: float | None) -> bool:
+        """True when this camera went unobserved long enough that its
+        accumulated evidence can no longer be trusted.
+
+        A fourth reset seam alongside reconnect, resume and restart, and
+        needed because those three all involve the stream *dropping*. A
+        stream that merely stalls keeps its segment_id, so without this the
+        gap is silently credited: accumulate.py adds `conf * dt` to a region
+        the moment it is created and tests it for firing on that same frame,
+        which fires a single frame with no corroboration once the gap passes
+        `ACC_THRESHOLD / conf`. See config.MAX_FRAME_GAP_SECONDS.
+        """
+        if last_t is None or t is None:
+            return False
+        return (t - last_t) > config.MAX_FRAME_GAP_SECONDS
 
     def prune(self, live_camera_ids) -> None:
         live = set(live_camera_ids)
@@ -167,7 +188,7 @@ class InferencePipeline:
 
         for (camera, read), detection in inferred:
             accumulator = self.registry.resolve(
-                camera.camera_id, camera, read.segment_id
+                camera.camera_id, camera, read.segment_id, read.t
             )
             events = accumulator.update(read.t, detection.boxes, detection.confs)
             if not events:

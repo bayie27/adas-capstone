@@ -76,3 +76,27 @@ FALLBACK_CAMERA_CAPACITY = 1
 # A stream can stay connected while delivering frames far too slowly. Past this
 # age a frame is skipped rather than treated as current.
 MAX_FRAME_AGE_SECONDS = 2.0
+
+# Longest gap between two CONSECUTIVE processed frames on one camera before its
+# accumulator is reset. This is a different quantity from MAX_FRAME_AGE_SECONDS
+# above, which measures how old a single frame is: a frame decoded a millisecond
+# ago after a five-second stall is perfectly fresh and still carries dt = 5s.
+#
+# It is a safety bound, not a tuning knob. accumulate.py creates a new region
+# with `score = conf * dt` and tests it for firing on that same frame, so a gap
+# of `ACC_THRESHOLD / conf` makes a single frame fire with no corroboration at
+# all — measured live on 2026-08-11 as "peak 0.54, 0.0s of evidence". The gap
+# needed SHRINKS as confidence rises, and this model's false positives score
+# higher than its genuine detections, so an unguarded gap preferentially
+# manufactures false alarms, and does it hardest when the machine is struggling.
+#
+# 0.5s sits between the two bounds that matter:
+#   lower — ordinary cadence is 66.7ms at 15 FPS and 100ms at 10 FPS, so this is
+#           5x the loosest normal interval and will not trip on jitter
+#   upper — the worst measured false positive (0.869) fires on a 1.15s gap, so
+#           this leaves 2.3x margin below the smallest dangerous gap
+#
+# Reset rather than clamped dt: a gap means the period was never observed, so
+# both the evidence and the decay across it are unknown. Discarding is the
+# honest response, and it reuses the same seam segment_id already uses.
+MAX_FRAME_GAP_SECONDS = 0.5

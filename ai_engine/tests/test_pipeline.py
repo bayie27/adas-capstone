@@ -125,6 +125,90 @@ def test_a_replaced_stream_object_resets_even_if_the_counter_collides():
     assert registry.resolve(1, new, 0).regions == []
 
 
+def test_a_long_gap_between_frames_resets_that_camera():
+    """A stalled stream must not be credited with evidence nobody observed.
+
+    accumulate.py creates a NEW region with `score = conf * dt` and checks it
+    for firing on that same frame, so a frame arriving after a long stall is
+    born above threshold and fires with age_s=0.0 — zero corroboration. Found
+    live on 2026-08-11: "[ALERT] Channel 1: accident detected (peak 0.54, 0.0s
+    of evidence)".
+
+    Neither existing guard covers it. MAX_FRAME_AGE_SECONDS checks a frame's
+    freshness, and a frame decoded just now after a five-second stall is fresh
+    while still carrying dt=5s. segment_id covers reconnect and resume; a
+    stream that stalls WITHOUT dropping keeps its segment.
+
+    The gap is worst where it is most dangerous: the size needed shrinks as
+    confidence rises (1.15s at conf 0.869), and this project's false positives
+    score HIGHER than genuine crashes. Left unguarded it preferentially fires
+    on false alarms, and hardest when the machine is already struggling.
+
+    Fixed here rather than in accumulate.py: the frozen reference behaves
+    identically, so changing it would break the parity gate.
+    """
+    registry = AccumulatorRegistry()
+    cam = FakeCamera(1)
+    first = registry.resolve(1, cam, 0, t=0.0)
+    first.update(0.0, [BOX], [0.6])
+    first.update(0.1, [BOX], [0.6])
+    assert first.regions
+
+    gapped = registry.resolve(1, cam, 0, t=0.1 + config.MAX_FRAME_GAP_SECONDS + 0.01)
+
+    assert gapped.regions == []
+    assert gapped._prev_t is None
+
+
+def test_a_normal_frame_interval_keeps_accumulating():
+    """The clamp must not fire on ordinary cadence, or it would throw away
+    real evidence every tick and nothing could ever accumulate."""
+    registry = AccumulatorRegistry()
+    cam = FakeCamera(1)
+    first = registry.resolve(1, cam, 0, t=0.0)
+    first.update(0.0, [BOX], [0.6])
+    first.update(0.1, [BOX], [0.6])
+
+    same = registry.resolve(1, cam, 0, t=0.2)
+
+    assert same is first
+    assert same.regions
+
+
+def test_a_gap_on_one_camera_does_not_reset_another():
+    """Cameras stall independently; a stalled feed must not discard a
+    healthy camera's accumulated evidence."""
+    registry = AccumulatorRegistry()
+    cam_a, cam_b = FakeCamera(1), FakeCamera(2)
+    registry.resolve(1, cam_a, 0, t=0.0)
+    acc_b = registry.resolve(2, cam_b, 0, t=0.0)
+    acc_b.update(0.0, [BOX], [0.6])
+    acc_b.update(0.1, [BOX], [0.6])
+
+    registry.resolve(1, cam_a, 0, t=config.MAX_FRAME_GAP_SECONDS + 1.0)
+
+    assert registry.resolve(2, cam_b, 0, t=0.2) is acc_b
+    assert acc_b.regions
+
+
+def test_the_gap_clamp_is_smaller_than_the_smallest_dangerous_gap():
+    """The clamp only works if it trips before a single frame can fire.
+
+    A new region is born with conf * dt, so the gap that fires instantly is
+    threshold / conf. The worst measured false positive scores 0.869, needing
+    only 1.0/0.869 = 1.15s. The clamp must sit below that, and above ordinary
+    cadence (66.7ms at 15 FPS, 100ms at 10 FPS) or it would reset constantly.
+    """
+    worst_false_positive_conf = 0.869
+    smallest_dangerous_gap = config.ACC_THRESHOLD / worst_false_positive_conf
+    # Bound to a local: Ruff's SIM300 treats any UPPERCASE attribute as a
+    # literal and flags the comparison whichever side it is written on.
+    clamp = config.MAX_FRAME_GAP_SECONDS
+
+    assert clamp < smallest_dangerous_gap
+    assert clamp > 1.0 / config.FPS_BAND_MIN
+
+
 def test_pruning_drops_accumulators_for_stopped_cameras():
     """Without this a STOP leaks an accumulator for every camera ever run."""
     registry = AccumulatorRegistry()
@@ -316,6 +400,33 @@ def test_over_capacity_marks_the_run_degraded_without_dropping_cameras():
 
     assert pipeline.degraded is True
     assert detector.batch_sizes == [6]
+
+
+def test_a_stalled_camera_does_not_alert_from_a_single_frame():
+    """The live failure, end to end.
+
+    On 2026-08-11 a real run emitted "[ALERT] Channel 1: accident detected
+    (peak 0.54, 0.0s of evidence)" — an alert from one frame, where the same
+    clip's parity run records age_s=2.31. Two frames separated by more than the
+    gap bound must produce no event at all, because nothing was observed in
+    between to corroborate anything.
+    """
+    events = []
+    cam = FakeCamera(1)
+    pipeline = InferencePipeline(
+        {1: cam}, FakeDetector(conf=0.9), _collect(events), capacity=8
+    )
+
+    now = time.monotonic()
+    cam.reads.append(FakeFrameRead(now, 0))
+    pipeline.tick_once()
+    # Long enough that conf*dt clears the threshold on its own: at conf 0.9 a
+    # 1.12s gap alone scores 1.008 against a threshold of 1.0.
+    cam.reads.append(FakeFrameRead(now + config.MAX_FRAME_GAP_SECONDS + 1.0, 0))
+    pipeline.tick_once()
+
+    assert events == []
+    assert cam.paused_calls == 0
 
 
 def test_accumulators_are_pruned_when_a_camera_is_stopped():
