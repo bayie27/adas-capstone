@@ -94,6 +94,14 @@ class Settings(BaseSettings):
     EXPORT_PDF_MAX_ROWS: int = 10000
     EXPORT_CSV_MAX_ROWS: int = 50000
     EXPORT_ARTIFACT_TTL_HOURS: int = 72
+    # D-010 — "one bounded local worker on the demo profile; concurrency is
+    # configurable for future hardware." No Celery/Redis/broker.
+    EXPORT_JOB_WORKERS: int = 1
+    # IANA zone name for the "configured local-display timestamp" every PDF
+    # report shows alongside its UTC generation time (01_CONTRACTS.md §1.1,
+    # D-010). The Philippines has no DST, so this is a fixed offset in
+    # practice, but the setting stays named/typed for portability.
+    REPORT_LOCAL_TIMEZONE: str = "Asia/Manila"
 
     # WebSocket (D-008)
     WS_MAX_CONNECTIONS_TOTAL: int = 50
