@@ -23,11 +23,28 @@ dependencies = [
 [project.optional-dependencies]
 ai = [
     "opencv-python>=4.13.0.92",
-    "tensorrt>=10.16.1.11",
     "torch>=2.11.0",
     "torchvision>=0.26.0",
     "ultralytics>=8.4.41",
 ]
+
+# TensorRT is a SPEED optimization, not a requirement, and it is deliberately
+# NOT part of the `ai` extra. The GPU is used either way — that comes from
+# torch's CUDA build. TensorRT adds a faster inference backend on top, and
+# ai_engine/calibrate.py probes for it and falls back to plain PyTorch when it
+# is absent, exactly as SPEC.md describes the `.engine` -> `.pt` fallback.
+#
+# It is separated because `tensorrt` on PyPI is a wheel-stub that downloads
+# several GB from NVIDIA's own index inside a PEP 517 build step, with no
+# timeout. That build hung indefinitely twice on a Windows dev machine
+# (2026-08-10), and because it sits in the `ai` extra it took every plain
+# `uv run` down with it. Opt in explicitly instead:
+#
+#     uv sync --extra ai --extra ai-trt
+#
+# If it hangs, Ctrl+C and carry on with `--extra ai`; nothing in the engine
+# requires it.
+ai-trt = ["tensorrt>=10.16.1.11"]
 
 [dependency-groups]
 dev = [

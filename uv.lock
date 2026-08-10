@@ -29,10 +29,12 @@ dependencies = [
 [package.optional-dependencies]
 ai = [
     { name = "opencv-python" },
-    { name = "tensorrt" },
     { name = "torch" },
     { name = "torchvision" },
     { name = "ultralytics" },
+]
+ai-trt = [
+    { name = "tensorrt" },
 ]
 
 [package.dev-dependencies]
@@ -59,12 +61,12 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.26" },
     { name = "requests", specifier = ">=2.33.1" },
     { name = "sqlmodel", specifier = ">=0.0.38" },
-    { name = "tensorrt", marker = "extra == 'ai'", specifier = ">=10.16.1.11" },
+    { name = "tensorrt", marker = "extra == 'ai-trt'", specifier = ">=10.16.1.11" },
     { name = "torch", marker = "extra == 'ai'", specifier = ">=2.11.0", index = "https://download.pytorch.org/whl/cu130" },
     { name = "torchvision", marker = "extra == 'ai'", specifier = ">=0.26.0", index = "https://download.pytorch.org/whl/cu130" },
     { name = "ultralytics", marker = "extra == 'ai'", specifier = ">=8.4.41" },
 ]
-provides-extras = ["ai"]
+provides-extras = ["ai", "ai-trt"]
 
 [package.metadata.requires-dev]
 dev = [
