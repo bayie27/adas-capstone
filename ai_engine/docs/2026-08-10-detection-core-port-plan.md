@@ -2563,8 +2563,6 @@ Create `ai_engine/tests/test_machine_profile.py`:
 ```python
 """machine_profile.py is pure — no cv2, no model — so this runs in CI."""
 
-import json
-
 import pytest
 from machine_profile import (
     MachineProfile,
@@ -2632,9 +2630,45 @@ def test_a_slower_machine_has_lower_capacity_at_the_same_rate():
 
 def test_the_same_machine_carries_more_cameras_at_the_lower_rate():
     """Stretching the tick from 66.7ms to 100ms is the only lever available
-    when a machine is over capacity."""
-    latency = {1: 30.0, 2: 55.0, 4: 110.0, 8: 220.0}
-    assert capacity_from_latency(latency, 10.0) > capacity_from_latency(latency, 15.0)
+    when a machine is over capacity.
+
+    The grid here is CONTIGUOUS, which is load-bearing — see the test below.
+    At 15 FPS batch 3 (82ms) overruns the 66.7ms tick, so capacity is 2; at
+    10 FPS it fits inside 100ms and capacity is 3."""
+    latency = {1: 30.0, 2: 55.0, 3: 82.0, 4: 110.0}
+    assert capacity_from_latency(latency, 15.0) == 2
+    assert capacity_from_latency(latency, 10.0) == 3
+
+
+def test_a_sparse_grid_understates_capacity():
+    """calibrate.py must benchmark EVERY batch size, not powers of two.
+
+    capacity_from_latency can only ever return a batch size it was actually
+    given, so a [1, 2, 4, 8] grid cannot express a capacity of 3, 5, 6 or 7.
+    Both machines below are identical; the sparse one reports 2 cameras
+    where the contiguous one reports 3, and the sparse one also reports the
+    same capacity at both ends of the band — which would make
+    `capacity_at_min_fps` a dead field and the 10-15 FPS band-drop lever in
+    pipeline.target_fps look pointless.
+
+    Interpolating between measured points was the alternative; benchmarking
+    the missing points is cheaper (a few seconds, once per machine) and
+    keeps every number in the profile a measurement."""
+    sparse = {1: 30.0, 2: 55.0, 4: 110.0}
+    contiguous = {1: 30.0, 2: 55.0, 3: 82.0, 4: 110.0}
+
+    assert capacity_from_latency(sparse, 10.0) == 2
+    assert capacity_from_latency(contiguous, 10.0) == 3
+    # The sparse grid hides the band's only lever entirely.
+    assert capacity_from_latency(sparse, 10.0) == capacity_from_latency(sparse, 15.0)
+
+
+def test_a_batch_costing_exactly_one_tick_counts_as_fitting():
+    """Pins the boundary as inclusive. At 10 FPS the tick is exactly 100ms,
+    so a 100ms batch of 2 fits and capacity is 2, not 1. Zero headroom is
+    accepted here because capacity is a planning estimate, not a deadline —
+    pipeline.tick_once already tolerates a tick running long."""
+    assert capacity_from_latency({1: 50.0, 2: 100.0}, 10.0) == 2
 
 
 def test_a_machine_that_cannot_carry_one_camera_reports_zero():
@@ -2792,7 +2826,15 @@ from machine_profile import (
     save_profile,
 )
 
-BATCH_SIZES = [1, 2, 4, 8]
+# CONTIGUOUS, not powers of two. capacity_from_latency can only return a
+# batch size it was actually handed, so a [1, 2, 4, 8] grid cannot express a
+# capacity of 3, 5, 6 or 7 — it would understate a 7-camera machine as 4, and
+# would report the SAME capacity at both ends of the FPS band, making
+# capacity_at_min_fps a dead field and pipeline.target_fps's band-drop lever
+# look pointless. Pinned by test_a_sparse_grid_understates_capacity.
+# Benchmarking the missing points costs a few seconds once per machine and
+# keeps every number in the profile a measurement rather than an interpolation.
+BATCH_SIZES = [1, 2, 3, 4, 5, 6, 7, 8]
 WARMUP_ITERATIONS = 10
 TIMED_ITERATIONS = 30
 
