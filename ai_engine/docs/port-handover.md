@@ -2,7 +2,7 @@
 
 **Written 2026-08-11**, updated as work progressed. **All 15 tasks are now complete.**
 
-Branch: `feat/ai-p11-detection-core-port` (41 commits, **not pushed**)
+Branch: `feat/ai-p11-detection-core-port` (51 commits, **not pushed**)
 Plan: `2026-08-10-detection-core-port-plan.md` — 15 tasks
 Progress ledger: `.superpowers/sdd/progress.md` — **gitignored**, per-task status and findings
 
@@ -10,15 +10,15 @@ Progress ledger: `.superpowers/sdd/progress.md` — **gitignored**, per-task sta
 
 ## Where things stand
 
-| Phase                         | Tasks | Status                 |
-| ----------------------------- | ----- | ---------------------- |
-| A — the port, no GPU          | 1–7   | ✅ complete, 122 tests |
-| B — verification, GPU + clips | 8–11  | ✅ complete            |
-| C — portability               | 12–15 | ✅ complete            |
+| Phase                         | Tasks | Status      |
+| ----------------------------- | ----- | ----------- |
+| A — the port, no GPU          | 1–7   | ✅ complete |
+| B — verification, GPU + clips | 8–11  | ✅ complete |
+| C — portability               | 12–15 | ✅ complete |
 
 **The plan is finished.** What remains is in "Still to do beyond the plan" below — the branch has never been pushed.
 
-Full suite is **799 passing**, 2 skipped, 19 deselected, plus 13 frontend tests.
+Full suite is **812 passing**, 2 skipped, 19 deselected, plus 13 frontend tests.
 
 ✅ **`pnpm check` now passes end to end** — prettier, Ruff format + lint, ESLint, typecheck, 799 pytest, 13 frontend tests. It had been failing since the harness port (`4158991`) on two pre-existing causes: `eval/probe_raw.py` was committed as-copied and never linted, and Prettier was scanning the gitignored `.superpowers/` working directory.
 
