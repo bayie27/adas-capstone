@@ -13,10 +13,21 @@ here imports from `seed.py`.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 
-from app.models import AIStatus, ConnectionStatus, DetectionStatus, UserRole
+from app.core.config import settings
+from app.models import (
+    AUDIT_ACTIONS,
+    AIStatus,
+    ConnectionStatus,
+    DetectionStatus,
+    UserRole,
+)
+
+# The edge profile pins a dismissal to the real cooldown boundary rather
+# than a hard-coded 60s, so the spec follows the setting if it changes.
+DISMISS_COOLDOWN_MINUTES = max(1, settings.DISMISS_COOLDOWN_SECONDS // 60)
 
 DEFAULT_SEED_PROFILE = "demo"
 PERF_PROFILE = "perf"
@@ -671,7 +682,282 @@ def build_default_audit_specs(now: datetime) -> list[SeedAuditSpec]:
     return specs
 
 
+def build_demo_cameras() -> list[SeedCameraSpec]:
+    """The six default cameras with observed telemetry populated, plus the
+    two states the default set can't show: a camera presenting as
+    Unresponsive, and a soft-deleted one.
+
+    On the healthy cameras the heartbeat is `now` exactly, which is the
+    freshest a seed can be. Note what that does *not* buy:
+    HEARTBEAT_STALE_SECONDS is 10, so with no AI engine running every
+    seeded camera presents as Unresponsive ten seconds after seeding
+    regardless. That is the system behaving correctly — nothing is
+    heartbeating — but it means "the Unresponsive camera" is only
+    distinguishable from the rest at a pinned `now`, which is how the
+    tests assert it. Silang's 45-minute-old heartbeat is deliberately far
+    past the threshold so it stays the unambiguous case even if the
+    setting is raised.
+    """
+    cameras = []
+    telemetry = {
+        "ayala": (14.8, 41.2, None, None, None),
+        "southbound": (0.0, None, "RTSP_TIMEOUT", "Read timed out after 10s", None),
+        "north_exit": (None, None, None, None, None),
+        "inosluban": (14.9, 38.7, None, None, None),
+        # applied_config_version lags config_version (1), so this camera
+        # shows as still applying its latest config.
+        "tambo": (15.0, 44.1, None, None, 0),
+        "dagatan": (14.7, 52.3, None, None, None),
+    }
+    for spec in build_default_cameras():
+        fps, latency, error_code, error_message, applied = telemetry[spec.key]
+        heartbeat = None if spec.key == "north_exit" else 0
+        cameras.append(
+            replace(
+                spec,
+                measured_fps=fps,
+                inference_latency_ms=latency,
+                last_error_code=error_code,
+                last_error_message=error_message,
+                applied_config_version=applied,
+                last_heartbeat_minutes_ago=heartbeat,
+            )
+        )
+
+    cameras.append(
+        SeedCameraSpec(
+            key="silang",
+            camera_name="Silang Junction Cam",
+            channel_id=7,
+            # Stored values stay as last genuinely reported. The camera
+            # presents as Unresponsive because the heartbeat is stale,
+            # which is how the real thing works — see the note on
+            # SeedCameraSpec.
+            connection_status=ConnectionStatus.CONNECTED,
+            ai_status=AIStatus.ACTIVE,
+            last_heartbeat_minutes_ago=45,
+            measured_fps=13.9,
+            inference_latency_ms=61.5,
+        )
+    )
+    cameras.append(
+        SeedCameraSpec(
+            key="retired",
+            camera_name="Retired Depot Cam",
+            channel_id=8,
+            connection_status=ConnectionStatus.DISCONNECTED,
+            ai_status=AIStatus.INACTIVE,
+            is_enabled=False,
+            is_active=False,
+        )
+    )
+    return cameras
+
+
+def build_demo_users() -> list[SeedUserSpec]:
+    """The four operators with varied alarm settings, plus the three account
+    states the default set can't show: a second Admin, a disabled account,
+    and one that must change its password on first login."""
+    # Cycled over the configured allow-list rather than invented names:
+    # PATCH /api/settings/alarm validates alarm_sound against
+    # ALARM_SOUND_KEYS, so a seeded value outside it would be one the API
+    # itself rejects on the next save. Today that list holds one entry, so
+    # the visible variation is volume and snooze duration.
+    sounds = tuple(settings.ALARM_SOUND_KEYS) or ("default",)
+    volumes = (80, 55, 100, 35)
+    snoozes = (30, 15, 60, 45)
+
+    users = [
+        replace(
+            spec,
+            alarm_sound=sounds[index % len(sounds)],
+            alarm_volume=volumes[index % len(volumes)],
+            alarm_snooze_duration=snoozes[index % len(snoozes)],
+        )
+        for index, spec in enumerate(build_default_users())
+    ]
+
+    users.append(
+        SeedUserSpec(
+            key="rmanalo",
+            username="rmanalo",
+            first_name="Rosario",
+            last_name="Manalo",
+            role=UserRole.ADMIN,
+            password="admin123",
+        )
+    )
+    users.append(
+        SeedUserSpec(
+            key="cvillena",
+            username="cvillena",
+            first_name="Carlos",
+            last_name="Villena",
+            role=UserRole.OPERATOR,
+            password="operator123",
+            is_active=False,
+        )
+    )
+    users.append(
+        SeedUserSpec(
+            key="newhire",
+            username="newhire",
+            first_name="Ana",
+            last_name="Robles",
+            role=UserRole.OPERATOR,
+            password="operator123",
+            password_changed=False,
+        )
+    )
+    return users
+
+
+# actor_type, result and a plausible target for each of the 26 actions in
+# AUDIT_ACTIONS. The catalog is iterated rather than listed so a new action
+# cannot silently go unseeded.
+_AUDIT_SYSTEM_ACTIONS = frozenset({"BACKUP_TRIGGER", "RESTORE_TRIGGER"})
+_AUDIT_DENIED_ACTIONS = frozenset(
+    {"LOGIN_FAILURE", "USER_ROLE_CHANGE", "CAMERA_DELETE"}
+)
+_AUDIT_FAILURE_ACTIONS = frozenset({"REPORT_EXPORT", "RESTORE_TRIGGER"})
+_AUDIT_TARGET_TYPES = {
+    "ALERT": "detection",
+    "CAMERA": "camera",
+    "USER": "user",
+    "ALARM": "alarm_settings",
+    "REPORT": "report",
+    "AUDIT": "report",
+    "BACKUP": "backup",
+    "RESTORE": "backup",
+    "LOGIN": "session",
+    "LOGOUT": "session",
+}
+
+
+def build_demo_audit_specs(now: datetime) -> list[SeedAuditSpec]:
+    """Every action in AUDIT_ACTIONS, with a mix of success/denied/failure
+    and both actor_type values, so the audit viewer's filters all have
+    something to match."""
+    specs = list(build_default_audit_specs(now))
+    actor_cycle = ("admin", *_OPERATOR_KEYS)
+
+    for index, action in enumerate(AUDIT_ACTIONS):
+        is_system = action in _AUDIT_SYSTEM_ACTIONS
+        if action in _AUDIT_FAILURE_ACTIONS:
+            result = "failure"
+        elif action in _AUDIT_DENIED_ACTIONS:
+            result = "denied"
+        else:
+            result = "success"
+
+        specs.append(
+            SeedAuditSpec(
+                actor_type="system" if is_system else "user",
+                actor_key=None if is_system else actor_cycle[index % len(actor_cycle)],
+                action=action,
+                target_type=_AUDIT_TARGET_TYPES.get(action.split("_", 1)[0]),
+                target_ref=str(index + 1),
+                result=result,
+                minutes_ago=240 + index * 7,
+            )
+        )
+
+    return specs
+
+
+def build_demo_alert_specs_enriched(now: datetime) -> list[SeedAlertSpec]:
+    """demo's 18 alerts, with a snooze on the one open incident that always
+    survives the enforcer: tambo_recent_unverified is at now-5min and the
+    only other open spec on that camera is three days old, so most-recent
+    always keeps it."""
+    specs = []
+    for spec in build_demo_alert_specs(now):
+        if spec.label == "tambo_recent_unverified":
+            spec = replace(
+                spec,
+                snoozed_by_key="dsahagun",
+                snoozed_after_minutes=2,
+                snooze_minutes=30,
+            )
+        specs.append(spec)
+    return specs
+
+
+def build_edge_cameras() -> list[SeedCameraSpec]:
+    """The default six plus a camera sitting in a post-dismissal cooldown."""
+    cameras = list(build_default_cameras())
+    cameras.append(
+        SeedCameraSpec(
+            key="cooldown",
+            camera_name="Cooldown Test Cam",
+            channel_id=9,
+            connection_status=ConnectionStatus.CONNECTED,
+            ai_status=AIStatus.PAUSED,
+            last_heartbeat_minutes_ago=0,
+            cooldown_minutes_from_now=1,
+        )
+    )
+    return cameras
+
+
+def build_edge_alert_specs_enriched(now: datetime) -> list[SeedAlertSpec]:
+    """edge's 10 specs plus the column boundaries: confidence_score at
+    exactly 0.0 and exactly 1.0 (the `ge=0.0, le=1.0` bounds), and a
+    dismissal sitting right on DISMISS_COOLDOWN_SECONDS."""
+    specs = list(build_edge_alert_specs(now))
+    specs.append(
+        SeedAlertSpec(
+            label="edge_north_exit_confidence_floor",
+            camera_key="north_exit",
+            detected_at=seeded_timestamp(now, days_ago=6, hour=4, minute=5),
+            confidence_score=0.0,
+            detection_status=DetectionStatus.DISMISSED,
+            closed_by_key="dsahagun",
+            closed_after_minutes=3,
+        )
+    )
+    specs.append(
+        SeedAlertSpec(
+            label="edge_inosluban_confidence_ceiling",
+            camera_key="inosluban",
+            detected_at=seeded_timestamp(now, days_ago=6, hour=16, minute=45),
+            confidence_score=1.0,
+            detection_status=DetectionStatus.RESOLVED,
+            verified_by_key="smeer",
+            verified_after_minutes=1,
+            closed_by_key="smeer",
+            closed_after_minutes=11,
+        )
+    )
+    # Closed exactly DISMISS_COOLDOWN_SECONDS ago, so the camera's cooldown
+    # expires at this instant — the boundary sweep_expired_cooldowns() acts on.
+    specs.append(
+        SeedAlertSpec(
+            label="edge_cooldown_boundary_dismissal",
+            camera_key="cooldown",
+            detected_at=seeded_timestamp(now, minutes_ago=DISMISS_COOLDOWN_MINUTES + 5),
+            confidence_score=0.55,
+            detection_status=DetectionStatus.DISMISSED,
+            closed_by_key="jtenorio",
+            closed_after_minutes=5,
+        )
+    )
+    return specs
+
+
+def _no_cameras() -> list[SeedCameraSpec]:
+    return []
+
+
+def _no_users() -> list[SeedUserSpec]:
+    return []
+
+
 def _no_alerts(now: datetime) -> list[SeedAlertSpec]:
+    return []
+
+
+def _no_audit(now: datetime) -> list[SeedAuditSpec]:
     return []
 
 
@@ -679,26 +965,39 @@ PROFILES: dict[str, SeedProfile] = {
     "demo": SeedProfile(
         name="demo",
         description="Balanced dataset for manual testing and demos.",
-        cameras=build_default_cameras,
-        users=build_default_users,
-        alerts=build_demo_alert_specs,
-        audit=build_default_audit_specs,
+        cameras=build_demo_cameras,
+        users=build_demo_users,
+        alerts=build_demo_alert_specs_enriched,
+        audit=build_demo_audit_specs,
+        health_days=7,
+        exports=True,
     ),
     "analytics": SeedProfile(
         name="analytics",
         description="Denser, chart-friendly data across 14 days.",
-        cameras=build_default_cameras,
-        users=build_default_users,
+        cameras=build_demo_cameras,
+        users=build_demo_users,
         alerts=build_analytics_alert_specs,
-        audit=build_default_audit_specs,
+        audit=build_demo_audit_specs,
+        health_days=30,
+        exports=True,
     ),
     "edge": SeedProfile(
         name="edge",
         description="Unusual workflow combinations and boundary values.",
-        cameras=build_default_cameras,
-        users=build_default_users,
-        alerts=build_edge_alert_specs,
-        audit=build_default_audit_specs,
+        cameras=build_edge_cameras,
+        users=build_demo_users,
+        alerts=build_edge_alert_specs_enriched,
+        audit=build_demo_audit_specs,
+    ),
+    "empty": SeedProfile(
+        name="empty",
+        description="Schema and the default admin only — first-run and empty states.",
+        cameras=_no_cameras,
+        users=_no_users,
+        alerts=_no_alerts,
+        audit=_no_audit,
+        snapshots=False,
     ),
     PERF_PROFILE: SeedProfile(
         name=PERF_PROFILE,

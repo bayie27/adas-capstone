@@ -10,6 +10,7 @@ reverse.
 
 from __future__ import annotations
 
+import math
 import random
 import time
 import uuid
@@ -23,7 +24,7 @@ from sqlalchemy import insert as sa_insert
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
-from app.core.config import Settings
+from app.core.config import Settings, settings
 from app.core.db import init_db
 from app.core.security import get_password_hash
 from app.dev.profiles import (
@@ -198,6 +199,9 @@ def ensure_alert(
     verified_at: datetime | None = None,
     closed_by_id: int | None = None,
     closed_at: datetime | None = None,
+    snoozed_by_id: int | None = None,
+    snoozed_at: datetime | None = None,
+    snoozed_until: datetime | None = None,
 ) -> DetectionLog:
     source_event_id = _seed_source_event_id(label)
     alert = session.exec(
@@ -217,6 +221,9 @@ def ensure_alert(
         verified_at=verified_at,
         closed_by_id=closed_by_id,
         closed_at=closed_at,
+        snoozed_by_id=snoozed_by_id,
+        snoozed_at=snoozed_at,
+        snoozed_until=snoozed_until,
     )
     session.add(alert)
     session.commit()
@@ -326,7 +333,7 @@ def _seed_audit_log_rows(
     carries BEFORE UPDATE/DELETE triggers, so a partial re-seed could not be
     corrected afterwards.
     """
-    if session.exec(select(AuditLog).limit(1)).first():
+    if not specs or session.exec(select(AuditLog).limit(1)).first():
         return 0
 
     rows: list[AuditLog] = []
@@ -363,6 +370,151 @@ def ensure_default_operators(session: Session) -> dict[str, User]:
     """Compat wrapper for backend/tests/perf/conftest.py. Step 7 repoints
     that conftest at seed_users()."""
     return seed_users(session, build_default_users(), now=datetime.now(UTC))
+
+
+def _clamp_percent(value: float) -> float:
+    """Every percentage column carries a 0-100 CHECK constraint."""
+    return round(min(100.0, max(0.0, value)), 2)
+
+
+def seed_health_history(
+    session: Session, *, days: int, now: datetime, seed: int = 20260811
+) -> int:
+    """sys_health_raw at HEALTH_PERSIST_SECONDS resolution plus the hourly
+    rollups derived from it. Both tables were never seeded, so the System
+    Health page had no history to draw at all.
+
+    The curve is a daily cycle with a periodic afternoon spike rather than
+    uniform noise, because the point is for a chart to be legible. Raw rows
+    older than HEALTH_RAW_RETENTION_HOURS (48h) are written deliberately —
+    a seed is allowed to exceed the retention window, and the hourly table
+    is what a 30-day view reads from anyway.
+    """
+    if days <= 0:
+        return 0
+    if session.exec(select(SysHealthRaw).limit(1)).first():
+        return 0
+
+    rng = random.Random(seed)
+    step = timedelta(seconds=settings.HEALTH_PERSIST_SECONDS)
+    start = (now - timedelta(days=days)).replace(minute=0, second=0, microsecond=0)
+
+    raw_rows: list[dict] = []
+    by_hour: dict[datetime, list[dict]] = {}
+
+    sample_at = start
+    while sample_at < now:
+        # Peaks mid-afternoon, troughs pre-dawn.
+        phase = ((sample_at.hour * 60 + sample_at.minute) / 1440.0 - 0.25) * 2 * math.pi
+        wave = math.sin(phase)
+        spike = 22.0 if (sample_at.hour == 14 and sample_at.day % 3 == 0) else 0.0
+
+        row = {
+            "cpu_usage": _clamp_percent(38 + 18 * wave + spike + rng.uniform(-3, 3)),
+            "ram_usage": _clamp_percent(52 + 11 * wave + rng.uniform(-2, 2)),
+            "gpu_usage_avg": _clamp_percent(
+                44 + 26 * wave + spike + rng.uniform(-4, 4)
+            ),
+            "gpu_temp_max": _clamp_percent(52 + 14 * wave + rng.uniform(-2, 2)),
+            "cpu_temp": None,  # null on Windows, which is the demo platform
+            "gpu_mem_pct_max": _clamp_percent(48 + 17 * wave + rng.uniform(-3, 3)),
+            "created_at": sample_at,
+        }
+        raw_rows.append(row)
+        by_hour.setdefault(sample_at.replace(minute=0), []).append(row)
+        sample_at += step
+
+    def _avg(rows: list[dict], key: str) -> float | None:
+        values = [r[key] for r in rows if r[key] is not None]
+        return round(sum(values) / len(values), 2) if values else None
+
+    def _peak(rows: list[dict], key: str) -> float | None:
+        values = [r[key] for r in rows if r[key] is not None]
+        return max(values) if values else None
+
+    hourly_rows = [
+        {
+            "hour_start": hour_start,
+            "sample_count": len(rows),
+            "avg_cpu_usage": _avg(rows, "cpu_usage"),
+            "avg_ram_usage": _avg(rows, "ram_usage"),
+            "avg_gpu_usage": _avg(rows, "gpu_usage_avg"),
+            "avg_cpu_temp": _avg(rows, "cpu_temp"),
+            "peak_cpu_temp": _peak(rows, "cpu_temp"),
+            "peak_gpu_temp": _peak(rows, "gpu_temp_max"),
+            "avg_gpu_mem_pct": _avg(rows, "gpu_mem_pct_max"),
+            "peak_gpu_mem_pct": _peak(rows, "gpu_mem_pct_max"),
+        }
+        for hour_start, rows in sorted(by_hour.items())
+    ]
+
+    for batch_start in range(0, len(raw_rows), PERF_BATCH_SIZE):
+        session.execute(
+            sa_insert(SysHealthRaw),
+            raw_rows[batch_start : batch_start + PERF_BATCH_SIZE],
+        )
+    session.execute(sa_insert(SysHealthHourly), hourly_rows)
+    session.commit()
+
+    print(
+        f"Seeded {len(raw_rows)} sys_health_raw and {len(hourly_rows)} "
+        f"sys_health_hourly row(s) over {days} day(s)."
+    )
+    return len(raw_rows) + len(hourly_rows)
+
+
+# One row per export_job status, spanning several report_type/format
+# combinations. No artifact file is written — artifact_path points where a
+# real one would live, which is enough for the Exports page to render and
+# for a download attempt to fail the way a swept artifact does.
+_EXPORT_JOB_SPECS = (
+    ("incidents", "csv", "queued", None, None),
+    ("dashboard", "pdf", "processing", None, None),
+    ("performance", "csv", "completed", "performance-2026-08.csv", 184_320),
+    ("audit", "pdf", "failed", None, None),
+    ("retraining", "zip", "expired", "retraining-2026-07.zip", 4_915_200),
+)
+
+
+def seed_export_jobs(session: Session, *, requested_by: User, now: datetime) -> int:
+    if session.exec(select(ExportJob).limit(1)).first():
+        return 0
+
+    rows: list[ExportJob] = []
+    for index, (report_type, fmt, status, artifact, size) in enumerate(
+        _EXPORT_JOB_SPECS
+    ):
+        created_at = now - timedelta(hours=index * 6 + 1)
+        rows.append(
+            ExportJob(
+                job_id=_seed_source_event_id(f"export_{report_type}_{status}"),
+                requested_by_id=requested_by.user_id,
+                report_type=report_type,
+                format=fmt,
+                filters_json='{"start_date": null, "end_date": null}',
+                status=status,
+                progress_current=100 if status in ("completed", "expired") else 0,
+                progress_total=100,
+                artifact_path=artifact,
+                artifact_bytes=size,
+                failure_category="render_error" if status == "failed" else None,
+                created_at=created_at,
+                started_at=created_at + timedelta(seconds=2)
+                if status != "queued"
+                else None,
+                completed_at=created_at + timedelta(seconds=45)
+                if status in ("completed", "failed", "expired")
+                else None,
+                # Deliberately in the past, so the expired row really is.
+                expires_at=now - timedelta(hours=3) if status == "expired" else None,
+            )
+        )
+
+    for row in rows:
+        session.add(row)
+    session.commit()
+    print(f"Seeded {len(rows)} export_job row(s).")
+    return len(rows)
 
 
 def seed_profile(
@@ -447,6 +599,22 @@ def seed_profile(
                     f"Alert {spec.label} has a closure offset but no closer."
                 )
 
+            # A snooze only means anything on an incident that is still
+            # open, and the enforcer above may have demoted this one.
+            snoozed_by = (
+                users_by_key.get(spec.snoozed_by_key) if spec.snoozed_by_key else None
+            )
+            snoozed_at = snoozed_until = None
+            if snoozed_by is not None and spec.detection_status in _OPEN_STATUSES:
+                snoozed_at = spec.detected_at + timedelta(
+                    minutes=spec.snoozed_after_minutes or 0
+                )
+                snoozed_until = snoozed_at + timedelta(
+                    minutes=spec.snooze_minutes or 30
+                )
+            else:
+                snoozed_by = None
+
             source_event_id = _seed_source_event_id(spec.label)
             ensure_alert(
                 session,
@@ -470,6 +638,9 @@ def seed_profile(
                     if spec.closed_after_minutes is not None
                     else None
                 ),
+                snoozed_by_id=snoozed_by.user_id if snoozed_by else None,
+                snoozed_at=snoozed_at,
+                snoozed_until=snoozed_until,
             )
             status_counts[spec.detection_status.value] += 1
             camera_counts[camera.camera_name] += 1
@@ -484,6 +655,9 @@ def seed_profile(
             users_by_key=users_by_key,
             now=now,
         )
+        seed_health_history(session, days=profile_def.health_days, now=now)
+        if profile_def.exports:
+            seed_export_jobs(session, requested_by=admin, now=now)
 
         print(f"Dev data seeding complete for profile '{profile}'.")
         print(f"Total alerts seeded: {len(alert_specs)}")
