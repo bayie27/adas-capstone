@@ -34,10 +34,10 @@ Without an NVIDIA GPU, use the CPU install instead — the two extras are mutual
 uv sync --extra ai-cpu
 ```
 
-Then calibrate the machine once, and start the engine:
+Then measure this machine's capacity once, and start the engine:
 
 ```bash
-uv run python ai_engine/calibrate.py
+uv run python ai_engine/capacity.py
 uv run python ai_engine/main.py
 ```
 
@@ -71,7 +71,7 @@ The important structural line is **which modules import `cv2`**. Everything that
 | `events.py`          | Event construction: UUIDs, snapshot keys, the v2 payload                  | No  |
 | `config.py`          | Constants, band bounds, paths                                             | No  |
 | `machine_profile.py` | Read/write/validate `machine_profile.json`                                | No  |
-| `calibrate.py`       | One-shot per-machine capacity benchmark                                   | Yes |
+| `capacity.py`        | How many cameras can this machine run? Writes the profile                 | Yes |
 
 `eval/` holds the measurement harness — see [`eval/README.md`](eval/README.md).
 
@@ -87,7 +87,7 @@ The important structural line is **which modules import `cv2`**. Everything that
 - **The fourth seam is a long frame gap, and it has no `segment_id` bump behind it.** The other three all involve the stream _dropping_; a stream that merely stalls keeps its segment. `accumulate.py` creates a new region with `score = conf * dt` and tests it for firing on that same frame, so a gap longer than `ACC_THRESHOLD / conf` fires a single frame with no corroboration at all — observed live as `peak 0.54, 0.0s of evidence`. `config.MAX_FRAME_GAP_SECONDS` (0.5 s) resets the camera instead. Removing it reopens that hole, and the hole is worst where it hurts most: the gap needed shrinks as confidence rises, and this model's false positives score higher than its genuine detections.
 - **Never quote validation mAP.** It is leaked; a model already known to be broken scored 0.986 by the same measure.
 - **`adas_transfer/` is frozen.** Excluded from Ruff and Prettier. It is the reference the parity gate diffs against — never edit or reformat it.
-- **Capacity is measured, not assumed.** `calibrate.py` writes a gitignored `machine_profile.json`. Its absence is not an error; the engine falls back to a conservative default of one camera.
+- **Capacity is measured, not assumed.** `capacity.py` writes a gitignored `machine_profile.json`. Its absence is not an error; the engine falls back to a conservative default of one camera.
 
 ---
 

@@ -28,21 +28,24 @@ Report standard and hard recall SEPARATELY. A blended figure hides which
 crashes were winnable. Never quote validation mAP — it is leaked, and a
 model already known to be broken scored 0.986 by the same measure.
 
-## Calibrating a new machine
+## How many cameras can this machine run?
 
-    uv run python ai_engine/calibrate.py
+    uv run python ai_engine/capacity.py
 
-Reports how many cameras this machine can carry at 10 and at 15 FPS, and
-writes `ai_engine/machine_profile.json` (gitignored, machine-specific).
-Pass `--cameras N` to target fewer than the maximum.
+Times the model across batch sizes and converts that into a camera count at
+both ends of the FPS band. Writes `ai_engine/machine_profile.json`
+(gitignored, machine-specific), which `main.py` reads at startup.
 
-A build that drifts from the baseline is **kept**, not rejected — falling
-back to a slower build could push a machine below a usable frame rate,
-trading a small measured deviation for a large invisible one. The drift is
-recorded in the profile instead.
+    Device: 0
+    CAPACITY: 8 camera(s) at 15 FPS, or 12 at 10 FPS.
 
-**Numbers quoted in the report or at the defence come from a machine whose
-verification matched.** Every other machine is fine to develop and demo on.
+Two flags: `--cameras N` records a lower target than the measured maximum,
+which is a reasonable choice on a machine also running the dev server and a
+browser; `--sample-frame <video>` measures against real footage instead of a
+blank frame.
+
+Run it once per machine. Absence of a profile is not an error — the engine
+falls back to a conservative one camera and says so on startup.
 
 ### What the benchmark frame does and does not matter for
 
@@ -80,22 +83,28 @@ band floor is the only lever available when a machine is over capacity. With
 the contiguous 1–16 grid the GTX 1650 measures **8 cameras at 15 FPS and 12
 at 10 FPS** — a real 50% gain that the earlier grids both concealed.
 
-A fast enough machine can saturate any grid, so `calibrate.py` says so
+A fast enough machine can saturate any grid, so `capacity.py` says so
 explicitly when capacity lands on the largest batch measured; treat that
 number as a floor and extend `BATCH_SIZES`. If a batch runs out of memory
 partway up, the sweep stops and keeps the smaller measurements rather than
 leaving the machine with no profile.
 
-### What calibration does not do
+### What it does not do, and why that is fine
 
-The design doc describes calibration as probe → **build** → benchmark →
-**verify** → write. The build and verify steps are not implemented:
+The design doc (§6.1) describes a five-step probe → **build** → benchmark →
+**verify** → write. Only probe, benchmark and write are implemented. That is
+a deliberate stopping point:
 
-- The sweep times the plain PyTorch weights. It does **not** export
-  `epoch50.pt` to TensorRT or ONNX first, so every capacity figure is a
-  **floor** — a built engine would raise it. TensorRT sits outside the `ai`
-  extra on purpose (its PyPI stub hangs indefinitely during install), so that
-  path is not exercised.
-- `verification` is always written as `unverified`. Calibration measures
-  speed, not correctness; only `uv run pytest -m clips` can promote it, and
-  only a machine whose verification matched may be cited for reported numbers.
+- **No build.** The sweep times the plain PyTorch weights rather than
+  exporting to TensorRT first, so every figure is a **floor** — an optimised
+  build would raise it. It was not worth doing: the GTX 1650 carries 8
+  cameras at 15 FPS unoptimised, well above what the system needs, so a build
+  step would buy capacity nobody is short of. TensorRT also sits outside the
+  `ai` extra because its PyPI package hangs indefinitely during install.
+- **No verify.** Verification exists to catch the numerical drift that
+  repackaging introduces, so with no repackaging there is nothing to check.
+  `verification` is always written as `unverified`.
+
+`docs/2026-08-11-calibration-capacity-design.md` records what a fuller
+measurement would involve — export probing, a thermal soak, decode contention
+— if a machine ever turns out to need it. It is a reference, not a backlog.

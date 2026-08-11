@@ -18,9 +18,8 @@ def _load_capacity() -> int:
     """Camera capacity from the machine profile, or a pessimistic default.
 
     A missing profile is not an error — the engine runs, says so, and points
-    at calibrate.py. The import is inside the function and the whole thing is
-    guarded, so this works before Task 12 exists (ImportError) as well as
-    after (missing or malformed file).
+    at capacity.py. The guard covers both an absent machine_profile module
+    (ImportError) and a missing or malformed profile file.
     """
     try:
         from machine_profile import load_profile
@@ -33,7 +32,7 @@ def _load_capacity() -> int:
         print(
             "[SYSTEM] No machine profile found. Running with a conservative "
             f"capacity of {config.FALLBACK_CAMERA_CAPACITY} camera(s). "
-            "Run `uv run python ai_engine/calibrate.py` to measure this machine."
+            "Run `uv run python ai_engine/capacity.py` to measure this machine."
         )
         return config.FALLBACK_CAMERA_CAPACITY
 

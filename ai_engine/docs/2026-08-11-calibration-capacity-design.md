@@ -4,13 +4,13 @@
 
 ## 1. Why
 
-`calibrate.py` exists to answer one question: **how many cameras can this machine run detections on while still keeping up?**
+`capacity.py` exists to answer one question: **how many cameras can this machine run detections on while still keeping up?**
 
 What it currently answers is narrower: _how fast is the model, in isolation, on a blank frame, on a cold GPU, in plain PyTorch._ Those are not the same claim, and the gap runs in the optimistic direction in several ways at once.
 
 It also never exports the model. The port design called for building the fastest format the machine supports; the implementation plan dropped that step, so every capacity figure is measured against unoptimised PyTorch weights and is therefore a floor.
 
-## 2. What today's `calibrate.py` actually measures
+## 2. What today's `capacity.py` actually measures
 
 | Property      | Today                                                                                    |
 | ------------- | ---------------------------------------------------------------------------------------- |
@@ -168,13 +168,13 @@ Two things that must not be dropped from the report:
 
 ## 5. Two modes
 
-| Invocation                     | Behaviour                                                            | Cost                  |
-| ------------------------------ | -------------------------------------------------------------------- | --------------------- |
-| `calibrate.py`                 | Find the maximum: full Phase A–F                                     | 30–50 min             |
-| `calibrate.py --cameras 5`     | Confirm an intended count: export just above 5, verify it fits, soak | ~15 min               |
-| `calibrate.py --format engine` | Skip the format probe                                                | saves most of Phase B |
-| `calibrate.py --soak 0`        | Skip the soak — burst figures only, explicitly labelled as such      | saves 10 min          |
-| `calibrate.py --no-export`     | Phase A only — writes a `.pt`-only profile                           | ~1 min                |
+| Invocation                    | Behaviour                                                            | Cost                  |
+| ----------------------------- | -------------------------------------------------------------------- | --------------------- |
+| `capacity.py`                 | Find the maximum: full Phase A–F                                     | 30–50 min             |
+| `capacity.py --cameras 5`     | Confirm an intended count: export just above 5, verify it fits, soak | ~15 min               |
+| `capacity.py --format engine` | Skip the format probe                                                | saves most of Phase B |
+| `capacity.py --soak 0`        | Skip the soak — burst figures only, explicitly labelled as such      | saves 10 min          |
+| `capacity.py --no-export`     | Phase A only — writes a `.pt`-only profile                           | ~1 min                |
 
 `--soak 0` exists because a quick re-run during development should not cost ten minutes. When it is used the profile records `sustained_verified: false`, so a burst-only figure can never be mistaken for a soaked one.
 

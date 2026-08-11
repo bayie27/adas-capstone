@@ -1,6 +1,6 @@
 """One-shot per-machine setup: probe, benchmark, write.
 
-    uv run python ai_engine/calibrate.py
+    uv run python ai_engine/capacity.py
 
 Answers "how many cameras can this machine carry at the required frame
 rate?" — a number a person can act on — rather than picking a tick rate.
@@ -81,7 +81,7 @@ def load_sample_frame(path):
     """
     path = Path(path)
     if not path.exists():
-        raise SystemExit(f"[calibrate] --sample-frame not found: {path}")
+        raise SystemExit(f"[capacity] --sample-frame not found: {path}")
 
     frame = cv2.imread(str(path))
     if frame is None:
@@ -91,7 +91,7 @@ def load_sample_frame(path):
         finally:
             capture.release()
         if not ok or frame is None:
-            raise SystemExit(f"[calibrate] could not read a frame from {path}")
+            raise SystemExit(f"[capacity] could not read a frame from {path}")
 
     return cv2.resize(frame, (BENCHMARK_WIDTH, BENCHMARK_HEIGHT))
 
@@ -147,20 +147,20 @@ def main() -> None:
     args = parser.parse_args()
 
     device = resolve_device()
-    print(f"[calibrate] device: {device}")
+    print(f"[capacity] device: {device}")
     if device == "cpu":
         print(
-            "[calibrate] WARNING: no GPU detected. This machine is useful for "
+            "[capacity] WARNING: no GPU detected. This machine is useful for "
             "integration work but is not a detection platform — do not draw "
             "any performance claim from it."
         )
 
     if args.sample_frame:
         frame = load_sample_frame(args.sample_frame)
-        print(f"[calibrate] benchmarking against {args.sample_frame}")
+        print(f"[capacity] benchmarking against {args.sample_frame}")
     else:
         frame = synthetic_frame()
-        print("[calibrate] benchmarking against a blank frame (optimistic)")
+        print("[capacity] benchmarking against a blank frame (optimistic)")
 
     detector = AccidentDetector(config.WEIGHTS_PATH, device=device)
 
@@ -173,32 +173,32 @@ def main() -> None:
             # measured: a capacity derived from the batches that DID fit is
             # still correct, and crashing would leave the machine with no
             # profile at all.
-            print(f"[calibrate] batch {batch} failed ({exc}); stopping the sweep")
+            print(f"[capacity] batch {batch} failed ({exc}); stopping the sweep")
             break
-        print(f"[calibrate] batch {batch}: {latency[batch]:.1f} ms")
+        print(f"[capacity] batch {batch}: {latency[batch]:.1f} ms")
 
     if not latency:
         raise SystemExit(
-            "[calibrate] could not benchmark even a single frame; no profile written"
+            "[capacity] could not benchmark even a single frame; no profile written"
         )
 
     capacity_max = capacity_from_latency(latency, config.FPS_BAND_MAX)
     capacity_min = capacity_from_latency(latency, config.FPS_BAND_MIN)
 
     print(
-        f"\n[calibrate] CAPACITY: {capacity_max} camera(s) at "
+        f"\n[capacity] CAPACITY: {capacity_max} camera(s) at "
         f"{config.FPS_BAND_MAX:.0f} FPS, or {capacity_min} at "
         f"{config.FPS_BAND_MIN:.0f} FPS."
     )
     if capacity_max == 0:
         print(
-            "[calibrate] This machine cannot carry a single camera at the "
+            "[capacity] This machine cannot carry a single camera at the "
             "required frame rate. The engine will still run for integration "
             "work, but no performance claim may be drawn from it."
         )
     if _grid_limited(latency, capacity_max) or _grid_limited(latency, capacity_min):
         print(
-            f"[calibrate] NOTE: capacity reached the largest batch benchmarked "
+            f"[capacity] NOTE: capacity reached the largest batch benchmarked "
             f"({max(latency)}), so the real figure is AT LEAST this, not "
             f"exactly this. Extend BATCH_SIZES to resolve it."
         )
@@ -225,7 +225,7 @@ def main() -> None:
         ),
     )
     save_profile(config.PROFILE_PATH, profile)
-    print(f"[calibrate] wrote {config.PROFILE_PATH}")
+    print(f"[capacity] wrote {config.PROFILE_PATH}")
 
 
 if __name__ == "__main__":

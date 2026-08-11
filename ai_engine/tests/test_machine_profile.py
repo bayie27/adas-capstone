@@ -33,7 +33,7 @@ def test_a_profile_round_trips(tmp_path):
 
 def test_a_missing_profile_loads_as_none(tmp_path):
     """Absence is not an error — the engine runs with a conservative
-    default and points at calibrate.py."""
+    default and points at capacity.py."""
     assert load_profile(tmp_path / "nope.json") is None
 
 
@@ -78,7 +78,7 @@ def test_the_same_machine_carries_more_cameras_at_the_lower_rate():
 
 
 def test_a_sparse_grid_understates_capacity():
-    """calibrate.py must benchmark EVERY batch size, not powers of two.
+    """capacity.py must benchmark EVERY batch size, not powers of two.
 
     capacity_from_latency can only ever return a batch size it was actually
     given, so a [1, 2, 4, 8] grid cannot express a capacity of 3, 5, 6 or 7.

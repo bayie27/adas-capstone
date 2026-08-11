@@ -32,7 +32,7 @@
 | `ai_engine/pipeline.py`        | Tick loop, accumulator registry, resets, fault isolation, staleness, capacity.   | No           |
 | `ai_engine/detector.py`        | Model ownership, grayscale, class filtering, device resolution, batched predict. | Yes          |
 | `ai_engine/machine_profile.py` | Read/write/validate `machine_profile.json`.                                      | No           |
-| `ai_engine/calibrate.py`       | Probe, build, benchmark, verify, write profile.                                  | Yes          |
+| `ai_engine/capacity.py`        | Probe, build, benchmark, verify, write profile.                                  | Yes          |
 | `ai_engine/camera.py`          | _(modify)_ decode timestamps, segment counter.                                   | Yes          |
 | `ai_engine/accident.py`        | _(rewrite)_ event → annotated snapshot → outbox.                                 | Yes          |
 | `ai_engine/main.py`            | _(rewrite)_ wire-up only.                                                        | Yes          |
@@ -287,7 +287,7 @@ In `ai_engine/config.py`, replace lines 40–42 (the `# AI Configuration` block)
 # Do not tune them without new evidence.
 
 WEIGHTS_PATH = Path(__file__).resolve().parent / "epoch50.pt"
-# Written by calibrate.py; machine-specific and gitignored.
+# Written by capacity.py; machine-specific and gitignored.
 PROFILE_PATH = Path(__file__).resolve().parent / "machine_profile.json"
 
 ACCIDENT_CLASS_ID = 0  # class 1 `vehicle` is a training foil, discarded at inference
@@ -386,7 +386,7 @@ Expected: all PASS.
 Append to `.gitignore`:
 
 ```gitignore
-# Written by ai_engine/calibrate.py. Machine-specific, like a TensorRT engine.
+# Written by ai_engine/capacity.py. Machine-specific, like a TensorRT engine.
 ai_engine/machine_profile.json
 ai_engine/*.engine
 ```
@@ -1903,7 +1903,7 @@ def _load_capacity() -> int:
     """Camera capacity from the machine profile, or a pessimistic default.
 
     A missing profile is not an error — the engine runs, says so, and points
-    at calibrate.py. The import is inside the function and the whole thing is
+    at capacity.py. The import is inside the function and the whole thing is
     guarded, so this works before Task 12 exists (ImportError) as well as
     after (missing or malformed file).
     """
@@ -1918,7 +1918,7 @@ def _load_capacity() -> int:
         print(
             "[SYSTEM] No machine profile found. Running with a conservative "
             f"capacity of {config.FALLBACK_CAMERA_CAPACITY} camera(s). "
-            "Run `uv run python ai_engine/calibrate.py` to measure this machine."
+            "Run `uv run python ai_engine/capacity.py` to measure this machine."
         )
         return config.FALLBACK_CAMERA_CAPACITY
 
@@ -2596,7 +2596,7 @@ def test_a_profile_round_trips(tmp_path):
 
 def test_a_missing_profile_loads_as_none(tmp_path):
     """Absence is not an error — the engine runs with a conservative
-    default and points at calibrate.py."""
+    default and points at capacity.py."""
     assert load_profile(tmp_path / "nope.json") is None
 
 
@@ -2641,7 +2641,7 @@ def test_the_same_machine_carries_more_cameras_at_the_lower_rate():
 
 
 def test_a_sparse_grid_understates_capacity():
-    """calibrate.py must benchmark EVERY batch size, not powers of two.
+    """capacity.py must benchmark EVERY batch size, not powers of two.
 
     capacity_from_latency can only ever return a batch size it was actually
     given, so a [1, 2, 4, 8] grid cannot express a capacity of 3, 5, 6 or 7.
@@ -2691,7 +2691,7 @@ Create `ai_engine/machine_profile.py`:
 ```python
 """Read, write and validate the per-machine calibration profile.
 
-Pure module: no cv2, no ultralytics, no torch. calibrate.py produces these;
+Pure module: no cv2, no ultralytics, no torch. capacity.py produces these;
 main.py consumes them.
 """
 
@@ -2792,7 +2792,7 @@ git commit -m "feat(ai-engine): add the machine calibration profile"
 
 **Files:**
 
-- Create: `ai_engine/calibrate.py`
+- Create: `ai_engine/capacity.py`
 - Modify: `ai_engine/eval/README.md`
 
 **Interfaces:**
@@ -2802,12 +2802,12 @@ git commit -m "feat(ai-engine): add the machine calibration profile"
 
 - [ ] **Step 1: Write the script**
 
-Create `ai_engine/calibrate.py`:
+Create `ai_engine/capacity.py`:
 
 ```python
 """One-shot per-machine setup: probe, build, benchmark, verify, write.
 
-    uv run python ai_engine/calibrate.py
+    uv run python ai_engine/capacity.py
 
 Answers "how many cameras can this machine carry at the required frame
 rate?" — a number a person can act on — rather than picking a tick rate.
@@ -2864,10 +2864,10 @@ def main() -> None:
     args = parser.parse_args()
 
     device = resolve_device()
-    print(f"[calibrate] device: {device}")
+    print(f"[capacity] device: {device}")
     if device == "cpu":
         print(
-            "[calibrate] WARNING: no GPU detected. This machine is useful for "
+            "[capacity] WARNING: no GPU detected. This machine is useful for "
             "integration work but is not a detection platform — do not draw "
             "any performance claim from it."
         )
@@ -2877,13 +2877,13 @@ def main() -> None:
     latency = {}
     for batch in BATCH_SIZES:
         latency[batch] = _benchmark(detector, batch)
-        print(f"[calibrate] batch {batch}: {latency[batch]:.1f} ms")
+        print(f"[capacity] batch {batch}: {latency[batch]:.1f} ms")
 
     capacity_max = capacity_from_latency(latency, config.FPS_BAND_MAX)
     capacity_min = capacity_from_latency(latency, config.FPS_BAND_MIN)
 
     print(
-        f"\n[calibrate] CAPACITY: {capacity_max} camera(s) at "
+        f"\n[capacity] CAPACITY: {capacity_max} camera(s) at "
         f"{config.FPS_BAND_MAX:.0f} FPS, or {capacity_min} at "
         f"{config.FPS_BAND_MIN:.0f} FPS."
     )
@@ -2910,14 +2910,14 @@ def main() -> None:
         ),
     )
     save_profile(config.PROFILE_PATH, profile)
-    print(f"[calibrate] wrote {config.PROFILE_PATH}")
+    print(f"[capacity] wrote {config.PROFILE_PATH}")
 
 
 if __name__ == "__main__":
     main()
 ```
 
-**What the shipped `calibrate.py` added beyond the sketch above.** The file is
+**What the shipped `capacity.py` added beyond the sketch above.** The file is
 the source of truth; these are the deltas and why each exists.
 
 - **`BATCH_SIZES = list(range(1, 17))`.** Two separate failures, both found by
@@ -2938,15 +2938,15 @@ the source of truth; these are the deltas and why each exists.
   inside run-to-run noise (batch 8: 63.6 ms blank vs 63.4 ms real) — the
   forward pass dominates. The concern was real but does not survive
   measurement; the flag exists so that can be re-checked on other hardware.
-- **`ai_engine/tests/test_calibrate.py`.** The plan specified no tests here.
-  `calibrate.py` writes the profile that governs capacity, and swapping
+- **`ai_engine/tests/test_capacity.py`.** The plan specified no tests here.
+  `capacity.py` writes the profile that governs capacity, and swapping
   `capacity_at_max_fps` with `capacity_at_min_fps` is silent — it would invert
   the band-drop decision with nothing to catch it.
 
 - [ ] **Step 2: Run it**
 
 ```bash
-uv run python ai_engine/calibrate.py
+uv run python ai_engine/capacity.py
 ```
 
 Expected: per-batch timings, a capacity line, and a written `machine_profile.json`.
@@ -2972,7 +2972,7 @@ Add to `ai_engine/eval/README.md`:
 ```markdown
 ## Calibrating a new machine
 
-    uv run python ai_engine/calibrate.py
+    uv run python ai_engine/capacity.py
 
 Reports how many cameras this machine can carry at 10 and at 15 FPS, and
 writes `ai_engine/machine_profile.json` (gitignored, machine-specific).
@@ -2990,7 +2990,7 @@ verification matched.** Every other machine is fine to develop and demo on.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add ai_engine/calibrate.py ai_engine/eval/README.md
+git add ai_engine/capacity.py ai_engine/eval/README.md
 git commit -m "feat(ai-engine): add per-machine calibration reporting camera capacity"
 ```
 
@@ -3053,7 +3053,7 @@ use there:
 
 The engine detects the absence of a GPU and falls back automatically. It
 will run and connect, which is useful for integration work, but it is not a
-detection platform — run `uv run python ai_engine/calibrate.py` and it will
+detection platform — run `uv run python ai_engine/capacity.py` and it will
 tell you so.
 ```
 
@@ -3108,13 +3108,13 @@ Create `ai_engine/README.md` covering, in this order:
 
    ```bash
    uv sync --extra ai              # or --extra ai-cpu without an NVIDIA GPU
-   uv run python ai_engine/calibrate.py
+   uv run python ai_engine/capacity.py
    uv run python ai_engine/main.py
    ```
 
    Note the engine holds **no camera configuration**. It heartbeats the backend and is told which cameras exist and where to reach them; the address is built backend-side from `RTSP_URL_TEMPLATE`. It cannot run without the backend. For local streams, `mediamtx mediamtx.yml` or `.\scripts\start-sim.ps1`.
 
-4. **Module map** — one line each for `main.py`, `pipeline.py`, `detector.py`, `accumulate.py`, `camera.py`, `accident.py`, `outbox.py`, `supervisor.py`, `backend_client.py`, `events.py`, `config.py`, `machine_profile.py`, `calibrate.py`. Say which import cv2 and which do not, and why that split exists.
+4. **Module map** — one line each for `main.py`, `pipeline.py`, `detector.py`, `accumulate.py`, `camera.py`, `accident.py`, `outbox.py`, `supervisor.py`, `backend_client.py`, `events.py`, `config.py`, `machine_profile.py`, `capacity.py`. Say which import cv2 and which do not, and why that split exists.
 
 5. **Things that will bite you**, each with its reason:
    - `uv run python`, never bare `python` — PATH has 3.14, the project is pinned to 3.12.13.

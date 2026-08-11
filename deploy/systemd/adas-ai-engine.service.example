@@ -6,7 +6,7 @@ After=network-online.target adas-backend.service
 Wants=network-online.target
 Requires=adas-backend.service
 
-# Run `uv run python ai_engine/calibrate.py` ONCE on this host before enabling
+# Run `uv run python ai_engine/capacity.py` ONCE on this host before enabling
 # the unit. It writes ai_engine/machine_profile.json, which is machine-specific
 # and gitignored, so it never arrives with a deploy. Without it the engine does
 # not fail — it falls back to a capacity of ONE camera and says so in its

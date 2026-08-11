@@ -24,7 +24,7 @@ adas-capstone/
 │   ├── camera.py            # Threaded RTSP stream reader with auto-reconnect
 │   ├── accident.py          # Event → annotated snapshot → outbox entry
 │   ├── supervisor.py        # Reconciles engine state against the backend
-│   ├── calibrate.py         # One-shot per-machine capacity benchmark
+│   ├── capacity.py          # How many cameras can this machine run?
 │   ├── machine_profile.py   # Read/write/validate machine_profile.json
 │   ├── config.py            # AI engine configuration (thresholds, endpoints)
 │   ├── epoch50.pt           # YOLO weights (the adopted checkpoint)
@@ -126,7 +126,7 @@ uv sync --extra ai-cpu
 
 The two are mutually exclusive; pick one. `ai-cpu` resolves torch from PyTorch's CPU index, so it pulls **no** `nvidia-*` packages at all. (Simply omitting the CUDA index would not be enough — on Linux the default PyPI torch wheel bundles the CUDA runtime anyway.) It also resolves a newer torch than the CUDA extra, since the two indexes carry different builds; that is fine precisely because no measured claim may come from a CPU machine.
 
-The engine detects the absence of a GPU and falls back automatically. It will run and connect, which is useful for integration work, but it is not a detection platform — run `uv run python ai_engine/calibrate.py` and it will tell you so.
+The engine detects the absence of a GPU and falls back automatically. It will run and connect, which is useful for integration work, but it is not a detection platform — run `uv run python ai_engine/capacity.py` and it will tell you so.
 
 **Node dependencies (frontend + root tooling):**
 
@@ -240,7 +240,7 @@ The engine loads `ai_engine/epoch50.pt` directly. There is no longer a `best.eng
 Before running it on a new machine, calibrate:
 
 ```bash
-uv run python ai_engine/calibrate.py
+uv run python ai_engine/capacity.py
 ```
 
 This reports how many cameras the machine can carry at 10 and at 15 FPS and writes a gitignored `machine_profile.json`. See [`ai_engine/eval/README.md`](ai_engine/eval/README.md).

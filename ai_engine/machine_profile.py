@@ -1,6 +1,6 @@
 """Read, write and validate the per-machine calibration profile.
 
-Pure module: no cv2, no ultralytics, no torch. calibrate.py produces these;
+Pure module: no cv2, no ultralytics, no torch. capacity.py produces these;
 main.py consumes them.
 """
 

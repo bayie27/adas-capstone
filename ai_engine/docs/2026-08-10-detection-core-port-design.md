@@ -31,19 +31,19 @@ The integration plumbing landed in PR #67 — `outbox.py`, `supervisor.py`, `bac
 
 ## 3. Module layout
 
-| Module               | Status             | Purpose                                                                                                                                     | Test tier    |
-| -------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `accumulate.py`      | new, verbatim copy | Evidence accumulator. No cv2, no model.                                                                                                     | CI           |
-| `pipeline.py`        | new                | Fixed-cadence batcher, per-camera accumulator registry, reset seams, event dispatch.                                                        | CI (fakes)   |
-| `detector.py`        | new                | Owns the model. Grayscale conversion, class-0 filtering, batched predict, device resolution.                                                | cv2-guarded  |
-| `calibrate.py`       | new                | One-shot per-machine setup: probe, build, benchmark, verify, write profile.                                                                 | cv2-guarded  |
-| `machine_profile.py` | new                | Read/write/validate the machine profile. No cv2.                                                                                            | CI           |
-| `camera.py`          | modified           | Decode timestamps, segment counter, buffer sizing.                                                                                          | cv2-guarded  |
-| `accident.py`        | rewritten          | Event → annotated snapshot → outbox enqueue.                                                                                                | cv2-guarded  |
-| `main.py`            | reduced to wire-up | Load profile, start outbox, start supervisor, run pipeline.                                                                                 | —            |
-| `testing.py`         | deleted            | A hardcoded manual RTSP viewer pointed at `channel1`, imported by nothing. Superseded by `calibrate.py`'s probe and the fake-capture tests. | —            |
-| `config.py`          | modified           | SPEC constants and defaults.                                                                                                                | CI           |
-| `eval/`              | new                | Ported measurement harness.                                                                                                                 | clips-marked |
+| Module               | Status             | Purpose                                                                                                                                    | Test tier    |
+| -------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
+| `accumulate.py`      | new, verbatim copy | Evidence accumulator. No cv2, no model.                                                                                                    | CI           |
+| `pipeline.py`        | new                | Fixed-cadence batcher, per-camera accumulator registry, reset seams, event dispatch.                                                       | CI (fakes)   |
+| `detector.py`        | new                | Owns the model. Grayscale conversion, class-0 filtering, batched predict, device resolution.                                               | cv2-guarded  |
+| `capacity.py`        | new                | One-shot per-machine setup: probe, build, benchmark, verify, write profile.                                                                | cv2-guarded  |
+| `machine_profile.py` | new                | Read/write/validate the machine profile. No cv2.                                                                                           | CI           |
+| `camera.py`          | modified           | Decode timestamps, segment counter, buffer sizing.                                                                                         | cv2-guarded  |
+| `accident.py`        | rewritten          | Event → annotated snapshot → outbox enqueue.                                                                                               | cv2-guarded  |
+| `main.py`            | reduced to wire-up | Load profile, start outbox, start supervisor, run pipeline.                                                                                | —            |
+| `testing.py`         | deleted            | A hardcoded manual RTSP viewer pointed at `channel1`, imported by nothing. Superseded by `capacity.py`'s probe and the fake-capture tests. | —            |
+| `config.py`          | modified           | SPEC constants and defaults.                                                                                                               | CI           |
+| `eval/`              | new                | Ported measurement harness.                                                                                                                | clips-marked |
 
 `outbox.py`, `backend_client.py`, `events.py`, `supervisor.py` are unchanged.
 
@@ -180,7 +180,7 @@ The engine must run on the deployment box, on teammates' laptops with assorted N
 
 ### 6.1 The calibration command
 
-`uv run python ai_engine/calibrate.py`, run once per machine after install:
+`uv run python ai_engine/capacity.py`, run once per machine after install:
 
 1. **Probe.** Resolve the device — CUDA, MPS, or CPU — and record the GPU name and available memory where applicable.
 
@@ -198,7 +198,7 @@ The engine must run on the deployment box, on teammates' laptops with assorted N
 
 The profile records the model build path, the resolved device, the measured latency curve across batch sizes, the derived camera capacity at each end of the band, the operator's chosen target count, and the verification result.
 
-The engine logs its capacity and the live camera count together on startup — for example `capacity 8 cameras @ 15 FPS · 6 active · OK`, or `capacity 2 cameras @ 15 FPS · 6 active · DEGRADED, running 10 FPS floor`. A machine that cannot carry a single camera at the required rate reports a capacity of zero and states plainly that it is not a detection platform (§6.4). `main.py` reads it at startup. If it is absent, the engine runs at a conservative default cadence and logs that `calibrate.py` has not been run; it does not fail.
+The engine logs its capacity and the live camera count together on startup — for example `capacity 8 cameras @ 15 FPS · 6 active · OK`, or `capacity 2 cameras @ 15 FPS · 6 active · DEGRADED, running 10 FPS floor`. A machine that cannot carry a single camera at the required rate reports a capacity of zero and states plainly that it is not a detection platform (§6.4). `main.py` reads it at startup. If it is absent, the engine runs at a conservative default cadence and logs that `capacity.py` has not been run; it does not fail.
 
 The engine logs the profile's verification status on startup so whoever is running it knows what they have.
 
@@ -231,7 +231,7 @@ Capacity below is what each class is _expected_ to report. None of it is measure
 | Apple Silicon          | A small number of cameras. Adequate for development and demos.                                                                                                                                                                                                                                                  |
 | CPU only               | Untested. Previously called "effectively zero", reasoning from the 10 FPS lower bound — but the cadence sweep (`cadence-measurement.md`) found no detection cost down to ~6 FPS, so that reasoning no longer holds. Needs measuring on actual CPU throughput, which is a different question from sampling rate. |
 
-**⚠️ This whole table is now too pessimistic.** It was written assuming ~15 FPS per camera was required. The cadence sweep found no measured detection cost at ~6 FPS, so capacity — which is `sustainable_inference_rate / required_per_camera_rate` — is roughly triple what these rows assume. Revise once `calibrate.py` produces real per-machine numbers rather than replacing one estimate with another.
+**⚠️ This whole table is now too pessimistic.** It was written assuming ~15 FPS per camera was required. The cadence sweep found no measured detection cost at ~6 FPS, so capacity — which is `sustainable_inference_rate / required_per_camera_rate` — is roughly triple what these rows assume. Revise once `capacity.py` produces real per-machine numbers rather than replacing one estimate with another.
 
 The CPU-only case runs, connects, and is useful for anyone working on integration, but it is not a detection platform and the engine states so on startup. No performance claim may be drawn from it.
 
@@ -344,7 +344,7 @@ Expected per-clip results are committed as `ai_engine/eval/baseline_epoch50.json
 5. `accident.py` rewritten against the event; `main.py` reduced to wire-up; config constants; delete `best.*`, add `epoch50.pt`.
 6. `eval/` harness ported; **port parity proven** before anything further.
 7. Per-clip regression established as the baseline.
-8. `calibrate.py`, `machine_profile.py`, dependency install split.
+8. `capacity.py`, `machine_profile.py`, dependency install split.
 9. Cadence measurement at the deployed rate; record the result.
 
 Step 6 gates everything after it. A refactor that silently changes behaviour is the failure this project has repeatedly caught, and the reference output must come from `adas_transfer/code/run.py` rather than from any re-implementation.

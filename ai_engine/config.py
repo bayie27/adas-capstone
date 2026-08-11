@@ -42,7 +42,7 @@ UNRESPONSIVE_AFTER_FAILURES = 3  # D-003
 # Do not tune them without new evidence.
 
 WEIGHTS_PATH = Path(__file__).resolve().parent / "epoch50.pt"
-# Written by calibrate.py; machine-specific and gitignored.
+# Written by capacity.py; machine-specific and gitignored.
 PROFILE_PATH = Path(__file__).resolve().parent / "machine_profile.json"
 
 ACCIDENT_CLASS_ID = 0  # class 1 `vehicle` is a training foil, discarded at inference

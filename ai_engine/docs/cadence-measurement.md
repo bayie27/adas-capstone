@@ -52,7 +52,7 @@ Every row is all 17 clips, scored with the same `eval/score.py` and `labels.csv`
 
 1. **The 10–15 FPS band is a compute/thermal constraint only.** The paper's own justification (p.74, thermal throttling) is the correct and complete one. There is no detection-side reason for the floor, so it must not be described as one.
 
-2. **Weak machines carry far more cameras than the design assumed.** Camera capacity is `sustainable_inference_rate / required_per_camera_rate`. If the required rate can drop to ~5 FPS with no measured detection cost, capacity roughly triples versus the 15 FPS assumption. Design doc §6.4's capability table is too pessimistic and should be revised after `calibrate.py` produces real numbers.
+2. **Weak machines carry far more cameras than the design assumed.** Camera capacity is `sustainable_inference_rate / required_per_camera_rate`. If the required rate can drop to ~5 FPS with no measured detection cost, capacity roughly triples versus the 15 FPS assumption. Design doc §6.4's capability table is too pessimistic and should be revised after `capacity.py` produces real numbers.
 
 3. **The CPU-only verdict needs revisiting.** §6.4 calls CPU-only "effectively zero capacity" at the 10 FPS lower bound. At ~5 FPS that conclusion no longer follows automatically. It remains untested — this sweep measured _sampling_ rate on a GPU, not CPU throughput — but the reasoning that produced the verdict is gone.
 

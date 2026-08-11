@@ -1,4 +1,4 @@
-"""calibrate.py imports cv2 and (via detector) ultralytics, so this module is
+"""capacity.py imports cv2 and (via detector) ultralytics, so this module is
 guarded and only runs where the `ai` extra is installed. It never loads the
 real model or touches the GPU — _benchmark is stubbed with canned latencies,
 because what needs testing here is the WIRING, not the timing.
@@ -11,7 +11,7 @@ import pytest
 pytest.importorskip("cv2")
 np = pytest.importorskip("numpy")
 
-import calibrate  # noqa: E402
+import capacity  # noqa: E402
 import config  # noqa: E402
 from machine_profile import load_profile  # noqa: E402
 
@@ -32,13 +32,13 @@ def _run(monkeypatch, tmp_path, argv=(), latencies=None):
             raise RuntimeError("CUDA out of memory")
         return latencies[batch]
 
-    monkeypatch.setattr(calibrate, "resolve_device", lambda: "cpu")
-    monkeypatch.setattr(calibrate, "AccidentDetector", lambda *a, **k: object())
-    monkeypatch.setattr(calibrate, "_benchmark", fake_benchmark)
+    monkeypatch.setattr(capacity, "resolve_device", lambda: "cpu")
+    monkeypatch.setattr(capacity, "AccidentDetector", lambda *a, **k: object())
+    monkeypatch.setattr(capacity, "_benchmark", fake_benchmark)
     monkeypatch.setattr(config, "PROFILE_PATH", profile_path)
-    monkeypatch.setattr(sys, "argv", ["calibrate.py", *argv])
+    monkeypatch.setattr(sys, "argv", ["capacity.py", *argv])
 
-    calibrate.main()
+    capacity.main()
     return load_profile(profile_path)
 
 
@@ -47,7 +47,7 @@ def test_the_batch_grid_is_contiguous():
     powers-of-two grid could never report 3, 5, 6 or 7 cameras. See
     test_a_sparse_grid_understates_capacity for the full argument — this pins
     the same requirement at the producing end."""
-    grid = calibrate.BATCH_SIZES
+    grid = capacity.BATCH_SIZES
     assert grid == list(range(1, 17))
 
 
@@ -56,7 +56,7 @@ def test_the_grid_reaches_past_eight():
     batch 8 came in at 63.6ms against the 66.7ms tick, so a grid ending at 8
     saturated at both ends of the band and reported the ceiling as if it were
     the answer."""
-    assert max(calibrate.BATCH_SIZES) > 8
+    assert max(capacity.BATCH_SIZES) > 8
 
 
 def test_the_two_capacities_are_not_swapped(monkeypatch, tmp_path):
@@ -85,7 +85,7 @@ def test_an_explicit_camera_target_overrides_the_measurement(monkeypatch, tmp_pa
 def test_a_machine_too_slow_for_one_camera_records_zero(monkeypatch, tmp_path):
     """The honest CPU-only answer, written to the profile rather than
     rounded up to 1."""
-    slow = {b: 900.0 * b for b in calibrate.BATCH_SIZES}
+    slow = {b: 900.0 * b for b in capacity.BATCH_SIZES}
     profile = _run(monkeypatch, tmp_path, latencies=slow)
     assert profile.capacity_at_max_fps == 0
     assert profile.capacity_at_min_fps == 0
@@ -95,7 +95,7 @@ def test_every_benchmarked_batch_is_recorded(monkeypatch, tmp_path):
     """The latency table is the evidence behind the capacity claim; dropping
     points would leave a number nobody can audit."""
     profile = _run(monkeypatch, tmp_path)
-    assert sorted(profile.latency_ms_by_batch) == calibrate.BATCH_SIZES
+    assert sorted(profile.latency_ms_by_batch) == capacity.BATCH_SIZES
 
 
 def test_a_fresh_profile_is_marked_unverified(monkeypatch, tmp_path):
@@ -134,17 +134,17 @@ def test_hitting_the_top_of_the_grid_is_reported_as_a_floor():
     here', not a measurement. Silently returning the ceiling is what made
     capacity_at_min_fps uninformative on the development machine."""
     saturated = {1: 10.0, 2: 12.0, 3: 14.0}
-    assert calibrate._grid_limited(saturated, 3) is True
-    assert calibrate._grid_limited(saturated, 2) is False
+    assert capacity._grid_limited(saturated, 3) is True
+    assert capacity._grid_limited(saturated, 2) is False
 
 
 def test_an_empty_latency_table_is_not_grid_limited():
-    assert calibrate._grid_limited({}, 0) is False
+    assert capacity._grid_limited({}, 0) is False
 
 
 def test_the_synthetic_frame_is_a_real_three_channel_image():
-    frame = calibrate.synthetic_frame()
-    assert frame.shape == (calibrate.BENCHMARK_HEIGHT, calibrate.BENCHMARK_WIDTH, 3)
+    frame = capacity.synthetic_frame()
+    assert frame.shape == (capacity.BENCHMARK_HEIGHT, capacity.BENCHMARK_WIDTH, 3)
 
 
 def test_a_sample_frame_is_resized_to_the_benchmark_resolution(tmp_path):
@@ -154,13 +154,13 @@ def test_a_sample_frame_is_resized_to_the_benchmark_resolution(tmp_path):
     path = tmp_path / "sample.png"
     cv2.imwrite(str(path), np.full((240, 320, 3), 127, dtype="uint8"))
 
-    frame = calibrate.load_sample_frame(path)
+    frame = capacity.load_sample_frame(path)
 
-    assert frame.shape == (calibrate.BENCHMARK_HEIGHT, calibrate.BENCHMARK_WIDTH, 3)
+    assert frame.shape == (capacity.BENCHMARK_HEIGHT, capacity.BENCHMARK_WIDTH, 3)
 
 
 def test_a_missing_sample_frame_exits_rather_than_benchmarking_a_blank(tmp_path):
     """Silently falling back to the blank frame would report an optimistic
     capacity under a flag that was asked for precisely to avoid one."""
     with pytest.raises(SystemExit):
-        calibrate.load_sample_frame(tmp_path / "nope.mp4")
+        capacity.load_sample_frame(tmp_path / "nope.mp4")

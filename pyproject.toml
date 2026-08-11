@@ -53,10 +53,14 @@ ai-cpu = [
 # NOT part of the `ai` extra. The GPU is used either way — that comes from
 # torch's CUDA build. TensorRT would add a faster inference backend on top.
 #
-# Nothing currently builds or loads a TensorRT engine: calibrate.py benchmarks
+# Nothing currently builds or loads a TensorRT engine: capacity.py benchmarks
 # the plain .pt weights and does not probe for TensorRT, so installing this
-# extra changes nothing today. It is kept because design doc section 8 still
-# specifies a build step (see the handover's "Still to do").
+# extra changes nothing today. That is a deliberate stopping point, not an
+# oversight — the GTX 1650 this was developed on carries 8 cameras at 15 FPS on
+# the plain weights, comfortably above what the system needs, so an optimised
+# build would buy capacity nobody is short of. The extra stays for whoever
+# eventually needs it; see docs/2026-08-11-calibration-capacity-design.md for
+# what measuring it properly would involve.
 #
 # It is separated because `tensorrt` on PyPI is a wheel-stub that downloads
 # several GB from NVIDIA's own index inside a PEP 517 build step, with no
