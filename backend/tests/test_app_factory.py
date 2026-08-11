@@ -24,6 +24,62 @@ def _real_db_path() -> Path:
     return Path(settings.DATABASE_URL[len(prefix) :])
 
 
+def _dev_tools_settings(tmp_path, **overrides) -> Settings:
+    return Settings(
+        _env_file=None,
+        SECRET_KEY="dev-tools-gate-secret-key-not-for-production",
+        INTERNAL_API_KEY="dev-tools-gate-internal-api-key",
+        DEFAULT_ADMIN_PASSWORD="dev-tools-gate-admin-password-123",
+        DATABASE_URL=f"sqlite:///{tmp_path / 'gate.db'}",
+        SCHEDULER_ENABLED=False,
+        EXPORT_JOB_WORKERS=0,
+        **overrides,
+    )
+
+
+class TestDevToolsGate:
+    """dev_plan/02_PKG_dev_api.md Step 1 (DT-3/DT-5). The flag is resolved
+    from ENVIRONMENT only when it is left unset, so a production deployment
+    is off by default while the LAN demo box can still turn it on."""
+
+    def test_defaults_on_in_development_and_off_in_production(self, tmp_path):
+        assert _dev_tools_settings(tmp_path).DEV_TOOLS_ENABLED is True
+        assert (
+            _dev_tools_settings(tmp_path, ENVIRONMENT="production").DEV_TOOLS_ENABLED
+            is False
+        )
+
+    def test_an_explicit_value_wins_over_the_environment(self, tmp_path):
+        enabled = _dev_tools_settings(
+            tmp_path, ENVIRONMENT="production", DEV_TOOLS_ENABLED=True
+        )
+        disabled = _dev_tools_settings(
+            tmp_path, ENVIRONMENT="development", DEV_TOOLS_ENABLED=False
+        )
+        assert enabled.DEV_TOOLS_ENABLED is True
+        assert disabled.DEV_TOOLS_ENABLED is False
+
+    def test_router_is_absent_when_disabled(self, tmp_path):
+        """Absent, not merely refusing — Package C's probe treats the 404 as
+        'no dev tools here', so a 401/403 would read as a different thing."""
+        app = create_app(_dev_tools_settings(tmp_path, DEV_TOOLS_ENABLED=False))
+        with TestClient(app) as client:
+            assert client.get("/api/dev/status").status_code == 404
+
+    def test_status_is_reachable_unauthenticated_when_enabled(self, tmp_path):
+        app = create_app(_dev_tools_settings(tmp_path, DEV_TOOLS_ENABLED=True))
+        with TestClient(app) as client:
+            resp = client.get("/api/dev/status")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["enabled"] is True
+        # Sourced from the registry, so a profile added later shows up here
+        # without this route being touched.
+        assert {"demo", "empty"} <= {p["name"] for p in body["profiles"]}
+        # Nothing an anonymous caller could act on.
+        assert set(body) == {"enabled", "profiles"}
+
+
 class TestAppFactoryIsolation:
     def test_client_fixture_never_touches_the_real_repo_root_db(
         self, client: TestClient
