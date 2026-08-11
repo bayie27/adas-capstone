@@ -80,7 +80,7 @@ any order relative to the others. The one soft coupling is documented in its §N
 | Package       | Status      | Commit                                     |
 | ------------- | ----------- | ------------------------------------------ |
 | A — seed core | Complete    | `517fd9c`..`093171e` — one commit per step |
-| B — dev API   | Not started | —                                          |
+| B — dev API   | Complete    | `3354369`..`11e92ab` — one commit per step |
 | C — dev panel | Not started | —                                          |
 | D — launcher  | Not started | —                                          |
 
