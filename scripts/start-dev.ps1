@@ -196,15 +196,29 @@ if ($Reseed) {
 # -> frontend -> AI engine.
 # ---------------------------------------------------------------------------
 
+# Prefer PowerShell 7 (pwsh) for the spawned windows, but a stock Windows box
+# only ships Windows PowerShell 5.1 with no pwsh on PATH. Nothing in these
+# scripts needs PS7-only syntax, so fall back to powershell.exe rather than
+# hard-failing every spawn with "the system cannot find the file specified."
+$script:ShellExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
+
 function Start-Component([string]$Title, [string]$Command, [bool]$Foreground) {
     if ($Foreground) {
         Write-Step "Running $Title in this terminal (Ctrl+C to stop)..."
         Invoke-Expression $Command
         return
     }
-    Write-Step "Starting $Title in a new window..."
+    Write-Step "Starting $Title in a new window ($script:ShellExe)..."
     $wrapped = "`$Host.UI.RawUI.WindowTitle = '$Title'; $Command"
-    Start-Process -FilePath "pwsh" -ArgumentList @('-NoExit', '-Command', $wrapped) -WorkingDirectory $RepoRoot | Out-Null
+    # -EncodedCommand (Base64 UTF-16LE), not -Command with a raw string: this
+    # repo can live under a path with spaces, and $Command already contains
+    # its own embedded double quotes (e.g. the frontend's `Set-Location
+    # "<repo>\frontend"`). Start-Process's -ArgumentList quoting does not
+    # nest reliably through that combination -- it silently truncates the
+    # path at the first space, e.g. `Set-Location` erroring on a stray path
+    # fragment. Encoding sidesteps quoting entirely.
+    $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($wrapped))
+    Start-Process -FilePath $script:ShellExe -ArgumentList @('-NoExit', '-EncodedCommand', $encoded) -WorkingDirectory $RepoRoot | Out-Null
 }
 
 $foreground = $NoNewWindow.IsPresent
