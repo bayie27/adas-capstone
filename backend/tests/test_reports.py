@@ -15,6 +15,8 @@ from datetime import UTC, datetime, timedelta
 from io import StringIO
 
 import pytest
+from app.core.config import Settings
+from app.main import create_app
 from app.models import Camera, DetectionLog, DetectionStatus
 from fastapi.testclient import TestClient
 from pypdf import PdfReader
@@ -525,6 +527,91 @@ class TestRowLimitBoundary:
         self._seed_n_incidents(session, camera, 1)
         over_limit = client.get("/api/alerts/export?format=pdf", headers=headers)
         assert over_limit.status_code == 413
+
+
+class TestCsvStreamClientDisconnect:
+    """Edge case 6.13 (be_audit/00_FINDINGS.md F26) — a client
+    disconnecting mid-CSV-stream must not 500 the (already-gone) client
+    and must not leak the request's DB session. The shared-session
+    `client` fixture used everywhere else in this file can't exercise
+    this: its `get_session` override yields one process-lifetime Session
+    object with no per-request open/close, which would mask exactly the
+    leak this row worries about. Real app, ordinary non-overridden
+    `get_session`, same pattern as test_internal.py's
+    TestConcurrentDisableRace, so this request's Session really is opened
+    and closed via FastAPI's own dependency teardown."""
+
+    def _make_client(self, tmp_path) -> TestClient:
+        app_settings = Settings(
+            _env_file=None,
+            SECRET_KEY="test-secret-key-not-for-production-use",
+            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            DATABASE_URL=f"sqlite:///{tmp_path / 'streamdisconnect.db'}",
+            SCHEDULER_ENABLED=False,
+            SNAPSHOT_ROOT=tmp_path / "snapshots",
+        )
+        app = create_app(app_settings)
+        return TestClient(app)
+
+    def test_disconnect_before_reading_the_body_does_not_leak_the_session(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ):
+        with self._make_client(tmp_path) as client:
+            with Session(client.app.state.engine) as session:
+                make_operator(session, username="streamdc", password="Operator123")
+                camera = make_camera(session, name="Stream DC Cam", channel_id=1)
+                for i in range(20):
+                    session.add(
+                        DetectionLog(
+                            camera_id=camera.camera_id,
+                            detected_at=datetime.now(UTC) - timedelta(minutes=i),
+                            snapshot_key=f"streamdc/{i}.jpg",
+                            confidence_score=0.5,
+                            detection_status=DetectionStatus.RESOLVED.value,
+                            source_event_id=str(uuid.uuid4()),
+                        )
+                    )
+                session.commit()
+
+            cookie_name = client.app.state.settings.SESSION_COOKIE_NAME
+            login = client.post(
+                "/api/auth/login",
+                data={"username": "streamdc", "password": "Operator123"},
+            )
+            assert login.status_code == 200
+            headers = {"Cookie": f"{cookie_name}={login.cookies.get(cookie_name)}"}
+
+            close_calls = []
+            real_close = Session.close
+            monkeypatch.setattr(
+                Session,
+                "close",
+                lambda self: (close_calls.append(self), real_close(self)),
+            )
+
+            with client.stream(
+                "GET",
+                "/api/alerts/export",
+                params={"format": "csv"},
+                headers=headers,
+            ) as response:
+                assert response.status_code == 200
+                # Disconnect immediately, before consuming any of the
+                # body — the earliest and most aggressive point a real
+                # client could bail, and the hardest case for cleanup to
+                # get right.
+
+            assert len(close_calls) >= 1, (
+                "the streaming export request's DB session was never "
+                "closed after the client disconnected"
+            )
+            monkeypatch.undo()
+
+            # The app must still be healthy afterward: no exhausted
+            # pool, no stuck lock, no unhandled 500 from the disconnect.
+            follow_up = client.get("/api/users/me", headers=headers)
+            assert follow_up.status_code == 200
 
 
 def _assert_no_filesystem_paths(text: str) -> None:
