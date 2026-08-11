@@ -1,0 +1,34 @@
+# Simulates the CDRRMO VMS from the EVALUATION clips instead of sample_vids.
+# Run from the repo root:  mediamtx mediamtx.clips.yml
+#
+# Use this when you have ai_engine/eval/clips/ populated (see
+# ai_engine/eval/README.md) but not ai_engine/sample_vids/. Both directories are
+# gitignored and neither ships in a clone, so pick whichever you actually have.
+#
+# Why these five clips: the first four are ones ai_engine/eval/baseline_epoch50.json
+# records as DETECTED, so the engine will alert on each within a loop or two.
+# channel5 is airbase.mp4, the crash-free negative — it must stay silent for the
+# whole run. A camera that never alerts is as much a result as one that does.
+#
+# -rtsp_transport tcp on publish is required, not cosmetic: with the default UDP
+# transport, publishing all 5 channels at once over loopback drops RTP packets
+# constantly. Same reasoning as mediamtx.yml.
+#
+# NOTE: MediaMTX writes auto.crt / auto.key into whatever directory it starts
+# from, for its MoQ/WebRTC listeners. Both are gitignored — never commit the key.
+paths:
+  channel1:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/dekwatro.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel2:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/tric-motor-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel3:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/red-car-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel4:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/motor-motor-night.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel5:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes

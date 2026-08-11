@@ -57,7 +57,8 @@ adas-capstone/
 │   ├── public/
 │   └── package.json
 ├── e2e/                     # Playwright specs (CI-only, spans backend + frontend)
-├── mediamtx.yml             # Camera simulation config — see "Simulate camera streams"
+├── mediamtx.yml             # Camera simulation from sample_vids/ — see "Simulate camera streams"
+├── mediamtx.clips.yml       # Same, but sourced from ai_engine/eval/clips/
 ├── scripts/start-sim.ps1    # Preflighted wrapper around `mediamtx mediamtx.yml`
 ├── pyproject.toml
 ├── uv.lock
@@ -184,6 +185,16 @@ mediamtx mediamtx.yml
 .\scripts\start-sim.ps1
 ```
 
+**Method 1b — `mediamtx.clips.yml` (if you have the evaluation clips instead).** `sample_vids/` and `eval/clips/` are both gitignored and neither ships in a clone, so use whichever you actually have:
+
+```bash
+mediamtx mediamtx.clips.yml
+```
+
+Same five channels, sourced from `ai_engine/eval/clips/` (see [`ai_engine/eval/README.md`](ai_engine/eval/README.md) for how to populate it). Channels 1–4 are clips the measured baseline records as detected, so the engine alerts on each within a loop or two; channel 5 is the crash-free negative and must stay silent for the whole run.
+
+MediaMTX writes `auto.crt` and `auto.key` into whatever directory it starts from. Both are gitignored — never commit the key.
+
 **Method 2 — manual ffmpeg per channel.** One terminal per channel, blocking. Useful if you only need one or two streams up. Run from the repo root (the paths below are root-relative). `-rtsp_transport tcp` matters, not just style — with the default UDP transport, publishing several channels at once over loopback drops RTP packets constantly:
 
 ```powershell
@@ -233,6 +244,27 @@ uv run python ai_engine/calibrate.py
 ```
 
 This reports how many cameras the machine can carry at 10 and at 15 FPS and writes a gitignored `machine_profile.json`. See [`ai_engine/eval/README.md`](ai_engine/eval/README.md).
+
+#### If the engine connects but never detects anything
+
+**This is the one that will catch you, and it is not a bug.**
+
+`reseed_dev.py` seeds sample alerts across every detection status, and any camera with an open (`Unverified` or `Ongoing`) alert is **self-blindfolded** — `desired_ai_state = Paused, reason = incident`. On a freshly seeded database that is _every_ camera, so the engine connects, reports `Connected`, and deliberately runs no inference at all. The engine log shows repeated `Stream dropped ... while paused` rather than anything about detection.
+
+Clear an alert to release its camera. Either resolve or dismiss it in the dashboard — which also exercises the HITL workflow — or, to unblock everything at once for a demo:
+
+```bash
+uv run python -c "import sqlite3; d=sqlite3.connect('adas.db'); d.execute(\"UPDATE detection_log SET detection_status='Resolved' WHERE detection_status IN ('Unverified','Ongoing')\"); d.execute(\"UPDATE camera SET desired_ai_state='Active', desired_state_reason=NULL WHERE is_active=1\"); d.commit()"
+```
+
+Within a few seconds the engine logs `Resuming AI ingestion` and starts alerting.
+
+#### Other things worth knowing on a first run
+
+- **Start the backend first.** The engine holds no camera configuration of its own — it heartbeats the backend and is told which cameras exist and where to reach them. It cannot run standalone.
+- **`RTSP_URL_TEMPLATE` changes need a backend restart.** Settings load once at startup.
+- **`UnicodeEncodeError` starting the backend on Windows.** The FastAPI CLI prints an emoji and the console codepage cannot encode it; this bites when output is redirected to a file. Prefix with `PYTHONIOENCODING=utf-8`.
+- **Only 5 RTSP channels exist** in both simulation configs, but `reseed_dev.py` seeds 6 cameras. The sixth has nothing to connect to and will sit reconnecting — deactivate it, or ignore it.
 
 ---
 

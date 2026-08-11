@@ -6,6 +6,8 @@
 
 **Companion document:** `ai_engine/docs/paper-edits-required.md` lists the paper changes this design makes necessary. The two must land together — several of the paper's test cases currently encode the pre-port detection design.
 
+> **Note for readers outside the team.** This repository is public, and two documents referenced above are deliberately not published: `Final-Paper.pdf` (the capstone paper) and `paper-edits-required.md` (the corrections this port makes necessary to it). Both are kept locally by the team and gitignored. References to them below are intentional and will not resolve in a clone.
+
 ---
 
 ## 1. Why
