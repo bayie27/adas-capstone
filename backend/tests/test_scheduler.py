@@ -136,6 +136,49 @@ class TestSchedulerJobErrorHandling:
         assert still_scheduled
 
 
+class TestMisfireCoalescing:
+    def test_a_backlog_of_missed_fires_collapses_into_one_catch_up_run(self):
+        """Edge case 5.11 — simulates what a suspend/resume (or any long
+        stall) produces: several missed interval fires queued up behind
+        `next_run_time`. `add_job()`'s D-009 policy (coalesce=True,
+        max_instances=1) must collapse that backlog into exactly one
+        catch-up run, not fire once per missed interval. Manipulates
+        `next_run_time` directly (APScheduler's own public job API) rather
+        than actually pausing the process for several intervals, but
+        exercises the same real scheduler and executor
+        test_unhandled_exception_in_a_job_keeps_it_scheduled does, not a
+        mock of APScheduler's own misfire handling."""
+        scheduler = create_scheduler()
+        calls: list[datetime] = []
+
+        def tick():
+            calls.append(datetime.now(UTC))
+
+        job = add_job(
+            scheduler, tick, job_id="backlog-job", trigger="interval", seconds=1
+        )
+
+        async def run_and_check() -> None:
+            scheduler.start()
+            # Rewind next_run_time to simulate 5 missed 1-second fires
+            # while "suspended" — well within the 300s misfire_grace_time,
+            # so APScheduler must catch up rather than skip the backlog.
+            job.modify(next_run_time=datetime.now(UTC) - timedelta(seconds=5))
+            scheduler.wakeup()
+            # Long enough to observe the coalesced catch-up run, short
+            # enough (< the 1s interval) to not also pick up the next
+            # legitimate, on-schedule tick — that would be correct
+            # behavior too, but would make this assertion meaningless.
+            await asyncio.sleep(0.4)
+            scheduler.shutdown(wait=False)
+
+        asyncio.run(run_and_check())
+
+        assert len(calls) == 1, (
+            f"expected exactly one coalesced catch-up run, got {len(calls)}"
+        )
+
+
 class TestExpireStaleSessions:
     def test_revokes_only_expired_unrevoked_sessions(self):
         engine = _make_engine()

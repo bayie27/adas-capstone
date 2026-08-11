@@ -113,6 +113,42 @@ class TestDashboardAnalytics:
         assert hour_counts[14] == 1
         assert sum(hour_counts.values()) == 2
 
+    def test_peak_hours_bucket_at_00_and_23_are_not_dropped(
+        self, client: TestClient, session: Session
+    ):
+        """Edge cases 5.7/5.9 — an incident timestamped exactly on an hour
+        boundary lands in exactly one bucket (the `strftime('%H', ...)`
+        grouping this endpoint uses extracts the hour directly, with no
+        range-window ambiguity the way the P5 hourly rollup has), and the
+        two edge buckets specifically (midnight, 11pm) aren't dropped by
+        an off-by-one in the 0-23 range this endpoint always returns."""
+        _, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name="Peak Hours Cam", channel_id=6)
+        make_analytics_log(
+            session,
+            camera,
+            detected_at=datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC),
+            status=DetectionStatus.RESOLVED,
+            confidence_score=0.8,
+        )
+        make_analytics_log(
+            session,
+            camera,
+            detected_at=datetime(2026, 1, 1, 23, 0, 0, tzinfo=UTC),
+            status=DetectionStatus.RESOLVED,
+            confidence_score=0.8,
+        )
+
+        resp = client.get("/api/analytics/dashboard", headers=headers)
+
+        assert resp.status_code == 200
+        hour_counts = {
+            row["hour"]: row["count"] for row in resp.json()["peak_accident_times"]
+        }
+        assert hour_counts[0] == 1
+        assert hour_counts[23] == 1
+        assert sum(hour_counts.values()) == 2
+
     def test_dashboard_filters_by_date_range_and_camera_ids(
         self, client: TestClient, session: Session
     ):

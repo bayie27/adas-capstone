@@ -21,9 +21,11 @@ rows in 14_EDGE_CASES.md: 1.17, 2.14, 2.15, 2.18, 3.6, 3.10, 3.11, 3.12,
 live in test_cameras.py, where the KPI semantics themselves live.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
 from app.core.monitor import (
     HealthStore,
     LiveHealthSample,
@@ -531,6 +533,12 @@ class TestPreviousHourStart:
         now = datetime(2026, 3, 5, 14, 37, 22, tzinfo=UTC)
         assert previous_hour_start(now) == datetime(2026, 3, 5, 13, 0, 0, tzinfo=UTC)
 
+    def test_crosses_the_midnight_utc_day_boundary(self):
+        """Edge case 5.8 — just after midnight rolls back to 23:00 on the
+        *previous* date, not 23:00 on the same (wrong) date."""
+        now = datetime(2026, 3, 5, 0, 30, 0, tzinfo=UTC)
+        assert previous_hour_start(now) == datetime(2026, 3, 4, 23, 0, 0, tzinfo=UTC)
+
 
 def _raw_row(
     created_at: datetime,
@@ -898,6 +906,34 @@ class TestHealthLiveEndpoint:
         client.app.state.health_store.set(cameras_but_silent)
         body = client.get("/api/system/health/live", headers=headers).json()
         assert "AI_HEARTBEAT_STALE" in {w["code"] for w in body["warnings"]}
+
+    def test_sustained_stale_ai_engine_never_logs_a_warning_line(
+        self, client: TestClient, session: Session, caplog: pytest.LogCaptureFixture
+    ):
+        """Edge case 6.19's "no runaway logging" half. AI_HEARTBEAT_STALE
+        is a per-request field in the JSON response (computed fresh each
+        time from the current health sample, never written to a log), and
+        presented camera status (Unresponsive) is likewise a pure,
+        stateless read-time computation in app/services/cameras.py with no
+        logging call in that path at all — so repeated polling under
+        sustained AI-engine silence is bounded to zero log lines by
+        construction, not merely "not too many." Simulates an extended
+        outage as many polls in a tight loop rather than actually waiting,
+        since the mechanism is stateless and doesn't care about wall time."""
+        headers = _operator_headers(client, session)
+        stale_sample = _sample(collected_at=datetime.now(UTC))
+        stale_sample.configured_camera_count = 3
+        stale_sample.sample_camera_count = 0
+        client.app.state.health_store.set(stale_sample)
+
+        with caplog.at_level(logging.WARNING):
+            for _ in range(20):
+                resp = client.get("/api/system/health/live", headers=headers)
+                assert resp.status_code == 200
+                cams = client.get("/api/cameras/", headers=headers)
+                assert cams.status_code == 200
+
+        assert caplog.records == []
 
     def test_healthy_state_when_no_warnings(self, client: TestClient, session: Session):
         headers = _operator_headers(client, session)

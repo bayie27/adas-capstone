@@ -960,14 +960,24 @@ class TestStateMachineExhaustiveness:
         }
         for path, methods in alert_paths.items():
             for method in methods:
-                if method.lower() != "post":
-                    continue
-                assert path.rsplit("/", 1)[-1] in {
-                    "confirm",
-                    "dismiss",
-                    "resolve",
-                    "snooze",
-                }, f"unexpected POST route {path} could reopen an incident"
+                lowered = method.lower()
+                if lowered not in {"get", "head", "options"}:
+                    # Edge case 7 (terminal-no-reopen-no-edit-delete,
+                    # be_audit/00_FINDINGS.md) — a future PUT/PATCH/DELETE
+                    # edit-or-delete route on an incident must fail this
+                    # assertion, not just an unexpected POST subroute; the
+                    # original version of this test only inspected POST
+                    # and silently `continue`d past every other method.
+                    assert lowered == "post", (
+                        f"unexpected {method} route {path} — terminal "
+                        "incidents must have no edit or delete API"
+                    )
+                    assert path.rsplit("/", 1)[-1] in {
+                        "confirm",
+                        "dismiss",
+                        "resolve",
+                        "snooze",
+                    }, f"unexpected POST route {path} could reopen an incident"
 
 
 class TestAlertCameraStatusSideEffects:
