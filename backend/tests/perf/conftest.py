@@ -41,6 +41,14 @@ import seed_dev_data as perf_seed  # noqa: E402
 
 PERF_ROW_COUNT = 100_000
 
+# A6 (be_audit/A6_manual_evidence.md Part 2) — the real operating envelope
+# is ~10 incidents/day (Lipa CDRRMO estimate), not the NFR-08 100k-row
+# profile's ~182/day density. A 30-day export at that envelope is ~300
+# rows; this is a separate, deliberately lower-density dataset, not a
+# filtered slice of perf_seeded's dense one.
+ENVELOPE_ROW_COUNT = 300
+ENVELOPE_SPREAD_DAYS = 30
+
 _PERF_DIR = Path(__file__).resolve().parent
 
 
@@ -145,6 +153,56 @@ def perf_seeded(perf_engine, perf_settings) -> dict:
 @pytest.fixture(scope="session")
 def perf_client(perf_settings, perf_seeded):
     app = create_app(perf_settings)
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture(scope="session")
+def envelope_settings(tmp_path_factory) -> Settings:
+    db_dir = tmp_path_factory.mktemp("envelope_db")
+    return _build_perf_settings(db_dir / "adas_envelope.db")
+
+
+@pytest.fixture(scope="session")
+def envelope_engine(envelope_settings):
+    engine = create_db_engine(envelope_settings)
+    init_db(engine, envelope_settings)
+    return engine
+
+
+@pytest.fixture(scope="session")
+def envelope_seeded(envelope_engine, envelope_settings) -> dict:
+    """A dedicated, separately-seeded ~10-incidents/day dataset (own DB
+    file, not a slice of `perf_seeded`) — see `ENVELOPE_ROW_COUNT`."""
+    with Session(envelope_engine) as session:
+        operators = perf_seed.ensure_default_operators(session)
+        cameras = perf_seed.seed_sample_cameras(session)
+        camera_ids = [c.camera_id for c in cameras]
+        operator_ids = [u.user_id for u in operators.values()]
+
+        now = datetime.now(UTC)
+        rows = perf_seed._build_perf_rows(
+            now=now,
+            camera_ids=camera_ids,
+            operator_ids=operator_ids,
+            target_count=ENVELOPE_ROW_COUNT,
+            spread_days=ENVELOPE_SPREAD_DAYS,
+        )
+        rows = perf_seed._enforce_open_camera_limit(rows, operator_ids=operator_ids)
+
+        for batch_start in range(0, len(rows), perf_seed.PERF_BATCH_SIZE):
+            batch = rows[batch_start : batch_start + perf_seed.PERF_BATCH_SIZE]
+            session.execute(insert(DetectionLog), batch)
+        session.commit()
+
+    reconcile_camera_desired_states(envelope_engine)
+
+    return {"now": now, "operators": operators}
+
+
+@pytest.fixture(scope="session")
+def envelope_client(envelope_settings, envelope_seeded):
+    app = create_app(envelope_settings)
     with TestClient(app) as client:
         yield client
 
