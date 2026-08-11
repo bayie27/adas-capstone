@@ -35,6 +35,7 @@ def test_lifespan_resets_only_enabled_active_cameras(tmp_path):
         DATABASE_URL=f"sqlite:///{tmp_path / 'lifespan.db'}",
         SCHEDULER_ENABLED=False,
         EXPORT_JOB_WORKERS=0,
+        SNAPSHOT_ROOT=tmp_path / "snapshots",
     )
     app = create_app(app_settings)
 

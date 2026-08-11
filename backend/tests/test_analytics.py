@@ -245,6 +245,7 @@ class TestPerformanceAnalytics:
         south = make_camera(session, name="South Corridor", channel_id=32)
         east = make_camera(session, name="East Corridor", channel_id=33)
         ignored = make_camera(session, name="Ignored Corridor", channel_id=34)
+        silent = make_camera(session, name="Silent Corridor", channel_id=35)
 
         make_analytics_log(
             session,
@@ -333,6 +334,30 @@ class TestPerformanceAnalytics:
                 "total_dismissed": 0,
                 "precision_score": 1.0,
                 "avg_accident_confidence": 0.75,
+                "avg_dismissed_confidence": None,
+            },
+            {
+                # Edge case 3.5 / F22 — a camera whose only detection is
+                # Unverified (excluded from analytics entirely) has zero
+                # confirmed and zero dismissed rows, but must still appear
+                # in the breakdown with null averages, not be omitted.
+                "camera_id": ignored.camera_id,
+                "camera_name": "Ignored Corridor",
+                "total_accidents": 0,
+                "total_dismissed": 0,
+                "precision_score": None,
+                "avg_accident_confidence": None,
+                "avg_dismissed_confidence": None,
+            },
+            {
+                # A camera with no detections at all (not even Unverified)
+                # must appear too — same edge case, the more literal reading.
+                "camera_id": silent.camera_id,
+                "camera_name": "Silent Corridor",
+                "total_accidents": 0,
+                "total_dismissed": 0,
+                "precision_score": None,
+                "avg_accident_confidence": None,
                 "avg_dismissed_confidence": None,
             },
         ]
@@ -602,9 +627,13 @@ def test_export_dashboard_csv_returns_header_only_when_no_confirmed_logs(
     ]
 
 
-def test_performance_ignores_unverified_logs_and_returns_empty_state(
+def test_performance_ignores_unverified_logs_but_still_lists_the_camera(
     client: TestClient, session: Session
 ):
+    """Edge case 3.5 / F22 — Unverified is excluded from every analytics
+    number (global KPIs all zero/null), but the camera itself is not
+    omitted from the per-camera breakdown just because it has no
+    confirmed/dismissed rows."""
     _, headers = operator_with_headers(client, session, username="perfempty")
     camera = make_camera(session, name="Silent Camera", channel_id=63)
     make_analytics_log(
@@ -626,13 +655,85 @@ def test_performance_ignores_unverified_logs_and_returns_empty_state(
             "avg_accident_confidence": None,
             "avg_dismissed_confidence": None,
         },
+        "per_camera": [
+            {
+                "camera_id": camera.camera_id,
+                "camera_name": "Silent Camera",
+                "total_accidents": 0,
+                "total_dismissed": 0,
+                "precision_score": None,
+                "avg_accident_confidence": None,
+                "avg_dismissed_confidence": None,
+            }
+        ],
+    }
+
+
+def test_performance_soft_deleted_camera_with_history_still_appears(
+    client: TestClient, session: Session
+):
+    """Edge case 9.7 at the performance-analytics layer (was only tested at
+    the export layer before) — removing a camera must not change what
+    already happened. A soft-deleted camera with confirmed/dismissed rows
+    in range still appears in the per-camera breakdown; one with no history
+    does not (it just isn't a *quiet active* camera, edge case 3.5's
+    concern doesn't extend to deleted-and-silent cameras)."""
+    _, headers = operator_with_headers(client, session, username="perfsoftdel")
+    camera = make_camera(session, name="Soon Deleted Cam", channel_id=65)
+    make_analytics_log(
+        session,
+        camera,
+        detected_at=datetime(2026, 6, 5, 8, 0, tzinfo=UTC),
+        status=DetectionStatus.RESOLVED,
+        confidence_score=0.8,
+    )
+    camera.is_active = False
+    session.add(camera)
+    session.commit()
+
+    resp = client.get("/api/analytics/performance", headers=headers)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["global_kpis"]["total_accidents"] == 1
+    assert body["per_camera"] == [
+        {
+            "camera_id": camera.camera_id,
+            "camera_name": "Soon Deleted Cam",
+            "total_accidents": 1,
+            "total_dismissed": 0,
+            "precision_score": 1.0,
+            "avg_accident_confidence": 0.8,
+            "avg_dismissed_confidence": None,
+        }
+    ]
+
+
+def test_performance_with_zero_cameras_registered_returns_empty_state(
+    client: TestClient, session: Session
+):
+    """The genuinely-empty case (edge case 3.1/3.6): no cameras at all."""
+    _, headers = operator_with_headers(client, session, username="perfnocams")
+
+    resp = client.get("/api/analytics/performance", headers=headers)
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "global_kpis": {
+            "total_accidents": 0,
+            "total_dismissed": 0,
+            "precision_score": None,
+            "avg_accident_confidence": None,
+            "avg_dismissed_confidence": None,
+        },
         "per_camera": [],
     }
 
 
-def test_export_performance_csv_returns_header_only_when_no_analytics_rows(
+def test_export_performance_csv_lists_camera_row_when_no_analytics_rows(
     client: TestClient, session: Session
 ):
+    """Edge case 3.5 / F22 at the export layer — same fix, CSV surface."""
     _, headers = operator_with_headers(client, session, username="perfheader")
     camera = make_camera(session, name="Header Perf Camera", channel_id=64)
     make_analytics_log(
@@ -656,5 +757,14 @@ def test_export_performance_csv_returns_header_only_when_no_analytics_rows(
             "Precision Score",
             "Avg Accident Confidence",
             "Avg Dismissed Confidence",
-        ]
+        ],
+        [
+            str(camera.camera_id),
+            "Header Perf Camera",
+            "0",
+            "0",
+            "N/A",
+            "N/A",
+            "N/A",
+        ],
     ]

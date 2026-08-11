@@ -656,6 +656,7 @@ class TestConcurrentDisableRace:
             DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
             DATABASE_URL=f"sqlite:///{tmp_path / 'race.db'}",
             SCHEDULER_ENABLED=False,
+            SNAPSHOT_ROOT=tmp_path / "snapshots",
         )
         app = create_app(app_settings)
         return TestClient(app)

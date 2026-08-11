@@ -8,6 +8,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from app.core.config import Settings, settings
 from app.core.db import get_engine, get_session
 from app.main import create_app
@@ -89,6 +90,7 @@ class TestSchedulerJobWiring:
             DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
             DATABASE_URL=f"sqlite:///{tmp_path / 'scheduler.db'}",
             SCHEDULER_ENABLED=True,
+            SNAPSHOT_ROOT=tmp_path / "snapshots",
         )
         app = create_app(app_settings)
 
@@ -114,6 +116,7 @@ class TestConcurrentWriteLockHandling:
             DATABASE_URL=f"sqlite:///{db_path}",
             SCHEDULER_ENABLED=False,
             SQLITE_BUSY_TIMEOUT_MS=50,
+            SNAPSHOT_ROOT=tmp_path / "snapshots",
         )
         app = create_app(app_settings)
 
@@ -156,6 +159,52 @@ class TestConcurrentWriteLockHandling:
         assert resp.json()["code"] == "TEMPORARILY_UNAVAILABLE"
 
 
+class TestSnapshotRootStartupCheck:
+    """Edge case 6.9 / be_audit/00_FINDINGS.md F23 — SNAPSHOT_ROOT is
+    validated at boot (F2's "fail loud, not per-request" precedent), not
+    left to degrade into every snapshot request quietly 404ing."""
+
+    def test_missing_snapshot_root_is_created_at_startup(self, tmp_path):
+        snapshot_root = tmp_path / "snapshots"
+        assert not snapshot_root.exists()
+        app_settings = Settings(
+            _env_file=None,
+            SECRET_KEY="test-secret-key-not-for-production-use",
+            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            DATABASE_URL=f"sqlite:///{tmp_path / 'snaproot.db'}",
+            SCHEDULER_ENABLED=False,
+            SNAPSHOT_ROOT=snapshot_root,
+        )
+        app = create_app(app_settings)
+
+        with TestClient(app):
+            pass
+
+        assert snapshot_root.is_dir()
+
+    def test_unprovisionable_snapshot_root_fails_startup(self, tmp_path):
+        """A path that can never become a directory (its parent is itself
+        a plain file) reproduces a permission-denied-style failure
+        portably, without relying on OS-specific ACL manipulation."""
+        blocking_file = tmp_path / "not_a_directory"
+        blocking_file.write_text("in the way")
+        snapshot_root = blocking_file / "snapshots"
+        app_settings = Settings(
+            _env_file=None,
+            SECRET_KEY="test-secret-key-not-for-production-use",
+            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            DATABASE_URL=f"sqlite:///{tmp_path / 'snaproot2.db'}",
+            SCHEDULER_ENABLED=False,
+            SNAPSHOT_ROOT=snapshot_root,
+        )
+        app = create_app(app_settings)
+
+        with pytest.raises(RuntimeError, match="SNAPSHOT_ROOT"), TestClient(app):
+            pass
+
+
 class TestExportWorkerGating:
     def test_export_worker_pool_runs_with_scheduler_disabled(self, tmp_path):
         """F7 regression — export workers must be gated on EXPORT_JOB_WORKERS,
@@ -171,6 +220,7 @@ class TestExportWorkerGating:
             DATABASE_URL=f"sqlite:///{tmp_path / 'export_workers.db'}",
             SCHEDULER_ENABLED=False,
             EXPORT_JOB_WORKERS=1,
+            SNAPSHOT_ROOT=tmp_path / "snapshots",
         )
         app = create_app(app_settings)
 

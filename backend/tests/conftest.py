@@ -135,6 +135,12 @@ def _build_test_settings(lifespan_dir) -> Settings:
         # F7 — tests drive export jobs directly via process_export_job(),
         # not through the worker pool; a live pool would race those calls.
         EXPORT_JOB_WORKERS=0,
+        # F23 — lifespan now mkdir()s SNAPSHOT_ROOT at startup; without this
+        # override every test booting the app via the `client` fixture would
+        # create the real repo's ai_engine/snapshots/ directory as a side
+        # effect, same class of leak test_client_fixture_never_touches_the_
+        # real_repo_root_db guards against for DATABASE_URL.
+        SNAPSHOT_ROOT=lifespan_dir / "snapshots",
     )
 
 

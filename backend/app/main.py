@@ -82,6 +82,23 @@ async def lifespan(app: FastAPI):
     app_settings: Settings = app.state.settings
     engine = app.state.engine
 
+    # Edge case 6.9 / be_audit/00_FINDINGS.md F23 — the same "fail at boot,
+    # not on first use" philosophy as F2's RTSP_URL_TEMPLATE validation.
+    # The backend only ever *reads* from SNAPSHOT_ROOT (app/services/
+    # snapshots.py) — the AI engine is the writer — but ensuring the
+    # directory exists and is actually accessible here means a
+    # misconfigured or permission-denied volume is a loud startup failure
+    # instead of every snapshot request quietly 404ing forever.
+    # exist_ok=True: creating it is the same lazy-provisioning precedent
+    # EXPORT_DIR/BACKUP_DIR already use, just moved to boot time.
+    logger.info("Ensuring snapshot root is accessible...")
+    try:
+        app_settings.SNAPSHOT_ROOT.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise RuntimeError(
+            f"SNAPSHOT_ROOT ({app_settings.SNAPSHOT_ROOT}) is not accessible: {exc}"
+        ) from exc
+
     logger.info("Initializing database...")
     init_db(engine, app_settings)
     app.state.db_initialized = True
