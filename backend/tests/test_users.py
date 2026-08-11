@@ -4,8 +4,12 @@ TC-I-402, TC-S-201, TC-S-202.
 Covers: CRUD, RBAC, last-admin guards, self-service, password rules.
 """
 
+import json
+
+import pytest
+from app.models import AuditLog
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from .conftest import auth_headers, make_admin, make_operator
 
@@ -401,6 +405,27 @@ class TestUpdateUser:
         )
         assert resp.status_code == 400
 
+    def test_cannot_deactivate_last_admin_is_audited_denied(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 8.16 (be_audit/00_FINDINGS.md F25) — the refusal
+        alone was already covered above; this pins the audit trail too, so
+        a future change that silently dropped the denied-audit write for
+        this guard would fail a test."""
+        admin = make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        client.patch(
+            f"/api/users/{admin.user_id}",
+            json={"is_active": False},
+            headers=headers,
+        )
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "USER_DISABLE")
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].result == "denied"
+        assert json.loads(rows[0].detail) == {"reason": "last_admin_deactivate"}
+
     def test_can_demote_admin_when_another_exists(
         self, client: TestClient, session: Session
     ):
@@ -559,6 +584,55 @@ class TestDeleteUser:
         headers = auth_headers(client, "admin2", "Admin123")
         resp = client.delete(f"/api/users/{admin2.user_id}", headers=headers)
         assert resp.status_code == 400
+
+    def test_cannot_delete_last_admin_is_audited_denied(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 8.16 (be_audit/00_FINDINGS.md F25) — pins the audit
+        trail for test_cannot_delete_last_admin above (self-targeting, so
+        it actually exercises the self_delete guard, not last_admin_delete
+        — see the next test for that one)."""
+        admin = make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        client.delete(f"/api/users/{admin.user_id}", headers=headers)
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "USER_DISABLE")
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].result == "denied"
+        assert json.loads(rows[0].detail) == {"reason": "self_delete"}
+
+    def test_cannot_delete_last_admin_non_self_is_audited_denied(
+        self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Edge case 8.16's fourth variant — deleting a *different* admin
+        who happens to be the last active one. Unreachable through the
+        ordinary sequential API: `delete_user`'s self-delete guard runs
+        first, and if the caller is a currently-active admin and the
+        active-admin count is <= 1, the caller must *be* that one admin, so
+        target_id == current_admin.user_id every time — the self-delete
+        branch always wins first. The only way to reach the non-self
+        last_admin_delete branch is a race (the count going stale between
+        this route's read and its guard check) or, as here, isolating the
+        guard directly by forcing _get_active_admin_count()'s return value
+        — exactly the kind of race F21/F24 showed is worth taking
+        seriously rather than dismissing as untestable."""
+        import app.api.routes.users as users_module
+
+        make_admin(session, username="admin1")
+        admin2 = make_admin(session, username="admin2")
+        headers = auth_headers(client, "admin1", "Admin123")
+        monkeypatch.setattr(users_module, "_get_active_admin_count", lambda session: 1)
+
+        resp = client.delete(f"/api/users/{admin2.user_id}", headers=headers)
+
+        assert resp.status_code == 400
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "USER_DISABLE")
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].result == "denied"
+        assert json.loads(rows[0].detail) == {"reason": "last_admin_delete"}
 
     def test_delete_is_soft_not_hard(self, client: TestClient, session: Session):
         """Historical audit trail must be preserved — use Case 2 postcondition."""

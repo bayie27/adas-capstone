@@ -861,3 +861,38 @@ class TestRBAC:
 
         me = client.get("/api/users/me", headers=headers)
         assert me.json()["role"] == "Operator"
+
+    # Every admin-only route in the API (be_audit/00_FINDINGS.md F25,
+    # edge case 8.11). A POST/PATCH body is deliberately `{}` — missing
+    # every required field — so a 422 slipping through would mean the
+    # route handler's body validation ran before the role check, not
+    # just that the route is admin-gated at all.
+    _ADMIN_ROUTES: list[tuple[str, str, dict | None]] = [
+        ("GET", "/api/audit-logs/", None),
+        ("GET", "/api/audit-logs/export", None),
+        ("POST", "/api/exports/retraining", {}),
+        ("GET", "/api/system/backups", None),
+        ("POST", "/api/system/backups", None),
+        ("POST", "/api/system/restores", {}),
+        ("GET", "/api/system/restores/latest", None),
+        ("GET", "/api/users/", None),
+        ("POST", "/api/users/", {}),
+        ("PATCH", "/api/users/1", {}),
+        ("POST", "/api/users/1/reset-password", {}),
+        ("DELETE", "/api/users/1", None),
+    ]
+
+    @pytest.mark.parametrize(("method", "path", "body"), _ADMIN_ROUTES)
+    def test_operator_gets_403_before_payload_processing_on_every_admin_route(
+        self,
+        client: TestClient,
+        session: Session,
+        method: str,
+        path: str,
+        body: dict | None,
+    ):
+        make_operator(session)
+        headers = auth_headers(client, "operator", "Operator123")
+        resp = client.request(method, path, json=body, headers=headers)
+        assert resp.status_code == 403, (method, path, resp.status_code, resp.text)
+        assert resp.json()["code"] == "FORBIDDEN"

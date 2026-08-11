@@ -11,7 +11,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.core.config import Settings
+from app.core.config import Settings, settings
 from app.core.redaction import redact_text
 from app.main import create_app
 from app.models import AIStatus, Camera, ConnectionStatus, DetectionLog, DetectionStatus
@@ -287,6 +287,35 @@ class TestInternalAuth:
 
         assert resp.status_code == 401
         assert resp.json()["detail"] == "Invalid Internal API Key"
+
+    def test_wrong_api_key_is_compared_constant_time(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Edge case 8.14 — asserting wall-clock timing is flaky; this
+        instead pins the *mechanism*, the same way test_auth.py's
+        test_unknown_username_still_runs_a_real_password_verification does
+        for 8.8: verify_internal_api_key must go through
+        secrets.compare_digest, not a short-circuiting `==`, which a
+        future refactor could otherwise introduce without any existing
+        test failing."""
+        import app.api.dependencies as dependencies_module
+
+        calls = []
+        original = dependencies_module.secrets.compare_digest
+        monkeypatch.setattr(
+            dependencies_module.secrets,
+            "compare_digest",
+            lambda a, b: (calls.append((a, b)), original(a, b))[1],
+        )
+
+        resp = client.post(
+            "/api/internal/heartbeat",
+            headers={"x-api-key": "wrong-key"},
+            json=self._valid_heartbeat_body(),
+        )
+
+        assert resp.status_code == 401
+        assert calls == [("wrong-key", settings.INTERNAL_API_KEY.get_secret_value())]
 
 
 class TestHeartbeat:
