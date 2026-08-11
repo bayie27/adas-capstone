@@ -1,0 +1,8 @@
+# Core deps for the ADAS detection prototype.
+# NOTE: install a CUDA build of torch FIRST (see README) so the GTX 1650 is used,
+# otherwise ultralytics will pull a CPU-only torch.
+ultralytics>=8.3.0
+lap>=0.5.12          # linear assignment for ByteTrack/BoT-SORT tracking
+opencv-python>=4.9
+numpy>=1.26
+PyYAML>=6.0

@@ -1,0 +1,99 @@
+clip,onset_s,end_s,involved,difficulty,notes
+# Crash onset times for the CDRRMO clip set, given by the project owner from playback
+# (2026-08-06). Times are approximate by design: eval/score.py counts a detection as correct
+# anywhere in [onset - lead, end + tail], default lead 2s / tail 15s, so a couple of seconds
+# of error is absorbed.
+#
+# end_s is set equal to onset_s throughout. The crash is treated as an instant and the 15s
+# tail covers the aftermath, which is what this detector actually targets. This is the
+# conservative choice: it keeps the crash window as small as possible, so more of each clip
+# counts as ordinary traffic and more stray detections count against the false-positive rate.
+#
+# NEGATIVES. `onset_s = none` declares "this clip contains no accident at all". The clip is
+# still RUN, and every second of it counts as ordinary footage, so any event it produces is a
+# false positive. This is how a real deployment false-alarm rate finally becomes measurable.
+# DO NOT use `none` for a clip that does contain a crash: the model would then be scored as
+# raising a false alarm precisely when it correctly detects the accident. A long clip with one
+# labelled crash already contributes nearly all of its duration as ordinary footage, which is
+# where negative-testing value actually comes from.
+#
+# DIFFICULTY is pre-registered. `hard` means the project owner judged the crash hard or nearly
+# impossible to see BEFORE any model was run on this footage. Declaring it in advance is what
+# makes a standard-vs-hard breakdown an honest stratification rather than post-hoc selection.
+# eval/score.py ignores this column; it exists for reporting.
+#
+# `involved` is INFERRED FROM THE FILENAME and has not been verified by watching the clips.
+# It is documentation only - eval/score.py reads just clip/onset_s/end_s.
+#
+# PROVENANCE - CHECKED 2026-08-06 by cropping the caption strip from every clip at native
+# resolution and reading it. This is the same test that caught car_car.mp4 as third-party
+# compilation footage in the old set. RESULT: no third-party footage found. Every clip carries
+# the same NVR overlay style and a burned-in timestamp, and 14 of 17 name a Lipa location:
+#   airbase.mp4              AIRBASE OVERPASS TO BANAY BANAY
+#   armored-car-car.mp4      C.M RECTO MONUMENT W/(IP PA)
+#   car-motor-far.mp4        GEN.LUNA TO ATHENIANS
+#   car-motor-motor.mp4      CITYHALL MAIN ENTRANCE W/IP PA
+#   car-motor.mp4            J.P LAUREL COR. SANTO TOMAS RD. TO LEVITOWN(IP PA)
+#   car-uturn-motor.mp4      OLANS PLACE TO FMALL
+#   dekwatro.mp4             INUSLUBAN BYPASS TO PKI
+#   dpwh-red-car-motor.mp4   DPWH TO CITYHALL(IP PA)
+#   jeep-motor.mp4           OLANS PLACE TO FMALL          (same camera as car-uturn-motor)
+#   jeep-yellow-car.mp4      SANTO TORIBIO BYPASS
+#   motor-motor-night.mp4    GEN. LUNA COR. CITYPARK AVE.2
+#   red-car-motor.mp4        BYPASS TO STO TORIBIO
+#   truck-car.mp4            GEN. LUNA COR. BONIFACIO TO SABANG BRIDGE
+#   truck-student-car.mp4    SAN VICENTE TO CROSSING
+# Three carry no location caption and are UNCONFIRMED, though nothing about them looks foreign:
+#   jeep-car.mp4             "Channel23" - a generic DVR channel label, no place name
+#   tric-motor-car.mp4       "IPC" - too short to identify
+#   motor-motor.mp4          no caption in frame, but a burned-in NVR timestamp is present
+#
+# TWO CLIPS ARE SCREEN RECORDINGS, not direct NVR exports. Both are genuine Lipa CCTV content -
+# the caption and timestamp are visible inside the recorded window - but they were captured by
+# filming the viewer software rather than exporting the stream:
+#   motor-motor.mp4       720x368   player controls (mute/snapshot/close) visible top-right
+#   jeep-yellow-car.mp4   1024x576  full NVR viewer: title bar reads "H.265, 2540*1440,
+#                                   3205kbps", timeline scrubber along the bottom, and an
+#                                   "Activate Windows" watermark
+# Their own title bar shows the SOURCE stream is 2560x1440. A clean re-export would recover it.
+# Keep them, but treat a miss on either as evidence about the capture, not about the detector:
+# the deployed system reads the camera stream directly and would never see 720x368.
+#
+# INDEPENDENCE IS NOT ESTABLISHED. Five captions match cameras from the OLD clip set
+# (INUSLUBAN BYPASS, GEN. LUNA COR. CITYPARK, DPWH TO CITYHALL, OLANS PLACE TO FMALL, CITYHALL
+# MAIN ENTRANCE). Some of these may be longer exports of incidents the old set already
+# contained rather than new ones - dpwh-red-car-motor.mp4 in particular looks like it could be
+# the old red-car-motorcycle.mp4 with more lead-in. This cannot be checked because the old
+# footage is gone. Do not claim "16 independent incidents" or "17 cameras" without settling it;
+# two clips already share the OLANS PLACE camera, so there are at most 16 distinct viewpoints.
+#
+airbase.mp4,none,none,,negative,NO ACCIDENT - 60.4s of ordinary traffic
+armored-car-car.mp4,6.0,6.0,armored car + car,hard,owner judged hard to detect; 60.7s clip so ~44s counts as ordinary footage
+car-motor-far.mp4,36.0,36.0,car + motorcycle,hard,collision is far from the camera
+car-motor-motor.mp4,49.0,49.0,car + motorcycle + motorcycle,standard,61.0s clip - NOT the old car-motor-motor.mp4, see note at end of file
+car-motor.mp4,39.0,39.0,car + motorcycle,standard,
+car-uturn-motor.mp4,22.0,22.0,car making a U-turn + motorcycle,hard,owner judged hard to detect; 60.1s clip so ~43s counts as ordinary footage
+dekwatro.mp4,12.0,12.0,,standard,
+dpwh-red-car-motor.mp4,27.0,27.0,car + motorcycle,standard,
+jeep-car.mp4,16.0,16.0,jeep + car,hard,owner judged hard to detect
+jeep-motor.mp4,11.0,11.0,jeep + motorcycle,standard,
+jeep-yellow-car.mp4,6.0,6.0,jeep + car,standard,only 13.7s long - the crash window covers nearly the whole clip
+motor-motor-night.mp4,10.0,10.0,motorcycle + motorcycle,standard,NIGHT FOOTAGE - the one condition v1 has never detected in
+motor-motor.mp4,18.0,18.0,motorcycle + motorcycle,standard,
+red-car-motor.mp4,15.0,15.0,car + motorcycle,standard,61.3s clip so ~44s counts as ordinary footage
+tric-motor-car.mp4,10.0,10.0,tricycle + motorcycle + car,standard,
+truck-car.mp4,40.0,40.0,truck + car,hard,owner offered this one for negative testing - read as a hardness judgement
+truck-student-car.mp4,23.0,23.0,truck + car,hard,owner judged hard to detect; filename suggests a pedestrian is involved - UNVERIFIED
+#
+# HISTORY - this file replaced the seven-clip label set on 2026-08-06.
+# Every result recorded in docs/results.md for v1 and v2 (4/5 recall, the latency table, the
+# v2 checkpoint sweep) was measured against the PREVIOUS label set and its footage, which is no
+# longer in prototype/samples/. Those numbers are not reproducible from this file and must not
+# be compared against numbers produced by it. The old label set, including its provenance
+# findings on car_car.mp4 and the fully-occluded clip that was excluded, is in git history:
+#   git show 9ab3ba2:eval/labels.csv
+#
+# NAME COLLISION - car-motor-motor.mp4 is the only filename shared with the old set, but it is
+# NOT the same footage: this one is 61.0s at 2560x1440, where the old clip was short and
+# 1920x1080 with its crash labelled at 7.0s. The old 7.0s onset does not apply here and would
+# score against the wrong moment. The onset above (49.0s) is the owner's, for this file.

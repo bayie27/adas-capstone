@@ -7,7 +7,7 @@ Intelligent Real-Time Road Accident Detection & Alert System. Three components: 
 | Task                              | Command                                                |
 | --------------------------------- | ------------------------------------------------------ |
 | Install (backend only)            | `uv sync`                                              |
-| Install (backend + AI engine)     | `uv sync --extra ai`                                   |
+| Install (backend + AI engine)     | `uv sync --extra ai` (`--extra ai-cpu` without a GPU)  |
 | Install (frontend + root tooling) | `pnpm install` (repo root — activates git hooks)       |
 | Run backend                       | `uv run fastapi dev backend/app/main.py`               |
 | Run frontend                      | `cd frontend && pnpm dev`                              |
@@ -33,7 +33,12 @@ Script reference, migration workflow, and CI jobs: [CONTRIBUTING.md](CONTRIBUTIN
 - **Auth is an `HttpOnly` cookie, not a bearer token** — no session credential in JS-reachable storage; `withCredentials: true` and the browser attaches it, including on the WebSocket handshake. Session validation (`app/api/dependencies.py`) reads the process-global `app.core.config.settings` singleton, so tests that build an isolated `Settings` must patch that global rather than just passing their instance around (see `internal_headers()` in `backend/tests/conftest.py`).
 - **`ux_detection_open_camera`** is a partial unique index (`WHERE detection_status IN ('Unverified','Ongoing')`) enforcing "at most one open incident per camera" at the database level, not just in Python. Anything that bulk-seeds `detection_log` rows must respect it — see `_enforce_open_camera_limit` in `backend/scripts/seed_dev_data.py`.
 - **`routes/system.py` (unauthenticated `/healthz/*`), `routes/system_health.py` (telemetry), and `routes/maintenance.py` (backup/restore) are three routers by design**, so those packages evolve without touching one file. Don't consolidate them.
-- **`ai_engine/best.engine` is GPU/driver/TensorRT-version-specific** and won't load on another machine. `ai_engine/main.py` catches the load failure and falls back to portable `ai_engine/best.pt` — intentional, not a bug to "fix".
+- **The weights are `ai_engine/epoch50.pt`, loaded directly, with no fallback.** `best.pt` and `best.engine` were deleted during the detection core port — `best.pt` lost checkpoint selection in all three training runs and `main.py` had been _preferring_ a stale TensorRT build of it, silently running the wrong model. Don't reintroduce an `.engine` → `.pt` fallback; nothing builds a TensorRT engine today.
+- **`ai_engine/machine_profile.json` is machine-specific and gitignored.** Produced by `uv run python ai_engine/capacity.py`, which reports how many cameras the machine can carry at 10 and at 15 FPS. Absence is not an error — the engine falls back to a conservative one camera and says so on startup.
+- **`DETECTOR_CONF = 0.15` is a closed lever, not a tuning knob.** False positives score _higher_ than genuine detections (0.869/0.844/0.649 versus 0.536/0.459/0.741), so any threshold that removes false alarms deletes real crashes first. Precision comes from the temporal accumulator, not from the threshold.
+- **`ai_engine/accumulate.py` must not drift in behaviour.** It is formatted and linted normally — byte-identity was deliberately abandoned as the wrong guarantee — but `test_accumulate.py` asserts it emits events identical to the frozen reference. Don't "tighten" its two `zip(..., strict=False)` calls: the reference truncates, and `strict=True` would raise instead.
+- **There are four accumulator reset seams, not three.** Reconnect, resume and restart all bump `camera.py`'s `segment_id`; the fourth is a long frame gap (`config.MAX_FRAME_GAP_SECONDS`), which carries no bump because the stream never dropped. Removing it lets a single frame fire an alert with no corroboration — see `ai_engine/docs/port-handover.md`.
+- **`ai_engine/adas_transfer/` is frozen** — excluded from Ruff and Prettier. It is the reference the parity gate diffs against; never edit or reformat it.
 - **Ruff is configured to skip `*.md`** — it reformats fenced Python blocks inside Markdown, which would rewrite untracked working docs at the repo root. Don't remove that exclusion.
 
 ## Domain rules
