@@ -8,6 +8,7 @@
   },
   "scripts": {
     "prepare": "husky",
+    "dev": "pwsh -File scripts/start-dev.ps1",
     "format": "run-p format:prettier format:ruff",
     "format:prettier": "prettier --write .",
     "format:ruff": "uv run ruff format .",
