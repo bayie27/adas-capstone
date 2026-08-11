@@ -2,7 +2,7 @@
 
 **Written 2026-08-11**, updated as work progressed. **All 15 tasks are now complete.**
 
-Branch: `feat/ai-p11-detection-core-port` (51 commits, **not pushed**)
+Branch: `feat/ai-p11-detection-core-port` — pushed, merged with main, open as **[PR #76](https://github.com/bayie27/adas-capstone/pull/76)**
 Plan: `2026-08-10-detection-core-port-plan.md` — 15 tasks
 Progress ledger: `.superpowers/sdd/progress.md` — **gitignored**, per-task status and findings
 
@@ -16,7 +16,7 @@ Progress ledger: `.superpowers/sdd/progress.md` — **gitignored**, per-task sta
 | B — verification, GPU + clips | 8–11  | ✅ complete |
 | C — portability               | 12–15 | ✅ complete |
 
-**The plan is finished.** What remains is in "Still to do beyond the plan" below — the branch has never been pushed.
+**The plan is finished and the work is in review.** What remains is in "Still to do beyond the plan" below.
 
 Full suite is **812 passing**, 2 skipped, 19 deselected, plus 13 frontend tests.
 
@@ -151,7 +151,7 @@ Reset rather than a clamped `dt`: a gap means the period was never observed, so 
 - ⚠️ **`CLAUDE.md` is stale.** Its "hard-won gotcha" describing `best.engine` falling back to `best.pt` refers to two files Task 2 deleted. `main.py` now loads `config.WEIGHTS_PATH` (`epoch50.pt`) directly with no fallback at all. Left unedited deliberately — it is the project instruction file — but it will actively mislead until corrected.
 
 - **Decide on calibration's missing build step.** Design doc **§6.1** specifies probe → **build** → benchmark → **verify** → write; the plan's Task 13 dropped build, and verify with it. Consequences: every capacity figure is a floor (no TensorRT/ONNX export), `model_path` always records the `.pt`, and `verification` is always `unverified`. Note these are **one decision, not two** — §6.3 exists to catch the numerical drift that repackaging introduces, so with no repackaging there is nothing for it to check. Also note our `unverified` is weaker than §6.3's: there it means "no clips, so a reduced sanity pass ran instead"; here no sanity pass runs at all.
-- Push the branch and open a PR — nothing is pushed yet.
+- ~~Push the branch and open a PR~~ — done, PR #76. Merged origin/main in first (it had moved 36 commits ahead); 826 tests and `pnpm check` green on the merged tree.
 - ~~`pnpm check` before the PR~~ — passing as of Task 14; re-run it immediately before pushing.
 - Apply `paper-edits-required.md` to the paper. Priority 1 is the mAP acceptance criterion.
 - `NOTICE.md`'s outstanding licence items, including the Ultralytics AGPL-3.0 question.
