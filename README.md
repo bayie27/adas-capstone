@@ -142,6 +142,50 @@ pnpm install
 
 All three components run in separate terminals. **Run every command from the repo root.** This is a convention, not a hard requirement anymore — the FastAPI CLI injects `backend/` into `sys.path` itself, and `DATABASE_URL` resolves to an absolute path under the repo root regardless of CWD — but the AI engine's `from config import ...`-style imports still need `ai_engine/` to be the script's own directory (which `uv run python ai_engine/main.py` gives it), so running from the root is simplest across the board.
 
+### Quickstart — clone to first detection
+
+The whole path, in order. Each step is verified; the detailed sections below explain the parts.
+
+**One-time, in this order:**
+
+```bash
+uv sync --extra ai                              # --extra ai-cpu if no NVIDIA GPU
+pnpm install                                    # at the ROOT — this activates git hooks
+cp .env.example .env                            # then fill in all 10 keys
+```
+
+Populate **one** clip directory — `ai_engine/sample_vids/` or `ai_engine/eval/clips/` (see [Simulate camera streams](#running-the-system) and [`ai_engine/eval/README.md`](ai_engine/eval/README.md)). Neither ships in a clone.
+
+```bash
+uv run python backend/scripts/reseed_dev.py     # REQUIRED — creates the cameras
+uv run python ai_engine/capacity.py             # once per machine
+```
+
+> **`reseed_dev.py` is not optional.** Starting the backend creates the tables and an admin account, but **no cameras**. Without seeding, the engine connects, is told there are zero cameras, and does nothing — which looks exactly like it is broken.
+
+**Then four terminals, in this order:**
+
+```bash
+mediamtx mediamtx.clips.yml                     # 1. streams (or mediamtx.yml)
+uv run fastapi dev backend/app/main.py          # 2. backend — must precede the engine
+cd frontend && pnpm dev                         # 3. dashboard at :5173
+uv run python ai_engine/main.py                 # 4. engine
+```
+
+Log in at `http://localhost:5173` as `admin` with the `DEFAULT_ADMIN_PASSWORD` from your `.env`.
+
+**Last step: release a camera.** Every seeded camera is paused by an open alert — deliberately, see [below](#cameras-start-paused-after-seeding--this-is-deliberate). Resolve or dismiss one in the dashboard and that camera starts detecting within seconds.
+
+**What a working run looks like** (using `mediamtx.clips.yml`): four cameras alert within a loop or two, and **camera 5 stays silent** — it serves the crash-free clip. A camera that never alerts is as much a result as one that does. The engine log reads:
+
+```
+[SYSTEM] Machine profile: 0 · capacity 8 camera(s) @ 15 FPS
+[SYSTEM] Resuming AI ingestion for Channel 4...
+[ALERT] Channel 4: accident detected (peak 0.76, 2.2s of evidence).
+```
+
+---
+
 **1. Start the backend**
 
 ```bash
@@ -278,7 +322,9 @@ Within a few seconds the engine logs `Resuming AI ingestion` and starts alerting
 uv run python backend/scripts/reseed_dev.py
 ```
 
-Always use `uv run python`, never a bare `python` — the `python` on PATH may be a different, unpinned interpreter (e.g. a system install) rather than the project's pinned 3.12.13. This gives you a fresh DB with an admin account, three cameras, and sample alerts across all detection statuses. See [`backend/scripts/README.md`](backend/scripts/README.md) for the full script reference.
+Always use `uv run python`, never a bare `python` — the `python` on PATH may be a different, unpinned interpreter (e.g. a system install) rather than the project's pinned 3.12.13. This gives you a fresh DB with an admin account, **six cameras**, operator accounts, and sample alerts across all detection statuses. See [`backend/scripts/README.md`](backend/scripts/README.md) for the full script reference.
+
+**This is a required first-run step, not just a reset.** Starting the backend creates the tables and an admin account but no cameras at all, so the AI engine has nothing to work with until you seed. See the [Quickstart](#quickstart--clone-to-first-detection) for where it belongs in the order.
 
 **Run the test suite:**
 

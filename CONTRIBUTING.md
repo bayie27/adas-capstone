@@ -1,8 +1,8 @@
 # Contributing
 
-This is the "what to run before committing" doc. See [README.md](README.md) for how to run the system itself.
+This is the "what to run before committing" doc. **To get the system actually running, follow the [Quickstart](README.md#quickstart--clone-to-first-detection) in the README** — it is the full ordered path from clone to first detection, including the database seed and the camera streams, which the three commands below do not cover.
 
-## First-time setup
+## First-time setup (development tooling)
 
 ```bash
 uv sync --extra ai
