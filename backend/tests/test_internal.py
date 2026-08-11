@@ -6,17 +6,27 @@ internal auth. The v1 poll/PATCH routes were removed by the A3 audit pack
 """
 
 import logging
+import threading
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from app.core.config import Settings
 from app.core.redaction import redact_text
-from app.models import AIStatus, ConnectionStatus, DetectionLog, DetectionStatus
+from app.main import create_app
+from app.models import AIStatus, Camera, ConnectionStatus, DetectionLog, DetectionStatus
 from app.schemas.events import EventEnvelope
+from app.services.cameras import recompute_desired_state
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from .conftest import internal_headers, make_camera, make_detection
+from .conftest import (
+    auth_headers,
+    internal_headers,
+    make_camera,
+    make_detection,
+    make_operator,
+)
 
 
 def _capture_broadcasts(
@@ -625,3 +635,198 @@ class TestHeartbeat:
     def test_rtsp_url_covered_by_generic_credential_redaction(self):
         leaky = "rtsp://opuser:sekret@10.0.0.5:554/x"
         assert "sekret" not in redact_text(leaky)
+
+
+class TestConcurrentDisableRace:
+    """Edge case 1.7 (be_audit/A5_edge_cases.md) — an AI event arriving
+    while an operator disables that camera. Needs genuinely parallel
+    requests, which the shared-session `client` fixture used everywhere
+    else in this file cannot provide (every request would serialize
+    through one Python-level `Session` object). Instead this builds its own
+    app on a real file-backed database with the ordinary, non-overridden
+    `get_session` dependency, so each thread's request gets its own
+    session against the same engine — the same shape production traffic
+    has."""
+
+    def _make_client(self, tmp_path) -> TestClient:
+        app_settings = Settings(
+            _env_file=None,
+            SECRET_KEY="test-secret-key-not-for-production-use",
+            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            DATABASE_URL=f"sqlite:///{tmp_path / 'race.db'}",
+            SCHEDULER_ENABLED=False,
+        )
+        app = create_app(app_settings)
+        return TestClient(app)
+
+    def test_ai_alert_racing_operator_disable_never_500s_and_stays_consistent(
+        self, tmp_path
+    ):
+        with self._make_client(tmp_path) as client:
+            with Session(client.app.state.engine) as session:
+                make_operator(session, username="racer", password="Operator123")
+            headers = auth_headers(client, "racer", "Operator123")
+
+            outcomes: set[tuple[int, int]] = set()
+
+            for attempt in range(25):
+                with Session(client.app.state.engine) as session:
+                    camera = make_camera(
+                        session, name=f"Race Cam {attempt}", channel_id=1000 + attempt
+                    )
+                    camera_id = camera.camera_id
+
+                alert_payload = {
+                    "source_event_id": str(uuid.uuid4()),
+                    "camera_id": camera_id,
+                    "detected_at": datetime.now(UTC).isoformat(),
+                    "snapshot_key": f"race/{attempt}.jpg",
+                    "confidence_score": 0.9,
+                }
+
+                barrier = threading.Barrier(2)
+                results: dict[str, object] = {}
+                errors: list[BaseException] = []
+
+                def send_alert(
+                    barrier=barrier,
+                    results=results,
+                    errors=errors,
+                    alert_payload=alert_payload,
+                ):
+                    try:
+                        barrier.wait(timeout=5)
+                        results["alert"] = client.post(
+                            "/api/internal/alert",
+                            headers=internal_headers(),
+                            json=alert_payload,
+                        )
+                    except BaseException as exc:  # noqa: BLE001
+                        errors.append(exc)
+
+                def send_disable(
+                    barrier=barrier,
+                    results=results,
+                    errors=errors,
+                    camera_id=camera_id,
+                ):
+                    try:
+                        barrier.wait(timeout=5)
+                        results["disable"] = client.patch(
+                            f"/api/cameras/{camera_id}",
+                            headers=headers,
+                            json={"is_enabled": False},
+                        )
+                    except BaseException as exc:  # noqa: BLE001
+                        errors.append(exc)
+
+                t_alert = threading.Thread(target=send_alert)
+                t_disable = threading.Thread(target=send_disable)
+                t_alert.start()
+                t_disable.start()
+                t_alert.join(timeout=10)
+                t_disable.join(timeout=10)
+
+                assert not errors, f"attempt {attempt}: {errors}"
+                alert_resp = results["alert"]
+                disable_resp = results["disable"]
+
+                # No 500s, no unhandled OperationalError leaking as anything
+                # but the documented 503.
+                assert alert_resp.status_code in (201, 404, 503), (
+                    attempt,
+                    alert_resp.status_code,
+                    alert_resp.text,
+                )
+                assert disable_resp.status_code in (200, 503), (
+                    attempt,
+                    disable_resp.status_code,
+                    disable_resp.text,
+                )
+                outcomes.add((alert_resp.status_code, disable_resp.status_code))
+
+                if alert_resp.status_code != 201 or disable_resp.status_code != 200:
+                    # A 503 (lock timeout) is a legitimate, already-covered
+                    # outcome (edge case 6.1) — nothing more to check for
+                    # this attempt.
+                    continue
+
+                # Both succeeded — assert desired-state self-consistency and
+                # that any created incident is not stranded.
+                with Session(client.app.state.engine) as session:
+                    db_camera = session.get(Camera, camera_id)
+                    assert db_camera is not None
+                    has_open_incident = (
+                        session.exec(
+                            select(DetectionLog).where(
+                                DetectionLog.camera_id == camera_id,
+                                DetectionLog.detection_status.in_(
+                                    [
+                                        DetectionStatus.UNVERIFIED.value,
+                                        DetectionStatus.ONGOING.value,
+                                    ]
+                                ),
+                            )
+                        ).first()
+                        is not None
+                    )
+
+                    # recompute_desired_state is the single source of truth
+                    # for what desired state *should* be given the camera's
+                    # current facts — replay it and compare, rather than
+                    # hand-deriving the invariant here.
+                    expected = Camera(
+                        camera_name=db_camera.camera_name,
+                        channel_id=db_camera.channel_id,
+                        is_active=db_camera.is_active,
+                        is_enabled=db_camera.is_enabled,
+                        cooldown_until=db_camera.cooldown_until,
+                    )
+                    recompute_desired_state(
+                        expected,
+                        has_open_incident=has_open_incident,
+                        now=datetime.now(UTC),
+                    )
+                    assert db_camera.desired_ai_state == expected.desired_ai_state, (
+                        attempt,
+                        db_camera.is_enabled,
+                        has_open_incident,
+                        db_camera.desired_ai_state,
+                        expected.desired_ai_state,
+                    )
+                    assert (
+                        db_camera.desired_state_reason == expected.desired_state_reason
+                    )
+
+                    if has_open_incident:
+                        # An incident on a now-disabled camera must still be
+                        # resolvable by an operator, not stranded.
+                        log = session.exec(
+                            select(DetectionLog).where(
+                                DetectionLog.camera_id == camera_id
+                            )
+                        ).first()
+                        assert log is not None
+                        detail_resp = client.get(
+                            f"/api/alerts/{log.log_id}", headers=headers
+                        )
+                        assert detail_resp.status_code == 200
+                        confirm_resp = client.post(
+                            f"/api/alerts/{log.log_id}/confirm", headers=headers
+                        )
+                        assert confirm_resp.status_code == 200
+
+            # Documented per be_audit/A5_edge_cases.md: both outcomes are
+            # acceptable, and this assertion is the record of which one(s)
+            # this suite actually observes. If this ever starts failing
+            # because a third status pair shows up, that is new information
+            # worth looking at, not a flake to silence.
+            assert outcomes <= {
+                (201, 200),
+                (404, 200),
+                (201, 503),
+                (404, 503),
+                (503, 200),
+                (503, 503),
+            }

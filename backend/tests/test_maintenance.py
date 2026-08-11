@@ -1072,6 +1072,63 @@ class TestRestoreRoutes:
         assert resp.status_code == 404
 
 
+class TestCrossOperationLock:
+    """Edge case 1.12 — restore and backup share the same maintenance lock,
+    so either operation must reject the other, not just itself
+    (`test_second_concurrent_trigger_returns_409` and
+    `test_second_concurrent_restore_returns_409` above only cover the
+    same-operation case)."""
+
+    def _restore_body(self, backup_id: str, password: str = "Admin123") -> dict:
+        return {
+            "backup_id": backup_id,
+            "current_password": password,
+            "confirmation": f"RESTORE {backup_id}",
+        }
+
+    def test_restore_returns_409_while_backup_holds_the_lock(
+        self, client, session, maintenance_settings
+    ):
+        """A restore mid-backup would capture a torn state — the lock must
+        block it, and no restore flag file may be written (that flag file
+        is what would trigger a restore on the next boot)."""
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        assert try_acquire_maintenance_lock() is True
+        try:
+            resp = client.post(
+                "/api/system/restores",
+                json=self._restore_body(new_backup_id()),
+                headers=headers,
+            )
+            assert resp.status_code == 409
+            assert resp.json()["code"] == "CONFLICT_BUSY"
+        finally:
+            release_maintenance_lock()
+
+        assert not restore_mod.restore_state_path(
+            maintenance_settings.backup_dir
+        ).exists()
+
+    def test_backup_returns_409_while_restore_holds_the_lock(
+        self, client, session, maintenance_settings
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        assert try_acquire_maintenance_lock() is True
+        try:
+            resp = client.post("/api/system/backups", headers=headers)
+            assert resp.status_code == 409
+            assert resp.json()["code"] == "CONFLICT_BUSY"
+        finally:
+            release_maintenance_lock()
+
+        listed = client.get("/api/system/backups", headers=headers).json()
+        assert listed["total_filtered"] == 0
+
+
 class TestSchedulingEdgeCases:
     """Edge cases 5.10 (MAINTENANCE_HOUR_LOCAL across a DST transition) and
     5.11 (scheduler misfire after suspend/resume) are handled entirely by
