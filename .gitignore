@@ -279,3 +279,10 @@ ai_engine/*.engine
 # people/vehicles/locations. Already covered by *.mp4 above; this is belt-and-suspenders
 # so the rule holds even if a non-.mp4 file ever lands here.
 ai_engine/eval/clips/
+
+# MediaMTX generates a self-signed cert and EC private key for its MoQ/WebRTC
+# listeners on first run, in whatever directory it is started from. The
+# documented command is `mediamtx mediamtx.yml` from the repo root, so every
+# developer who simulates cameras drops these here. Never commit a .key.
+auto.crt
+auto.key
