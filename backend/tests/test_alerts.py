@@ -288,6 +288,40 @@ class TestGetAlerts:
 
         assert resp.status_code == 422
 
+    @pytest.mark.parametrize(
+        "query",
+        ["limit=0", "limit=101", "offset=-1"],
+    )
+    def test_pagination_boundary_rejections(
+        self, client: TestClient, session: Session, query: str
+    ):
+        """Edge case 2.1/2.2 (be_audit/00_FINDINGS.md F27)."""
+        _, headers = operator_with_headers(client, session)
+        resp = client.get(f"/api/alerts/?{query}", headers=headers)
+        assert resp.status_code == 422
+
+    @pytest.mark.parametrize("query", ["limit=1", "limit=100", "offset=0"])
+    def test_pagination_boundary_accepted(
+        self, client: TestClient, session: Session, query: str
+    ):
+        _, headers = operator_with_headers(client, session)
+        resp = client.get(f"/api/alerts/?{query}", headers=headers)
+        assert resp.status_code == 200
+
+    def test_offset_beyond_total_returns_empty_page_with_correct_total(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name="Beyond Offset Cam", channel_id=2)
+        make_alert(session, camera, status=DetectionStatus.RESOLVED)
+
+        resp = client.get("/api/alerts/?offset=50", headers=headers)
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert body["logs"] == []
+
     def test_invalid_camera_id_returns_422(self, client: TestClient, session: Session):
         _, headers = operator_with_headers(client, session)
 

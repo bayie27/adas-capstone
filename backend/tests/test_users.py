@@ -249,6 +249,39 @@ class TestGetAllUsers:
         resp = client.get("/api/users/", headers=headers)
         assert resp.status_code == 403
 
+    @pytest.mark.parametrize("query", ["limit=0", "limit=101", "offset=-1"])
+    def test_pagination_boundary_rejections(
+        self, client: TestClient, session: Session, query: str
+    ):
+        """Edge case 2.1/2.2 (be_audit/00_FINDINGS.md F27)."""
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        resp = client.get(f"/api/users/?{query}", headers=headers)
+        assert resp.status_code == 422
+
+    @pytest.mark.parametrize("query", ["limit=1", "limit=100", "offset=0"])
+    def test_pagination_boundary_accepted(
+        self, client: TestClient, session: Session, query: str
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        resp = client.get(f"/api/users/?{query}", headers=headers)
+        assert resp.status_code == 200
+
+    def test_offset_beyond_total_returns_empty_page_with_correct_total(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        total = client.get("/api/users/", headers=headers).json()["total_filtered"]
+
+        resp = client.get("/api/users/?offset=100000", headers=headers)
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == total
+        assert body["users"] == []
+
     def test_soft_deleted_users_excluded(self, client: TestClient, session: Session):
         make_admin(session)
         op = make_operator(session)

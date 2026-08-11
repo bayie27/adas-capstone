@@ -6,6 +6,7 @@ aware) observed status.
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from app.models import DetectionStatus
 from fastapi.testclient import TestClient
 from sqlmodel import Session
@@ -60,6 +61,36 @@ class TestGetAllCameras:
             "active_detection": 0,
         }
         assert body["total_filtered"] == 0
+
+    @pytest.mark.parametrize("query", ["limit=0", "limit=101", "offset=-1"])
+    def test_pagination_boundary_rejections(
+        self, client: TestClient, session: Session, query: str
+    ):
+        """Edge case 2.1/2.2 (be_audit/00_FINDINGS.md F27)."""
+        headers = _headers(client, session)
+        resp = client.get(f"/api/cameras/?{query}", headers=headers)
+        assert resp.status_code == 422
+
+    @pytest.mark.parametrize("query", ["limit=1", "limit=100", "offset=0"])
+    def test_pagination_boundary_accepted(
+        self, client: TestClient, session: Session, query: str
+    ):
+        headers = _headers(client, session)
+        resp = client.get(f"/api/cameras/?{query}", headers=headers)
+        assert resp.status_code == 200
+
+    def test_offset_beyond_total_returns_empty_page_with_correct_total(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        make_camera(session, name="Beyond Offset Cam", channel_id=50)
+
+        resp = client.get("/api/cameras/?offset=50", headers=headers)
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert body["cameras"] == []
         assert body["cameras"] == []
 
     def test_soft_deleted_camera_excluded_from_kpis(
