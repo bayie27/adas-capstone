@@ -2,8 +2,9 @@
 
 > **Status:** every row below has a coverage status (`covered`/`partial`/`uncovered`/`accepted-gap`/
 > `inapplicable`) and evidence in `be_audit/EDGE_CASE_COVERAGE.md`, built 2026-08-11 by the A5 audit
-> pack. Check there before re-investigating a row — and see `be_audit/00_FINDINGS.md` F22–F28 for the
-> gaps that turned out to be materially risky, not just untested.
+> pack and closed to 140/143 `covered` the same day. Check there before re-investigating a row — and
+> see `be_audit/00_FINDINGS.md` F22–F29 for what those gaps turned out to be (F22–F28 fixed, F29 open
+> at an upstream library boundary).
 
 > **Cross-cutting.** Not a work package — a checklist every package is reviewed against.
 > Each package doc has its own "Tests to write" table covering *that package's* core behaviours.
