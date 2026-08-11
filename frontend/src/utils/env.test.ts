@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { getBrowserHostname, trimTrailingSlash } from "./env"
+import { getBrowserHostname, getBrowserProtocol, trimTrailingSlash } from "./env"
 
 describe("trimTrailingSlash", () => {
   it("removes a single trailing slash", () => {
@@ -27,6 +27,34 @@ describe("getBrowserHostname", () => {
     })
 
     expect(getBrowserHostname()).toBe("localhost")
+
+    spy.mockRestore()
+  })
+})
+
+describe("getBrowserProtocol", () => {
+  it("returns window.location.protocol when set", () => {
+    expect(getBrowserProtocol()).toBe(window.location.protocol)
+  })
+
+  it("returns https: under TLS so WS_BASE_URL derives wss:", () => {
+    const spy = vi.spyOn(window, "location", "get").mockReturnValue({
+      ...window.location,
+      protocol: "https:",
+    })
+
+    expect(getBrowserProtocol()).toBe("https:")
+
+    spy.mockRestore()
+  })
+
+  it("falls back to http: when protocol is empty", () => {
+    const spy = vi.spyOn(window, "location", "get").mockReturnValue({
+      ...window.location,
+      protocol: "",
+    })
+
+    expect(getBrowserProtocol()).toBe("http:")
 
     spy.mockRestore()
   })

@@ -663,7 +663,15 @@ class TestOriginValidation:
 
         headers = internal_headers()
         headers["Origin"] = "http://evil.example.com"
-        resp = client.get("/api/internal/cameras", headers=headers)
+        resp = client.post(
+            "/api/internal/heartbeat",
+            headers=headers,
+            json={
+                "engine_id": "adas-ai-1",
+                "sent_at": datetime.now(UTC).isoformat(),
+                "cameras": [],
+            },
+        )
         assert resp.status_code == 200
 
 

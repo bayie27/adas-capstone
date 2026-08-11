@@ -4,6 +4,8 @@ Tests for the create_app() factory and test-harness isolation (P1 Step 6).
 
 import inspect
 import sqlite3
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.config import Settings, settings
@@ -12,6 +14,8 @@ from app.main import create_app
 from app.models import Camera
 from fastapi.testclient import TestClient
 from sqlmodel import Session
+
+from .conftest import make_operator
 
 
 def _real_db_path() -> Path:
@@ -126,13 +130,23 @@ class TestConcurrentWriteLockHandling:
             blocking_conn = sqlite3.connect(str(db_path), timeout=0)
             blocking_conn.execute("BEGIN EXCLUSIVE")
             try:
-                resp = client.patch(
-                    f"/api/internal/cameras/{camera_id}/status",
+                resp = client.post(
+                    "/api/internal/heartbeat",
                     # verify_internal_api_key checks the process-global
                     # `settings`, not this app's own per-instance settings —
                     # see app/api/dependencies.py.
                     headers={"x-api-key": settings.INTERNAL_API_KEY.get_secret_value()},
-                    json={"connection_status": "Connected"},
+                    json={
+                        "engine_id": "adas-ai-1",
+                        "sent_at": datetime.now(UTC).isoformat(),
+                        "cameras": [
+                            {
+                                "camera_id": camera_id,
+                                "connection_status": "Connected",
+                                "ai_status": "Active",
+                            }
+                        ],
+                    },
                 )
             finally:
                 blocking_conn.execute("ROLLBACK")
@@ -140,3 +154,54 @@ class TestConcurrentWriteLockHandling:
 
         assert resp.status_code == 503
         assert resp.json()["code"] == "TEMPORARILY_UNAVAILABLE"
+
+
+class TestExportWorkerGating:
+    def test_export_worker_pool_runs_with_scheduler_disabled(self, tmp_path):
+        """F7 regression — export workers must be gated on EXPORT_JOB_WORKERS,
+        not on SCHEDULER_ENABLED. Before the fix, a scheduler-off boot never
+        called ExportJobQueue.start(), so a queued job sat `queued` forever
+        with no error. This drives a job through the real worker pool (no
+        direct process_export_job() call) with the scheduler off."""
+        app_settings = Settings(
+            _env_file=None,
+            SECRET_KEY="test-secret-key-not-for-production-use",
+            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            DATABASE_URL=f"sqlite:///{tmp_path / 'export_workers.db'}",
+            SCHEDULER_ENABLED=False,
+            EXPORT_JOB_WORKERS=1,
+        )
+        app = create_app(app_settings)
+
+        with TestClient(app) as client:
+            with Session(app.state.engine) as session:
+                make_operator(session, username="exportop", password="Operator123")
+
+            login_resp = client.post(
+                "/api/auth/login",
+                data={"username": "exportop", "password": "Operator123"},
+            )
+            assert login_resp.status_code == 200, login_resp.text
+            cookie_val = login_resp.cookies.get(app_settings.SESSION_COOKIE_NAME)
+            headers = {"Cookie": f"{app_settings.SESSION_COOKIE_NAME}={cookie_val}"}
+
+            create_resp = client.post(
+                "/api/exports/jobs",
+                json={"report_type": "incidents", "format": "csv"},
+                headers=headers,
+            )
+            assert create_resp.status_code == 202
+            job_id = create_resp.json()["job_id"]
+
+            deadline = time.monotonic() + 5
+            status = None
+            while time.monotonic() < deadline:
+                status_resp = client.get(f"/api/exports/jobs/{job_id}", headers=headers)
+                assert status_resp.status_code == 200
+                status = status_resp.json()["status"]
+                if status == "completed":
+                    break
+                time.sleep(0.05)
+
+        assert status == "completed"

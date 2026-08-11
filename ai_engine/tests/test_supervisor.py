@@ -122,3 +122,64 @@ def test_same_config_version_and_state_is_a_no_op():
 
 def test_zero_cameras_registered_yields_no_actions():
     assert supervisor.compute_actions([], {}) == []
+
+
+# F20 (be_audit/00_FINDINGS.md) — a camera with an outbox-queued-but-
+# undelivered event must not be resumed on a stale "Active" snapshot the
+# backend reported because it doesn't know about that pending event yet.
+
+
+def test_pending_outbox_event_withholds_resume():
+    snap = _snap(1, desired_ai_state="Active")
+    local = {1: _local(is_paused=True)}
+    actions = supervisor.compute_actions([snap], local, {1})
+    assert actions == []
+
+
+def test_pending_outbox_event_for_a_different_camera_does_not_block_resume():
+    snap = _snap(1, desired_ai_state="Active")
+    local = {1: _local(is_paused=True)}
+    actions = supervisor.compute_actions([snap], local, {2})
+    assert actions == [ReconcileAction(1, Action.RESUME)]
+
+
+def test_resume_proceeds_once_the_pending_set_is_empty():
+    snap = _snap(1, desired_ai_state="Active")
+    local = {1: _local(is_paused=True)}
+    actions = supervisor.compute_actions([snap], local, set())
+    assert actions == [ReconcileAction(1, Action.RESUME)]
+
+
+def test_pending_outbox_event_does_not_block_a_pause():
+    # Withholding only applies to resume — a fresh incident (backend now
+    # correctly reporting Paused) must still pause the camera immediately.
+    snap = _snap(1, desired_ai_state="Paused")
+    local = {1: _local(is_paused=False)}
+    actions = supervisor.compute_actions([snap], local, {1})
+    assert actions == [ReconcileAction(1, Action.PAUSE)]
+
+
+def test_reapply_config_forces_paused_snapshot_when_outbox_pending():
+    # An RTSP/channel change rebuilds the stream from scratch via
+    # _start_stream(), which reads desired_ai_state straight off the
+    # snapshot — so a stale "Active" must be overridden here too, or the
+    # rebuilt stream would come back unpaused despite the pending event.
+    snap = _snap(
+        1,
+        desired_ai_state="Active",
+        rtsp_url="rtsp://backend/channel1_v2",
+    )
+    local = {1: _local(is_paused=True, rtsp_url="rtsp://backend/channel1")}
+    actions = supervisor.compute_actions([snap], local, {1})
+    assert actions == [
+        ReconcileAction(
+            1, Action.REAPPLY_CONFIG, {**snap, "desired_ai_state": "Paused"}
+        )
+    ]
+
+
+def test_reapply_config_unaffected_when_no_outbox_pending():
+    snap = _snap(1, desired_ai_state="Active", rtsp_url="rtsp://backend/channel1_v2")
+    local = {1: _local(is_paused=True, rtsp_url="rtsp://backend/channel1")}
+    actions = supervisor.compute_actions([snap], local, set())
+    assert actions == [ReconcileAction(1, Action.REAPPLY_CONFIG, snap)]

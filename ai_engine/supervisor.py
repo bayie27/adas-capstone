@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 
+import outbox
 from backend_client import send_heartbeat
 from config import ENGINE_ID, HEARTBEAT_INTERVAL_SECONDS
 
@@ -39,7 +40,9 @@ class ReconcileAction:
     )
 
 
-def compute_actions(snapshot_cameras, local_cameras):
+def compute_actions(
+    snapshot_cameras, local_cameras, pending_outbox_camera_ids=frozenset()
+):
     """Pure decision function.
 
     snapshot_cameras: the heartbeat response's `cameras` list — each dict
@@ -47,6 +50,19 @@ def compute_actions(snapshot_cameras, local_cameras):
         config_version, ... (01_CONTRACTS.md §6.2).
     local_cameras: dict[camera_id] -> {"is_paused", "applied_config_version",
         "rtsp_url", "channel_id"} describing what the engine currently runs.
+    pending_outbox_camera_ids: camera_ids with at least one event still
+        queued for delivery (outbox.pending_camera_ids()). The backend's
+        snapshot cannot know about an event that hasn't been delivered yet
+        — nothing is committed to its DB until then — so it will keep
+        reporting the pre-incident `desired_ai_state: Active` for that
+        camera. Honoring that resume here would let the engine detect again
+        before the original event's outbox retry even fires; the newer
+        detection would then win the open-incident race and the backend
+        would discard the original as a "redundant" 409 CONFLICT — silently
+        losing a genuine, earlier detection (F20, be_audit/00_FINDINGS.md).
+        A camera in this set stays paused regardless of what the snapshot
+        says, until its outbox entry has actually been delivered or given
+        up on.
 
     The v2 snapshot includes ALL is_active cameras, including disabled ones
     (is_enabled: false) — unlike the legacy poll, which pre-filtered to
@@ -89,10 +105,19 @@ def compute_actions(snapshot_cameras, local_cameras):
         # restart on a version bump would mean a template/credential change
         # (e.g. MediaMTX -> DSS cutover) is silently ignored by every
         # already-running stream.
+        has_pending_event = camera_id in pending_outbox_camera_ids
         if restart_needed:
             # A fresh stream is constructed in the correct desired state
-            # directly, so no separate pause/resume action is needed.
-            actions.append(ReconcileAction(camera_id, Action.REAPPLY_CONFIG, snap))
+            # directly, so no separate pause/resume action is needed —
+            # except a pending outbox event overrides a stale "Active"
+            # the same way it does below, or the restart would silently
+            # hand back an unpaused stream (see pending_outbox_camera_ids).
+            reapply_snap = snap
+            if has_pending_event and snap.get("desired_ai_state") != "Paused":
+                reapply_snap = {**snap, "desired_ai_state": "Paused"}
+            actions.append(
+                ReconcileAction(camera_id, Action.REAPPLY_CONFIG, reapply_snap)
+            )
             continue
 
         if config_changed:
@@ -101,7 +126,7 @@ def compute_actions(snapshot_cameras, local_cameras):
         desired = snap.get("desired_ai_state")
         if desired == "Paused" and not local.get("is_paused"):
             actions.append(ReconcileAction(camera_id, Action.PAUSE))
-        elif desired == "Active" and local.get("is_paused"):
+        elif desired == "Active" and local.get("is_paused") and not has_pending_event:
             actions.append(ReconcileAction(camera_id, Action.RESUME))
 
     return actions
@@ -189,7 +214,9 @@ def heartbeat_loop(cameras: dict) -> None:
             if response is not None:
                 snapshot_cameras = response.get("cameras", [])
                 actions = compute_actions(
-                    snapshot_cameras, _local_camera_states(cameras)
+                    snapshot_cameras,
+                    _local_camera_states(cameras),
+                    outbox.pending_camera_ids(),
                 )
                 _apply_actions(actions, cameras)
                 interval = response.get(

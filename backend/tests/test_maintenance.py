@@ -63,6 +63,28 @@ from sqlmodel import Session, select
 
 from tests.conftest import auth_headers, make_admin, make_operator
 
+
+@pytest.fixture
+def lifespan_db_dir(tmp_path):
+    """Overrides conftest's session-scoped fixture, for this module only.
+
+    Everywhere else the app's on-disk database is write-only scaffolding —
+    `get_session`/`get_engine` are overridden to the in-memory `session`
+    engine, so nothing reads it and one migrated file can be shared by the
+    whole session. This module is the exception: `maintenance_settings`
+    points BACKUP_DIR/DATABASE_URL at that very file, and
+    `_audit_rows_on_disk` reads back rows the background backup job wrote
+    through `app.state.engine`. Sharing it would let BACKUP_TRIGGER rows
+    accumulate across tests, and `assert len(rows) == 1` would count its
+    neighbours' work.
+
+    So: back to one fresh migrated database per test here, and pay the
+    `alembic upgrade head` for it. Correctness is worth ~20s in a suite
+    that runs in well under two minutes.
+    """
+    return tmp_path
+
+
 # ---------------------------------------------------------------------------
 # Pure-function fixtures: a real file-based SQLite DB, independent of the
 # in-memory ORM session the rest of the suite uses.
@@ -70,6 +92,9 @@ from tests.conftest import auth_headers, make_admin, make_operator
 
 
 def _make_real_db(db_path, *, seed_value="seed"):
+    from app.core.config import settings as app_settings
+    from app.core.migrations import get_code_head_revision
+
     conn = sqlite3.connect(db_path)
     # WAL mode, matching every real adas.db (app.core.db.install_sqlite_pragmas)
     # — without this, sqlite3.Connection.backup() never carries WAL mode
@@ -79,6 +104,17 @@ def _make_real_db(db_path, *, seed_value="seed"):
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
     conn.execute("INSERT INTO t (v) VALUES (?)", (seed_value,))
+    # P9 — stamp the real code head so backups of this fixture pass
+    # restore.py's schema-revision compatibility check, same as any real
+    # post-P9 adas.db would.
+    conn.execute(
+        "CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL, "
+        "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"
+    )
+    conn.execute(
+        "INSERT INTO alembic_version (version_num) VALUES (?)",
+        (get_code_head_revision(app_settings),),
+    )
     conn.commit()
     conn.close()
 

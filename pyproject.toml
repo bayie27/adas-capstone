@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = "==3.12.13"
 dependencies = [
+    "alembic>=1.19.1",
     "apscheduler>=3.11.3",
     "argon2-cffi>=25.1.0",
     "fastapi[standard]>=0.136.1",
@@ -79,6 +80,7 @@ dev = [
     "pypdf>=6.15.0",
     "pytest>=9.0.3",
     "pytest-cov>=6.0",
+    "pytest-xdist>=3.6",
     "ruff>=0.9",
 ]
 
@@ -113,9 +115,14 @@ torchvision = [
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "ai_engine/tests"]
 cache_dir = "backend/.pytest_cache"
-addopts = "-q -m 'not clips'"
+# Two tiers are excluded from the default run; name either explicitly to opt in.
+#   not slow  — backend/tests/perf/ (10_PKG_migration_evidence.md Step 3) seeds a
+#               real 100,000-row database every session.
+#   not clips — needs a GPU and ai_engine/eval/clips populated, so CI cannot run
+#               them and most machines should not.
+addopts = "-q -m 'not slow and not clips'"
 markers = [
-    "slow: marks tests as slow",
+    "slow: marks tests as slow (excluded from the default run — see backend/tests/perf/)",
     "clips: needs a GPU and ai_engine/eval/clips populated; excluded from CI",
 ]
 

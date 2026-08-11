@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 
+import pytest
 from app.core.logging import RedactingFilter
 from app.schemas import default_error_code
 from fastapi.testclient import TestClient
@@ -131,3 +132,62 @@ class TestOperationalErrorHandler:
         assert response.status_code == 500
         body = json.loads(response.body)
         assert body["code"] == "INTERNAL_SERVER_ERROR"
+
+
+class TestRequestIdOnErrorResponses:
+    """F8 (00_FINDINGS.md): the bare-`Exception` handler runs in Starlette's
+    ServerErrorMiddleware, outside request_id_middleware, so by the time it
+    ran `request_id_ctx.get()` had already been reset to "-" and the 500
+    response carried no `X-Request-ID` — the one error class where
+    correlation matters most was the one that lost it. Both routes below are
+    added to a per-test app instance (the `client` fixture builds a fresh
+    app per test) so nothing leaks into other tests."""
+
+    def test_unhandled_exception_returns_x_request_id_matching_the_log(
+        self, client: TestClient, caplog: pytest.LogCaptureFixture
+    ):
+        async def _boom():
+            raise RuntimeError("simulated unhandled failure")
+
+        client.app.add_api_route("/__test_unhandled_500", _boom, methods=["GET"])
+
+        # A separate client sharing the same (already-started) app, only so
+        # `raise_server_exceptions=False` can be set — that flag is baked
+        # into the transport at construction time, not mutable on `client`.
+        no_raise_client = TestClient(client.app, raise_server_exceptions=False)
+        with caplog.at_level(logging.ERROR):
+            resp = no_raise_client.get("/__test_unhandled_500")
+
+        assert resp.status_code == 500
+        request_id = resp.headers["X-Request-ID"]
+        assert request_id and request_id != "-"
+
+        matching = [
+            r for r in caplog.records if "Unhandled exception on" in r.getMessage()
+        ]
+        assert len(matching) == 1
+        assert f"[request_id={request_id}]" in matching[0].getMessage()
+
+    def test_lock_timeout_503_returns_x_request_id_matching_the_log(
+        self, client: TestClient, caplog: pytest.LogCaptureFixture
+    ):
+        async def _locked():
+            raise OperationalError("SELECT 1", {}, Exception("database is locked"))
+
+        client.app.add_api_route("/__test_locked_503", _locked, methods=["GET"])
+
+        no_raise_client = TestClient(client.app, raise_server_exceptions=False)
+        with caplog.at_level(logging.ERROR):
+            resp = no_raise_client.get("/__test_locked_503")
+
+        assert resp.status_code == 503
+        request_id = resp.headers["X-Request-ID"]
+        assert request_id and request_id != "-"
+
+        matching = [
+            r
+            for r in caplog.records
+            if "SQLite busy-timeout exceeded" in r.getMessage()
+        ]
+        assert len(matching) == 1
+        assert f"[request_id={request_id}]" in matching[0].getMessage()

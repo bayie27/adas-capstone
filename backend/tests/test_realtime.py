@@ -8,6 +8,8 @@ file's "trigger a broadcast and read it" shape.
 """
 
 import asyncio
+import logging
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import app.main as main_module
@@ -223,13 +225,14 @@ def test_event_ids_are_unique_across_broadcasts(client: TestClient, session: Ses
                     "x-api-key": default_settings.INTERNAL_API_KEY.get_secret_value()
                 },
                 json={
+                    "source_event_id": str(uuid.uuid4()),
                     "camera_id": camera.camera_id,
                     "detected_at": datetime.now(UTC).isoformat(),
-                    "snapshot_path": "ws/uniq.jpg",
+                    "snapshot_key": "ws/uniq.jpg",
                     "confidence_score": 0.9,
                 },
             )
-            assert resp.status_code == 200
+            assert resp.status_code == 201
 
         detection_one = websocket.receive_json()
         websocket.receive_json()  # CAMERA_STATUS_UPDATE for camera_one
@@ -475,7 +478,7 @@ class _FakeWebSocketConnection:
     async def send_json(self, data: dict) -> None:
         self.sent.append(data)
 
-    async def receive_text(self) -> str:
+    async def receive(self) -> dict:
         raise RuntimeError("simulated non-disconnect failure")
 
 
@@ -501,6 +504,45 @@ def test_read_loop_deregisters_connection_on_non_disconnect_exception(
 
     assert ws.accepted is True
     assert ws.closed is not None
+    assert manager.total_connection_count() == 0
+
+
+# ---------------------------------------------------------------------------
+# F16 (00_FINDINGS.md) — a binary client frame is ignored, not logged as an
+# "Unexpected error", and the connection is deregistered exactly once when
+# it actually closes.
+# ---------------------------------------------------------------------------
+
+
+def test_binary_frame_is_ignored_and_not_logged_as_error(
+    client: TestClient, session: Session, caplog: pytest.LogCaptureFixture
+):
+    make_operator(session, username="wsbinary", password="Operator123")
+    headers = auth_headers(client, "wsbinary", "Operator123")
+    manager: RealtimeManager = client.app.state.realtime_manager
+
+    with (
+        caplog.at_level(logging.INFO),
+        client.websocket_connect("/ws/alerts", headers=headers) as websocket,
+    ):
+        websocket.receive_json()  # CONNECTION_READY
+
+        websocket.send_bytes(b"\x00\x01not-a-state-mutation")
+
+        # Connection survived the binary frame — a broadcast still
+        # reaches it, proving the read loop didn't tear it down.
+        manager.broadcast(
+            make_event(EventType.RE_ALARM, ReAlarmData(log_id=1, camera_id=1))
+        )
+        websocket.receive_json()
+
+    assert not any(
+        "Unexpected error in /ws/alerts read loop" in record.message
+        for record in caplog.records
+    )
+    # The `with` block's exit closes the socket, which must still
+    # deregister the connection exactly once (no leak, no double-cleanup
+    # error) even though a non-text frame was received earlier.
     assert manager.total_connection_count() == 0
 
 

@@ -31,9 +31,19 @@ class HeartbeatCameraReport(SQLModel):
 
 
 class HeartbeatRequest(SQLModel):
-    engine_id: str
+    # F9 (be_audit/A3_ai_seam.md) — bounded to match the care already taken
+    # one class above: engine_id was accepted with no length limit and no
+    # null-byte check even though nothing else on this payload gets that
+    # pass. cameras is bounded generously above the paper's 418-camera
+    # target so a malformed or hostile engine can't post an unbounded body.
+    engine_id: str = Field(max_length=128)
     sent_at: datetime
-    cameras: list[HeartbeatCameraReport] = []
+    cameras: list[HeartbeatCameraReport] = Field(default=[], max_length=2000)
+
+    @field_validator("engine_id")
+    @classmethod
+    def _no_null_bytes(cls, v: str) -> str:
+        return reject_null_bytes(v)
 
 
 class HeartbeatCameraSnapshot(SQLModel):

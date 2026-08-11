@@ -7,12 +7,22 @@ from _bootstrap import bootstrap_backend
 bootstrap_backend()
 
 from reset_db import reset_sqlite_db
-from seed_dev_data import DEFAULT_SEED_PROFILE, SEED_PROFILES, seed_dev_data
+from seed_dev_data import (
+    DEFAULT_SEED_PROFILE,
+    PERF_PROFILE,
+    PERF_TARGET_INCIDENT_COUNT,
+    SEED_PROFILES,
+    seed_dev_data,
+    seed_perf_data,
+)
 
 
 def reseed_dev(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
     reset_sqlite_db(initialize=False)
-    seed_dev_data(profile=profile)
+    if profile == PERF_PROFILE:
+        seed_perf_data(target_count=PERF_TARGET_INCIDENT_COUNT)
+    else:
+        seed_dev_data(profile=profile)
 
 
 def main() -> None:

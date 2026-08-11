@@ -160,6 +160,26 @@ def test_retry_does_not_redeliver_before_next_attempt_is_due():
     assert call_count["n"] == 1
 
 
+def test_pending_camera_ids_reflects_queued_events():
+    outbox.enqueue(_payload("evt-1", camera_id=5))
+    outbox.enqueue(_payload("evt-2", camera_id=7))
+    outbox.enqueue(_payload("evt-3", camera_id=5))  # duplicate camera, no dup id
+    assert outbox.pending_camera_ids() == {5, 7}
+
+
+def test_pending_camera_ids_empty_when_outbox_is_empty():
+    assert outbox.pending_camera_ids() == set()
+
+
+def test_pending_camera_ids_skips_corrupt_entries(_outbox_dir):
+    _outbox_dir.mkdir(parents=True, exist_ok=True)
+    (_outbox_dir / "20260101T000000000000_bad.json").write_text(
+        "{not valid json", encoding="utf-8"
+    )
+    outbox.enqueue(_payload(camera_id=9))
+    assert outbox.pending_camera_ids() == {9}
+
+
 def test_restart_drains_events_left_pending_from_a_prior_crash():
     # Simulates two events persisted before a crash, discovered fresh on
     # the next process start — this is the entire reason the outbox exists.

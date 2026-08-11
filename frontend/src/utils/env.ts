@@ -10,12 +10,21 @@ export function getBrowserHostname() {
   return window.location.hostname || "localhost"
 }
 
+export function getBrowserProtocol() {
+  if (typeof window === "undefined") {
+    return "http:"
+  }
+
+  return window.location.protocol || "http:"
+}
+
 function getDefaultApiBaseUrl() {
-  return `http://${getBrowserHostname()}:8000/api`
+  return `${getBrowserProtocol()}//${getBrowserHostname()}:8000/api`
 }
 
 function getDefaultWsBaseUrl() {
-  return `ws://${getBrowserHostname()}:8000`
+  const wsProtocol = getBrowserProtocol() === "https:" ? "wss:" : "ws:"
+  return `${wsProtocol}//${getBrowserHostname()}:8000`
 }
 
 export const API_BASE_URL = trimTrailingSlash(

@@ -2,25 +2,47 @@
 Focused tests for app startup behavior.
 """
 
-import asyncio
-
-import app.main as main_module
+from app.core.config import Settings
+from app.main import create_app
 from app.models import AIStatus, Camera, ConnectionStatus
-from sqlmodel import Session, SQLModel, create_engine
-from sqlmodel.pool import StaticPool
+from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 from .conftest import make_camera
 
 
-def test_lifespan_resets_only_enabled_active_cameras(monkeypatch):
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    SQLModel.metadata.create_all(engine)
+def test_lifespan_resets_only_enabled_active_cameras(tmp_path):
+    """A real restart (TestClient entered a second time) must reset
+    connection/AI status for enabled+active cameras only, leaving
+    disabled and inactive cameras untouched.
 
-    with Session(engine) as session:
+    Uses create_app() rather than pointing a hand-built in-memory engine at
+    the module-level `app` singleton: check_schema_revision's auto-bootstrap
+    (backend/alembic/env.py) always reopens `target_settings.DATABASE_URL`
+    itself, ignoring whatever engine object is passed in — so an engine and
+    a settings.DATABASE_URL that don't actually match (as the old version of
+    this test had, via monkeypatch.setattr(..., "engine", ...) while leaving
+    app.state.settings on the real process-global Settings) silently
+    migrates the *wrong* database. This showed up as a "table already
+    exists" collision against the real repo-root adas.db whenever some
+    earlier test in the same session had already caused it to be migrated —
+    order-dependent and unrelated to the cameras under test here."""
+    app_settings = Settings(
+        _env_file=None,
+        SECRET_KEY="test-secret-key-not-for-production-use",
+        INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+        DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+        DATABASE_URL=f"sqlite:///{tmp_path / 'lifespan.db'}",
+        SCHEDULER_ENABLED=False,
+        EXPORT_JOB_WORKERS=0,
+    )
+    app = create_app(app_settings)
+
+    # First boot: creates the schema so cameras can be seeded below.
+    with TestClient(app):
+        pass
+
+    with Session(app.state.engine) as session:
         enabled_active = make_camera(
             session,
             name="Enabled Active Reset Cam",
@@ -48,18 +70,11 @@ def test_lifespan_resets_only_enabled_active_cameras(monkeypatch):
         disabled_id = disabled.camera_id
         inactive_id = inactive.camera_id
 
-    # Point the already-built module-level app at this throwaway engine
-    # instead of the one create_app() built at import time — lifespan reads
-    # both engine and settings from app.state, per Step 6.
-    monkeypatch.setattr(main_module.app.state, "engine", engine)
+    # Second boot: the restart under test.
+    with TestClient(app):
+        pass
 
-    async def run_lifespan_once() -> None:
-        async with main_module.lifespan(main_module.app):
-            pass
-
-    asyncio.run(run_lifespan_once())
-
-    with Session(engine) as session:
+    with Session(app.state.engine) as session:
         enabled_active = session.get(Camera, enabled_active_id)
         disabled = session.get(Camera, disabled_id)
         inactive = session.get(Camera, inactive_id)

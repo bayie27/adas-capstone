@@ -15,6 +15,7 @@ hand.
 import json
 import os
 import re
+import sqlite3
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -42,6 +43,26 @@ class InvalidBackupIdError(ValueError):
 
 def new_backup_id() -> str:
     return uuid.uuid4().hex
+
+
+def read_schema_revision(db_path: Path) -> str | None:
+    """The Alembic revision stamped in a completed SQLite file, read via
+    raw `sqlite3` — this package stays free of an app.models/SQLAlchemy
+    dependency (see restore.py's `record_restore_outcome_audit`). `None`
+    means "unknown": the file predates Alembic (P9), is unreadable, or has
+    no `alembic_version` row — never an error, since a backup must still
+    be creatable even if its revision can't be determined."""
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    except sqlite3.OperationalError:
+        return None
+    try:
+        row = conn.execute("SELECT version_num FROM alembic_version LIMIT 1").fetchone()
+        return row[0] if row else None
+    except sqlite3.DatabaseError:
+        return None
+    finally:
+        conn.close()
 
 
 def validate_backup_id(backup_id: str) -> str:

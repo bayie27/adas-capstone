@@ -8,8 +8,9 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from app.core import security as _security
 from app.core.config import Settings, settings
-from app.core.db import get_engine, get_session
+from app.core.db import get_engine, get_session, install_sqlite_pragmas
 from app.core.security import get_password_hash
 from app.main import create_app
 from app.models import (
@@ -23,8 +24,53 @@ from app.models import (
     UserRole,
 )
 from fastapi.testclient import TestClient
+from passlib.context import CryptContext
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
+
+# ---------------------------------------------------------------------------
+# Password hashing — production cost parameters are far too slow for a suite
+# ---------------------------------------------------------------------------
+
+# Captured here at conftest import, which happens before any fixture runs —
+# so this is genuinely the context app/core/security.py builds at import
+# time, not the cheap one installed below. test_security_params.py asserts
+# against it; see cheap_password_hashing() for why that matters.
+PRODUCTION_PWD_CONTEXT = _security.pwd_context
+
+
+@pytest.fixture(autouse=True, scope="session")
+def cheap_password_hashing():
+    """Argon2id at throwaway cost parameters, for the test suite only.
+
+    Production runs argon2-cffi's RFC 9106 defaults (64 MiB, t=3, p=4) —
+    measured at ~400ms per hash and ~180ms per verify on a dev laptop. This
+    suite performs roughly 900 of them (every make_admin/make_operator,
+    every login/auth_headers, and one per init_db), which was about five
+    minutes of pure key derivation.
+
+    These tests assert authentication *behaviour*, not that the KDF is
+    expensive — same algorithm, same code paths, ~1ms. The production cost
+    parameters are pinned separately by test_security_params.py, so this
+    cannot mask a real weakening of app/core/security.py.
+
+    Rebinding the module attribute is enough: nothing imports `pwd_context`
+    directly, and get_password_hash/verify_password resolve it as a module
+    global at call time.
+    """
+    _security.pwd_context = CryptContext(
+        schemes=["argon2"],
+        deprecated="auto",
+        argon2__time_cost=1,
+        argon2__memory_cost=8,
+        argon2__parallelism=1,
+    )
+    # Recomputed under the cheap context too — otherwise every
+    # unknown-username login still pays a full-cost verify (edge case 8.8).
+    _security._DUMMY_PASSWORD_HASH = _security.pwd_context.hash(
+        "not-a-real-account-used-only-for-timing"
+    )
+
 
 # ---------------------------------------------------------------------------
 # Database fixture — fresh in-memory DB per test
@@ -38,13 +84,42 @@ def session_fixture():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    # F1 — must be registered before anything opens StaticPool's single
+    # connection, or the pragmas never apply. Matches production (app.core.db)
+    # so tests enforce the same foreign_keys=ON guarantees as the real app.
+    install_sqlite_pragmas(engine, settings.SQLITE_BUSY_TIMEOUT_MS)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
     SQLModel.metadata.drop_all(engine)
 
 
-def _build_test_settings(tmp_path) -> Settings:
+@pytest.fixture(scope="session")
+def lifespan_db_dir(tmp_path_factory):
+    """One migrated throwaway database, shared by every client fixture.
+
+    Session-scoped on purpose. Almost no test reads this database —
+    client_fixture overrides get_session/get_engine to the in-memory
+    `session` engine — but the lifespan still runs init_db() against it, and
+    init_db bootstraps a *fresh* file with a full `alembic upgrade head`
+    (37 DDL operations against a synchronous=FULL SQLite file). On a
+    per-test tmp_path that fired 352 times, roughly two minutes of the
+    suite. Shared, the first client pays for the migration and the rest hit
+    the `current_rev == head_rev` fast path in check_schema_revision.
+
+    tmp_path_factory is per-worker under xdist, so this stays one migration
+    per worker rather than one shared file racing 16 processes.
+
+    If you add a test that *reads* app.state.engine — counting audit rows
+    written by a background job, say — state will leak in from its
+    neighbours. Override this fixture in that module to get a fresh
+    database per test; test_maintenance.py does exactly that and explains
+    why.
+    """
+    return tmp_path_factory.mktemp("lifespan")
+
+
+def _build_test_settings(lifespan_dir) -> Settings:
     """A disposable Settings instance, decoupled from the real .env, whose
     engine (built inside create_app()) never touches the repo-root adas.db —
     that engine is unused anyway once get_session/get_engine are overridden
@@ -55,14 +130,17 @@ def _build_test_settings(tmp_path) -> Settings:
         SECRET_KEY="test-secret-key-not-for-production-use",
         INTERNAL_API_KEY="test-internal-api-key-not-for-production",
         DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
-        DATABASE_URL=f"sqlite:///{tmp_path / 'lifespan-only.db'}",
+        DATABASE_URL=f"sqlite:///{lifespan_dir / 'lifespan-only.db'}",
         SCHEDULER_ENABLED=False,
+        # F7 — tests drive export jobs directly via process_export_job(),
+        # not through the worker pool; a live pool would race those calls.
+        EXPORT_JOB_WORKERS=0,
     )
 
 
 @pytest.fixture(name="client")
-def client_fixture(session: Session, tmp_path):
-    app = create_app(_build_test_settings(tmp_path))
+def client_fixture(session: Session, lifespan_db_dir):
+    app = create_app(_build_test_settings(lifespan_db_dir))
 
     def get_session_override():
         yield session
