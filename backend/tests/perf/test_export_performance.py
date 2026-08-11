@@ -45,6 +45,13 @@ def _export_window(perf_seeded: dict, *, days: int) -> tuple[str, str]:
     return start.isoformat(), now.isoformat()
 
 
+# A6 (be_audit/A6_manual_evidence.md Part 2) — the owner-decided real
+# operating envelope: ~10 incidents/day, so a 30-day export is ~300 rows,
+# not the paper's literal ~10,000. This is the primary NFR-06 evidence;
+# the 10k-row cases above stay as a documented ceiling, not deleted.
+_ENVELOPE_WINDOW_DAYS = 30
+
+
 class TestIncidentExportLatency:
     def test_csv_export_ttfb_and_total_under_5s(
         self, perf_client: TestClient, perf_seeded: dict
@@ -150,5 +157,74 @@ class TestIncidentExportLatency:
             f"{_LARGE_WINDOW_DAYS}-day window: {elapsed:.3f}s "
             f"({len(resp.content)} bytes) (budget {EXPORT_BUDGET_SECONDS}s) "
             f"— EXPECTED TO EXCEED BUDGET, see module docstring"
+        )
+        assert elapsed < EXPORT_BUDGET_SECONDS
+
+
+class TestOperatingEnvelopeExportLatency:
+    """A6 Part 2 — primary NFR-06/TC-R-203 evidence at the real ~10
+    incidents/day envelope (~300 rows over 30 days), against a dedicated
+    `envelope_seeded` dataset at that density — not a date-filtered slice
+    of the ~182/day `perf_seeded` dataset used above."""
+
+    def test_csv_export_at_operating_envelope_under_5s(
+        self, envelope_client: TestClient, envelope_seeded: dict
+    ):
+        headers = operator_auth_headers(envelope_client, envelope_seeded)
+        start_date, end_date = _export_window(
+            envelope_seeded, days=_ENVELOPE_WINDOW_DAYS
+        )
+
+        started = time.perf_counter()
+        resp = envelope_client.get(
+            "/api/alerts/export",
+            headers=headers,
+            params={
+                "format": "csv",
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+        )
+        elapsed = time.perf_counter() - started
+
+        assert resp.status_code == 200, resp.text
+        row_count = resp.text.count("\n") - 1  # header line
+
+        print(
+            f"\n[PERF] GET /api/alerts/export?format=csv over a "
+            f"{_ENVELOPE_WINDOW_DAYS}-day window at the ~10/day operating "
+            f"envelope: {elapsed:.3f}s (~{row_count} rows) "
+            f"(budget {EXPORT_BUDGET_SECONDS}s)"
+        )
+        assert elapsed < EXPORT_BUDGET_SECONDS
+
+    def test_pdf_export_at_operating_envelope_under_5s(
+        self, envelope_client: TestClient, envelope_seeded: dict
+    ):
+        headers = operator_auth_headers(envelope_client, envelope_seeded)
+        start_date, end_date = _export_window(
+            envelope_seeded, days=_ENVELOPE_WINDOW_DAYS
+        )
+
+        started = time.perf_counter()
+        resp = envelope_client.get(
+            "/api/alerts/export",
+            headers=headers,
+            params={
+                "format": "pdf",
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+        )
+        elapsed = time.perf_counter() - started
+
+        assert resp.status_code == 200, resp.text
+        assert resp.headers["content-type"] == "application/pdf"
+
+        print(
+            f"[PERF] GET /api/alerts/export?format=pdf over a "
+            f"{_ENVELOPE_WINDOW_DAYS}-day window at the ~10/day operating "
+            f"envelope: {elapsed:.3f}s ({len(resp.content)} bytes) "
+            f"(budget {EXPORT_BUDGET_SECONDS}s)"
         )
         assert elapsed < EXPORT_BUDGET_SECONDS

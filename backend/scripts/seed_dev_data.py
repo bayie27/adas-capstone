@@ -992,16 +992,20 @@ def _build_perf_rows(
     operator_ids: list[int],
     target_count: int,
     seed: int = 20260810,
+    spread_days: int = PERF_SPREAD_DAYS,
 ) -> list[dict]:
     """Deterministic (fixed `seed`) so re-running the perf profile against
     an already-seeded database is reproducible, matching the rest of this
-    script's idempotency conventions."""
+    script's idempotency conventions. `spread_days` defaults to the
+    NFR-08 100,000-row profile's ~18-month span; A6 passes a tighter
+    30-day window to build the ~10-incidents/day operating-envelope
+    dataset at its own (much lower) density instead."""
     rng = random.Random(seed)
     rows: list[dict] = []
 
     for i in range(target_count):
         camera_id = camera_ids[i % len(camera_ids)]
-        days_ago = rng.uniform(0, PERF_SPREAD_DAYS)
+        days_ago = rng.uniform(0, spread_days)
         detected_at = (now - timedelta(days=days_ago)).replace(microsecond=0)
         status = _perf_pick_status(rng)
         confidence_score = round(rng.uniform(0.35, 0.99), 4)
