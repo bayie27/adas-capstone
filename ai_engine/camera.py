@@ -1,11 +1,29 @@
 import threading
 import time
 from collections import deque
+from contextlib import suppress
+from dataclasses import dataclass
 
 import cv2
 from config import RECONNECT_INTERVAL_SECONDS, UNRESPONSIVE_AFTER_FAILURES
 
 _FPS_WINDOW_SECONDS = 5
+
+
+@dataclass(frozen=True)
+class FrameRead:
+    """One decoded frame with the two things the accumulator needs.
+
+    `t` is time.monotonic() captured in the reader thread AT DECODE, not at
+    inference time — queueing delay would otherwise pollute dt.
+
+    `segment_id` increments on reconnect, on resume, and at construction.
+    The pipeline resets that camera's accumulator whenever it changes.
+    """
+
+    frame: object
+    t: float
+    segment_id: int
 
 
 class CameraStream:
@@ -19,8 +37,10 @@ class CameraStream:
         self.channel_id = channel_id
         self.camera_id = camera_id
         self.url = rtsp_url
-        self.latest_frame = None
-        self.frame_ready = False
+        # A single tuple assignment is atomic under the GIL; the old
+        # frame/flag pair could be read half-updated.
+        self._latest: FrameRead | None = None
+        self.segment_id = 0
         self.running = True
         self.is_paused = False  # The digital blindfold
         self.cap = None
@@ -46,9 +66,14 @@ class CameraStream:
         self.ai_status = "Paused"
 
     def resume(self):
+        """Bumping the segment here is what neutralises SPEC.md section 6:
+        the fired region from the incident just handled is discarded, so this
+        location can alert again. Without it the camera goes permanently deaf
+        at that spot."""
         print(f"[SYSTEM] Resuming AI ingestion for Channel {self.channel_id}...")
         self.is_paused = False
         self.ai_status = "Active"
+        self.segment_id += 1
 
     def _record_failure(self, error_code, error_message):
         self.consecutive_failures += 1
@@ -84,16 +109,22 @@ class CameraStream:
                     f"[SYSTEM] Channel {self.channel_id} is offline. Attempting connection to {self.url}..."
                 )
                 self.cap = cv2.VideoCapture(self.url)
+                # Always want the newest frame; a stale one is worse than a
+                # dropped one for an alerting system. Not supported by every
+                # backend, so a failure here is harmless.
+                with suppress(Exception):
+                    self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
                 if not self.cap.isOpened():
                     self._record_failure("CONNECT_FAILED", "Could not open RTSP stream")
                     time.sleep(RECONNECT_INTERVAL_SECONDS)
                     continue
                 else:
-                    # Successfully connected
                     self._record_success()
                     self.connection_status = "Connected"
                     self.ai_status = "Paused" if self.is_paused else "Active"
+                    # Reconnected: dt across the outage is meaningless.
+                    self.segment_id += 1
 
             # 2. Pause Bypass
             if self.is_paused:
@@ -115,8 +146,9 @@ class CameraStream:
             # 3. Read Loop
             success, frame = self.cap.read()
             if success:
-                self.latest_frame = frame
-                self.frame_ready = True
+                self._latest = FrameRead(
+                    frame=frame, t=time.monotonic(), segment_id=self.segment_id
+                )
                 self._record_frame_decoded()
                 self._record_success()
                 self.connection_status = "Connected"
@@ -130,11 +162,17 @@ class CameraStream:
                 time.sleep(1)
 
     def read(self):
-        """Returns the latest frame if it's new; otherwise returns None."""
-        if self.frame_ready:
-            self.frame_ready = False
-            return self.latest_frame
-        return None
+        """Returns the newest unconsumed FrameRead, or None.
+
+        Returning None when nothing is new is deliberate: a camera decoding
+        slower than the tick rate simply contributes fewer samples, which the
+        accumulator handles correctly because it integrates over elapsed time.
+        """
+        latest = self._latest
+        if latest is None:
+            return None
+        self._latest = None
+        return latest
 
     def observed_state(self):
         """Matches HeartbeatCameraReport (01_CONTRACTS.md §6.2)."""

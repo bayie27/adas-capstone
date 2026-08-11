@@ -271,5 +271,30 @@ test-results/
 playwright-report/
 .playwright/
 
+# Written by ai_engine/capacity.py. Machine-specific, like a TensorRT engine.
+ai_engine/machine_profile.json
+ai_engine/*.engine
+
+# Real accident footage, test-only, permanently. No public licence; shows identifiable
+# people/vehicles/locations. Already covered by *.mp4 above; this is belt-and-suspenders
+# so the rule holds even if a non-.mp4 file ever lands here.
+ai_engine/eval/clips/
+
+# MediaMTX generates a self-signed cert and EC private key for its MoQ/WebRTC
+# listeners on first run, in whatever directory it is started from. The
+# documented command is `mediamtx mediamtx.yml` from the repo root, so every
+# developer who simulates cameras drops these here. Never commit a .key.
+auto.crt
+auto.key
+
+# Kept local, deliberately not published. This repository is public.
+#   Final-Paper.pdf         — the capstone paper itself, a 3.2MB binary
+#   paper-edits-required.md — corrections the port makes necessary to that paper
+# port-handover.md IS tracked: be_plan/ and be_audit/ establish that internal
+# planning and audit documents belong in this repo, and it is what lets a fresh
+# session resume the work.
+ai_engine/docs/Final-Paper.pdf
+ai_engine/docs/paper-edits-required.md
+
 # TLS certs (LAN demo profile) — never commit a private key
 certs/

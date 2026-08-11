@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Preflights the two external binaries this depends on (ffmpeg, mediamtx)
-    and the sample_vids/ directory, then execs `mediamtx mediamtx.yml`. Ctrl+C
+    and the eval/clips/ directory, then execs `mediamtx mediamtx.yml`. Ctrl+C
     stops MediaMTX and its child ffmpeg processes together.
 #>
 
@@ -29,9 +29,23 @@ add that directory to PATH. Then retry this script.
     exit 1
 }
 
-$sampleVidsDir = Join-Path $RepoRoot "ai_engine\sample_vids"
-if (-not (Test-Path $sampleVidsDir) -or -not (Get-ChildItem $sampleVidsDir -Filter "*.mp4" -ErrorAction SilentlyContinue)) {
-    Write-Warning "ai_engine\sample_vids\ is missing or empty. See the README for how to obtain the clips."
+# mediamtx.yml sources the five channels from here. The clips are gitignored,
+# so a fresh clone has none and MediaMTX would start with every path failing to
+# publish — a confusing symptom for a missing-files cause. Name the five it
+# actually needs rather than just checking the directory is non-empty.
+$clipsDir = Join-Path $RepoRoot "ai_engine\eval\clips"
+$required = @("dekwatro", "tric-motor-car", "red-car-motor", "motor-motor-night", "airbase")
+$missing = $required | Where-Object { -not (Test-Path (Join-Path $clipsDir "$_.mp4")) }
+if ($missing) {
+    Write-Warning @"
+ai_engine\eval\clips\ is missing $($missing.Count) of the 5 clips mediamtx.yml needs:
+  $($missing -join ', ')
+
+Populate it from the frozen research package:
+  cp ai_engine/adas_transfer/clips/*.mp4 ai_engine/eval/clips/
+
+See ai_engine/eval/README.md.
+"@
 }
 
 Write-Host "Starting MediaMTX (mediamtx.yml) from $RepoRoot ..."
