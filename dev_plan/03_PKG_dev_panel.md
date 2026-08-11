@@ -225,3 +225,41 @@ Don't run `pnpm check` manually — `.husky/pre-push` runs it on every push.
 
 - Whether the `Modal` extraction caused any visible change (it shouldn't).
 - The production bundle size delta from `pnpm build`, so the DT-3 trade-off is on record.
+
+---
+
+## Executed 2026-08-11 — answers
+
+**The `Modal` extraction caused no visible change.** Only the `useEffect` body moved; the returned
+JSX, the props and the class strings are untouched. `Modal` had no test, so one was added covering
+open/closed rendering, Escape, `closeOnBackdrop={false}`, and the scroll lock being restored on
+unmount.
+
+**Bundle delta: +10,385 bytes** in the main `index` chunk (290,217 → 300,602), plus a separate
+**5,962-byte `DevPanel` chunk** that is only fetched when the panel is opened. That ~10 KB is the
+DT-3 trade-off in full: the trigger, the probe hook and the service wrappers ship to production
+because the gate is a runtime probe rather than `import.meta.env.DEV`. Verified in the built
+output — `"Open dev tools"` is present in the production `index` bundle and `"Inject a detection"`
+is not, i.e. the split held.
+
+### One thing this doc did not anticipate
+
+`queryClient.clear()` **drops the dev-tools probe entry too.** `enabled` then falls back to
+`false`, which unmounts `DevPanelTrigger` and closes the panel in the middle of the reseed that
+just succeeded. `useDevTools` exports `DEV_STATUS_QUERY_KEY` so the reset writes the probe result
+straight back after clearing. `gcTime` does not help — `clear()` empties the cache outright.
+
+### Frontend tests
+
+29 passing (was 16). New: `DevPanel.test.tsx` (renders nothing when the probe 404s, renders the
+trigger when enabled, one button per profile with `perf` marked slow), `SidePanel.test.tsx`
+(closed/open, Escape, backdrop, scroll restore) and `Modal.test.tsx`. A reusable
+`QueryClientProvider` + `MemoryRouter` wrapper lives in `src/test/wrapper.tsx`; service modules are
+mocked with `vi.mock` since there is no MSW.
+
+### Not run
+
+The nine manual checks in the Verification section need a browser against a running backend. Checks
+that could be verified without one are covered by the tests and the build inspection above; the
+rest — the siren firing, the alarm modal stacking above the panel, the operator-view route change,
+empty states after reseeding to `empty` — have **not** been executed.
