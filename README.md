@@ -245,13 +245,15 @@ uv run python ai_engine/calibrate.py
 
 This reports how many cameras the machine can carry at 10 and at 15 FPS and writes a gitignored `machine_profile.json`. See [`ai_engine/eval/README.md`](ai_engine/eval/README.md).
 
-#### If the engine connects but never detects anything
+#### Cameras start paused after seeding — this is deliberate
 
-**This is the one that will catch you, and it is not a bug.**
+`reseed_dev.py` seeds sample alerts across every detection status, and any camera with an open (`Unverified` or `Ongoing`) alert is **self-blindfolded** — `desired_ai_state = Paused, reason = incident`. On a freshly seeded database that is _every_ camera.
 
-`reseed_dev.py` seeds sample alerts across every detection status, and any camera with an open (`Unverified` or `Ongoing`) alert is **self-blindfolded** — `desired_ai_state = Paused, reason = incident`. On a freshly seeded database that is _every_ camera, so the engine connects, reports `Connected`, and deliberately runs no inference at all. The engine log shows repeated `Stream dropped ... while paused` rather than anything about detection.
+**That is the self-blindfold invariant working correctly, not a bug.** An unresolved incident means the camera should not be re-alerting on the same scene, and it means the operator decides when each camera goes live rather than being flooded the moment the engine starts.
 
-Clear an alert to release its camera. Either resolve or dismiss it in the dashboard — which also exercises the HITL workflow — or, to unblock everything at once for a demo:
+The only catch is discoverability: the engine reports `Connected` and then deliberately runs no inference, so it can look broken. The log shows repeated `Stream dropped ... while paused` rather than anything about detection. That is what to expect.
+
+Clear an alert to release its camera — resolve or dismiss it in the dashboard, which is also how you exercise the HITL workflow. To bring everything online at once for a demo:
 
 ```bash
 uv run python -c "import sqlite3; d=sqlite3.connect('adas.db'); d.execute(\"UPDATE detection_log SET detection_status='Resolved' WHERE detection_status IN ('Unverified','Ongoing')\"); d.execute(\"UPDATE camera SET desired_ai_state='Active', desired_state_reason=NULL WHERE is_active=1\"); d.commit()"
