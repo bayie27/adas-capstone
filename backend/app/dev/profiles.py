@@ -12,14 +12,14 @@ here imports from `seed.py`.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from app.models import DetectionStatus
+from app.models import AIStatus, ConnectionStatus, DetectionStatus, UserRole
 
 DEFAULT_SEED_PROFILE = "demo"
 PERF_PROFILE = "perf"
-SEED_PROFILES = ("demo", "analytics", "edge", PERF_PROFILE)
 
 # 10_PKG_migration_evidence.md Step 2 — NFR-08's 100,000-incident dataset.
 PERF_TARGET_INCIDENT_COUNT = 100_000
@@ -40,6 +40,90 @@ class SeedAlertSpec:
     verified_after_minutes: int | None = None
     closed_by_key: str | None = None
     closed_after_minutes: int | None = None
+    snoozed_by_key: str | None = None
+    snoozed_after_minutes: int | None = None
+    snooze_minutes: int | None = None
+
+
+@dataclass(frozen=True)
+class SeedCameraSpec:
+    """`key` is what SeedAlertSpec.camera_key refers to. It stays stable
+    across profiles even when the camera list varies, because the alert
+    specs are written against it."""
+
+    key: str
+    camera_name: str
+    channel_id: int
+    connection_status: ConnectionStatus
+    ai_status: AIStatus
+    is_enabled: bool = True
+    is_active: bool = True
+
+    # Observed telemetry (D-003, AI-owned columns). `Unresponsive` is not
+    # settable here on purpose: presented_statuses() derives it from a
+    # stale heartbeat and never writes it to the row, so a camera that
+    # should present as Unresponsive gets a backdated
+    # last_heartbeat_minutes_ago instead of a fake stored status.
+    last_heartbeat_minutes_ago: int | None = None
+    measured_fps: float | None = None
+    inference_latency_ms: float | None = None
+    last_error_code: str | None = None
+    last_error_message: str | None = None
+    applied_config_version: int | None = None
+    cooldown_minutes_from_now: int | None = None
+
+
+@dataclass(frozen=True)
+class SeedUserSpec:
+    key: str
+    username: str
+    first_name: str
+    last_name: str
+    role: UserRole
+    password: str
+    is_active: bool = True
+    # False leaves password_changed_at NULL, which is what the frontend
+    # reads as "must change password on first login".
+    password_changed: bool = True
+    alarm_sound: str | None = None
+    alarm_volume: int | None = None
+    alarm_snooze_duration: int | None = None
+
+
+@dataclass(frozen=True)
+class SeedAuditSpec:
+    """`actor_key` and `target_ref_key` are resolved against the seeded
+    users at write time; `username` overrides the actor's own name for
+    rows that record an actor who never existed (a failed login)."""
+
+    action: str
+    result: str
+    minutes_ago: int
+    actor_type: str = "user"
+    actor_key: str | None = None
+    username: str | None = None
+    target_type: str | None = None
+    target_ref_key: str | None = None
+    target_ref: str | None = None
+    detail: str | None = None
+
+
+@dataclass(frozen=True)
+class SeedProfile:
+    name: str
+    description: str  # shown in the dev panel
+    cameras: Callable[[], list[SeedCameraSpec]]
+    users: Callable[[], list[SeedUserSpec]]
+    alerts: Callable[[datetime], list[SeedAlertSpec]]
+    audit: Callable[[datetime], list[SeedAuditSpec]]
+    health_days: int = 0
+    exports: bool = False
+    snapshots: bool = True
+    # perf's bulk path. Declared here so the registry is the single place
+    # that says how a profile is written, but bound in app.dev.seed — the
+    # writer lives with the other writers, and profiles.py must not import
+    # seed.py (the dependency runs one way).
+    bulk: Callable[..., None] | None = field(default=None, compare=False)
 
 
 def seeded_timestamp(
@@ -448,18 +532,199 @@ def build_edge_alert_specs(now: datetime) -> list[SeedAlertSpec]:
     ]
 
 
-PROFILE_BUILDERS = {
-    "demo": build_demo_alert_specs,
-    "analytics": build_analytics_alert_specs,
-    "edge": build_edge_alert_specs,
+def build_default_cameras() -> list[SeedCameraSpec]:
+    return [
+        SeedCameraSpec(
+            key="ayala",
+            camera_name="Ayala Highway Cam",
+            channel_id=1,
+            connection_status=ConnectionStatus.CONNECTED,
+            ai_status=AIStatus.ACTIVE,
+        ),
+        SeedCameraSpec(
+            key="southbound",
+            camera_name="Southbound Entry Cam",
+            channel_id=2,
+            connection_status=ConnectionStatus.RECONNECTING,
+            ai_status=AIStatus.PAUSED,
+        ),
+        SeedCameraSpec(
+            key="north_exit",
+            camera_name="North Exit Cam",
+            channel_id=3,
+            connection_status=ConnectionStatus.DISCONNECTED,
+            ai_status=AIStatus.INACTIVE,
+            is_enabled=False,
+        ),
+        SeedCameraSpec(
+            key="inosluban",
+            camera_name="Inosluban Intersection",
+            channel_id=4,
+            connection_status=ConnectionStatus.CONNECTED,
+            ai_status=AIStatus.ACTIVE,
+        ),
+        SeedCameraSpec(
+            key="tambo",
+            camera_name="Tambo Highway Cam",
+            channel_id=5,
+            connection_status=ConnectionStatus.CONNECTED,
+            ai_status=AIStatus.ACTIVE,
+        ),
+        SeedCameraSpec(
+            key="dagatan",
+            camera_name="Dagatan Entry Cam",
+            channel_id=6,
+            connection_status=ConnectionStatus.CONNECTED,
+            ai_status=AIStatus.ACTIVE,
+        ),
+    ]
+
+
+# The four operator accounts shared by every profile. The `admin` account
+# is not here — init_db() creates it from DEFAULT_ADMIN_PASSWORD before any
+# profile runs.
+_OPERATOR_KEYS = ("dsahagun", "ealonzo", "smeer", "jtenorio")
+
+
+def build_default_users() -> list[SeedUserSpec]:
+    return [
+        SeedUserSpec(
+            key="dsahagun",
+            username="dsahagun",
+            first_name="Daniel Luis",
+            last_name="Sahagun",
+            role=UserRole.OPERATOR,
+            password="operator123",
+        ),
+        SeedUserSpec(
+            key="ealonzo",
+            username="ealonzo",
+            first_name="Enjey Kashlee",
+            last_name="Alonzo",
+            role=UserRole.OPERATOR,
+            password="operator123",
+        ),
+        SeedUserSpec(
+            key="smeer",
+            username="smeer",
+            first_name="Sebastian Angelo",
+            last_name="Meer",
+            role=UserRole.OPERATOR,
+            password="operator123",
+        ),
+        SeedUserSpec(
+            key="jtenorio",
+            username="jtenorio",
+            first_name="Jhon Paulo",
+            last_name="Tenorio",
+            role=UserRole.OPERATOR,
+            password="operator123",
+        ),
+    ]
+
+
+def build_default_audit_specs(now: datetime) -> list[SeedAuditSpec]:
+    """Representative audit_log rows so the audit viewer has something to
+    page through. `now` is accepted for signature parity with the other
+    builders — every offset here is relative, not absolute."""
+    specs = [
+        SeedAuditSpec(
+            actor_key="admin",
+            action="LOGIN_SUCCESS",
+            target_type="session",
+            result="success",
+            minutes_ago=180,
+        ),
+        SeedAuditSpec(
+            actor_key=None,
+            username="ghost",
+            action="LOGIN_FAILURE",
+            target_type="session",
+            result="denied",
+            detail='{"reason": "invalid_credentials"}',
+            minutes_ago=42,
+        ),
+    ]
+
+    for offset, key in enumerate(_OPERATOR_KEYS, start=1):
+        specs.append(
+            SeedAuditSpec(
+                actor_key="admin",
+                action="USER_CREATE",
+                target_type="user",
+                target_ref_key=key,
+                result="success",
+                detail=f'{{"created_username": "{key}"}}',
+                minutes_ago=170 - offset,
+            )
+        )
+        specs.append(
+            SeedAuditSpec(
+                actor_key=key,
+                action="LOGIN_SUCCESS",
+                target_type="session",
+                result="success",
+                minutes_ago=60 + offset * 5,
+            )
+        )
+
+    return specs
+
+
+def _no_alerts(now: datetime) -> list[SeedAlertSpec]:
+    return []
+
+
+PROFILES: dict[str, SeedProfile] = {
+    "demo": SeedProfile(
+        name="demo",
+        description="Balanced dataset for manual testing and demos.",
+        cameras=build_default_cameras,
+        users=build_default_users,
+        alerts=build_demo_alert_specs,
+        audit=build_default_audit_specs,
+    ),
+    "analytics": SeedProfile(
+        name="analytics",
+        description="Denser, chart-friendly data across 14 days.",
+        cameras=build_default_cameras,
+        users=build_default_users,
+        alerts=build_analytics_alert_specs,
+        audit=build_default_audit_specs,
+    ),
+    "edge": SeedProfile(
+        name="edge",
+        description="Unusual workflow combinations and boundary values.",
+        cameras=build_default_cameras,
+        users=build_default_users,
+        alerts=build_edge_alert_specs,
+        audit=build_default_audit_specs,
+    ),
+    PERF_PROFILE: SeedProfile(
+        name=PERF_PROFILE,
+        description="100,000 incidents over ~18 months (NFR-08). Slow (~33s).",
+        cameras=build_default_cameras,
+        users=build_default_users,
+        alerts=_no_alerts,
+        audit=build_default_audit_specs,
+        snapshots=False,
+    ),
 }
 
+# Was a hand-maintained literal tuple that `perf` was missing from, which
+# is why the CLI dispatched it through a duplicated `if` in two places.
+SEED_PROFILES = tuple(PROFILES)
 
-def build_alert_specs(profile: str, now: datetime) -> list[SeedAlertSpec]:
+
+def get_profile(profile: str) -> SeedProfile:
     try:
-        return PROFILE_BUILDERS[profile](now)
+        return PROFILES[profile]
     except KeyError as exc:
         valid_profiles = ", ".join(SEED_PROFILES)
         raise ValueError(
             f"Unknown seed profile '{profile}'. Expected one of: {valid_profiles}."
         ) from exc
+
+
+def build_alert_specs(profile: str, now: datetime) -> list[SeedAlertSpec]:
+    return get_profile(profile).alerts(now)

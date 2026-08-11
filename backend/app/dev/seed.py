@@ -22,6 +22,7 @@ from sqlalchemy import insert as sa_insert
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
+from app.core.config import Settings
 from app.core.db import init_db
 from app.core.security import get_password_hash
 from app.dev.profiles import (
@@ -31,23 +32,26 @@ from app.dev.profiles import (
     PERF_PROFILE,
     PERF_SPREAD_DAYS,
     PERF_TARGET_INCIDENT_COUNT,
+    PROFILES,
     SeedAlertSpec,
-    build_alert_specs,
+    SeedAuditSpec,
+    SeedCameraSpec,
+    SeedUserSpec,
+    build_default_cameras,
+    build_default_users,
+    get_profile,
     seeded_timestamp,
 )
 from app.models import (
-    AIStatus,
     AlarmSettings,
     AuditLog,
     Camera,
-    ConnectionStatus,
     DetectionLog,
     DetectionStatus,
     ExportJob,
     SysHealthHourly,
     SysHealthRaw,
     User,
-    UserRole,
 )
 from app.services.cameras import reconcile_camera_desired_states
 
@@ -99,69 +103,85 @@ def _seed_source_event_id(label: str) -> str:
     return str(uuid.uuid5(_SEED_NAMESPACE, label))
 
 
-def ensure_user(
-    session: Session,
-    *,
-    username: str,
-    first_name: str,
-    last_name: str,
-    role: UserRole,
-    password: str,
-    is_active: bool = True,
-) -> User:
-    user = session.exec(select(User).where(User.username == username)).first()
+def ensure_user(session: Session, spec: SeedUserSpec, *, now: datetime) -> User:
+    user = session.exec(select(User).where(User.username == spec.username)).first()
     if user:
         return user
 
     user = User(
-        username=username,
-        first_name=first_name,
-        last_name=last_name,
-        role=role,
-        password_hash=get_password_hash(password),
-        is_active=is_active,
-        password_changed_at=datetime.now(UTC),
+        username=spec.username,
+        first_name=spec.first_name,
+        last_name=spec.last_name,
+        role=spec.role,
+        password_hash=get_password_hash(spec.password),
+        is_active=spec.is_active,
+        password_changed_at=now if spec.password_changed else None,
     )
     session.add(user)
     session.commit()
     session.refresh(user)
 
-    session.add(AlarmSettings(user_id=user.user_id))
+    alarm = AlarmSettings(user_id=user.user_id)
+    if spec.alarm_sound is not None:
+        alarm.alarm_sound = spec.alarm_sound
+    if spec.alarm_volume is not None:
+        alarm.volume = spec.alarm_volume
+    if spec.alarm_snooze_duration is not None:
+        alarm.snooze_duration = spec.alarm_snooze_duration
+    session.add(alarm)
     session.commit()
 
-    print(f"Created user {username}")
+    print(f"Created user {spec.username}")
     return user
 
 
-def ensure_camera(
-    session: Session,
-    *,
-    camera_name: str,
-    channel_id: int,
-    connection_status: ConnectionStatus,
-    ai_status: AIStatus,
-    is_enabled: bool = True,
-    is_active: bool = True,
-) -> Camera:
+def ensure_camera(session: Session, spec: SeedCameraSpec, *, now: datetime) -> Camera:
     camera = session.exec(
-        select(Camera).where(Camera.camera_name == camera_name)
+        select(Camera).where(Camera.camera_name == spec.camera_name)
     ).first()
     if camera:
         return camera
 
     camera = Camera(
-        camera_name=camera_name,
-        channel_id=channel_id,
-        connection_status=connection_status.value,
-        ai_status=ai_status.value,
-        is_enabled=is_enabled,
-        is_active=is_active,
+        camera_name=spec.camera_name,
+        channel_id=spec.channel_id,
+        connection_status=spec.connection_status.value,
+        ai_status=spec.ai_status.value,
+        is_enabled=spec.is_enabled,
+        is_active=spec.is_active,
+        measured_fps=spec.measured_fps,
+        inference_latency_ms=spec.inference_latency_ms,
+        last_error_code=spec.last_error_code,
+        last_error_message=spec.last_error_message,
+        applied_config_version=spec.applied_config_version,
     )
+    if spec.last_heartbeat_minutes_ago is not None:
+        camera.last_heartbeat_at = now - timedelta(
+            minutes=spec.last_heartbeat_minutes_ago
+        )
+    if spec.cooldown_minutes_from_now is not None:
+        camera.cooldown_until = now + timedelta(minutes=spec.cooldown_minutes_from_now)
     session.add(camera)
     session.commit()
     session.refresh(camera)
-    print(f"Created camera {camera_name}")
+    print(f"Created camera {spec.camera_name}")
     return camera
+
+
+def seed_cameras(
+    session: Session, specs: list[SeedCameraSpec], *, now: datetime
+) -> dict[str, Camera]:
+    """Keyed off SeedCameraSpec.key, which is what the alert specs refer
+    to. The old version returned a fixed 6-tuple that the caller
+    destructured into a hard-coded dict, so a profile could not vary its
+    cameras at all."""
+    return {spec.key: ensure_camera(session, spec, now=now) for spec in specs}
+
+
+def seed_users(
+    session: Session, specs: list[SeedUserSpec], *, now: datetime
+) -> dict[str, User]:
+    return {spec.key: ensure_user(session, spec, now=now) for spec in specs}
 
 
 def ensure_alert(
@@ -204,53 +224,13 @@ def ensure_alert(
     return alert
 
 
-def seed_sample_cameras(
-    session: Session,
-) -> tuple[Camera, Camera, Camera, Camera, Camera, Camera]:
-    camera_1 = ensure_camera(
-        session,
-        camera_name="Ayala Highway Cam",
-        channel_id=1,
-        connection_status=ConnectionStatus.CONNECTED,
-        ai_status=AIStatus.ACTIVE,
+def seed_sample_cameras(session: Session) -> list[Camera]:
+    """Compat wrapper for backend/tests/perf/conftest.py, which reuses the
+    default camera set. Step 7 repoints that conftest at seed_cameras()
+    and this goes away."""
+    return list(
+        seed_cameras(session, build_default_cameras(), now=datetime.now(UTC)).values()
     )
-    camera_2 = ensure_camera(
-        session,
-        camera_name="Southbound Entry Cam",
-        channel_id=2,
-        connection_status=ConnectionStatus.RECONNECTING,
-        ai_status=AIStatus.PAUSED,
-    )
-    camera_3 = ensure_camera(
-        session,
-        camera_name="North Exit Cam",
-        channel_id=3,
-        connection_status=ConnectionStatus.DISCONNECTED,
-        ai_status=AIStatus.INACTIVE,
-        is_enabled=False,
-    )
-    camera_4 = ensure_camera(
-        session,
-        camera_name="Inosluban Intersection",
-        channel_id=4,
-        connection_status=ConnectionStatus.CONNECTED,
-        ai_status=AIStatus.ACTIVE,
-    )
-    camera_5 = ensure_camera(
-        session,
-        camera_name="Tambo Highway Cam",
-        channel_id=5,
-        connection_status=ConnectionStatus.CONNECTED,
-        ai_status=AIStatus.ACTIVE,
-    )
-    camera_6 = ensure_camera(
-        session,
-        camera_name="Dagatan Entry Cam",
-        channel_id=6,
-        connection_status=ConnectionStatus.CONNECTED,
-        ai_status=AIStatus.ACTIVE,
-    )
-    return camera_1, camera_2, camera_3, camera_4, camera_5, camera_6
 
 
 def _enforce_one_open_incident_per_camera(
@@ -295,67 +275,42 @@ def _enforce_one_open_incident_per_camera(
 def _seed_audit_log_rows(
     session: Session,
     *,
-    admin: User,
-    operators: dict[str, User],
+    specs: list[SeedAuditSpec],
+    users_by_key: dict[str, User],
     now: datetime,
-) -> None:
-    """A handful of representative audit_log rows so the P2 audit viewer has
-    something to page through. Real audit *writing* is P2's job — these are
-    seeded directly rather than produced by exercising that code path,
-    which doesn't exist yet.
+) -> int:
+    """Representative audit_log rows so the audit viewer has something to
+    page through. Real audit *writing* happens through
+    app/services/audit.py; these are seeded directly rather than by
+    exercising that path.
+
+    The bail-if-any-row-exists guard is the idempotency contract — audit_log
+    carries BEFORE UPDATE/DELETE triggers, so a partial re-seed could not be
+    corrected afterwards.
     """
     if session.exec(select(AuditLog).limit(1)).first():
-        return
+        return 0
 
-    rows: list[AuditLog] = [
-        AuditLog(
-            actor_type="user",
-            user_id=admin.user_id,
-            username=admin.username,
-            role=admin.role,
-            action="LOGIN_SUCCESS",
-            target_type="session",
-            result="success",
-            created_at=seeded_timestamp(now, minutes_ago=180),
-        ),
-        AuditLog(
-            actor_type="user",
-            user_id=None,
-            username="ghost",
-            role=None,
-            action="LOGIN_FAILURE",
-            target_type="session",
-            result="denied",
-            detail='{"reason": "invalid_credentials"}',
-            created_at=seeded_timestamp(now, minutes_ago=42),
-        ),
-    ]
+    rows: list[AuditLog] = []
+    for spec in specs:
+        actor = users_by_key.get(spec.actor_key) if spec.actor_key else None
+        target_ref = spec.target_ref
+        if target_ref is None and spec.target_ref_key is not None:
+            target = users_by_key.get(spec.target_ref_key)
+            target_ref = str(target.user_id) if target else None
 
-    for offset, (username, operator) in enumerate(operators.items(), start=1):
         rows.append(
             AuditLog(
-                actor_type="user",
-                user_id=admin.user_id,
-                username=admin.username,
-                role=admin.role,
-                action="USER_CREATE",
-                target_type="user",
-                target_ref=str(operator.user_id),
-                result="success",
-                detail=f'{{"created_username": "{username}"}}',
-                created_at=seeded_timestamp(now, minutes_ago=170 - offset),
-            )
-        )
-        rows.append(
-            AuditLog(
-                actor_type="user",
-                user_id=operator.user_id,
-                username=operator.username,
-                role=operator.role,
-                action="LOGIN_SUCCESS",
-                target_type="session",
-                result="success",
-                created_at=seeded_timestamp(now, minutes_ago=60 + offset * 5),
+                actor_type=spec.actor_type,
+                user_id=actor.user_id if actor else None,
+                username=spec.username or (actor.username if actor else None),
+                role=actor.role if actor else None,
+                action=spec.action,
+                target_type=spec.target_type,
+                target_ref=target_ref,
+                result=spec.result,
+                detail=spec.detail,
+                created_at=seeded_timestamp(now, minutes_ago=spec.minutes_ago),
             )
         )
 
@@ -363,45 +318,13 @@ def _seed_audit_log_rows(
         session.add(row)
     session.commit()
     print(f"Seeded {len(rows)} audit_log row(s).")
+    return len(rows)
 
 
 def ensure_default_operators(session: Session) -> dict[str, User]:
-    """The four seeded operator accounts, shared by every profile (demo,
-    analytics, edge, perf)."""
-    return {
-        "dsahagun": ensure_user(
-            session,
-            username="dsahagun",
-            first_name="Daniel Luis",
-            last_name="Sahagun",
-            role=UserRole.OPERATOR,
-            password="operator123",
-        ),
-        "ealonzo": ensure_user(
-            session,
-            username="ealonzo",
-            first_name="Enjey Kashlee",
-            last_name="Alonzo",
-            role=UserRole.OPERATOR,
-            password="operator123",
-        ),
-        "smeer": ensure_user(
-            session,
-            username="smeer",
-            first_name="Sebastian Angelo",
-            last_name="Meer",
-            role=UserRole.OPERATOR,
-            password="operator123",
-        ),
-        "jtenorio": ensure_user(
-            session,
-            username="jtenorio",
-            first_name="Jhon Paulo",
-            last_name="Tenorio",
-            role=UserRole.OPERATOR,
-            password="operator123",
-        ),
-    }
+    """Compat wrapper for backend/tests/perf/conftest.py. Step 7 repoints
+    that conftest at seed_users()."""
+    return seed_users(session, build_default_users(), now=datetime.now(UTC))
 
 
 def seed_profile(
@@ -409,39 +332,44 @@ def seed_profile(
     *,
     profile: str = DEFAULT_SEED_PROFILE,
     now: datetime | None = None,
+    target_settings: Settings | None = None,
 ) -> SeedResult:
     """`engine` is explicit because create_app() binds a different engine per
     Settings instance to app.state.engine, and Package B seeds from inside a
     request handler using that one — not app.core.db's module global.
 
+    `target_settings` must be the Settings that `engine` was built from
+    whenever that is not the process-global singleton. init_db() ->
+    check_schema_revision() reopens `target_settings.DATABASE_URL` itself
+    through backend/alembic/env.py and ignores the engine argument
+    entirely, so passing an isolated engine without its Settings migrates
+    the wrong database — the trap recorded as F18 in be_audit/00_FINDINGS.md.
+    Defaults to the process-global, which is what the CLI wants.
+
     `now` is injectable so tests get determinism instead of whatever
     datetime.now(UTC) returns mid-run."""
-    init_db(engine)
-
+    profile_def = get_profile(profile)
     now = now if now is not None else datetime.now(UTC)
+
+    # perf writes 100,000 rows through a bulk path that has nothing in
+    # common with the spec path below. Registering it on the profile is
+    # what removes the duplicated `if profile == PERF_PROFILE` branch that
+    # used to live in both CLI entrypoints.
+    if profile_def.bulk is not None:
+        return profile_def.bulk(engine, now=now, target_settings=target_settings)
+
+    init_db(engine, target_settings)
 
     with Session(engine) as session:
         admin = session.exec(select(User).where(User.username == "admin")).first()
         if not admin:
             raise RuntimeError("Expected default admin to exist after init_db().")
 
-        operators = ensure_default_operators(session)
+        operators = seed_users(session, profile_def.users(), now=now)
+        users_by_key = {"admin": admin, **operators}
+        cameras = seed_cameras(session, profile_def.cameras(), now=now)
 
-        camera_1, camera_2, camera_3, camera_4, camera_5, camera_6 = (
-            seed_sample_cameras(session)
-        )
-
-        cameras = {
-            "ayala": camera_1,
-            "southbound": camera_2,
-            "north_exit": camera_3,
-            "inosluban": camera_4,
-            "tambo": camera_5,
-            "dagatan": camera_6,
-        }
-        alert_specs = _enforce_one_open_incident_per_camera(
-            build_alert_specs(profile, now)
-        )
+        alert_specs = _enforce_one_open_incident_per_camera(profile_def.alerts(now))
 
         def make_snapshot(cam_id: int, dt: datetime, source_event_id: str) -> str:
             # 01_CONTRACTS.md §7.1 nested key format, not a flat filename.
@@ -512,7 +440,12 @@ def seed_profile(
             if closed_by:
                 closer_counts[closed_by.username] += 1
 
-        _seed_audit_log_rows(session, admin=admin, operators=operators, now=now)
+        _seed_audit_log_rows(
+            session,
+            specs=profile_def.audit(now),
+            users_by_key=users_by_key,
+            now=now,
+        )
 
         print(f"Dev data seeding complete for profile '{profile}'.")
         print(f"Total alerts seeded: {len(alert_specs)}")
@@ -719,8 +652,9 @@ def seed_perf_data(
     *,
     target_count: int = PERF_TARGET_INCIDENT_COUNT,
     now: datetime | None = None,
+    target_settings: Settings | None = None,
 ) -> SeedResult:
-    init_db(engine)
+    init_db(engine, target_settings)
     now = now if now is not None else datetime.now(UTC)
 
     with Session(engine) as session:
@@ -728,8 +662,8 @@ def seed_perf_data(
         if not admin:
             raise RuntimeError("Expected default admin to exist after init_db().")
 
-        operators = ensure_default_operators(session)
-        cameras = seed_sample_cameras(session)
+        operators = seed_users(session, build_default_users(), now=now)
+        cameras = seed_cameras(session, build_default_cameras(), now=now).values()
         camera_ids = [c.camera_id for c in cameras]
         if any(cid is None for cid in camera_ids):
             raise RuntimeError("Cameras must be persisted before perf seeding.")
@@ -776,3 +710,9 @@ def seed_perf_data(
     reconcile_camera_desired_states(engine)
 
     return result
+
+
+# Late binding: the registry declares that `perf` is written by a bulk
+# path, but the writer lives here with the other writers because
+# profiles.py must not import this module.
+PROFILES[PERF_PROFILE] = replace(PROFILES[PERF_PROFILE], bulk=seed_perf_data)
