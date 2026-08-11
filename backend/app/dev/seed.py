@@ -18,6 +18,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import func
 from sqlalchemy import insert as sa_insert
@@ -27,6 +28,7 @@ from sqlmodel import Session, select
 from app.core.config import Settings, settings
 from app.core.db import init_db
 from app.core.security import get_password_hash
+from app.dev.assets import write_snapshot
 from app.dev.profiles import (
     _OPEN_STATUSES,
     DEFAULT_SEED_PROFILE,
@@ -523,6 +525,7 @@ def seed_profile(
     profile: str = DEFAULT_SEED_PROFILE,
     now: datetime | None = None,
     target_settings: Settings | None = None,
+    snapshot_root: Path | None = None,
 ) -> SeedResult:
     """`engine` is explicit because create_app() binds a different engine per
     Settings instance to app.state.engine, and Package B seeds from inside a
@@ -549,6 +552,10 @@ def seed_profile(
         return profile_def.bulk(engine, now=now, target_settings=target_settings)
 
     init_db(engine, target_settings)
+
+    if snapshot_root is None:
+        snapshot_root = (target_settings or settings).SNAPSHOT_ROOT
+    snapshots_written = 0
 
     with Session(engine) as session:
         admin = session.exec(select(User).where(User.username == "admin")).first()
@@ -616,13 +623,21 @@ def seed_profile(
                 snoozed_by = None
 
             source_event_id = _seed_source_event_id(spec.label)
+            snapshot_key = make_snapshot(
+                camera.camera_id, spec.detected_at, source_event_id
+            )
+            if profile_def.snapshots and write_snapshot(
+                snapshot_key,
+                snapshot_root=snapshot_root,
+                index=snapshots_written,
+            ):
+                snapshots_written += 1
+
             ensure_alert(
                 session,
                 label=spec.label,
                 camera_id=camera.camera_id,
-                snapshot_key=make_snapshot(
-                    camera.camera_id, spec.detected_at, source_event_id
-                ),
+                snapshot_key=snapshot_key,
                 detected_at=spec.detected_at,
                 confidence_score=spec.confidence_score,
                 detection_status=spec.detection_status,
@@ -695,7 +710,9 @@ def seed_profile(
         print("  smeer / operator123")
         print("  jtenorio / operator123")
 
-        result = _collect_result(session, profile=profile)
+        if snapshots_written:
+            print(f"Wrote {snapshots_written} placeholder snapshot file(s).")
+        result = _collect_result(session, profile=profile, snapshots=snapshots_written)
 
     # Derive desired_ai_state/reason/cooldown_until from the incidents just
     # seeded (D-003) — a camera with a seeded open incident must come out
