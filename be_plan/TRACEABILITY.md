@@ -187,7 +187,7 @@ numbers, machine spec, and date.
 |---|---|---|---|---|---|
 | TC-R-201 | NFR-04 | backend | automated | `backend/tests/perf/test_alert_latency.py::TestAlertDeliveryLatency::test_alert_reaches_a_connected_client_under_2s` — measured 0.016s (budget 2s), against the 100k-row perf dataset. | pass |
 | TC-R-202 | NFR-08 | backend | automated | `backend/tests/perf/test_query_performance.py::TestListAndDashboardLatency` — measured 0.111s (list) / 1.112s (dashboard) on 100,000 rows (budget 3s); `TestQueryPlans` confirms no `SCAN detection_log`. | pass |
-| TC-R-203 | NFR-06 | backend | automated | `backend/tests/perf/test_export_performance.py` — CSV 0.585s at ~8,700 rows (budget 5s) ✅; PDF 0.826s at a realistic ~180-row report ✅; PDF **35.9s at the ~10,000-row ceiling** ❌ — see `EVIDENCE.md`'s "Real finding" section. This is a genuine, measured gap, not silently omitted. | pass (CSV, realistic PDF) / **fails at 10k-row PDF ceiling** — see finding |
+| TC-R-203 | NFR-06 | backend | automated | **Re-scoped 2026-08-11** (`be_audit/A6_manual_evidence.md` Part 2, owner decision): the real operating envelope is ~10 incidents/day, so a 30-day export is ~300 rows, not the paper's literal ~10,000. Primary evidence is now `TestOperatingEnvelopeExportLatency` in `backend/tests/perf/test_export_performance.py` — CSV 0.052s, PDF 2.750s, both at 300 rows/30 days (budget 5s) ✅. The 10,000-row measurement is retained as a documented **ceiling**, not a requirement: CSV 0.537s at ~8,700 rows ✅; PDF 1.031s at a realistic ~180-row report ✅; PDF **48.4s at the ~10,000-row ceiling** ❌ (`xfail(strict=False)`) — see `EVIDENCE.md`'s NFR-06 section. | **pass at the real envelope** (primary) / documented 10k-row PDF ceiling retained for context, not a requirement |
 
 ---
 
@@ -197,8 +197,8 @@ numbers, machine spec, and date.
 |---|---|---|---|---|---|
 | TC-R-301 | NFR-14 | AI engine | external | Interface: the AI engine's per-camera reconnect loop (D-003: retry every 10s, `Unresponsive` after 3 failures). No automated test found in `ai_engine/tests/` exercising an actual disconnect/reconnect cycle. Backend-side staleness (`Unresponsive` after 10s of no heartbeat) is covered by `backend/tests/test_camera_reconciliation.py` and was live-drilled per P10 (engine killed, `Unresponsive` appeared within budget, recovered on restart). | pending (AI reconnect loop itself) / pass (backend staleness half) |
 | TC-R-302 | NFR-15 | AI engine | external | Interface: per-camera exception boundary in the supervisor. `ai_engine/tests/test_supervisor.py` tests state-transition logic with simulated inputs, not a literal injected exception in one camera's worker leaving others unaffected. No matching test found. | pending |
-| TC-R-303 | NFR-16 | backend + deployment | manual | `be_plan/MANUAL_TESTS.md`'s 3 AM restart drill procedure (10_PKG_migration_evidence.md Step 5). Automated pieces it depends on: `backend/app/maintenance/cli.py`'s `restart` command, tested in `backend/tests/test_maintenance.py`. | pending (procedure written, not yet executed against a real 3 AM window) |
-| TC-R-304 | NFR-17 | backend (recovery endpoint) + frontend (reconnect trigger) | manual + automated (backend half) | `be_plan/MANUAL_TESTS.md`'s browser-crash-and-reopen procedure (Step 5). Backend half automated: `backend/tests/test_alerts.py::test_filter_by_status` (the `GET /api/alerts/?status=Unverified` the frontend calls on reconnect exists and is filter-correct). | pending (manual procedure) / pass (backend half) |
+| TC-R-303 | NFR-16 | backend + deployment | manual | `be_plan/MANUAL_TESTS.md`'s 3 AM restart drill procedure (10_PKG_migration_evidence.md Step 5), **executed 2026-08-11** (manually triggered, not the literal 3 AM window — see the pack's own note that this is expected). Downtime measured at 8.13s against the <10s NFR-16 budget. Automated pieces it depends on: `backend/app/maintenance/cli.py`'s `restart` command, tested in `backend/tests/test_maintenance.py`. | **pass** — see `MANUAL_TESTS.md` §1 Results |
+| TC-R-304 | NFR-17 | backend (recovery endpoint) + frontend (reconnect trigger) | manual + automated (backend half) | `be_plan/MANUAL_TESTS.md`'s browser-crash-and-reopen procedure (Step 5), **executed 2026-08-11** (tab close + fresh tab against the same origin, the closest faithful analog available to a literal OS process kill — session cookie and full alert queue both survived with zero data loss). Backend half automated: `backend/tests/test_alerts.py::test_filter_by_status` (the `GET /api/alerts/?status=Unverified` the frontend calls on reconnect exists and is filter-correct). | **pass** (manual + backend half) — see `MANUAL_TESTS.md` §7 Results |
 
 ---
 
@@ -206,8 +206,8 @@ numbers, machine spec, and date.
 
 | Test case | Requirement | Owner | Evidence type | Evidence | Status |
 |---|---|---|---|---|---|
-| TC-R-401 | NFR-13 | AI engine / deployment | manual | `be_plan/MANUAL_TESTS.md`'s 24-hour endurance procedure (RAM at start/6h/12h/24h). | pending |
-| TC-R-402 | NFR-13 | AI engine / deployment | manual | `be_plan/MANUAL_TESTS.md`'s 24-hour endurance procedure (GPU thermal + VRAM). | pending |
+| TC-R-401 | NFR-13 | AI engine / deployment | manual | `be_plan/MANUAL_TESTS.md`'s 24-hour endurance procedure (RAM at start/6h/12h/24h). **Deliberately not executed 2026-08-11** — owner decision when `be_audit/A6_manual_evidence.md` ran: a genuine 24-hour continuous run was weighed against a shortened proxy or an honest non-run, and the owner chose the latter rather than accept a proxy or a session held open for a full day. Still owed; not silently downgraded. | pending — see `MANUAL_TESTS.md` §4-5 Results |
+| TC-R-402 | NFR-13 | AI engine / deployment | manual | `be_plan/MANUAL_TESTS.md`'s 24-hour endurance procedure (GPU thermal + VRAM). Same 2026-08-11 owner decision as TC-R-401. | pending — see `MANUAL_TESTS.md` §4-5 Results |
 
 ---
 
@@ -229,7 +229,7 @@ numbers, machine spec, and date.
 |---|---|---|---|---|---|
 | TC-S-201 | FR-02 | frontend | external | Interface: the `role` claim from `GET /api/users/me`, same as TC-U-103. React router guard not automated in this repo. | pending |
 | TC-S-202 | FR-02 | backend (JWT validation) + frontend (route render) | automated (backend half) | Backend: `backend/tests/test_auth.py::TestRBAC::test_admin_can_access_user_management`. Frontend route render: external. | pass (backend) / pending (frontend) |
-| TC-S-203 | NFR-19 | backend (session mechanism) | manual | `be_plan/MANUAL_TESTS.md`'s 4-hour idle-session procedure (10_PKG_migration_evidence.md Step 5 names this case explicitly). Supporting automated evidence: `SESSION_LIFETIME_MINUTES` defaults to 480 (8h), so 4h sits inside the window by construction — `backend/tests/test_auth.py::TestSessionAuthority::test_session_expiry_exact_boundary_is_rejected` proves the boundary itself is enforced correctly. | pending (manual procedure not yet run) |
+| TC-S-203 | NFR-19 | backend (session mechanism) | manual | `be_plan/MANUAL_TESTS.md`'s 4-hour idle-session procedure (10_PKG_migration_evidence.md Step 5 names this case explicitly). **Deliberately not executed 2026-08-11** — same owner decision as TC-R-401/402: a genuine 4-hour idle window was weighed against a shortened proxy or an honest non-run, and the owner chose the latter. Supporting automated evidence: `SESSION_LIFETIME_MINUTES` defaults to 480 (8h), so 4h sits inside the window by construction — `backend/tests/test_auth.py::TestSessionAuthority::test_session_expiry_exact_boundary_is_rejected` proves the boundary itself is enforced correctly. | pending (manual procedure deliberately not run) — see `MANUAL_TESTS.md` §6 Results |
 
 ---
 
@@ -247,7 +247,7 @@ numbers, machine spec, and date.
 
 | Test case | Requirement | Owner | Evidence type | Evidence | Status |
 |---|---|---|---|---|---|
-| TC-S-401 | NFR-15, D-008 | backend (delivery) + frontend (DOM stacking) | manual + automated (backend half) | `be_plan/MANUAL_TESTS.md`'s 3-simultaneous-camera procedure (Step 5, named explicitly). Backend half automated: edge case 1.5/1.6 (`ux_detection_open_camera`, idempotent `source_event_id` under genuine concurrency) — covered in `backend/tests/test_internal.py`; P10's live drill also observed two genuinely concurrent detections resolve to exactly one incident via the `409` backstop. | pending (manual procedure) / pass (backend concurrency half) |
+| TC-S-401 | NFR-15, D-008 | backend (delivery) + frontend (DOM stacking) | manual + automated (backend half) | `be_plan/MANUAL_TESTS.md`'s 3-simultaneous-camera procedure (Step 5, named explicitly), **executed 2026-08-11** — 3 v2 `POST /api/internal/alert` payloads fired in rapid succession against 3 distinct cameras (`seed_alerts_via_api.py` no longer exists post-F3/F19; used the v2-shaped substitute F19 named), all 3 received, correctly attributed, no drops, no unexpected 409s. Backend half automated: edge case 1.5/1.6 (`ux_detection_open_camera`, idempotent `source_event_id` under genuine concurrency) — covered in `backend/tests/test_internal.py`; P10's live drill also observed two genuinely concurrent detections resolve to exactly one incident via the `409` backstop. | **pass** (manual + backend concurrency half) — see `MANUAL_TESTS.md` §8 Results |
 | TC-S-402 | FR-08, D-004 | backend (data isolation) + frontend (state rendering) | automated (backend half) | Snooze fields are scoped to one `DetectionLog` row by schema construction — no cross-incident bleed is structurally possible. `backend/tests/test_snoozes.py` and `test_alerts.py::test_snooze_broadcasts_snooze_activated` cover the backend half. Frontend dual-state rendering: external. | pass (backend) / pending (frontend) |
 
 ---
