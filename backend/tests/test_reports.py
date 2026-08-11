@@ -333,6 +333,40 @@ class TestHostileAndDegenerateInput:
         pdf_resp = client.get("/api/alerts/export?format=pdf", headers=headers)
         assert pdf_resp.status_code == 200
         assert pdf_resp.content.startswith(b"%PDF")
+        # Not just "doesn't crash" -- the name is actually there, wrapped
+        # onto its own line rather than being dropped or truncated.
+        reader = PdfReader(io.BytesIO(pdf_resp.content))
+        text = reader.pages[0].extract_text()
+        assert 'Weird "Camera"' in text
+        assert "Second Line" in text
+
+    def test_formula_injection_camera_name_neutralized_in_pdf_too(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 4.2 -- the same formula-injection name 4.1 covers for
+        CSV, rendered into a PDF: it must appear as literal text, not
+        break fpdf2's layout."""
+        make_operator(session, username="formulapdfname")
+        headers = auth_headers(client, "formulapdfname", "Operator123")
+        hostile_name = "=cmd|'/c calc'!A1"
+        camera = make_camera(session, name=hostile_name, channel_id=303)
+        session.add(
+            DetectionLog(
+                camera_id=camera.camera_id,
+                detected_at=datetime.now(UTC),
+                snapshot_key="formula.jpg",
+                confidence_score=0.5,
+                detection_status=DetectionStatus.UNVERIFIED.value,
+                source_event_id=str(uuid.uuid4()),
+            )
+        )
+        session.commit()
+
+        pdf_resp = client.get("/api/alerts/export?format=pdf", headers=headers)
+        assert pdf_resp.status_code == 200
+        reader = PdfReader(io.BytesIO(pdf_resp.content))
+        text = reader.pages[0].extract_text()
+        assert "cmd" in text and "calc" in text
 
     def test_unicode_camera_name_round_trips_without_crash(
         self, client: TestClient, session: Session
@@ -365,6 +399,17 @@ class TestHostileAndDegenerateInput:
         pdf_resp = client.get("/api/alerts/export?format=pdf", headers=headers)
         assert pdf_resp.status_code == 200
         assert pdf_resp.content.startswith(b"%PDF")
+        # Deliberately NOT asserting the Unicode name round-trips through
+        # PDF *text extraction* here — investigating this row surfaced a
+        # real, pre-existing defect (F29): fpdf2 2.8.8's embedded-font
+        # ToUnicode CMap corrupts extracted text for accented Latin
+        # characters this exact font supports and renders warning-free
+        # (confirmed in isolation, independent of this app's own code —
+        # see F29 for the reproduction). The CJK/emoji glyphs the font
+        # genuinely lacks are excluded here for the same reason 4.1-4.3
+        # scope to ASCII-safe names. Crash-freedom is what this row can
+        # honestly assert until F29 is fixed or the extraction-vs-render
+        # distinction is confirmed with a rendering tool.
 
     def test_sql_injection_string_in_search_is_inert(
         self, client: TestClient, session: Session
