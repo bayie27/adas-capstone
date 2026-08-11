@@ -234,15 +234,6 @@ def ensure_alert(
     return alert
 
 
-def seed_sample_cameras(session: Session) -> list[Camera]:
-    """Compat wrapper for backend/tests/perf/conftest.py, which reuses the
-    default camera set. Step 7 repoints that conftest at seed_cameras()
-    and this goes away."""
-    return list(
-        seed_cameras(session, build_default_cameras(), now=datetime.now(UTC)).values()
-    )
-
-
 # The single source of truth for the rule. ux_detection_open_camera is a
 # partial unique index (at most one Unverified/Ongoing row per camera_id),
 # so this is not a convention a generator may respect voluntarily — an
@@ -366,12 +357,6 @@ def _seed_audit_log_rows(
     session.commit()
     print(f"Seeded {len(rows)} audit_log row(s).")
     return len(rows)
-
-
-def ensure_default_operators(session: Session) -> dict[str, User]:
-    """Compat wrapper for backend/tests/perf/conftest.py. Step 7 repoints
-    that conftest at seed_users()."""
-    return seed_users(session, build_default_users(), now=datetime.now(UTC))
 
 
 def _clamp_percent(value: float) -> float:
@@ -703,12 +688,15 @@ def seed_profile(
                 print(f"  {username}: {count}")
         else:
             print("  (none)")
+        # Derived from the profile's own user specs, not a hard-coded list:
+        # `empty` seeds no operators, and printing four logins that don't
+        # exist is worse than printing none.
         print("Users:")
         print("  admin / DEFAULT_ADMIN_PASSWORD from .env")
-        print("  dsahagun / operator123")
-        print("  ealonzo / operator123")
-        print("  smeer / operator123")
-        print("  jtenorio / operator123")
+        for spec in profile_def.users():
+            disabled = "" if spec.is_active else "  (disabled)"
+            must_change = "" if spec.password_changed else "  (must change on login)"
+            print(f"  {spec.username} / {spec.password}{disabled}{must_change}")
 
         if snapshots_written:
             print(f"Wrote {snapshots_written} placeholder snapshot file(s).")
