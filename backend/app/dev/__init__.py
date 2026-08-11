@@ -13,7 +13,7 @@ from app.dev.profiles import (
     SeedAlertSpec,
     build_alert_specs,
 )
-from app.dev.seed import seed_dev_data, seed_perf_data
+from app.dev.seed import SeedResult, seed_perf_data, seed_profile
 
 __all__ = [
     "DEFAULT_SEED_PROFILE",
@@ -21,7 +21,8 @@ __all__ = [
     "PERF_TARGET_INCIDENT_COUNT",
     "SEED_PROFILES",
     "SeedAlertSpec",
+    "SeedResult",
     "build_alert_specs",
-    "seed_dev_data",
     "seed_perf_data",
+    "seed_profile",
 ]

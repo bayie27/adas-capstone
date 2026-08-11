@@ -15,6 +15,7 @@ from _bootstrap import bootstrap_backend
 
 bootstrap_backend()
 
+from app.core.db import engine
 from app.dev.profiles import (
     DEFAULT_SEED_PROFILE,
     PERF_BATCH_SIZE,
@@ -30,6 +31,7 @@ from app.dev.profiles import (
     seeded_timestamp,
 )
 from app.dev.seed import (
+    SeedResult,
     _build_perf_rows,
     _enforce_one_open_incident_per_camera,
     _enforce_open_camera_limit,
@@ -39,10 +41,21 @@ from app.dev.seed import (
     ensure_camera,
     ensure_default_operators,
     ensure_user,
-    seed_dev_data,
-    seed_perf_data,
     seed_sample_cameras,
 )
+from app.dev.seed import seed_perf_data as _seed_perf_data
+from app.dev.seed import seed_profile as _seed_profile
+
+
+def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> SeedResult:
+    """CLI-shaped wrapper over app.dev.seed.seed_profile, binding the
+    module-global engine that scripts have always used."""
+    return _seed_profile(engine, profile=profile)
+
+
+def seed_perf_data(*, target_count: int = PERF_TARGET_INCIDENT_COUNT) -> SeedResult:
+    return _seed_perf_data(engine, target_count=target_count)
+
 
 __all__ = [
     "DEFAULT_SEED_PROFILE",
@@ -52,6 +65,7 @@ __all__ = [
     "PERF_TARGET_INCIDENT_COUNT",
     "SEED_PROFILES",
     "SeedAlertSpec",
+    "SeedResult",
     "_build_perf_rows",
     "_enforce_one_open_incident_per_camera",
     "_enforce_open_camera_limit",

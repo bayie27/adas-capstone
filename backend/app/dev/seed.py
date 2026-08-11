@@ -14,19 +14,21 @@ import random
 import time
 import uuid
 from collections import Counter
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func
 from sqlalchemy import insert as sa_insert
+from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
-from app.core.db import engine, init_db
+from app.core.db import init_db
 from app.core.security import get_password_hash
 from app.dev.profiles import (
     _OPEN_STATUSES,
     DEFAULT_SEED_PROFILE,
     PERF_BATCH_SIZE,
+    PERF_PROFILE,
     PERF_SPREAD_DAYS,
     PERF_TARGET_INCIDENT_COUNT,
     SeedAlertSpec,
@@ -41,10 +43,50 @@ from app.models import (
     ConnectionStatus,
     DetectionLog,
     DetectionStatus,
+    ExportJob,
+    SysHealthHourly,
+    SysHealthRaw,
     User,
     UserRole,
 )
 from app.services.cameras import reconcile_camera_desired_states
+
+
+@dataclass(frozen=True)
+class SeedResult:
+    """Per-table row counts after a seed run. Package B returns this from
+    POST /api/dev/reseed and Package C renders it, so the counts are what
+    the database actually holds afterwards rather than what this run
+    happened to insert — after a wipe those are the same number, and on a
+    re-seed against an existing database the former is the useful one."""
+
+    profile: str
+    users: int
+    cameras: int
+    detections: int
+    audit_rows: int
+    health_samples: int
+    export_jobs: int
+    snapshots: int
+
+
+def _collect_result(
+    session: Session, *, profile: str, snapshots: int = 0
+) -> SeedResult:
+    def count(model) -> int:
+        return session.exec(select(func.count()).select_from(model)).one()
+
+    return SeedResult(
+        profile=profile,
+        users=count(User),
+        cameras=count(Camera),
+        detections=count(DetectionLog),
+        audit_rows=count(AuditLog),
+        health_samples=count(SysHealthRaw) + count(SysHealthHourly),
+        export_jobs=count(ExportJob),
+        snapshots=snapshots,
+    )
+
 
 # Deterministic per-run UUIDs (uuid5 of a stable label) so re-seeding a
 # non-reset database stays idempotent — a fresh uuid4() every run would
@@ -362,10 +404,21 @@ def ensure_default_operators(session: Session) -> dict[str, User]:
     }
 
 
-def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
-    init_db()
+def seed_profile(
+    engine: Engine,
+    *,
+    profile: str = DEFAULT_SEED_PROFILE,
+    now: datetime | None = None,
+) -> SeedResult:
+    """`engine` is explicit because create_app() binds a different engine per
+    Settings instance to app.state.engine, and Package B seeds from inside a
+    request handler using that one — not app.core.db's module global.
 
-    now = datetime.now(UTC)
+    `now` is injectable so tests get determinism instead of whatever
+    datetime.now(UTC) returns mid-run."""
+    init_db(engine)
+
+    now = now if now is not None else datetime.now(UTC)
 
     with Session(engine) as session:
         admin = session.exec(select(User).where(User.username == "admin")).first()
@@ -497,10 +550,14 @@ def seed_dev_data(*, profile: str = DEFAULT_SEED_PROFILE) -> None:
         print("  smeer / operator123")
         print("  jtenorio / operator123")
 
+        result = _collect_result(session, profile=profile)
+
     # Derive desired_ai_state/reason/cooldown_until from the incidents just
     # seeded (D-003) — a camera with a seeded open incident must come out
     # Paused/'incident', or it would contradict ux_detection_open_camera.
     reconcile_camera_desired_states(engine)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -657,9 +714,14 @@ def _enforce_open_camera_limit(
     return rows
 
 
-def seed_perf_data(*, target_count: int = PERF_TARGET_INCIDENT_COUNT) -> None:
-    init_db()
-    now = datetime.now(UTC)
+def seed_perf_data(
+    engine: Engine,
+    *,
+    target_count: int = PERF_TARGET_INCIDENT_COUNT,
+    now: datetime | None = None,
+) -> SeedResult:
+    init_db(engine)
+    now = now if now is not None else datetime.now(UTC)
 
     with Session(engine) as session:
         admin = session.exec(select(User).where(User.username == "admin")).first()
@@ -681,8 +743,9 @@ def seed_perf_data(*, target_count: int = PERF_TARGET_INCIDENT_COUNT) -> None:
                 f"detection_log already has {existing_count} rows "
                 f"(>= target {target_count}); skipping bulk insert."
             )
+            result = _collect_result(session, profile=PERF_PROFILE)
             reconcile_camera_desired_states(engine)
-            return
+            return result
 
         print(f"Generating {target_count} detection_log rows...")
         rows = _build_perf_rows(
@@ -706,6 +769,10 @@ def seed_perf_data(*, target_count: int = PERF_TARGET_INCIDENT_COUNT) -> None:
             f"({len(rows) / elapsed:.0f} rows/sec)."
         )
 
+        result = _collect_result(session, profile=PERF_PROFILE)
+
     # Derive desired_ai_state/reason/cooldown_until from the incidents just
     # seeded (D-003), same as every other profile.
     reconcile_camera_desired_states(engine)
+
+    return result
