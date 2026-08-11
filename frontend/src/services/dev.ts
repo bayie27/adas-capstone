@@ -51,13 +51,18 @@ export interface DevCameraStatePayload {
   clear_cooldown?: boolean
 }
 
+// Paths are relative to the shared instance's baseURL, which already ends
+// in `/api` (see utils/env.ts) — same convention as every other service
+// here, e.g. cameras.ts uses "/cameras/". Prefixing "/api" again produces
+// /api/api/dev/... and a 404 on every call.
+
 export async function getDevStatus(): Promise<DevStatus> {
-  const { data } = await api.get<DevStatus>("/api/dev/status")
+  const { data } = await api.get<DevStatus>("/dev/status")
   return data
 }
 
 export async function reseedProfile(profile: string, loginAs?: string): Promise<DevSeedResult> {
-  const { data } = await api.post<DevSeedResult>("/api/dev/reseed", {
+  const { data } = await api.post<DevSeedResult>("/dev/reseed", {
     profile,
     ...(loginAs ? { login_as: loginAs } : {}),
   })
@@ -65,7 +70,7 @@ export async function reseedProfile(profile: string, loginAs?: string): Promise<
 }
 
 export async function loginAs(username: string): Promise<{ session: DevSessionUser }> {
-  const { data } = await api.post<{ session: DevSessionUser }>("/api/dev/login-as", {
+  const { data } = await api.post<{ session: DevSessionUser }>("/dev/login-as", {
     username,
   })
   return data
@@ -75,7 +80,7 @@ export async function injectDetection(payload: {
   camera_id?: number
   confidence?: number
 }): Promise<{ log_id: number; camera_id: number }> {
-  const { data } = await api.post("/api/dev/detections", payload)
+  const { data } = await api.post("/dev/detections", payload)
   return data
 }
 
@@ -83,11 +88,11 @@ export async function setCameraState(
   cameraId: number,
   payload: DevCameraStatePayload,
 ): Promise<void> {
-  await api.post(`/api/dev/cameras/${cameraId}/state`, payload)
+  await api.post(`/dev/cameras/${cameraId}/state`, payload)
 }
 
 export async function generateHealthHistory(days: number): Promise<number> {
-  const { data } = await api.post<{ rows_written: number }>("/api/dev/health-history", {
+  const { data } = await api.post<{ rows_written: number }>("/dev/health-history", {
     days,
   })
   return data.rows_written
