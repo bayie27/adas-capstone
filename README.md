@@ -57,8 +57,7 @@ adas-capstone/
 │   ├── public/
 │   └── package.json
 ├── e2e/                     # Playwright specs (CI-only, spans backend + frontend)
-├── mediamtx.yml             # Camera simulation from sample_vids/ — see "Simulate camera streams"
-├── mediamtx.clips.yml       # Same, but sourced from ai_engine/eval/clips/
+├── mediamtx.yml             # Camera simulation — see "Simulate camera streams"
 ├── scripts/start-sim.ps1    # Preflighted wrapper around `mediamtx mediamtx.yml`
 ├── pyproject.toml
 ├── uv.lock
@@ -154,7 +153,7 @@ pnpm install                                    # at the ROOT — this activates
 cp .env.example .env                            # then fill in all 10 keys
 ```
 
-Populate **one** clip directory — `ai_engine/sample_vids/` or `ai_engine/eval/clips/` (see [Simulate camera streams](#running-the-system) and [`ai_engine/eval/README.md`](ai_engine/eval/README.md)). Neither ships in a clone.
+Populate `ai_engine/eval/clips/` — no video ships in a clone. See [Obtaining the clips](#obtaining-the-clips).
 
 ```bash
 uv run python backend/scripts/reseed_dev.py     # REQUIRED — creates the cameras
@@ -166,7 +165,7 @@ uv run python ai_engine/capacity.py             # once per machine
 **Then four terminals, in this order:**
 
 ```bash
-mediamtx mediamtx.clips.yml                     # 1. streams (or mediamtx.yml)
+mediamtx mediamtx.yml                           # 1. streams
 uv run fastapi dev backend/app/main.py          # 2. backend — must precede the engine
 cd frontend && pnpm dev                         # 3. dashboard at :5173
 uv run python ai_engine/main.py                 # 4. engine
@@ -176,7 +175,7 @@ Log in at `http://localhost:5173` as `admin` with the `DEFAULT_ADMIN_PASSWORD` f
 
 **Last step: release a camera.** Every seeded camera is paused by an open alert — deliberately, see [below](#cameras-start-paused-after-seeding--this-is-deliberate). Resolve or dismiss one in the dashboard and that camera starts detecting within seconds.
 
-**What a working run looks like** (using `mediamtx.clips.yml`): four cameras alert within a loop or two, and **camera 5 stays silent** — it serves the crash-free clip. A camera that never alerts is as much a result as one that does. The engine log reads:
+**What a working run looks like:** four cameras alert within a loop or two, and **camera 5 stays silent** — it serves the crash-free clip. A camera that never alerts is as much a result as one that does. The engine log reads:
 
 ```
 [SYSTEM] Machine profile: 0 · capacity 8 camera(s) @ 15 FPS
@@ -205,17 +204,17 @@ Dashboard available at `http://localhost:5173`.
 
 **3. Simulate camera streams (development)**
 
-The AI engine expects RTSP feeds at `rtsp://localhost:8554/channel1` through `channel5`. There are three ways to produce them; pick whichever fits what you're doing. All three need `ai_engine/sample_vids/` populated first — see [Obtaining the sample clips](#obtaining-the-sample-clips) below.
+The AI engine expects RTSP feeds at `rtsp://localhost:8554/channel1` through `channel5`. There are three ways to produce them; pick whichever fits what you're doing. All three need `ai_engine/eval/clips/` populated first — see [Obtaining the clips](#obtaining-the-clips) below.
 
-Channel → clip mapping:
+Channel → clip mapping. The first four are clips `ai_engine/eval/baseline_epoch50.json` records as **detected**, so the engine alerts on each within a loop or two. Channel 5 is the crash-free negative and **must stay silent** — a camera that never alerts is as much a result as one that does:
 
-| Path       | Clip                     |
-| ---------- | ------------------------ |
-| `channel1` | `car_car.mp4`            |
-| `channel2` | `car-motor-motor.mp4`    |
-| `channel3` | `defour.mp4`             |
-| `channel4` | `red-car-motorcycle.mp4` |
-| `channel5` | `motor-to-motor.mp4`     |
+| Path       | Clip                    | Expected              |
+| ---------- | ----------------------- | --------------------- |
+| `channel1` | `dekwatro.mp4`          | detects               |
+| `channel2` | `tric-motor-car.mp4`    | detects               |
+| `channel3` | `red-car-motor.mp4`     | detects               |
+| `channel4` | `motor-motor-night.mp4` | detects               |
+| `channel5` | `airbase.mp4`           | **silent** (no crash) |
 
 **Method 1 — `mediamtx.yml` (default, recommended).** One command, all 5 channels, run from the repo root:
 
@@ -223,53 +222,49 @@ Channel → clip mapping:
 mediamtx mediamtx.yml
 ```
 
-`runOnInit` starts an `ffmpeg` per channel automatically and restarts it if it dies. One Ctrl+C in the MediaMTX terminal cleans up MediaMTX and every child `ffmpeg` process. `scripts/start-sim.ps1` wraps this with preflight checks (ffmpeg/mediamtx on PATH, `sample_vids/` populated) and clearer errors if something's missing:
+`runOnInit` starts an `ffmpeg` per channel automatically and restarts it if it dies. One Ctrl+C in the MediaMTX terminal cleans up MediaMTX and every child `ffmpeg` process. `scripts/start-sim.ps1` wraps this with preflight checks (ffmpeg and mediamtx on PATH, and the five clips present by name) and clearer errors if something's missing:
 
 ```powershell
 .\scripts\start-sim.ps1
 ```
 
-**Method 1b — `mediamtx.clips.yml` (if you have the evaluation clips instead).** `sample_vids/` and `eval/clips/` are both gitignored and neither ships in a clone, so use whichever you actually have:
-
-```bash
-mediamtx mediamtx.clips.yml
-```
-
-Same five channels, sourced from `ai_engine/eval/clips/` (see [`ai_engine/eval/README.md`](ai_engine/eval/README.md) for how to populate it). Channels 1–4 are clips the measured baseline records as detected, so the engine alerts on each within a loop or two; channel 5 is the crash-free negative and must stay silent for the whole run.
-
 MediaMTX writes `auto.crt` and `auto.key` into whatever directory it starts from. Both are gitignored — never commit the key.
 
-**Method 2 — manual ffmpeg per channel.** One terminal per channel, blocking. Useful if you only need one or two streams up. Run from the repo root (the paths below are root-relative). The paths assume `sample_vids/`; if you have the evaluation clips instead, substitute `ai_engine\eval\clips\<name>.mp4` — see `mediamtx.clips.yml` for a working set. `-rtsp_transport tcp` matters, not just style — with the default UDP transport, publishing several channels at once over loopback drops RTP packets constantly:
+**Method 2 — manual ffmpeg per channel.** One terminal per channel, blocking. Useful if you only need one or two streams up. Run from the repo root (the paths below are root-relative). `-rtsp_transport tcp` matters, not just style — with the default UDP transport, publishing several channels at once over loopback drops RTP packets constantly:
 
 ```powershell
-ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\car_car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel1
-ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\car-motor-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel2
-ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\defour.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel3
-ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\red-car-motorcycle.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel4
-ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\motor-to-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel5
+ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\dekwatro.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel1
+ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\tric-motor-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel2
+ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\red-car-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel3
+ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\motor-motor-night.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel4
+ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel5
 ```
 
 **Method 3 — OBS Studio via RTMP (interactive playback control).** Use this when you want to scrub/pause/restart a clip live during a demo — Methods 1 and 2 just loop blindly.
 
 1. OBS → Settings → Stream → Service: **Custom...**, Server: `rtmp://localhost:1935/channel1`, Stream Key: leave empty. (Equivalently, Server `rtmp://localhost:1935` + Stream Key `channel1` — MediaMTX's docs recommend putting the path in the server URL.)
-2. Add a **Media Source** pointing at a clip in `ai_engine/sample_vids/`, tick **Loop**. The Media Source exposes Restart/Pause/Play hotkeys for interactive control.
+2. Add a **Media Source** pointing at a clip in `ai_engine/eval/clips/`, tick **Loop**. The Media Source exposes Restart/Pause/Play hotkeys for interactive control.
 3. Click **Start Streaming**. MediaMTX auto-creates the path and republishes it as `rtsp://localhost:8554/channel1` — no AI engine changes needed.
 
 **Limitation:** one OBS instance publishes exactly one stream. Simulating all 5 channels via OBS needs 5 OBS instances/profiles or the `obs-multi-rtmp` plugin — use OBS for an interactive demo of one or two channels, and Method 1 for bulk background simulation.
 
 MediaMTX's default ports: RTSP `8554`, RTMP `1935`, HLS `8888`, WebRTC `8889`, SRT `8890`.
 
-#### Obtaining the sample clips
+#### Obtaining the clips
 
-`.gitignore` excludes `*.mp4`, so `ai_engine/sample_vids/` is not in the repo — a fresh clone has no clips and can't run the simulation until you add them. Expected filenames:
+`.gitignore` excludes `*.mp4`, so no video ships in the repo — a fresh clone can't run the simulation until you add some. They live in **one place**: `ai_engine/eval/clips/`, which is also where the evaluation harness and the `-m clips` tests look.
 
-- `car_car.mp4`
-- `car-motor-motor.mp4`
-- `defour.mp4`
-- `red-car-motorcycle.mp4`
-- `motor-to-motor.mp4`
+Populate it from the frozen research package:
 
-> **TODO(team):** paste the shared-drive link for `sample_vids/` here.
+```bash
+cp ai_engine/adas_transfer/clips/*.mp4 ai_engine/eval/clips/
+```
+
+See [`ai_engine/eval/README.md`](ai_engine/eval/README.md) for what the 17 clips are and which ones the measured baseline expects to fire.
+
+**The clips are test-only, permanently.** They carry no public licence and show identifiable people, vehicles and locations. Never publish them, never train on them, and never use their ordinary-traffic frames as negatives.
+
+> **Historical note.** Earlier revisions of this README described a second directory, `ai_engine/sample_vids/`, with five differently-named clips and a `TODO` where its download link should have been. That directory never had a documented source, four of its five filenames existed nowhere, and both `mediamtx.yml` and `start-sim.ps1` pointed at it — so the "default, recommended" path could not work on any machine. It has been retired in favour of the single location above.
 
 **4. Start the AI engine**
 

@@ -1,28 +1,36 @@
-# Simulates the CDRRMO VMS by republishing sample clips as RTSP.
+# Simulates the CDRRMO VMS by republishing evaluation clips as RTSP.
 # Run from the repo root:  mediamtx mediamtx.yml
 #
-# Requires ai_engine/sample_vids/ to exist locally (gitignored — see README
-# for how to obtain the clips). MediaMTX auto-creates any path on publish, so
-# this file isn't strictly required, but runOnInit collapses the previous
-# 5-terminal ffmpeg dance into a single `mediamtx mediamtx.yml`.
+# Requires ai_engine/eval/clips/ to be populated (gitignored — see
+# ai_engine/eval/README.md). MediaMTX auto-creates any path on publish, so this
+# file isn't strictly required, but runOnInit collapses the 5-terminal ffmpeg
+# dance into a single command.
 #
-# -rtsp_transport tcp on publish is required, not cosmetic: with the default
-# UDP transport, publishing all 5 channels at once over loopback drops RTP
-# packets constantly ("RTP packets lost" / "invalid FU-A packet") — verified
-# by running this file against real MediaMTX + ffmpeg. TCP publish is clean.
+# Why these five: the first four are clips ai_engine/eval/baseline_epoch50.json
+# records as DETECTED, so the engine alerts on each within a loop or two.
+# channel5 is airbase.mp4, the crash-free negative — it must stay silent for the
+# whole run. A camera that never alerts is as much a result as one that does.
+#
+# -rtsp_transport tcp on publish is required, not cosmetic: with the default UDP
+# transport, publishing all 5 channels at once over loopback drops RTP packets
+# constantly ("RTP packets lost" / "invalid FU-A packet") — verified by running
+# this file against real MediaMTX + ffmpeg. TCP publish is clean.
+#
+# NOTE: MediaMTX writes auto.crt / auto.key into whatever directory it starts
+# from, for its MoQ/WebRTC listeners. Both are gitignored — never commit the key.
 paths:
   channel1:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/sample_vids/car_car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/dekwatro.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
   channel2:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/sample_vids/car-motor-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/tric-motor-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
   channel3:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/sample_vids/defour.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/red-car-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
   channel4:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/sample_vids/red-car-motorcycle.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/motor-motor-night.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
   channel5:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/sample_vids/motor-to-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes

@@ -49,7 +49,7 @@ For local streams during development, from the repo root:
 mediamtx mediamtx.yml
 ```
 
-or the preflighted wrapper `.\scripts\start-sim.ps1`, which checks that `ffmpeg` and `mediamtx` are on PATH and that `sample_vids/` is populated first. Both need those prerequisites — see **Simulate camera streams** in the [root README](../README.md#running-the-system).
+or the preflighted wrapper `.\scripts\start-sim.ps1`, which checks that `ffmpeg` and `mediamtx` are on PATH and that the five clips it needs are present. Both need those prerequisites — see **Simulate camera streams** in the [root README](../README.md#running-the-system).
 
 ---
 
