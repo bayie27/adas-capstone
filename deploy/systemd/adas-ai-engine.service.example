@@ -6,6 +6,12 @@ After=network-online.target adas-backend.service
 Wants=network-online.target
 Requires=adas-backend.service
 
+# Run `uv run python ai_engine/calibrate.py` ONCE on this host before enabling
+# the unit. It writes ai_engine/machine_profile.json, which is machine-specific
+# and gitignored, so it never arrives with a deploy. Without it the engine does
+# not fail — it falls back to a capacity of ONE camera and says so in its
+# startup log. On the 8x L4 target that is a silent, very large
+# under-utilisation, and the only symptom is a line nobody reads.
 [Service]
 Type=simple
 User=adas

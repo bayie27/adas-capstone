@@ -195,7 +195,7 @@ Same five channels, sourced from `ai_engine/eval/clips/` (see [`ai_engine/eval/R
 
 MediaMTX writes `auto.crt` and `auto.key` into whatever directory it starts from. Both are gitignored — never commit the key.
 
-**Method 2 — manual ffmpeg per channel.** One terminal per channel, blocking. Useful if you only need one or two streams up. Run from the repo root (the paths below are root-relative). `-rtsp_transport tcp` matters, not just style — with the default UDP transport, publishing several channels at once over loopback drops RTP packets constantly:
+**Method 2 — manual ffmpeg per channel.** One terminal per channel, blocking. Useful if you only need one or two streams up. Run from the repo root (the paths below are root-relative). The paths assume `sample_vids/`; if you have the evaluation clips instead, substitute `ai_engine\eval\clips\<name>.mp4` — see `mediamtx.clips.yml` for a working set. `-rtsp_transport tcp` matters, not just style — with the default UDP transport, publishing several channels at once over loopback drops RTP packets constantly:
 
 ```powershell
 ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\car_car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel1
