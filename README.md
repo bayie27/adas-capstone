@@ -170,7 +170,21 @@ pnpm install
 
 ## Running the System
 
-All three components run in separate terminals. **Run every command from the repo root.** This is a convention, not a hard requirement anymore — the FastAPI CLI injects `backend/` into `sys.path` itself, and `DATABASE_URL` resolves to an absolute path under the repo root regardless of CWD — but the AI engine's `from config import ...`-style imports still need `ai_engine/` to be the script's own directory (which `uv run python ai_engine/main.py` gives it), so running from the root is simplest across the board.
+**One command, from the repo root:**
+
+```powershell
+pwsh -File scripts/start-dev.ps1
+```
+
+No switches starts the everyday case — backend + frontend, each in its own window. Add `-Sim` and/or `-Ai` for the camera simulation and the AI engine, or `-All` for all four. `-Reseed <profile>` reseeds the dev DB before anything starts (see [Development Workflow](#development-workflow) for the profile names). `pnpm dev` at the repo root is the same thing. Tear it down with:
+
+```powershell
+pwsh -File scripts/stop-dev.ps1
+```
+
+Run `Get-Help scripts/start-dev.ps1 -Full` (or open the script) for every switch, or see [`dev_plan/04_PKG_launcher.md`](dev_plan/04_PKG_launcher.md) for the design rationale.
+
+This is the fast path; the rest of this section is the manual four-terminal fallback it replaces, useful when you want one component in isolation or the launcher doesn't fit your setup. **Run every command from the repo root.** This is a convention, not a hard requirement anymore — the FastAPI CLI injects `backend/` into `sys.path` itself, and `DATABASE_URL` resolves to an absolute path under the repo root regardless of CWD — but the AI engine's `from config import ...`-style imports still need `ai_engine/` to be the script's own directory (which `uv run python ai_engine/main.py` gives it), so running from the root is simplest across the board.
 
 ### Quickstart — clone to first detection
 
