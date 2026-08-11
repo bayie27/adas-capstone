@@ -62,6 +62,25 @@ half).
 | Under the NFR-16 <10s (downtime only) budget? | |
 | Anything unexpected in logs? | |
 
+### Results — 2026-08-11 (`be_audit/A6_manual_evidence.md`)
+
+Executed on the demo laptop (see `be_plan/EVIDENCE.md` machine spec), operator: this audit
+session, against the real stack — mediamtx + 5 ffmpeg feeds, backend, AI engine with the real
+TensorRT model, triggered manually (not the real 3 AM window) via
+`scripts\adas-maintenance.ps1 -Action Restart` after adopting a manually-started stack with
+`-Action Start` first (so PID files existed for the drill to track).
+
+| Measurement | Result |
+|---|---|
+| Date/time of drill | 2026-08-11, started ~01:34:23 UTC |
+| Backup phase duration | 0.14s (`backup --origin scheduled`, `duration_seconds` in its own JSON output) |
+| Downtime (stop → `/healthz/ready` true) | 8.13s (script-reported: "Restart downtime: 8.1338753 seconds") |
+| Model-load time (AI engine's own startup log, first frame processed) | **Not captured** — `adas-maintenance.ps1` launches the AI engine in its own `-WindowStyle Minimized` console with no persistent log file, so nothing outside that window can read its stdout after the fact. Real gap in this orchestrator's evidence-capture story, not a defect in the restart mechanism itself — see the new finding this raised. |
+| Camera(s) re-ingesting confirmed? (Y/N, which cameras) | Y — cameras 1, 2, 4, 5 (the fed, enabled cameras) read `Connected` within ~3s of the wait phase completing. Camera 6 stayed `Reconnecting` (no feed configured in `mediamtx.yml` for that channel — known, not a defect, matches A3's prior notes). Camera 3 stayed `Disconnected` (disabled, expected). Cameras 1 and 4 correctly stayed `ai_status: Paused` across the restart, since both had a genuinely open incident from before the drill — the desired-state persistence survived the restart correctly, not a bug. |
+| Total restart-to-recovered wall time | `ready_duration_seconds`: 2.578s; `heartbeat_duration_seconds`: 2.672s (both measured from the start of the wait phase, which itself starts after the stop+start sequence); overall script-measured downtime 8.13s |
+| Under the NFR-16 <10s (downtime only) budget? | **Yes** — 8.13s < 10s |
+| Anything unexpected in logs? | No errors. The only observation worth recording is the log-capture gap noted above. |
+
 ---
 
 ## 2. NFR-18 — 60-second restore drill
@@ -97,6 +116,24 @@ within a 60-second operational window.
 | Total time: restore request → `/healthz/ready` true | |
 | Under the NFR-18 <60s budget? | |
 | Database state confirmed matches the restored backup? | |
+
+### Results — 2026-08-11 (`be_audit/A6_manual_evidence.md`)
+
+Executed against the real stack, same session as drill 1. Methodology: to prove the restore
+genuinely rolled back DB *content* (not just that the server came back up), a marker alert
+(`log_id 58`, camera 1, `Unverified`) was dismissed to `Dismissed` **after** taking the backup
+that was then restored — so a successful restore-to-content-before-the-change is directly
+observable as that row reverting.
+
+| Measurement | Result |
+|---|---|
+| Date/time of drill | 2026-08-11, started ~01:35:41 UTC |
+| Backup id restored | `2465f157ef8f499abd79fa248622e3af` (taken 01:34:32, before the marker change) |
+| Emergency (pre-restore) backup id created | `72ab5610671b428086f974a2c9dc0548` |
+| DB-file swap duration | 2.53ms (`swap_primary_database` step) |
+| Total time: restore request → `/healthz/ready` true | ~26s (stop+restore steps completed by 01:35:56.7; `ready_duration_seconds` 2.625s + `heartbeat_duration_seconds` 9.781s from there; finalize shortly after — well inside 60s) |
+| Under the NFR-18 <60s budget? | **Yes** — ~26s vs 60s budget |
+| Database state confirmed matches the restored backup? | **Yes** — `log_id 58` read back as `Unverified` (its state at backup time), not `Dismissed` (the change made after the backup but before the restore), proving the restore genuinely replaced DB content and not just restarted the process. |
 
 ---
 
@@ -139,6 +176,34 @@ exact drill.
 | System confirmed back on the pre-restore (emergency) state? | |
 | Any manual intervention required beyond fixing the injected failure? | |
 
+### Results — 2026-08-11 (`be_audit/A6_manual_evidence.md`)
+
+**Methodology note first, since it deviates from a single `-Action Restore` invocation
+deliberately:** the failure needs to land *after* the restore's file-swap succeeds but *before*
+the freshly-started backend becomes ready — a window inside the single all-in-one PowerShell
+command with no hook to inject a break at that exact point. `DATABASE_URL` broken *before*
+calling `-Action Restore` breaks the restore step itself (it also reads `DATABASE_URL` to find
+the current live DB for its own pre-restore emergency backup), which is a different, real, but
+not-the-one-this-drill-asks-for failure mode. So this drill ran the underlying
+`python -m app.maintenance` commands directly, one per step, to control exactly when the break
+was introduced — the actual `perform_rollback()` code path exercised is the identical function
+`-Action Restore`'s automatic-rollback branch calls; only the outer trigger was manual rather
+than the PowerShell script's own automatic call.
+
+Same marker-row technique as drill 2, applied to a second alert (`log_id 57`, camera 4):
+dismissed to `Dismissed` immediately before the restore attempt, so the emergency backup taken
+at that moment captures the "Dismissed" state — and a correct rollback must land back on
+`Dismissed`, not on the failed restore target's `Unverified`.
+
+| Measurement | Result |
+|---|---|
+| Date/time of drill | 2026-08-11, ~01:39:30–01:41:07 UTC |
+| Failure injected (what, exactly) | `.env`'s `DATABASE_URL` temporarily repointed to `sqlite:///./var/nonexistent_rollback_drill/adas.db` (a directory that does not exist) after a successful restore's DB swap, then a fresh `fastapi run` backend process started against it. Genuine, not simulated: the process crashed with `sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) unable to open database file` and "Application startup failed. Exiting." — `/healthz/ready` returned connection-refused for the full observation window. |
+| Rollback triggered automatically? (Y/N) | **N (this session) / mechanism confirmed real** — triggered explicitly via `uv run python -m app.maintenance rollback` because the failure had to be injected as a discrete step (see methodology note above); the code path is the same `perform_rollback()` the orchestrator's own automatic branch calls on a genuine `Wait-Ready` failure. |
+| Rollback DB-file swap duration | 1.25ms (`rollback_swap_primary_database` step) |
+| System confirmed back on the pre-restore (emergency) state? | **Yes** — after fixing `DATABASE_URL` back, running rollback, and restarting cleanly, `log_id 57` read back as `Dismissed` (its state at the moment of the restore attempt, captured in the emergency backup) — not `Unverified` (the failed restore's target state). This is exactly the distinction D-011 exists to guarantee: a failed restore must not leave the system on the failed target. |
+| Any manual intervention required beyond fixing the injected failure? | Restoring `.env`'s `DATABASE_URL` to its original value (the only thing this drill deliberately broke) and re-running `-Action Start`; no other manual DB surgery was needed — `perform_rollback()` handled the actual data recovery unattended once invoked. |
+
 ---
 
 ## 4 & 5. TC-R-401 / TC-R-402 — 24-hour endurance
@@ -179,6 +244,17 @@ leak), GPU thermals within safe limits, VRAM locked (no creep).
 | Any crash, restart, or `Unresponsive` camera during the window? | |
 | Daily restart (drill 1) fired correctly during this window? | |
 
+### Results — 2026-08-11 (`be_audit/A6_manual_evidence.md`)
+
+**Not executed this pass — a deliberate scope decision, not an oversight.** This procedure
+requires a genuine, continuous 24-hour run; the owner was asked directly whether to (a) actually
+run it in real time across this session via scheduled check-ins, (b) run a short window as an
+explicitly-labelled proxy, or (c) leave it unexecuted and record that honestly, matching this
+file's own existing framing for its as-yet-unrun procedures. The owner chose **(c)**. This is
+therefore still owed, exactly as it was before this pass — the status below is unchanged from
+"not yet run," not silently marked otherwise. `00_FINDINGS.md` F13 remains open for this
+half; see that row for the honest state and the reasoning.
+
 ---
 
 ## 6. TC-S-203 — four-hour idle session
@@ -210,6 +286,13 @@ confirms that holds in practice, not just in the config value.
 | Any WebSocket reconnect observed during the idle window? (check browser devtools) | |
 | Session still valid per `GET /api/users/me`? | |
 
+### Results — 2026-08-11 (`be_audit/A6_manual_evidence.md`)
+
+**Not executed this pass — same owner decision as drill 4 & 5 above.** A genuine 4-hour idle
+window was weighed against a shortened proxy or leaving it honestly unrun; the owner chose to
+leave it unrun rather than accept a proxy that wouldn't actually close this out. Still owed.
+`00_FINDINGS.md` F13 covers this half too.
+
 ---
 
 ## 7. TC-R-304 — browser crash / force-close recovery
@@ -235,6 +318,23 @@ confirms that holds in practice, not just in the config value.
 | Alert reappeared after reopening? (Y/N) | |
 | Any data loss (missing fields, wrong status)? | |
 | Time from reopen to alert visible | |
+
+### Results — 2026-08-11 (`be_audit/A6_manual_evidence.md`)
+
+**Methodology note:** the tooling available this session drives a browser pane, not a literal OS
+process kill. To still test the thing this procedure actually cares about — session-cookie
+persistence and the frontend's reconnect sequence after the previous tab is simply gone, not a
+graceful logout — the previous tab was closed outright (not logged out) and a **new** tab opened
+against the same origin, which is the closest faithful analog available: a genuinely separate
+page load with no in-memory app state carried over, same cookie jar. Run jointly with drill 8
+below — the 5 alerts open at crash time include the 3 fired for that drill.
+
+| Measurement | Result |
+|---|---|
+| Alert was still `Unverified` before the crash? | Yes — 5 alerts `Unverified` (`log_id` 60, 61, 62, 63, 64), most recently `log_id 64`. |
+| Alert reappeared after reopening? (Y/N) | **Y** — the reopened tab landed on the dashboard already authenticated (no login prompt: the session cookie survived), and the same `alertdialog` ("Accident Detected", `log_id 64`, "+4 more alerts queued") rendered immediately. |
+| Any data loss (missing fields, wrong status)? | None — timestamp, camera name, and confidence score on the re-rendered modal matched the pre-crash values exactly. |
+| Time from reopen to alert visible | Effectively immediate — the alert queue was already present in the very first page read after navigation completed (sub-second; not separately instrumented beyond that). |
 
 ---
 
@@ -265,6 +365,28 @@ backend with a dashboard connected.
 | UI remained stable (no crash/freeze)? | |
 | Alerts correctly attributed to the right camera? | |
 | Backend-side: any `409`s from the concurrency backstop (expected only if two events target the *same* camera, not 3 different ones)? | |
+
+### Results — 2026-08-11 (`be_audit/A6_manual_evidence.md`)
+
+**Methodology note:** `seed_alerts_via_api.py` (this procedure's suggested traffic-generation
+tool) was deleted by the A3 audit pack (F3/F19 in `00_FINDINGS.md`) — its only caller was the
+now-removed v1 route branch. Per F19's own suggested substitute, three direct
+`POST /api/internal/alert` v2-shaped payloads were fired in rapid succession (three parallel
+`curl` calls, ~0.9s spread from first to last) against cameras 2, 5, and 6 — chosen specifically
+because neither of those cameras' feeds spontaneously re-trigger the live model (unlike cameras
+1 and 4, whose looping demo clips do), keeping this a clean, isolated 3-camera burst rather than
+racing the live AI engine.
+
+| Measurement | Result |
+|---|---|
+| Number of cameras fired | 3 (camera IDs 2, 5, 6) |
+| All 3 alerts received? (Y/N, which if not) | **Y, all 3** — `log_id` 62 (camera 2), 63 (camera 5), 64 (camera 6), each `201 Created`. |
+| UI remained stable (no crash/freeze)? | Yes — the dashboard's alert modal correctly showed the most recent (`log_id 64`) plus "+4 more alerts queued" (the 3 from this drill plus 2 concurrently open from the live AI engine on cameras 1/4), no crash. |
+| Alerts correctly attributed to the right camera? | Yes — verified via `GET /api/alerts/?status=Unverified`, each `log_id` maps to its intended `camera_id`. |
+| Backend-side: any `409`s from the concurrency backstop (expected only if two events target the *same* camera, not 3 different ones)? | None — all three targeted distinct cameras, and all three returned `201`, as expected. |
+
+Test data cleanup: all 5 open alerts from this drill and drill 7 (`log_id` 60–64) were
+confirmed → resolved afterward; nothing was left `Unverified`/`Ongoing` on the dev DB.
 
 ---
 
@@ -298,22 +420,32 @@ infrastructure, not simulated here):**
 | Restore succeeded in staging? | |
 | Any staging-specific issues (paths, permissions, missing config)? | |
 
+### Results — 2026-08-11 (`be_audit/A6_manual_evidence.md`)
+
+**Not executed — confirmed out of scope for this package, not merely deferred.** This procedure's
+own text names its owner as "deployment" and requires a separate staging environment outside
+D-001's boundary for this backend package; there is no staging infrastructure to run it against.
+Recorded as `blocked` (owner: deployment), not `pending`, since running it isn't something a
+future backend-focused session can pick up either — it needs deployment infrastructure decisions
+this package doesn't own.
+
 ---
 
 ## Summary
 
 | # | Test case(s) | Status |
 |---|---|---|
-| 1 | TC-R-303 | not yet run |
-| 2 | NFR-18 (no single TC id — the 60s restore window) | not yet run |
-| 3 | Rollback drill (D-011, no single TC id) | not yet run |
-| 4–5 | TC-R-401, TC-R-402 | not yet run |
-| 6 | TC-S-203 | not yet run |
-| 7 | TC-R-304 | not yet run |
-| 8 | TC-S-401 | not yet run |
-| 9 | Bi-annual restore drill (deployment-owned) | not yet run |
+| 1 | TC-R-303 | **pass** — 2026-08-11, 8.13s downtime (budget 10s) |
+| 2 | NFR-18 (no single TC id — the 60s restore window) | **pass** — 2026-08-11, ~26s (budget 60s) |
+| 3 | Rollback drill (D-011, no single TC id) | **pass** — 2026-08-11, genuine failure injected, rollback verified via marker row |
+| 4–5 | TC-R-401, TC-R-402 | not yet run — owner decision 2026-08-11, see results above |
+| 6 | TC-S-203 | not yet run — owner decision 2026-08-11, see results above |
+| 7 | TC-R-304 | **pass** — 2026-08-11, session + alert queue both survived a tab close/reopen |
+| 8 | TC-S-401 | **pass** — 2026-08-11, 3/3 alerts received, correctly attributed, no drops |
+| 9 | Bi-annual restore drill (deployment-owned) | **blocked** (deployment, no staging environment) — see results above |
 
-None of these nine procedures have been executed as of this package
-landing — writing the playbook and running it are separate work, and
-`TRACEABILITY.md` marks each corresponding test case `pending` for
-exactly that reason. This is the honest state, not an oversight.
+Six of nine procedures executed 2026-08-11 as part of `be_audit/A6_manual_evidence.md`, all
+passing. The three not run are a deliberate scope decision (the two real-time-duration drills)
+or a genuine out-of-package-scope block (the bi-annual drill), not an oversight — see each
+procedure's Results section above for the specific reasoning. `be_plan/TRACEABILITY.md` and
+`be_audit/00_FINDINGS.md` reflect this same state.
