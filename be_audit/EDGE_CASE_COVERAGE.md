@@ -7,7 +7,7 @@ status column, one row per case in `be_plan/14_EDGE_CASES.md`.
 
 Updated same day, second pass: every `partial`/`uncovered` row from the first pass was either closed
 with a real test, fixed as a real bug, or downgraded to `accepted-gap` with a rationale. See
-`be_audit/00_FINDINGS.md` F22–F29 for the findings that came out of doing this.
+`be_audit/00_FINDINGS.md` F24–F31 for the findings that came out of doing this.
 
 ## How this was built
 
@@ -29,16 +29,16 @@ all are asserted, it's `partial`, with the gap named in Evidence.
 
 Ten rows turned out to be more than a missing test:
 
-- **3.5** and **6.9** were confirmed implementation bugs (not just untested) — both fixed. (**F22**, **F23**)
-- **1.18** (heartbeat) had the *same* SQLAlchemy dirty-tracking hazard F21 fixed for camera disable —
-  found via deterministic reproduction while writing the row's test, then fixed. (**F24**)
+- **3.5** and **6.9** were confirmed implementation bugs (not just untested) — both fixed. (**F24**, **F25**)
+- **1.18** (heartbeat) had the *same* SQLAlchemy dirty-tracking hazard F23 fixed for camera disable —
+  found via deterministic reproduction while writing the row's test, then fixed. (**F26**)
 - **4.4** surfaced a real, still-open defect in `fpdf2`'s text-extraction layer for accented Latin
   characters — not fixed (upstream library boundary), documented and the test adjusted to assert
-  honestly. (**F29**, row stays `partial`)
+  honestly. (**F31**, row stays `partial`)
 - **6.4** was downgraded to `accepted-gap`: the backend never writes a snapshot file itself (the AI
   engine does), so "disk full during a snapshot write" has no backend code path to test.
 
-The other six (**F25**–**F28**, plus the closures of **1.6**, **2.1**, **2.2**, **2.10**, **2.11**,
+The other six (**F27**–**F30**, plus the closures of **1.6**, **2.1**, **2.2**, **2.10**, **2.11**,
 **3.1**, **3.15**, **4.2**, **4.3**, **4.7**, **4.13**, **4.14**, **5.7**–**5.9**, **5.11**, **5.12**,
 **6.13**, **6.19**, **7**'s three side-effect units, **8.11**, **8.14**, **8.16**, **9.7**) were
 closed with new tests against already-correct code.
@@ -55,7 +55,7 @@ closed with new tests against already-correct code.
 | 1.4 | Re-snooze racing the previous snooze's expiry job | P4 | covered | `test_snoozes.py::TestClearExpiredSnooze::test_re_snooze_racing_the_previous_deadline_finds_it_moved` — sequential/state simulation; asserts zero `RE_ALARM` |
 | 1.5 | Two AI events for one camera arriving simultaneously | P4 | covered | `test_internal.py::TestReceiveAiAlertV2::test_v2_open_camera_conflict_is_409` — sequential simulation; second is `409 CONFLICT_STATE`. Race-safety rests on `ux_detection_open_camera`, the DB-level guarantee also exercised genuinely-in-parallel by 1.7's test |
 | 1.6 | The same `source_event_id` posted twice concurrently | P4 | covered | `test_internal.py::TestConcurrentDuplicateSourceEventId::test_same_source_event_id_posted_by_two_threads_yields_one_row` — genuinely parallel threaded test (25 attempts), asserts `{200,201}` and exactly one `DetectionLog` row, actually hitting the `ux_detection_source_event` `IntegrityError` backstop |
-| 1.7 | AI event arriving while an operator disables that camera | P4 | covered | `test_internal.py::TestConcurrentDisableRace::test_ai_alert_racing_operator_disable_never_500s_and_stays_consistent` — genuinely parallel threaded test; found and fixed two real race bugs while writing it (**F21**) |
+| 1.7 | AI event arriving while an operator disables that camera | P4 | covered | `test_internal.py::TestConcurrentDisableRace::test_ai_alert_racing_operator_disable_never_500s_and_stays_consistent` — genuinely parallel threaded test; found and fixed two real race bugs while writing it (**F23**) |
 | 1.8 | Cooldown job firing while a new incident opens on that camera | P4 | covered | `test_camera_reconciliation.py::TestResumeCameraAfterCooldown::test_leaves_camera_paused_if_a_new_incident_opened` |
 | 1.9 | Camera soft-deleted while its cooldown job is pending | P4 | covered | `test_camera_reconciliation.py::TestResumeCameraAfterCooldown::test_soft_deleted_camera_is_untouched` (job no-ops) + `test_cameras.py::TestDeleteCamera::test_succeeds_without_open_incident_sets_inactive` (the delete route itself sets `Inactive`) |
 | 1.10 | Session revoked mid-request | P2 | covered | `test_auth.py::TestConcurrencyAndMultiSession::test_request_completes_cleanly_after_mid_flight_revocation` — sequential simulation; pre-revocation request `200`, next `401` |
@@ -66,7 +66,7 @@ closed with new tests against already-correct code.
 | 1.15 | Two export jobs for the same user at once | P6 | covered | `test_exports.py::TestConcurrentJobs::test_two_jobs_for_the_same_user_are_both_processed_independently` — sequential simulation |
 | 1.16 | WebSocket broadcast during a client disconnect | P3 | covered | `test_realtime.py::test_broadcast_during_a_client_disconnect_does_not_raise` — deterministic single-threaded simulation |
 | 1.17 | Hourly rollup running twice for the same hour | P5 | covered | `test_system_health.py::TestRollupHour::test_rerunning_is_idempotent` |
-| 1.18 | Two heartbeats from different engine instances | P4 | covered | `test_internal.py::TestConcurrentHeartbeatRace::test_two_engines_heartbeating_the_same_camera_never_corrupt_it` — genuinely parallel threaded test (25 attempts). Found and fixed a real bug while writing it: `apply_observed()` had the same SQLAlchemy dirty-tracking hazard F21 fixed elsewhere, now closed with `flag_modified()` (**F24**) |
+| 1.18 | Two heartbeats from different engine instances | P4 | covered | `test_internal.py::TestConcurrentHeartbeatRace::test_two_engines_heartbeating_the_same_camera_never_corrupt_it` — genuinely parallel threaded test (25 attempts). Found and fixed a real bug while writing it: `apply_observed()` had the same SQLAlchemy dirty-tracking hazard F23 fixed elsewhere, now closed with `flag_modified()` (**F26**) |
 
 ## 2. Boundary values
 
@@ -99,7 +99,7 @@ closed with new tests against already-correct code.
 | 3.2 | Analytics with only `Unverified` incidents excluded from every number | P6 | covered | `test_analytics.py::test_dashboard_ignores_unverified_logs_and_returns_empty_state` + `test_performance_ignores_unverified_logs_but_still_lists_the_camera` |
 | 3.3 | Precision when confirmed=0, dismissed=0 → `null` | P6 | covered | `test_analytics.py::test_performance_ignores_unverified_logs_but_still_lists_the_camera` — asserts `precision_score: None` |
 | 3.4 | Precision when confirmed=0, dismissed>0 → `0.0` | P6 | covered | `test_analytics.py::TestPerformanceAnalytics::test_performance_returns_global_and_per_camera_metrics` |
-| 3.5 | Camera with zero incidents appears in performance breakdown with null averages, not omitted | P6 | covered | **Was a confirmed implementation bug (F22), now fixed**: `_compute_performance_data` (`analytics.py`) now populates the table from every active camera matching filters, not just cameras with confirmed/dismissed rows. `test_analytics.py::test_performance_returns_global_and_per_camera_metrics` (Ignored/Silent Corridor cameras) + `test_performance_ignores_unverified_logs_but_still_lists_the_camera` |
+| 3.5 | Camera with zero incidents appears in performance breakdown with null averages, not omitted | P6 | covered | **Was a confirmed implementation bug (F24), now fixed**: `_compute_performance_data` (`analytics.py`) now populates the table from every active camera matching filters, not just cameras with confirmed/dismissed rows. `test_analytics.py::test_performance_returns_global_and_per_camera_metrics` (Ignored/Silent Corridor cameras) + `test_performance_ignores_unverified_logs_but_still_lists_the_camera` |
 | 3.6 | Zero cameras registered: KPI invariants hold, heartbeat empty snapshot | P4, P5 | covered | `test_cameras.py::TestGetAllCameras::test_zero_cameras_kpis_all_zero` + `test_system_health.py::TestCollectAiMetrics::test_zero_cameras_is_a_clean_zero_state` |
 | 3.7 | Export with zero matching rows: header-only CSV, empty-state PDF correct page count | P6 | covered | `test_reports.py::TestHostileAndDegenerateInput::test_sql_injection_string_in_search_is_inert` (CSV) + `TestPdfContent::test_empty_dataset_pdf_has_empty_state_and_correct_page_count` |
 | 3.8 | Help search matching nothing: empty `items`, populated `top_faqs` | P8 | covered | `test_help.py::TestEmptyState::test_no_results_returns_empty_items_and_populated_top_faqs` |
@@ -119,7 +119,7 @@ closed with new tests against already-correct code.
 | 4.1 | Camera named `=cmd\|'/c calc'!A1` neutralized in CSV | P6 | covered | `test_alerts.py::TestExportAlerts::test_export_alerts_neutralizes_formula_injection` |
 | 4.2 | Same formula-injection name rendered into a PDF | P6 | covered | `test_reports.py::TestHostileAndDegenerateInput::test_formula_injection_camera_name_neutralized_in_pdf_too` — real `pypdf` text-extraction assertion, not just a `%PDF` byte check |
 | 4.3 | Camera name with newline/embedded `"`: correctly quoted in CSV, wrapped in PDF | P6 | covered | `test_reports.py::TestHostileAndDegenerateInput::test_newline_and_quote_in_camera_name_survive_csv_and_pdf` — CSV exact round-trip + `pypdf` extraction confirms the name text is actually present in the PDF |
-| 4.4 | Unicode names (emoji, RTL, combining, ZWJ) stored/returned/exported/PDF-rendered without mojibake or crash | P4, P6 | partial | CSV round-trips exactly (`test_unicode_camera_name_round_trips_without_crash`). PDF: crash-freedom confirmed, but real text-extraction verification surfaced **F29** — `fpdf2` 2.8.8 corrupts extracted text for accented Latin characters the embedded font demonstrably supports (no missing-glyph warning), reproduced independent of this app's code. Not fixed — upstream library boundary; visual-rendering impact unconfirmed for lack of a PDF rasterizer in this environment |
+| 4.4 | Unicode names (emoji, RTL, combining, ZWJ) stored/returned/exported/PDF-rendered without mojibake or crash | P4, P6 | partial | CSV round-trips exactly (`test_unicode_camera_name_round_trips_without_crash`). PDF: crash-freedom confirmed, but real text-extraction verification surfaced **F31** — `fpdf2` 2.8.8 corrupts extracted text for accented Latin characters the embedded font demonstrably supports (no missing-glyph warning), reproduced independent of this app's code. Not fixed — upstream library boundary; visual-rendering impact unconfirmed for lack of a PDF rasterizer in this environment |
 | 4.5 | Max length counted in characters, not bytes | P1 | covered | `test_schema.py::TestUnicodeLength::test_max_length_counts_codepoints_not_bytes` + `test_one_over_max_length_in_codepoints_rejected` |
 | 4.6 | Null byte in a string field rejected, not stored | P1 | covered | `test_schema.py::TestNullByteRejection` (camera/user); `test_internal.py::TestHeartbeat::test_null_byte_in_engine_id_is_422`; `test_snapshots.py::test_null_byte_rejected` |
 | 4.7 | Leading/trailing (incl. Unicode) whitespace stripped from `username`; padding can't create a 2nd account | P2 | covered | `test_auth.py::TestUsernameNormalization::test_login_strips_unicode_whitespace` (U+00A0, U+2003, parametrized) + `test_unicode_padded_username_cannot_create_a_second_account`, alongside the pre-existing ASCII-space tests |
@@ -164,7 +164,7 @@ closed with new tests against already-correct code.
 | 6.6 | Disk full during a backup | P7 | covered | `test_maintenance.py::TestBackupCore::test_insufficient_disk_space_aborts_before_starting` |
 | 6.7 | NVML unavailable or raising mid-run | P5 | covered | `test_system_health.py::TestReadGpus::test_no_nvml_bindings_returns_empty_list`, `test_nvml_init_failure_returns_empty_list` |
 | 6.8 | `psutil` raising on a single reading | P5 | covered | `test_system_health.py::TestHealthLiveEndpoint::test_single_sensor_unavailable_does_not_fail_the_endpoint` |
-| 6.9 | Snapshot root unwritable at startup | P1 | covered | **Was confirmed unimplemented (F23), now fixed**: `lifespan()` (`main.py`) now `mkdir()`s `SNAPSHOT_ROOT` at boot, matching the `RTSP_URL_TEMPLATE` fail-at-boot precedent (F2). `test_app_factory.py::TestSnapshotRootStartupCheck::test_missing_snapshot_root_is_created_at_startup` + `test_unprovisionable_snapshot_root_fails_startup` |
+| 6.9 | Snapshot root unwritable at startup | P1 | covered | **Was confirmed unimplemented (F25), now fixed**: `lifespan()` (`main.py`) now `mkdir()`s `SNAPSHOT_ROOT` at boot, matching the `RTSP_URL_TEMPLATE` fail-at-boot precedent (F2). `test_app_factory.py::TestSnapshotRootStartupCheck::test_missing_snapshot_root_is_created_at_startup` + `test_unprovisionable_snapshot_root_fails_startup` |
 | 6.10 | Rate-limiter key dictionary growth pruned | P2 | covered | `test_rate_limit.py::TestSlidingWindowLimiter::test_expired_keys_are_pruned_not_retained` |
 | 6.11 | WebSocket queue overflow closes only that connection | P3 | covered | `test_realtime.py::test_full_queue_closes_only_the_slow_connection` |
 | 6.12 | Many simultaneous WebSocket connections; limit enforced | P3 | covered | `test_realtime.py::test_per_user_connection_limit_rejects_extra_but_keeps_established`, `test_total_connection_limit_rejects_extra_from_any_user` |
@@ -222,7 +222,7 @@ split here into checkable units.
 | 9.4 | Creating a camera reusing a soft-deleted camera's `channel_id` | P1, P4 | covered | `test_cameras.py::TestCreateCamera::test_reuses_soft_deleted_camera_channel_id` + `test_schema.py::TestPartialUniqueIndexes::test_reusing_a_soft_deleted_cameras_channel_id_succeeds` |
 | 9.5 | Two soft-deleted cameras with the same name | P1 | covered | `test_schema.py::TestPartialUniqueIndexes::test_two_soft_deleted_cameras_can_share_a_name` |
 | 9.6 | Soft-deleting a camera with an open incident | P4 | covered | `test_cameras.py::TestDeleteCamera::test_refuses_with_open_incident` — `400 PRECONDITION_FAILED` |
-| 9.7 | Soft-deleted camera still appearing in historical analytics | P6 | covered | Export path: `test_reports.py::TestHostileAndDegenerateInput::test_soft_deleted_camera_still_appears_in_export_history`. Analytics-performance path (new, closes the gap alongside the F22 fix): `test_analytics.py::test_performance_soft_deleted_camera_with_history_still_appears` |
+| 9.7 | Soft-deleted camera still appearing in historical analytics | P6 | covered | Export path: `test_reports.py::TestHostileAndDegenerateInput::test_soft_deleted_camera_still_appears_in_export_history`. Analytics-performance path (new, closes the gap alongside the F24 fix): `test_analytics.py::test_performance_soft_deleted_camera_with_history_still_appears` |
 | 9.8 | Soft-deleted camera excluded from KPI counts | P5 | covered | `test_cameras.py::TestGetAllCameras::test_soft_deleted_camera_excluded_from_kpis` |
 | 9.9 | Hard-deleting a referenced user | P1 | covered | `test_schema.py::TestForeignKeyEnforcement::test_hard_deleting_a_referenced_user_is_blocked` — raw DELETE bypassing ORM, `ON DELETE RESTRICT` |
 | 9.10 | Deleting a user cascades their `alarm_settings` | P1 | covered | `test_schema.py::TestCascadeDeletes::test_deleting_a_user_cascades_their_alarm_settings` |
@@ -259,15 +259,15 @@ One row (6.4) earned its own `accepted-gap` for a row-specific reason — see th
 
 ## Findings surfaced by this register
 
-All recorded in `be_audit/00_FINDINGS.md`. F22–F28 are fixed; F29 is open (upstream library boundary):
+All recorded in `be_audit/00_FINDINGS.md`. F24–F30 are fixed; F31 is open (upstream library boundary):
 
-- **F22** (Med, fixed) — 3.5: analytics performance breakdown dropped cameras with zero incidents.
-- **F23** (Med, fixed) — 6.9: no startup writability check for `SNAPSHOT_ROOT`.
-- **F24** (Med, fixed) — 1.6, 1.18: genuinely-parallel testing found and fixed a real heartbeat-race
-  corruption bug (the same class as F21), on top of closing the sequential-only test gap.
-- **F25** (Low-Med, fixed) — 8.11, 8.14, 8.16: auth/authz claims correct but were regression-prone, untested.
-- **F26** (Low-Med, fixed) — 6.13: CSV stream-disconnect cleanup, confirmed already correct.
-- **F27** (Low-Med, fixed) — 2.1, 2.2: pagination boundaries now regression-tested.
-- **F28** (Low-Med, fixed) — 7: three incident-transition side-effects now regression-tested.
-- **F29** (Med, open) — 4.4: `fpdf2` corrupts PDF text extraction for accented Latin characters;
+- **F24** (Med, fixed) — 3.5: analytics performance breakdown dropped cameras with zero incidents.
+- **F25** (Med, fixed) — 6.9: no startup writability check for `SNAPSHOT_ROOT`.
+- **F26** (Med, fixed) — 1.6, 1.18: genuinely-parallel testing found and fixed a real heartbeat-race
+  corruption bug (the same class as F23), on top of closing the sequential-only test gap.
+- **F27** (Low-Med, fixed) — 8.11, 8.14, 8.16: auth/authz claims correct but were regression-prone, untested.
+- **F28** (Low-Med, fixed) — 6.13: CSV stream-disconnect cleanup, confirmed already correct.
+- **F29** (Low-Med, fixed) — 2.1, 2.2: pagination boundaries now regression-tested.
+- **F30** (Low-Med, fixed) — 7: three incident-transition side-effects now regression-tested.
+- **F31** (Med, open) — 4.4: `fpdf2` corrupts PDF text extraction for accented Latin characters;
   upstream library issue, visual-rendering impact unconfirmed (no PDF rasterizer available here).

@@ -902,12 +902,12 @@ class TestConcurrentDisableRace:
 
 
 class TestConcurrentHeartbeatRace:
-    """Edge case 1.18 (be_audit/00_FINDINGS.md F24) — two engine instances
+    """Edge case 1.18 (be_audit/00_FINDINGS.md F26) — two engine instances
     heartbeating the same camera concurrently. The same real-file-DB,
-    real-thread harness as TestConcurrentDisableRace, because F21's bug
+    real-thread harness as TestConcurrentDisableRace, because F23's bug
     hunt for edge case 1.7 showed sequential/deterministic simulation
     misses real SQLAlchemy dirty-tracking races — deterministic
-    reproduction (be_audit/00_FINDINGS.md F24 writeup) found the identical
+    reproduction (be_audit/00_FINDINGS.md F26 writeup) found the identical
     mechanism here before it was fixed in apply_observed(): whichever
     heartbeat commits last must leave the row matching its own report in
     full, never a mixed-provenance row with some fields surviving from the
@@ -1021,7 +1021,7 @@ class TestConcurrentHeartbeatRace:
 
 
 class TestConcurrentDuplicateSourceEventId:
-    """Edge case 1.6 (be_audit/00_FINDINGS.md F24) — the same
+    """Edge case 1.6 (be_audit/00_FINDINGS.md F26) — the same
     source_event_id posted twice genuinely concurrently must hit the
     ux_detection_source_event unique-index IntegrityError backstop
     (internal.py's except IntegrityError branch), not just the pre-commit

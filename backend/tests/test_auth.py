@@ -895,7 +895,7 @@ class TestRBAC:
         me = client.get("/api/users/me", headers=headers)
         assert me.json()["role"] == "Operator"
 
-    # Every admin-only route in the API (be_audit/00_FINDINGS.md F25,
+    # Every admin-only route in the API (be_audit/00_FINDINGS.md F27,
     # edge case 8.11). A POST/PATCH body is deliberately `{}` — missing
     # every required field — so a 422 slipping through would mean the
     # route handler's body validation ran before the role check, not

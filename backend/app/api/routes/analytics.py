@@ -447,7 +447,7 @@ def _performance_camera_population(
     """The per-camera table's row population: every *active* camera matching
     the `camera_id`/`search` filters, whether or not it has any
     confirmed/dismissed incidents in range (edge case 3.5,
-    be_audit/00_FINDINGS.md F22) — a quiet camera must still appear with
+    be_audit/00_FINDINGS.md F24) — a quiet camera must still appear with
     null averages, not vanish from the table — **plus** any soft-deleted
     camera that does have history in range (edge case 9.7): removing a
     camera must not change what already happened. `is_active=0` cameras
@@ -522,7 +522,7 @@ def _compute_performance_data(
     # Population is every active camera matching the filters — not just
     # cameras that happen to have a confirmed/dismissed row — so a quiet
     # camera still appears with null averages rather than being omitted
-    # (edge case 3.5, F22).
+    # (edge case 3.5, F24).
     camera_name_map = _performance_camera_population(
         session,
         camera_id=camera_id,

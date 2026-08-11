@@ -401,14 +401,14 @@ class TestHostileAndDegenerateInput:
         assert pdf_resp.content.startswith(b"%PDF")
         # Deliberately NOT asserting the Unicode name round-trips through
         # PDF *text extraction* here — investigating this row surfaced a
-        # real, pre-existing defect (F29): fpdf2 2.8.8's embedded-font
+        # real, pre-existing defect (F31): fpdf2 2.8.8's embedded-font
         # ToUnicode CMap corrupts extracted text for accented Latin
         # characters this exact font supports and renders warning-free
         # (confirmed in isolation, independent of this app's own code —
-        # see F29 for the reproduction). The CJK/emoji glyphs the font
+        # see F31 for the reproduction). The CJK/emoji glyphs the font
         # genuinely lacks are excluded here for the same reason 4.1-4.3
         # scope to ASCII-safe names. Crash-freedom is what this row can
-        # honestly assert until F29 is fixed or the extraction-vs-render
+        # honestly assert until F31 is fixed or the extraction-vs-render
         # distinction is confirmed with a rendering tool.
 
     def test_sql_injection_string_in_search_is_inert(
@@ -575,7 +575,7 @@ class TestRowLimitBoundary:
 
 
 class TestCsvStreamClientDisconnect:
-    """Edge case 6.13 (be_audit/00_FINDINGS.md F26) — a client
+    """Edge case 6.13 (be_audit/00_FINDINGS.md F28) — a client
     disconnecting mid-CSV-stream must not 500 the (already-gone) client
     and must not leak the request's DB session. The shared-session
     `client` fixture used everywhere else in this file can't exercise

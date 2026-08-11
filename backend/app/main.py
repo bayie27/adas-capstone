@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
     app_settings: Settings = app.state.settings
     engine = app.state.engine
 
-    # Edge case 6.9 / be_audit/00_FINDINGS.md F23 — the same "fail at boot,
+    # Edge case 6.9 / be_audit/00_FINDINGS.md F25 — the same "fail at boot,
     # not on first use" philosophy as F2's RTSP_URL_TEMPLATE validation.
     # The backend only ever *reads* from SNAPSHOT_ROOT (app/services/
     # snapshots.py) — the AI engine is the writer — but ensuring the

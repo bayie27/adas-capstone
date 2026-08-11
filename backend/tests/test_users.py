@@ -253,7 +253,7 @@ class TestGetAllUsers:
     def test_pagination_boundary_rejections(
         self, client: TestClient, session: Session, query: str
     ):
-        """Edge case 2.1/2.2 (be_audit/00_FINDINGS.md F27)."""
+        """Edge case 2.1/2.2 (be_audit/00_FINDINGS.md F29)."""
         make_admin(session)
         headers = auth_headers(client, "admin", "Admin123")
         resp = client.get(f"/api/users/?{query}", headers=headers)
@@ -441,7 +441,7 @@ class TestUpdateUser:
     def test_cannot_deactivate_last_admin_is_audited_denied(
         self, client: TestClient, session: Session
     ):
-        """Edge case 8.16 (be_audit/00_FINDINGS.md F25) — the refusal
+        """Edge case 8.16 (be_audit/00_FINDINGS.md F27) — the refusal
         alone was already covered above; this pins the audit trail too, so
         a future change that silently dropped the denied-audit write for
         this guard would fail a test."""
@@ -621,7 +621,7 @@ class TestDeleteUser:
     def test_cannot_delete_last_admin_is_audited_denied(
         self, client: TestClient, session: Session
     ):
-        """Edge case 8.16 (be_audit/00_FINDINGS.md F25) — pins the audit
+        """Edge case 8.16 (be_audit/00_FINDINGS.md F27) — pins the audit
         trail for test_cannot_delete_last_admin above (self-targeting, so
         it actually exercises the self_delete guard, not last_admin_delete
         — see the next test for that one)."""
@@ -648,7 +648,7 @@ class TestDeleteUser:
         last_admin_delete branch is a race (the count going stale between
         this route's read and its guard check) or, as here, isolating the
         guard directly by forcing _get_active_admin_count()'s return value
-        — exactly the kind of race F21/F24 showed is worth taking
+        — exactly the kind of race F23/F26 showed is worth taking
         seriously rather than dismissing as untestable."""
         import app.api.routes.users as users_module
 

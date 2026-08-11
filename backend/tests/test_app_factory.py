@@ -160,7 +160,7 @@ class TestConcurrentWriteLockHandling:
 
 
 class TestSnapshotRootStartupCheck:
-    """Edge case 6.9 / be_audit/00_FINDINGS.md F23 — SNAPSHOT_ROOT is
+    """Edge case 6.9 / be_audit/00_FINDINGS.md F25 — SNAPSHOT_ROOT is
     validated at boot (F2's "fail loud, not per-request" precedent), not
     left to degrade into every snapshot request quietly 404ing."""
 

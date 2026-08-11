@@ -323,7 +323,7 @@ class TestGetAlerts:
     def test_pagination_boundary_rejections(
         self, client: TestClient, session: Session, query: str
     ):
-        """Edge case 2.1/2.2 (be_audit/00_FINDINGS.md F27)."""
+        """Edge case 2.1/2.2 (be_audit/00_FINDINGS.md F29)."""
         _, headers = operator_with_headers(client, session)
         resp = client.get(f"/api/alerts/?{query}", headers=headers)
         assert resp.status_code == 422
@@ -806,7 +806,7 @@ class TestAlertTransitions:
 
 
 class TestTransitionSideEffects:
-    """Edge case 7 (be_audit/00_FINDINGS.md F28) — three side-effects of
+    """Edge case 7 (be_audit/00_FINDINGS.md F30) — three side-effects of
     the four legal transitions, verified directly rather than inferred
     from a plausible-sounding assertion elsewhere: the audit_log row's
     `action` (previously only checked via the WS broadcast payload, and

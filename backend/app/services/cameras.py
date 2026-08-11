@@ -208,7 +208,7 @@ def apply_observed(camera: Camera, report: ObservedReport, *, now: datetime) -> 
     # from the UPDATE's SET clause, letting a second engine's concurrently
     # committed value for that column survive underneath this heartbeat's
     # otherwise-authoritative write — a corrupted, mixed-provenance row
-    # (same mechanism as F21). Forcing every observed column every time is
+    # (same mechanism as F23). Forcing every observed column every time is
     # cheap and always correct, unlike the desired-state columns in
     # update_camera, where only the fields recompute_desired_state() might
     # not otherwise mark dirty need it.

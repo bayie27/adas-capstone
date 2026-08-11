@@ -66,7 +66,7 @@ class TestGetAllCameras:
     def test_pagination_boundary_rejections(
         self, client: TestClient, session: Session, query: str
     ):
-        """Edge case 2.1/2.2 (be_audit/00_FINDINGS.md F27)."""
+        """Edge case 2.1/2.2 (be_audit/00_FINDINGS.md F29)."""
         headers = _headers(client, session)
         resp = client.get(f"/api/cameras/?{query}", headers=headers)
         assert resp.status_code == 422

@@ -373,7 +373,7 @@ class TestPerformanceAnalytics:
                 "avg_dismissed_confidence": None,
             },
             {
-                # Edge case 3.5 / F22 — a camera whose only detection is
+                # Edge case 3.5 / F24 — a camera whose only detection is
                 # Unverified (excluded from analytics entirely) has zero
                 # confirmed and zero dismissed rows, but must still appear
                 # in the breakdown with null averages, not be omitted.
@@ -687,7 +687,7 @@ def test_export_dashboard_csv_returns_header_only_when_no_confirmed_logs(
 def test_performance_ignores_unverified_logs_but_still_lists_the_camera(
     client: TestClient, session: Session
 ):
-    """Edge case 3.5 / F22 — Unverified is excluded from every analytics
+    """Edge case 3.5 / F24 — Unverified is excluded from every analytics
     number (global KPIs all zero/null), but the camera itself is not
     omitted from the per-camera breakdown just because it has no
     confirmed/dismissed rows."""
@@ -790,7 +790,7 @@ def test_performance_with_zero_cameras_registered_returns_empty_state(
 def test_export_performance_csv_lists_camera_row_when_no_analytics_rows(
     client: TestClient, session: Session
 ):
-    """Edge case 3.5 / F22 at the export layer — same fix, CSV surface."""
+    """Edge case 3.5 / F24 at the export layer — same fix, CSV surface."""
     _, headers = operator_with_headers(client, session, username="perfheader")
     camera = make_camera(session, name="Header Perf Camera", channel_id=64)
     make_analytics_log(
