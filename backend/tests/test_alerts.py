@@ -11,10 +11,10 @@ from io import StringIO
 
 import pytest
 from app.core.scheduler import create_scheduler
-from app.models import DetectionLog, DetectionStatus
+from app.models import AuditLog, DetectionLog, DetectionStatus
 from app.schemas.events import EventEnvelope
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from .conftest import auth_headers, make_camera, make_operator
 
@@ -749,6 +749,102 @@ class TestAlertTransitions:
         assert body["handled_action"] == "ALERT_CONFIRM"
         assert body["handled_by"] == "Test Operator"
         assert body["handled_at"] is not None
+
+
+class TestTransitionSideEffects:
+    """Edge case 7 (be_audit/00_FINDINGS.md F28) — three side-effects of
+    the four legal transitions, verified directly rather than inferred
+    from a plausible-sounding assertion elsewhere: the audit_log row's
+    `action` (previously only checked via the WS broadcast payload, and
+    only for resolve/correction), detected_at/created_at immutability, and
+    snooze-field clearing."""
+
+    _TRANSITIONS = [
+        ("confirm", DetectionStatus.UNVERIFIED, "ALERT_CONFIRM"),
+        ("dismiss", DetectionStatus.UNVERIFIED, "ALERT_DISMISS"),
+        ("resolve", DetectionStatus.ONGOING, "ALERT_RESOLVE"),
+        ("dismiss", DetectionStatus.ONGOING, "ALERT_CORRECTION"),
+    ]
+
+    @pytest.mark.parametrize(("route", "source_status", "action"), _TRANSITIONS)
+    def test_audit_log_action_is_correct_for_every_legal_transition(
+        self,
+        client: TestClient,
+        session: Session,
+        route: str,
+        source_status: DetectionStatus,
+        action: str,
+    ):
+        operator, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name=f"Audit Action Cam {action}", channel_id=1)
+        extra = (
+            {"verified_by_id": operator.user_id, "verified_at": datetime.now(UTC)}
+            if source_status == DetectionStatus.ONGOING
+            else {}
+        )
+        log = make_alert(session, camera, status=source_status, **extra)
+
+        resp = client.post(f"/api/alerts/{log.log_id}/{route}", headers=headers)
+        assert resp.status_code == 200
+
+        rows = session.exec(select(AuditLog).where(AuditLog.action == action)).all()
+        assert len(rows) == 1, (action, [r.action for r in rows])
+        assert rows[0].result == "success"
+        assert rows[0].target_ref == str(log.log_id)
+
+    @pytest.mark.parametrize(("route", "source_status", "action"), _TRANSITIONS)
+    def test_detected_at_and_created_at_never_modified_by_a_transition(
+        self,
+        client: TestClient,
+        session: Session,
+        route: str,
+        source_status: DetectionStatus,
+        action: str,
+    ):
+        operator, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name=f"Immutable Ts Cam {action}", channel_id=1)
+        extra = (
+            {"verified_by_id": operator.user_id, "verified_at": datetime.now(UTC)}
+            if source_status == DetectionStatus.ONGOING
+            else {}
+        )
+        log = make_alert(session, camera, status=source_status, **extra)
+        detected_at_before = log.detected_at
+        created_at_before = log.created_at
+
+        resp = client.post(f"/api/alerts/{log.log_id}/{route}", headers=headers)
+        assert resp.status_code == 200
+
+        session.refresh(log)
+        assert log.detected_at == detected_at_before
+        assert log.created_at == created_at_before
+
+    @pytest.mark.parametrize("route", ["confirm", "dismiss"])
+    def test_snooze_fields_cleared_by_a_transition_out_of_unverified(
+        self, client: TestClient, session: Session, route: str
+    ):
+        """Only Unverified incidents can carry an active snooze (the
+        Ongoing-sourced transitions have nothing to clear, since
+        Ongoing incidents can't be snoozed in the first place)."""
+        _, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name=f"Snooze Clear Cam {route}", channel_id=1)
+        snoozer = make_operator(session, username=f"snoozer_{route}")
+        log = make_alert(
+            session,
+            camera,
+            status=DetectionStatus.UNVERIFIED,
+            snoozed_at=datetime.now(UTC),
+            snoozed_until=datetime.now(UTC) + timedelta(minutes=15),
+            snoozed_by_id=snoozer.user_id,
+        )
+
+        resp = client.post(f"/api/alerts/{log.log_id}/{route}", headers=headers)
+        assert resp.status_code == 200
+
+        session.refresh(log)
+        assert log.snoozed_at is None
+        assert log.snoozed_until is None
+        assert log.snoozed_by_id is None
 
 
 class TestStateMachineExhaustiveness:
