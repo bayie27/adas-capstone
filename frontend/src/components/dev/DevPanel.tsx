@@ -5,12 +5,14 @@ import { useNavigate } from "react-router-dom"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { SidePanel } from "@/components/ui/SidePanel"
 import { DEV_STATUS_QUERY_KEY, useDevTools } from "@/hooks/useDevTools"
+import { suspendAuthRedirect } from "@/services/api"
 import {
   generateHealthHistory,
   injectDetection,
   loginAs,
   reseedProfile,
   setCameraState,
+  type DevSeedResult,
   type DevSessionUser,
 } from "@/services/dev"
 import { useAlertStore } from "@/store/useAlertStore"
@@ -103,18 +105,38 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
     setConfirmingSlow(false)
 
     return run(`reseed:${profile}`, async () => {
-      // Awaited fully before anything else fires: the response carries the
-      // replacement cookie, and a request in that window would hit the 401
-      // interceptor and bounce to /login.
-      const result = await reseedProfile(profile)
-      applyNewSession(result.session, true)
-      return (
-        `Seeded '${result.profile}': ${result.detections} detections, ` +
-        `${result.cameras} cameras, ${result.users} users, ` +
-        `${result.health_samples} health rows, ${result.export_jobs} exports, ` +
-        `${result.snapshots} snapshots. Signed in as ${result.session.username}.`
-      )
+      // Awaiting the reseed is necessary but NOT sufficient, which is what
+      // driving this in a real browser showed: the wipe deletes every
+      // auth_session row, so requests *other components* already had in
+      // flight — the alert poll, the camera list, the WebSocket
+      // revalidation — come back 401 and the interceptor bounces the
+      // operator to /login mid-reseed. Reproduced 2/2 before this guard.
+      //
+      // So: cancel what is outstanding, and suspend the redirect across the
+      // whole operation plus a short grace window for anything that had
+      // already left before cancelQueries could reach it.
+      const resumeAuthRedirect = suspendAuthRedirect()
+      const graceMs = 2000
+      try {
+        await queryClient.cancelQueries()
+        const result = await reseedProfile(profile)
+        applyNewSession(result.session, true)
+        window.setTimeout(resumeAuthRedirect, graceMs)
+        return buildReseedMessage(result)
+      } catch (error) {
+        resumeAuthRedirect()
+        throw error
+      }
     })
+  }
+
+  function buildReseedMessage(result: DevSeedResult) {
+    return (
+      `Seeded '${result.profile}': ${result.detections} detections, ` +
+      `${result.cameras} cameras, ${result.users} users, ` +
+      `${result.health_samples} health rows, ${result.export_jobs} exports, ` +
+      `${result.snapshots} snapshots. Signed in as ${result.session.username}.`
+    )
   }
 
   return (
