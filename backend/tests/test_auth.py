@@ -168,6 +168,39 @@ class TestUsernameNormalization:
         )
         assert resp.status_code == 200
 
+    @pytest.mark.parametrize("space", [" ", " "])
+    def test_login_strips_unicode_whitespace(
+        self, client: TestClient, session: Session, space: str
+    ):
+        """Edge case 4.7 — not just ASCII spaces: U+00A0 (NBSP) and U+2003
+        (em space) are both `str.isspace()`-true and must strip too."""
+        make_admin(session)
+        resp = client.post(
+            "/api/auth/login",
+            data={"username": f"{space}admin{space}", "password": "Admin123"},
+        )
+        assert resp.status_code == 200
+
+    def test_unicode_padded_username_cannot_create_a_second_account(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 4.7 — same as test_padded_username_cannot_create_a_
+        second_account below, but with Unicode whitespace padding."""
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        resp = client.post(
+            "/api/users/",
+            json={
+                "username": " admin ",
+                "first_name": "Dup",
+                "last_name": "User",
+                "role": "Operator",
+                "password": "Duppass1",
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 400
+
     def test_padded_username_cannot_create_a_second_account(
         self, client: TestClient, session: Session
     ):

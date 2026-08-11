@@ -288,6 +288,34 @@ class TestGetAlerts:
 
         assert resp.status_code == 422
 
+    def test_start_equals_end_returns_that_instants_row(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 2.11 — start_date == end_date is a valid (not
+        rejected) single-instant window, inclusive on both ends."""
+        _, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name="Instant Window Cam", channel_id=3)
+        target_at = datetime(2026, 1, 2, 9, 0, tzinfo=UTC)
+        target = make_alert(
+            session, camera, status=DetectionStatus.RESOLVED, detected_at=target_at
+        )
+        other_camera = make_camera(session, name="Instant Window Cam 2", channel_id=4)
+        make_alert(
+            session,
+            other_camera,
+            status=DetectionStatus.RESOLVED,
+            detected_at=target_at + timedelta(hours=1),
+        )
+
+        iso = target_at.isoformat().replace("+00:00", "Z")
+        resp = client.get(
+            f"/api/alerts/?start_date={iso}&end_date={iso}", headers=headers
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert [log["log_id"] for log in body["logs"]] == [target.log_id]
+
     @pytest.mark.parametrize(
         "query",
         ["limit=0", "limit=101", "offset=-1"],
@@ -307,6 +335,17 @@ class TestGetAlerts:
         _, headers = operator_with_headers(client, session)
         resp = client.get(f"/api/alerts/?{query}", headers=headers)
         assert resp.status_code == 200
+
+    def test_extremely_long_search_string_is_rejected(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 4.13 — the list endpoint's own `search` param, not
+        just the export/help variants covered elsewhere."""
+        _, headers = operator_with_headers(client, session)
+        resp = client.get(
+            "/api/alerts/", params={"search": "x" * 10_000}, headers=headers
+        )
+        assert resp.status_code == 422
 
     def test_offset_beyond_total_returns_empty_page_with_correct_total(
         self, client: TestClient, session: Session
@@ -556,6 +595,21 @@ class TestAlertSnapshotRoute:
 
         resp = client.get(f"/api/alerts/{log.log_id}/snapshot", headers=headers)
         assert resp.status_code == 404
+
+    def test_detail_returns_200_when_snapshot_file_missing(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 3.15 — the detail endpoint never touches the
+        filesystem, so a missing snapshot file must not affect it; only
+        the dedicated /snapshot route 404s."""
+        _, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name="Missing File Detail Cam", channel_id=1)
+        log = make_alert(session, camera, snapshot_key="does/not/exist.jpg")
+
+        resp = client.get(f"/api/alerts/{log.log_id}", headers=headers)
+
+        assert resp.status_code == 200
+        assert resp.json()["log_id"] == log.log_id
 
     def test_public_snapshots_mount_is_gone(self, client: TestClient):
         resp = client.get("/snapshots/whatever.jpg")

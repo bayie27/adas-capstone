@@ -5,6 +5,7 @@ internal auth. The v1 poll/PATCH routes were removed by the A3 audit pack
 (be_audit/A3_ai_seam.md, F3) — no caller since PR #67.
 """
 
+import json
 import logging
 import threading
 import uuid
@@ -261,6 +262,44 @@ class TestReceiveAiAlertV2:
             },
         )
         assert resp.status_code == 422
+
+    def test_malformed_json_body_is_422_not_500(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 4.14 — syntactically broken JSON bytes, not just a
+        semantically wrong shape."""
+        resp = client.post(
+            "/api/internal/alert",
+            headers={**internal_headers(), "Content-Type": "application/json"},
+            content=b'{"not": valid json,,,',
+        )
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "VALIDATION_ERROR"
+
+    def test_wrong_content_type_is_422_not_500(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 4.14 — a valid JSON payload sent with a non-JSON
+        Content-Type must still 422 cleanly, not 500."""
+        camera = make_camera(session, name="Wrong Content-Type Cam", channel_id=37)
+        body = json.dumps(self._payload_dict(camera.camera_id)).encode()
+
+        resp = client.post(
+            "/api/internal/alert",
+            headers={**internal_headers(), "Content-Type": "text/plain"},
+            content=body,
+        )
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "VALIDATION_ERROR"
+
+    def _payload_dict(self, camera_id: int) -> dict:
+        return {
+            "source_event_id": str(uuid.uuid4()),
+            "camera_id": camera_id,
+            "detected_at": "2026-07-12T10:30:00+00:00",
+            "snapshot_key": "wrongct.jpg",
+            "confidence_score": 0.9,
+        }
 
 
 class TestInternalAuth:

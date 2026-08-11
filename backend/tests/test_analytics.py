@@ -592,6 +592,27 @@ def test_dashboard_ignores_unverified_logs_and_returns_empty_state(
     assert all(row["count"] == 0 for row in body["peak_accident_times"])
 
 
+def test_dashboard_with_a_genuinely_empty_database_returns_the_same_empty_state(
+    client: TestClient, session: Session
+):
+    """Edge case 3.1 — the more literal reading: zero detection_log rows
+    at all (not even Unverified), not just zero confirmed/dismissed ones."""
+    _, headers = operator_with_headers(client, session, username="dashgenuine")
+
+    resp = client.get("/api/analytics/dashboard", headers=headers)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["kpis"] == {
+        "ongoing": 0,
+        "total_accidents": 0,
+        "total_resolved": 0,
+    }
+    assert body["frequency_by_location"] == []
+    assert len(body["peak_accident_times"]) == 24
+    assert all(row["count"] == 0 for row in body["peak_accident_times"])
+
+
 def test_export_dashboard_csv_returns_header_only_when_no_confirmed_logs(
     client: TestClient, session: Session
 ):
