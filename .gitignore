@@ -288,11 +288,10 @@ auto.crt
 auto.key
 
 # Kept local, deliberately not published. This repository is public.
-#   Final-Paper.pdf         — the capstone paper itself
+#   Final-Paper.pdf         — the capstone paper itself, a 3.2MB binary
 #   paper-edits-required.md — corrections the port makes necessary to that paper
-#   port-handover.md        — internal working notes: candid defect list and
-#                             machine-specific environment detail
-# All three remain on disk for the team; they are simply not pushed.
+# port-handover.md IS tracked: be_plan/ and be_audit/ establish that internal
+# planning and audit documents belong in this repo, and it is what lets a fresh
+# session resume the work.
 ai_engine/docs/Final-Paper.pdf
 ai_engine/docs/paper-edits-required.md
-ai_engine/docs/port-handover.md
