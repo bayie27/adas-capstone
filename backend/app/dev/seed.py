@@ -14,6 +14,7 @@ import random
 import time
 import uuid
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
@@ -233,40 +234,77 @@ def seed_sample_cameras(session: Session) -> list[Camera]:
     )
 
 
+# The single source of truth for the rule. ux_detection_open_camera is a
+# partial unique index (at most one Unverified/Ongoing row per camera_id),
+# so this is not a convention a generator may respect voluntarily — an
+# extra open row is an IntegrityError, not a cosmetic problem.
+#
+# Most-recent-wins: the open incident a camera actually has is its latest
+# one. Both call sites used to enforce this differently — the spec path
+# kept the *first* open spec in list order, the perf path kept the most
+# recently detected — and they synthesized different closure metadata on
+# the rows they demoted.
+_DEMOTED_VERIFY_MINUTES = 4
+_DEMOTED_CLOSE_MINUTES = 20
+
+
+def _keep_latest_open_per_camera[T](
+    items: list[T],
+    *,
+    is_open: Callable[[T], bool],
+    camera_of: Callable[[T], object],
+    detected_at_of: Callable[[T], datetime],
+) -> set[int]:
+    """Returns the identities of the open items to demote, keeping the most
+    recently detected one per camera.
+
+    Ties break toward earlier list position: the collected order is the
+    input order and `sorted` is stable, which is what the perf path's
+    in-place sort already did.
+    """
+    open_by_camera: dict[object, list[T]] = {}
+    for item in items:
+        if is_open(item):
+            open_by_camera.setdefault(camera_of(item), []).append(item)
+
+    demote: set[int] = set()
+    for camera_items in open_by_camera.values():
+        ranked = sorted(camera_items, key=detected_at_of, reverse=True)
+        demote.update(id(item) for item in ranked[1:])
+    return demote
+
+
 def _enforce_one_open_incident_per_camera(
     specs: list[SeedAlertSpec],
 ) -> list[SeedAlertSpec]:
-    """ux_detection_open_camera allows at most one Unverified/Ongoing row
-    per camera. The hand-written specs above don't know about that
-    constraint (some cameras get two), so demote every extra open spec —
-    in list order, keeping the first one seen per camera — to Resolved.
+    """Spec-path adapter over _keep_latest_open_per_camera.
 
     A demoted spec always ends up with a verifier and closer even if the
     original (often Unverified, with neither) didn't have one — a Resolved
     row with no verified_by/closed_by would be a nonsensical seed record.
     """
-    seen_open_cameras: set[str] = set()
-    normalized: list[SeedAlertSpec] = []
+    demote = _keep_latest_open_per_camera(
+        specs,
+        is_open=lambda spec: spec.detection_status in _OPEN_STATUSES,
+        camera_of=lambda spec: spec.camera_key,
+        detected_at_of=lambda spec: spec.detected_at,
+    )
 
+    normalized: list[SeedAlertSpec] = []
     for spec in specs:
-        if spec.detection_status in _OPEN_STATUSES:
-            if spec.camera_key in seen_open_cameras:
-                verified_by_key = spec.verified_by_key or "dsahagun"
-                verified_after_minutes = spec.verified_after_minutes or 5
-                closed_by_key = spec.closed_by_key or verified_by_key
-                closed_after_minutes = spec.closed_after_minutes or (
-                    verified_after_minutes + 15
-                )
-                spec = replace(
-                    spec,
-                    detection_status=DetectionStatus.RESOLVED,
-                    verified_by_key=verified_by_key,
-                    verified_after_minutes=verified_after_minutes,
-                    closed_by_key=closed_by_key,
-                    closed_after_minutes=closed_after_minutes,
-                )
-            else:
-                seen_open_cameras.add(spec.camera_key)
+        if id(spec) in demote:
+            verified_by_key = spec.verified_by_key or "dsahagun"
+            verified_after_minutes = (
+                spec.verified_after_minutes or _DEMOTED_VERIFY_MINUTES
+            )
+            spec = replace(
+                spec,
+                detection_status=DetectionStatus.RESOLVED,
+                verified_by_key=verified_by_key,
+                verified_after_minutes=verified_after_minutes,
+                closed_by_key=spec.closed_by_key or verified_by_key,
+                closed_after_minutes=verified_after_minutes + _DEMOTED_CLOSE_MINUTES,
+            )
         normalized.append(spec)
 
     return normalized
@@ -613,36 +651,33 @@ def _build_perf_rows(
 def _enforce_open_camera_limit(
     rows: list[dict], *, operator_ids: list[int]
 ) -> list[dict]:
-    """Bulk-row equivalent of _enforce_one_open_incident_per_camera:
-    ux_detection_open_camera is a real partial-unique index (at most one
-    Unverified/Ongoing row per camera_id), not merely a convention the
-    generator needs to respect voluntarily. Keeps the most recently
-    detected open row per camera and demotes every earlier one to
-    Resolved with a synthesized verifier/closer."""
-    open_by_camera: dict[int, list[dict]] = {}
-    for row in rows:
-        if row["detection_status"] in (
-            DetectionStatus.UNVERIFIED.value,
-            DetectionStatus.ONGOING.value,
-        ):
-            open_by_camera.setdefault(row["camera_id"], []).append(row)
+    """Bulk-row adapter over _keep_latest_open_per_camera. Mutates in
+    place, as the bulk-insert path expects."""
+    open_values = (DetectionStatus.UNVERIFIED.value, DetectionStatus.ONGOING.value)
+    demote = _keep_latest_open_per_camera(
+        rows,
+        is_open=lambda row: row["detection_status"] in open_values,
+        camera_of=lambda row: row["camera_id"],
+        detected_at_of=lambda row: row["detected_at"],
+    )
 
-    for camera_rows in open_by_camera.values():
-        camera_rows.sort(key=lambda r: r["detected_at"], reverse=True)
-        for row in camera_rows[1:]:
-            detected_at = row["detected_at"]
-            verified_by_id = row["verified_by_id"] or operator_ids[0]
-            verified_at = row["verified_at"] or detected_at + timedelta(minutes=4)
-            closed_by_id = row["closed_by_id"] or verified_by_id
-            closed_at = verified_at + timedelta(minutes=20)
-            row.update(
-                detection_status=DetectionStatus.RESOLVED.value,
-                verified_by_id=verified_by_id,
-                verified_at=verified_at,
-                closed_by_id=closed_by_id,
-                closed_at=closed_at,
-                updated_at=closed_at,
-            )
+    for row in rows:
+        if id(row) not in demote:
+            continue
+        detected_at = row["detected_at"]
+        verified_by_id = row["verified_by_id"] or operator_ids[0]
+        verified_at = row["verified_at"] or detected_at + timedelta(
+            minutes=_DEMOTED_VERIFY_MINUTES
+        )
+        closed_at = verified_at + timedelta(minutes=_DEMOTED_CLOSE_MINUTES)
+        row.update(
+            detection_status=DetectionStatus.RESOLVED.value,
+            verified_by_id=verified_by_id,
+            verified_at=verified_at,
+            closed_by_id=row["closed_by_id"] or verified_by_id,
+            closed_at=closed_at,
+            updated_at=closed_at,
+        )
 
     return rows
 
