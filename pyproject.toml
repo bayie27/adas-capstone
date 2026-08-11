@@ -24,11 +24,56 @@ dependencies = [
 [project.optional-dependencies]
 ai = [
     "opencv-python>=4.13.0.92",
-    "tensorrt>=10.16.1.11",
     "torch>=2.11.0",
     "torchvision>=0.26.0",
     "ultralytics>=8.4.41",
 ]
+
+# For teammates without an NVIDIA GPU. Identical to `ai` except that torch and
+# torchvision come from PyTorch's CPU index instead of the CUDA 13 one — see
+# [tool.uv.sources] below. Without this a GPU-less machine downloads a full
+# CUDA build to run on the CPU.
+#
+# Pointing at the pytorch-cpu index rather than just omitting the CUDA index is
+# deliberate: on Linux the DEFAULT PyPI torch wheel bundles the CUDA runtime,
+# so plain PyPI would still pull the thing this extra exists to avoid. Windows
+# happens to default to a CPU build, which makes the bug invisible on the
+# machine this was developed on.
+#
+#     uv sync --extra ai-cpu
+#
+# Mutually exclusive with `ai` — see [tool.uv] conflicts.
+ai-cpu = [
+    "opencv-python>=4.13.0.92",
+    "torch>=2.11.0",
+    "torchvision>=0.26.0",
+    "ultralytics>=8.4.41",
+]
+
+# TensorRT is a SPEED optimization, not a requirement, and it is deliberately
+# NOT part of the `ai` extra. The GPU is used either way — that comes from
+# torch's CUDA build. TensorRT would add a faster inference backend on top.
+#
+# Nothing currently builds or loads a TensorRT engine: capacity.py benchmarks
+# the plain .pt weights and does not probe for TensorRT, so installing this
+# extra changes nothing today. That is a deliberate stopping point, not an
+# oversight — the GTX 1650 this was developed on carries 8 cameras at 15 FPS on
+# the plain weights, comfortably above what the system needs, so an optimised
+# build would buy capacity nobody is short of. The extra stays for whoever
+# eventually needs it; see docs/2026-08-11-calibration-capacity-design.md for
+# what measuring it properly would involve.
+#
+# It is separated because `tensorrt` on PyPI is a wheel-stub that downloads
+# several GB from NVIDIA's own index inside a PEP 517 build step, with no
+# timeout. That build hung indefinitely twice on a Windows dev machine
+# (2026-08-10), and because it sits in the `ai` extra it took every plain
+# `uv run` down with it. Opt in explicitly instead:
+#
+#     uv sync --extra ai --extra ai-trt
+#
+# If it hangs, Ctrl+C and carry on with `--extra ai`; nothing in the engine
+# requires it.
+ai-trt = ["tensorrt>=10.16.1.11"]
 
 [dependency-groups]
 dev = [
@@ -44,19 +89,41 @@ name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv]
+# `ai` and `ai-cpu` both provide torch, from different indexes. uv cannot
+# resolve a single lock entry for a package whose source depends on which
+# extra is enabled unless the two are declared mutually exclusive.
+conflicts = [[{ extra = "ai" }, { extra = "ai-cpu" }]]
+
 [tool.uv.sources]
-torch = { index = "pytorch-cu130" }
-torchvision = { index = "pytorch-cu130" }
+# Index selection is per-extra, so it must NOT be unconditional here — an
+# unconditional cu130 pin would drag the CUDA wheels back into `ai-cpu`.
+torch = [
+    { index = "pytorch-cu130", extra = "ai" },
+    { index = "pytorch-cpu", extra = "ai-cpu" },
+]
+torchvision = [
+    { index = "pytorch-cu130", extra = "ai" },
+    { index = "pytorch-cpu", extra = "ai-cpu" },
+]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "ai_engine/tests"]
 cache_dir = "backend/.pytest_cache"
-# -m "not slow": backend/tests/perf/ (10_PKG_migration_evidence.md Step 3)
-# seeds a real 100,000-row database every session and is excluded from the
-# default run. An explicit `-m slow` on the command line overrides this.
-addopts = "-q -m \"not slow\""
+# Two tiers are excluded from the default run; name either explicitly to opt in.
+#   not slow  — backend/tests/perf/ (10_PKG_migration_evidence.md Step 3) seeds a
+#               real 100,000-row database every session.
+#   not clips — needs a GPU and ai_engine/eval/clips populated, so CI cannot run
+#               them and most machines should not.
+addopts = "-q -m 'not slow and not clips'"
 markers = [
     "slow: marks tests as slow (excluded from the default run — see backend/tests/perf/)",
+    "clips: needs a GPU and ai_engine/eval/clips populated; excluded from CI",
 ]
 
 [tool.ruff]
@@ -66,7 +133,24 @@ target-version = "py312"
 # uses Ruff for Python only (Prettier owns Markdown), and several working docs at
 # the repo root are untracked notes that must not be touched — so keep Ruff off
 # Markdown entirely.
-extend-exclude = ["ai_engine/snapshots", "ai_engine/sample_vids", ".venv", "*.md"]
+extend-exclude = [
+    "ai_engine/snapshots",
+    "ai_engine/sample_vids",
+    ".venv",
+    "*.md",
+    # Frozen artifact staged from the research repo `adas_detection`. It is the
+    # reference the ported detector is diffed against to prove the port changed
+    # no behaviour (SPEC.md §8 step 3), so it must stay a faithful copy.
+    # This covers the STAGED COPY under adas_transfer/ only. The port's own
+    # working module, ai_engine/accumulate.py, is formatted and linted normally;
+    # its equivalence to this reference is asserted behaviourally by
+    # tests/test_accumulate.py, not by comparing source text.
+    "ai_engine/adas_transfer",
+]
+# lint-staged passes explicit file paths, and Ruff ignores `extend-exclude` for
+# paths given on the command line unless exclusions are forced. Without this the
+# pre-commit hook would reformat the frozen package above regardless.
+force-exclude = true
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]

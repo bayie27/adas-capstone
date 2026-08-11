@@ -17,12 +17,18 @@ The system is composed of three independently runnable components that communica
 ```
 adas-capstone/
 ├── ai_engine/
-│   ├── main.py              # Entry point — multi-camera inference loop
+│   ├── main.py              # Entry point — wire-up only
+│   ├── pipeline.py          # Fixed-cadence batched multi-camera tick loop
+│   ├── detector.py          # Model ownership, grayscale, class filtering
+│   ├── accumulate.py        # Temporal evidence accumulator (fires the event)
 │   ├── camera.py            # Threaded RTSP stream reader with auto-reconnect
-│   ├── accident.py          # Accident detection logic and webhook dispatch
-│   ├── sync.py              # Background thread that polls the backend for camera state
+│   ├── accident.py          # Event → annotated snapshot → outbox entry
+│   ├── supervisor.py        # Reconciles engine state against the backend
+│   ├── capacity.py          # How many cameras can this machine run?
+│   ├── machine_profile.py   # Read/write/validate machine_profile.json
 │   ├── config.py            # AI engine configuration (thresholds, endpoints)
-│   ├── best.pt / best.engine # YOLO weights (portable) / TensorRT engine (GPU-specific)
+│   ├── epoch50.pt           # YOLO weights (the adopted checkpoint)
+│   ├── eval/                # Measurement harness — see eval/README.md
 │   └── snapshots/           # Saved incident snapshots (auto-created)
 ├── backend/
 │   ├── alembic/              # Schema migrations — see CONTRIBUTING.md's "Database migrations"
@@ -65,7 +71,7 @@ adas-capstone/
 │   ├── public/
 │   └── package.json
 ├── e2e/                     # Playwright specs (CI-only, spans backend + frontend)
-├── mediamtx.yml             # Camera simulation config — see "Simulate camera streams"
+├── mediamtx.yml             # Camera simulation — see "Simulate camera streams"
 ├── scripts/start-sim.ps1    # Preflighted wrapper around `mediamtx mediamtx.yml`
 ├── scripts/adas-maintenance.ps1  # Windows demo orchestrator for backup/restore/restart
 ├── alembic.ini               # Points at backend/alembic/ — see CONTRIBUTING.md
@@ -84,7 +90,7 @@ adas-capstone/
 - **Node.js 22+** and **pnpm** — for the frontend and the root pnpm workspace (`package.json` at the repo root drives lint/format/test scripts across both)
 - **ffmpeg** — required to broadcast local video files to the RTSP proxy during development
 - **MediaMTX** — RTSP media server used to simulate the VMS in development ([download](https://github.com/bluenviron/mediamtx/releases))
-- **NVIDIA GPU + CUDA** — required to run the AI engine with the TensorRT engine; the AI engine falls back to portable `.pt` weights (still needs a GPU for reasonable inference speed, but not a matching TensorRT build) if `best.engine` fails to load
+- **NVIDIA GPU + CUDA** — needed for detection at a usable frame rate. The engine runs without one (see `uv sync --extra ai-cpu` under [Installation](#installation)) and is useful that way for integration work, but a CPU-only machine is not a detection platform and no measured claim may come from it
 
 ---
 
@@ -136,11 +142,21 @@ migration testing.
 uv sync
 ```
 
-`uv sync` alone installs the backend only (fast, no CUDA — this is what CI runs). The AI engine's heavy ML dependencies (torch, tensorrt, ultralytics, opencv) live behind an optional extra, so running the AI engine needs:
+`uv sync` alone installs the backend only (fast, no CUDA — this is what CI runs). The AI engine's heavy ML dependencies (torch, ultralytics, opencv) live behind an optional extra, so running the AI engine needs:
 
 ```bash
 uv sync --extra ai
 ```
+
+On a machine without an NVIDIA GPU, use the CPU install instead — the `ai` extra pulls CUDA-specific PyTorch wheels that are a large download and of no use there:
+
+```bash
+uv sync --extra ai-cpu
+```
+
+The two are mutually exclusive; pick one. `ai-cpu` resolves torch from PyTorch's CPU index, so it pulls **no** `nvidia-*` packages at all. (Simply omitting the CUDA index would not be enough — on Linux the default PyPI torch wheel bundles the CUDA runtime anyway.) It also resolves a newer torch than the CUDA extra, since the two indexes carry different builds; that is fine precisely because no measured claim may come from a CPU machine.
+
+The engine detects the absence of a GPU and falls back automatically. It will run and connect, which is useful for integration work, but it is not a detection platform — run `uv run python ai_engine/capacity.py` and it will tell you so.
 
 **Node dependencies (frontend + root tooling):**
 
@@ -155,6 +171,50 @@ pnpm install
 ## Running the System
 
 All three components run in separate terminals. **Run every command from the repo root.** This is a convention, not a hard requirement anymore — the FastAPI CLI injects `backend/` into `sys.path` itself, and `DATABASE_URL` resolves to an absolute path under the repo root regardless of CWD — but the AI engine's `from config import ...`-style imports still need `ai_engine/` to be the script's own directory (which `uv run python ai_engine/main.py` gives it), so running from the root is simplest across the board.
+
+### Quickstart — clone to first detection
+
+The whole path, in order. Each step is verified; the detailed sections below explain the parts.
+
+**One-time, in this order:**
+
+```bash
+uv sync --extra ai                              # --extra ai-cpu if no NVIDIA GPU
+pnpm install                                    # at the ROOT — this activates git hooks
+cp .env.example .env                            # then fill in all 10 keys
+```
+
+Populate `ai_engine/eval/clips/` — no video ships in a clone. See [Obtaining the clips](#obtaining-the-clips).
+
+```bash
+uv run python backend/scripts/reseed_dev.py     # REQUIRED — creates the cameras
+uv run python ai_engine/capacity.py             # once per machine
+```
+
+> **`reseed_dev.py` is not optional.** Starting the backend creates the tables and an admin account, but **no cameras**. Without seeding, the engine connects, is told there are zero cameras, and does nothing — which looks exactly like it is broken.
+
+**Then four terminals, in this order:**
+
+```bash
+mediamtx mediamtx.yml                           # 1. streams
+uv run fastapi dev backend/app/main.py          # 2. backend — must precede the engine
+cd frontend && pnpm dev                         # 3. dashboard at :5173
+uv run python ai_engine/main.py                 # 4. engine
+```
+
+Log in at `http://localhost:5173` as `admin` with the `DEFAULT_ADMIN_PASSWORD` from your `.env`.
+
+**Last step: release a camera.** Every seeded camera is paused by an open alert — deliberately, see [below](#cameras-start-paused-after-seeding--this-is-deliberate). Resolve or dismiss one in the dashboard and that camera starts detecting within seconds.
+
+**What a working run looks like:** four cameras alert within a loop or two, and **camera 5 stays silent** — it serves the crash-free clip. A camera that never alerts is as much a result as one that does. The engine log reads:
+
+```
+[SYSTEM] Machine profile: 0 · capacity 8 camera(s) @ 15 FPS
+[SYSTEM] Resuming AI ingestion for Channel 4...
+[ALERT] Channel 4: accident detected (peak 0.76, 2.2s of evidence).
+```
+
+---
 
 **1. Start the backend**
 
@@ -175,17 +235,17 @@ Dashboard available at `http://localhost:5173`.
 
 **3. Simulate camera streams (development)**
 
-The AI engine expects RTSP feeds at `rtsp://localhost:8554/channel1` through `channel5`. There are three ways to produce them; pick whichever fits what you're doing. All three need `ai_engine/sample_vids/` populated first — see [Obtaining the sample clips](#obtaining-the-sample-clips) below.
+The AI engine expects RTSP feeds at `rtsp://localhost:8554/channel1` through `channel5`. There are three ways to produce them; pick whichever fits what you're doing. All three need `ai_engine/eval/clips/` populated first — see [Obtaining the clips](#obtaining-the-clips) below.
 
-Channel → clip mapping:
+Channel → clip mapping. The first four are clips `ai_engine/eval/baseline_epoch50.json` records as **detected**, so the engine alerts on each within a loop or two. Channel 5 is the crash-free negative and **must stay silent** — a camera that never alerts is as much a result as one that does:
 
-| Path       | Clip                     |
-| ---------- | ------------------------ |
-| `channel1` | `car_car.mp4`            |
-| `channel2` | `car-motor-motor.mp4`    |
-| `channel3` | `defour.mp4`             |
-| `channel4` | `red-car-motorcycle.mp4` |
-| `channel5` | `motor-to-motor.mp4`     |
+| Path       | Clip                    | Expected              |
+| ---------- | ----------------------- | --------------------- |
+| `channel1` | `dekwatro.mp4`          | detects               |
+| `channel2` | `tric-motor-car.mp4`    | detects               |
+| `channel3` | `red-car-motor.mp4`     | detects               |
+| `channel4` | `motor-motor-night.mp4` | detects               |
+| `channel5` | `airbase.mp4`           | **silent** (no crash) |
 
 **Method 1 — `mediamtx.yml` (default, recommended).** One command, all 5 channels, run from the repo root:
 
@@ -193,43 +253,49 @@ Channel → clip mapping:
 mediamtx mediamtx.yml
 ```
 
-`runOnInit` starts an `ffmpeg` per channel automatically and restarts it if it dies. One Ctrl+C in the MediaMTX terminal cleans up MediaMTX and every child `ffmpeg` process. `scripts/start-sim.ps1` wraps this with preflight checks (ffmpeg/mediamtx on PATH, `sample_vids/` populated) and clearer errors if something's missing:
+`runOnInit` starts an `ffmpeg` per channel automatically and restarts it if it dies. One Ctrl+C in the MediaMTX terminal cleans up MediaMTX and every child `ffmpeg` process. `scripts/start-sim.ps1` wraps this with preflight checks (ffmpeg and mediamtx on PATH, and the five clips present by name) and clearer errors if something's missing:
 
 ```powershell
 .\scripts\start-sim.ps1
 ```
 
+MediaMTX writes `auto.crt` and `auto.key` into whatever directory it starts from. Both are gitignored — never commit the key.
+
 **Method 2 — manual ffmpeg per channel.** One terminal per channel, blocking. Useful if you only need one or two streams up. Run from the repo root (the paths below are root-relative). `-rtsp_transport tcp` matters, not just style — with the default UDP transport, publishing several channels at once over loopback drops RTP packets constantly:
 
 ```powershell
-ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\car_car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel1
-ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\car-motor-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel2
-ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\defour.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel3
-ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\red-car-motorcycle.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel4
-ffmpeg -re -stream_loop -1 -i ai_engine\sample_vids\motor-to-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel5
+ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\dekwatro.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel1
+ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\tric-motor-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel2
+ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\red-car-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel3
+ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\motor-motor-night.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel4
+ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel5
 ```
 
 **Method 3 — OBS Studio via RTMP (interactive playback control).** Use this when you want to scrub/pause/restart a clip live during a demo — Methods 1 and 2 just loop blindly.
 
 1. OBS → Settings → Stream → Service: **Custom...**, Server: `rtmp://localhost:1935/channel1`, Stream Key: leave empty. (Equivalently, Server `rtmp://localhost:1935` + Stream Key `channel1` — MediaMTX's docs recommend putting the path in the server URL.)
-2. Add a **Media Source** pointing at a clip in `ai_engine/sample_vids/`, tick **Loop**. The Media Source exposes Restart/Pause/Play hotkeys for interactive control.
+2. Add a **Media Source** pointing at a clip in `ai_engine/eval/clips/`, tick **Loop**. The Media Source exposes Restart/Pause/Play hotkeys for interactive control.
 3. Click **Start Streaming**. MediaMTX auto-creates the path and republishes it as `rtsp://localhost:8554/channel1` — no AI engine changes needed.
 
 **Limitation:** one OBS instance publishes exactly one stream. Simulating all 5 channels via OBS needs 5 OBS instances/profiles or the `obs-multi-rtmp` plugin — use OBS for an interactive demo of one or two channels, and Method 1 for bulk background simulation.
 
 MediaMTX's default ports: RTSP `8554`, RTMP `1935`, HLS `8888`, WebRTC `8889`, SRT `8890`.
 
-#### Obtaining the sample clips
+#### Obtaining the clips
 
-`.gitignore` excludes `*.mp4`, so `ai_engine/sample_vids/` is not in the repo — a fresh clone has no clips and can't run the simulation until you add them. Expected filenames:
+`.gitignore` excludes `*.mp4`, so no video ships in the repo — a fresh clone can't run the simulation until you add some. They live in **one place**: `ai_engine/eval/clips/`, which is also where the evaluation harness and the `-m clips` tests look.
 
-- `car_car.mp4`
-- `car-motor-motor.mp4`
-- `defour.mp4`
-- `red-car-motorcycle.mp4`
-- `motor-to-motor.mp4`
+Populate it from the frozen research package:
 
-> **TODO(team):** paste the shared-drive link for `sample_vids/` here.
+```bash
+cp ai_engine/adas_transfer/clips/*.mp4 ai_engine/eval/clips/
+```
+
+See [`ai_engine/eval/README.md`](ai_engine/eval/README.md) for what the 17 clips are and which ones the measured baseline expects to fire.
+
+**The clips are test-only, permanently.** They carry no public licence and show identifiable people, vehicles and locations. Never publish them, never train on them, and never use their ordinary-traffic frames as negatives.
+
+> **Historical note.** Earlier revisions of this README described a second directory, `ai_engine/sample_vids/`, with five differently-named clips and a `TODO` where its download link should have been. That directory never had a documented source, four of its five filenames existed nowhere, and both `mediamtx.yml` and `start-sim.ps1` pointed at it — so the "default, recommended" path could not work on any machine. It has been retired in favour of the single location above.
 
 **4. Start the AI engine**
 
@@ -239,7 +305,38 @@ Requires `uv sync --extra ai` (see [Installation](#installation)). Run from the 
 uv run python ai_engine/main.py
 ```
 
-`best.engine` is a TensorRT engine built for one specific GPU + driver + TensorRT version — it will not load on a different machine. The AI engine detects this and falls back to the portable `best.pt` weights automatically; a fallback message on startup is expected on any machine other than the one it was built on.
+The engine loads `ai_engine/epoch50.pt` directly. There is no longer a `best.engine`/`best.pt` pair or a fallback between them — both files were removed when the detection core was ported, because `best.pt` lost checkpoint selection in all three training runs and `main.py` had been _preferring_ the stale TensorRT build of it.
+
+Before running it on a new machine, calibrate:
+
+```bash
+uv run python ai_engine/capacity.py
+```
+
+This reports how many cameras the machine can carry at 10 and at 15 FPS and writes a gitignored `machine_profile.json`. See [`ai_engine/eval/README.md`](ai_engine/eval/README.md).
+
+#### Cameras start paused after seeding — this is deliberate
+
+`reseed_dev.py` seeds sample alerts across every detection status, and any camera with an open (`Unverified` or `Ongoing`) alert is **self-blindfolded** — `desired_ai_state = Paused, reason = incident`. On a freshly seeded database that is _every_ camera.
+
+**That is the self-blindfold invariant working correctly, not a bug.** An unresolved incident means the camera should not be re-alerting on the same scene, and it means the operator decides when each camera goes live rather than being flooded the moment the engine starts.
+
+The only catch is discoverability: the engine reports `Connected` and then deliberately runs no inference, so it can look broken. The log shows repeated `Stream dropped ... while paused` rather than anything about detection. That is what to expect.
+
+Clear an alert to release its camera — resolve or dismiss it in the dashboard, which is also how you exercise the HITL workflow. To bring everything online at once for a demo:
+
+```bash
+uv run python -c "import sqlite3; d=sqlite3.connect('adas.db'); d.execute(\"UPDATE detection_log SET detection_status='Resolved' WHERE detection_status IN ('Unverified','Ongoing')\"); d.execute(\"UPDATE camera SET desired_ai_state='Active', desired_state_reason=NULL WHERE is_active=1\"); d.commit()"
+```
+
+Within a few seconds the engine logs `Resuming AI ingestion` and starts alerting.
+
+#### Other things worth knowing on a first run
+
+- **Start the backend first.** The engine holds no camera configuration of its own — it heartbeats the backend and is told which cameras exist and where to reach them. It cannot run standalone.
+- **`RTSP_URL_TEMPLATE` changes need a backend restart.** Settings load once at startup.
+- **`UnicodeEncodeError` starting the backend on Windows.** The FastAPI CLI prints an emoji and the console codepage cannot encode it; this bites when output is redirected to a file. Prefix with `PYTHONIOENCODING=utf-8`.
+- **Only 5 RTSP channels exist** in both simulation configs, but `reseed_dev.py` seeds 6 cameras. The sixth has nothing to connect to and will sit reconnecting — deactivate it, or ignore it.
 
 ---
 
@@ -251,7 +348,9 @@ uv run python ai_engine/main.py
 uv run python backend/scripts/reseed_dev.py
 ```
 
-Always use `uv run python`, never a bare `python` — the `python` on PATH may be a different, unpinned interpreter (e.g. a system install) rather than the project's pinned 3.12.13. This gives you a fresh DB with an admin account, six cameras, and sample alerts across all detection statuses. Schema is provisioned by running `alembic upgrade head` under the hood, not `CREATE TABLE`-equivalent metadata calls — see [CONTRIBUTING.md](CONTRIBUTING.md)'s "Database migrations" section before changing a model. See [`backend/scripts/README.md`](backend/scripts/README.md) for the full script reference, including the `perf` profile (100,000 incidents, for measuring query/export performance against a realistic dataset size).
+Always use `uv run python`, never a bare `python` — the `python` on PATH may be a different, unpinned interpreter (e.g. a system install) rather than the project's pinned 3.12.13. This gives you a fresh DB with an admin account, six cameras, operator accounts, and sample alerts across all detection statuses. Schema is provisioned by running `alembic upgrade head` under the hood, not `CREATE TABLE`-equivalent metadata calls — see [CONTRIBUTING.md](CONTRIBUTING.md)'s "Database migrations" section before changing a model. See [`backend/scripts/README.md`](backend/scripts/README.md) for the full script reference, including the `perf` profile (100,000 incidents, for measuring query/export performance against a realistic dataset size).
+
+**This is a required first-run step, not just a reset.** Starting the backend creates the tables and an admin account but no cameras at all, so the AI engine has nothing to work with until you seed. See the [Quickstart](#quickstart--clone-to-first-detection) for where it belongs in the order.
 
 **Run the test suite:**
 

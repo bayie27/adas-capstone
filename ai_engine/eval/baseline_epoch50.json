@@ -1,0 +1,25 @@
+{
+  "model": "epoch50.pt",
+  "source": "adas_transfer/SPEC.md section 4",
+  "note": "Native frame rate. Diff clip by clip, never against the 8/16 aggregate — the total can hide a change that gains one crash and loses another.",
+  "false_positives": 3,
+  "clips": {
+    "car-motor": { "difficulty": "standard", "hit": true },
+    "dekwatro": { "difficulty": "standard", "hit": true },
+    "dpwh-red-car-motor": { "difficulty": "standard", "hit": true },
+    "jeep-motor": { "difficulty": "standard", "hit": true },
+    "jeep-yellow-car": { "difficulty": "standard", "hit": true },
+    "motor-motor-night": { "difficulty": "standard", "hit": true },
+    "red-car-motor": { "difficulty": "standard", "hit": true },
+    "tric-motor-car": { "difficulty": "standard", "hit": true },
+    "car-motor-motor": { "difficulty": "standard", "hit": false },
+    "motor-motor": { "difficulty": "standard", "hit": false },
+    "armored-car-car": { "difficulty": "hard", "hit": false },
+    "car-motor-far": { "difficulty": "hard", "hit": false },
+    "car-uturn-motor": { "difficulty": "hard", "hit": false },
+    "jeep-car": { "difficulty": "hard", "hit": false },
+    "truck-car": { "difficulty": "hard", "hit": false },
+    "truck-student-car": { "difficulty": "hard", "hit": false },
+    "airbase": { "difficulty": "negative", "hit": false }
+  }
+}

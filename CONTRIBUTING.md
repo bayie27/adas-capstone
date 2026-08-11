@@ -1,8 +1,8 @@
 # Contributing
 
-This is the "what to run before committing" doc. See [README.md](README.md) for how to run the system itself.
+This is the "what to run before committing" doc. **To get the system actually running, follow the [Quickstart](README.md#quickstart--clone-to-first-detection) in the README** — it is the full ordered path from clone to first detection, including the database seed and the camera streams, which the three commands below do not cover.
 
-## First-time setup
+## First-time setup (development tooling)
 
 ```bash
 uv sync --extra ai
@@ -10,7 +10,9 @@ pnpm install
 cp .env.example .env
 ```
 
-- `uv sync --extra ai` — installs the backend plus the AI engine's heavy ML deps (torch, tensorrt, ultralytics, opencv). Use plain `uv sync` if you're only touching the backend/frontend and don't need to run the AI engine.
+- `uv sync --extra ai` — installs the backend plus the AI engine's heavy ML deps (torch, ultralytics, opencv). Use plain `uv sync` if you're only touching the backend/frontend and don't need to run the AI engine.
+  - **No NVIDIA GPU?** Use `uv sync --extra ai-cpu` instead. The two are mutually exclusive: `ai` pins torch to the CUDA index, `ai-cpu` to PyTorch's CPU index so it pulls no `nvidia-*` packages at all.
+  - **TensorRT is not included** in either. It is a speed optimisation nothing currently uses, and its PyPI package downloads several GB inside a build step with no timeout — which hung a dev machine indefinitely, twice. It lives in an opt-in `ai-trt` extra; the GPU works fine without it, since CUDA comes from torch.
 - `pnpm install` — **run this at the repo root**, not inside `frontend/`. This is a pnpm workspace, and running install at the root is what triggers husky's `prepare` script and activates the git hooks below. Running it only inside `frontend/` will leave your hooks inert.
 - `cp .env.example .env` — then fill in real values. The backend hard-fails on startup if any of the 10 keys are missing.
 
