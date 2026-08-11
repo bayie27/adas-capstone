@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
@@ -197,6 +198,32 @@ def apply_observed(camera: Camera, report: ObservedReport, *, now: datetime) -> 
         camera.last_error_code,
         camera.last_error_message,
     )
+
+    # Edge case 1.18 (two engine instances) — a heartbeat report is a
+    # complete observed snapshot and must always overwrite every field it
+    # carries, even when a value coincidentally matches what *this*
+    # session's own object was loaded with. Without this, SQLAlchemy's
+    # dirty-tracking (which diffs against this session's own original read,
+    # not the live row) can silently omit a coincidentally-unchanged column
+    # from the UPDATE's SET clause, letting a second engine's concurrently
+    # committed value for that column survive underneath this heartbeat's
+    # otherwise-authoritative write — a corrupted, mixed-provenance row
+    # (same mechanism as F21). Forcing every observed column every time is
+    # cheap and always correct, unlike the desired-state columns in
+    # update_camera, where only the fields recompute_desired_state() might
+    # not otherwise mark dirty need it.
+    for field in (
+        "connection_status",
+        "ai_status",
+        "applied_config_version",
+        "measured_fps",
+        "inference_latency_ms",
+        "last_error_code",
+        "last_error_message",
+        "last_heartbeat_at",
+    ):
+        flag_modified(camera, field)
+
     return before != after
 
 
