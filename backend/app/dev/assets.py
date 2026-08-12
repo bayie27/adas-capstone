@@ -68,16 +68,24 @@ def _image_pool() -> tuple[bytes, ...]:
 def write_snapshot(snapshot_key: str, *, snapshot_root: Path, index: int = 0) -> bool:
     """Writes a placeholder image at `snapshot_root / snapshot_key`,
     creating parent directories. Returns False if the key escapes
-    `snapshot_root`, or if a file is already there.
+    `snapshot_root`, is unresolvable, or if a file is already there.
 
     `index` picks which pooled image to use, so a caller enumerating its
     detections gets them round-robin rather than the same frame every time.
     """
-    root = snapshot_root.resolve()
-    target = (snapshot_root / snapshot_key).resolve()
-
     # The seeder builds these keys itself, but this is also reachable from
-    # Package B's injector with a caller-supplied one.
+    # Package B's injector with a caller-supplied one — same containment
+    # pattern as services/snapshots.resolve(). A pathological key makes
+    # .resolve() raise instead of returning: OSError/RuntimeError for a
+    # symlink loop, ValueError for an embedded null byte (verified directly —
+    # it is NOT an OSError on this platform). Any of those must reject
+    # cleanly, not propagate as an unhandled 500.
+    try:
+        root = snapshot_root.resolve()
+        target = (snapshot_root / snapshot_key).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return False
+
     if not target.is_relative_to(root):
         return False
     if target.exists():

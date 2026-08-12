@@ -20,15 +20,21 @@ interface AuthState {
   username: string | null
   userId: number | null
   /**
-   * Bumped on every setSession() call. The cookie is the actual credential,
-   * but a WS connection authenticates once at handshake time and has no way
-   * to notice the browser is now holding a different cookie (e.g. a dev
-   * reseed, which rotates the session but leaves role/userId unchanged for
-   * the same admin). RealtimeAlertsBridge keys its reconnect off this so the
+   * Bumped only by bumpSessionEpoch() — NOT on every setSession() call.
+   * setSession() also runs for edits that update the display cache without
+   * touching the actual cookie (ProfileSettings.tsx's non-username path,
+   * Users.tsx's self-edit path), and a WS reconnect for those would be
+   * unwarranted disruption to a live alert feed. The cookie is the actual
+   * credential, but a WS connection authenticates once at handshake time and
+   * has no way to notice the browser is now holding a genuinely different
+   * one (a dev reseed, which mints a new session but can leave role/userId
+   * unchanged for the same admin) — callers that mint a new cookie must bump
+   * this explicitly. RealtimeAlertsBridge keys its reconnect off it so the
    * socket never outlives the session it was opened under.
    */
   sessionEpoch: number
   setSession: (role: AppUserRole, username: string, userId: number) => void
+  bumpSessionEpoch: () => void
   clearSession: () => void
 }
 
@@ -109,8 +115,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   sessionEpoch: 0,
   setSession: (role, username, userId) => {
     writeStoredSession({ role, username, userId })
-    set((state) => ({ role, username, userId, sessionEpoch: state.sessionEpoch + 1 }))
+    set({ role, username, userId })
   },
+  bumpSessionEpoch: () => set((state) => ({ sessionEpoch: state.sessionEpoch + 1 })),
   clearSession: () => {
     const emptySession = createEmptySession()
     writeStoredSession(emptySession)

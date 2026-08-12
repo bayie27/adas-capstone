@@ -61,6 +61,13 @@ export function useAdasWebSocket(
       }
 
       websocket.onmessage = (event: MessageEvent) => {
+        // close() is not synchronous — a message already in flight on a
+        // socket this effect just tore down (resetKey change, unmount) can
+        // still arrive after isDisposed flips. Match onclose/onerror.
+        if (isDisposed) {
+          return
+        }
+
         try {
           const parsed = JSON.parse(event.data as string)
           onMessageRef.current(parsed)

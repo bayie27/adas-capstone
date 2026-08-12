@@ -90,4 +90,33 @@ describe("useAdasWebSocket", () => {
 
     expect(onClose).toHaveBeenCalledWith(4009)
   })
+
+  it("drops a message that arrives on the old socket after a resetKey teardown", () => {
+    const onMessage = vi.fn()
+    const { rerender } = renderHook(
+      ({ resetKey }: { resetKey: number }) =>
+        useAdasWebSocket(onMessage, { enabled: true, resetKey }),
+      { initialProps: { resetKey: 0 } },
+    )
+
+    const first = MockWebSocket.instances[0]
+
+    act(() => {
+      rerender({ resetKey: 1 })
+    })
+
+    // close() is not synchronous on a real WebSocket — a message already in
+    // flight on the disposed socket can still land on its `onmessage`.
+    act(() => {
+      first.onmessage?.({ data: JSON.stringify({ stale: true }) })
+    })
+
+    expect(onMessage).not.toHaveBeenCalled()
+
+    act(() => {
+      MockWebSocket.instances[1].onmessage?.({ data: JSON.stringify({ stale: false }) })
+    })
+
+    expect(onMessage).toHaveBeenCalledWith({ stale: false })
+  })
 })

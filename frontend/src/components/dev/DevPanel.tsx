@@ -39,7 +39,18 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
   const [confidence, setConfidence] = useState(87)
 
   const setSession = useAuthStore((state) => state.setSession)
+  const bumpSessionEpoch = useAuthStore((state) => state.bumpSessionEpoch)
   const currentRole = useAuthStore((state) => state.role)
+
+  // `inputMode="numeric"` is only a mobile-keyboard hint, not validation —
+  // pasted or typed non-digit text still reaches here. Number("abc") is NaN,
+  // and JSON.stringify silently turns NaN into null in the request body, so
+  // without this check a typo becomes "auto-pick a camera" with no feedback
+  // instead of a clear error.
+  const trimmedCameraId = cameraId.trim()
+  const parsedCameraId = trimmedCameraId === "" ? null : Number(trimmedCameraId)
+  const cameraIdIsInvalid =
+    parsedCameraId !== null && (!Number.isInteger(parsedCameraId) || parsedCameraId < 1)
 
   /**
    * Everything a reseed invalidates, in this order.
@@ -70,6 +81,12 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
     const appRole = mapApiRoleToAppRole(session.role)
     if (!appRole) return
     setSession(appRole, session.username, session.user_id)
+    // Both callers of applyNewSession (reseed, login-as) mint a brand new
+    // cookie server-side — the live alerts socket must not outlive it. See
+    // useAuthStore's sessionEpoch doc: this is deliberately NOT inside
+    // setSession() itself, since plain profile edits call that too without
+    // rotating anything.
+    bumpSessionEpoch()
 
     // /admin and /user are separate route trees behind ProtectedRoute, so
     // an admin -> operator switch that stayed on /admin/users would bounce.
@@ -184,10 +201,18 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
         <input
           value={cameraId}
           onChange={(e) => setCameraId(e.target.value)}
+          type="number"
+          min={1}
+          step={1}
           inputMode="numeric"
           placeholder="auto"
           className="mb-3 w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-white"
         />
+        {cameraIdIsInvalid && (
+          <p className="-mt-2 mb-3 text-xs text-[#F87171]">
+            Enter a whole camera ID, or leave it blank.
+          </p>
+        )}
         <label className="mb-1 block text-xs text-[#A1A1AA]">
           Confidence: {(confidence / 100).toFixed(2)}
         </label>
@@ -200,11 +225,11 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
           className="mb-3 w-full"
         />
         <PanelButton
-          disabled={busy !== null}
+          disabled={busy !== null || cameraIdIsInvalid}
           onClick={() =>
             run("inject", async () => {
               const result = await injectDetection({
-                ...(cameraId ? { camera_id: Number(cameraId) } : {}),
+                ...(parsedCameraId !== null ? { camera_id: parsedCameraId } : {}),
                 confidence: confidence / 100,
               })
               await queryClient.invalidateQueries()
@@ -217,10 +242,12 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
 
         <div className="mt-2 grid grid-cols-2 gap-2">
           <PanelButton
-            disabled={busy !== null || !cameraId}
+            disabled={busy !== null || parsedCameraId === null || cameraIdIsInvalid}
             onClick={() =>
               run("stale", async () => {
-                await setCameraState(Number(cameraId), { stale_heartbeat: true })
+                // Disabled above whenever parsedCameraId isn't a valid
+                // integer, so this branch only runs with a real value.
+                await setCameraState(parsedCameraId as number, { stale_heartbeat: true })
                 await queryClient.invalidateQueries()
                 return `Camera ${cameraId} now presents as Unresponsive.`
               })
@@ -229,10 +256,10 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
             Make stale
           </PanelButton>
           <PanelButton
-            disabled={busy !== null || !cameraId}
+            disabled={busy !== null || parsedCameraId === null || cameraIdIsInvalid}
             onClick={() =>
               run("cooldown", async () => {
-                await setCameraState(Number(cameraId), { clear_cooldown: true })
+                await setCameraState(parsedCameraId as number, { clear_cooldown: true })
                 await queryClient.invalidateQueries()
                 return `Cooldown cleared on camera ${cameraId}.`
               })
