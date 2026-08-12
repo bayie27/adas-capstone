@@ -298,3 +298,7 @@ ai_engine/docs/paper-edits-required.md
 
 # TLS certs (LAN demo profile) — never commit a private key
 certs/
+
+# Optional real frames for seeded snapshots (dev_plan/01_PKG_seed_core.md Step 6).
+# Absence is fine - the seeder falls back to an embedded placeholder JPEG.
+backend/app/dev/assets/snapshots/

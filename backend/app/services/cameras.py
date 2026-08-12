@@ -242,16 +242,26 @@ def _camera_ids_with_open_incidents(
     return set(rows)
 
 
-def reconcile_camera_desired_states(engine: Engine) -> list[Camera]:
+def reconcile_camera_desired_states(
+    engine: Engine, *, now: datetime | None = None
+) -> list[Camera]:
     """Startup reconciliation (P1 Step 9). Recomputes desired state for
     every soft-deleted-excluded camera — never resets it blindly, unlike
     observed state, which genuinely has no reporter until the AI engine
     reconnects.
 
+    `now` is injectable so dev seeding can pass its own pinned time through
+    instead of silently falling back to wall-clock `datetime.now(UTC)` —
+    a seeded `cooldown_until` computed relative to a pinned `now` would
+    otherwise read as already-expired the moment real time moves past that
+    pinned value, and recompute_desired_state() clears an expired cooldown
+    as part of its normal, correct behavior. The real startup caller
+    (app/main.py) always wants wall-clock time, so the default is unchanged.
+
     Returns the cameras left Paused with reason='cooldown' so the caller
     can reschedule their resume jobs.
     """
-    now = datetime.now(UTC)
+    now = now if now is not None else datetime.now(UTC)
     with Session(engine) as session:
         cameras = session.exec(
             select(Camera).where(col(Camera.is_active).is_(True))
