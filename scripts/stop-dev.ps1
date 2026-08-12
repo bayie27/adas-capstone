@@ -93,8 +93,20 @@ function Stop-ByPort([int]$Port, [string]$Label) {
     # may itself have spawned children (MediaMTX's per-channel ffmpeg), and
     # even where it hasn't, /T is harmless.
     & taskkill /PID $procId /T /F 2>&1 | Out-Null
+
+    # A single check shortly after taskkill isn't enough to rule out a
+    # reload supervisor (uvicorn's WatchFiles loop under `fastapi dev`)
+    # respawning a worker after an unexpected child death -- that would
+    # look clean at 300ms and rebind moments later. Re-check once more
+    # after a longer pause before declaring the port free.
     Start-Sleep -Milliseconds 300
-    if (Get-ListeningProcessId -Port $Port) {
+    $stillBound = [bool](Get-ListeningProcessId -Port $Port)
+    if (-not $stillBound) {
+        Start-Sleep -Milliseconds 700
+        $stillBound = [bool](Get-ListeningProcessId -Port $Port)
+    }
+
+    if ($stillBound) {
         Write-Warning "$Label`: port $Port is still bound after stopping PID $procId. Investigate manually."
     }
     else {

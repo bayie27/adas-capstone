@@ -173,7 +173,7 @@ if ($Frontend) {
 }
 
 if ($Ai) {
-    Write-Warning "-Ai needs 'uv sync --extra ai' (heavy CUDA deps) and an NVIDIA GPU for a usable frame rate. It will still connect without a GPU -- fine for integration work -- but is not a detection platform in that mode."
+    Write-Warning "-Ai needs 'uv sync --extra ai' (heavy CUDA deps) and an NVIDIA GPU for a usable frame rate. It will still connect without a GPU -- fine for integration work -- but is not a detection platform in that mode. The weights (ai_engine\epoch50.pt) are committed and loaded directly with no fallback -- a missing epoch50.pt is a hard startup failure, not a degradation. ai_engine\machine_profile.json is machine-specific and gitignored; its absence is NOT an error -- the engine falls back to one camera and says so on startup. Run 'uv run python ai_engine/capacity.py' to generate it."
 }
 
 # ---------------------------------------------------------------------------
@@ -229,7 +229,11 @@ if ($Sim) {
 }
 
 if ($Backend) {
-    $cmd = "uv run fastapi dev backend/app/main.py"
+    # `uv run fastapi dev` has been seen to crash on Windows with a cp1252
+    # codec error when launched from a Bash-flavoured shell -- set
+    # unconditionally rather than reactively, since there's no reliable way
+    # to detect the parent shell's encoding before the crash happens.
+    $cmd = "`$env:PYTHONUTF8 = '1'; uv run fastapi dev backend/app/main.py"
     Start-Component -Title "ADAS - Backend" -Command $cmd -Foreground $foreground
 }
 

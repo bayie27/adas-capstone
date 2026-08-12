@@ -208,3 +208,36 @@ Run from a clean shell, not one that already has the servers running.
 - Whether `Get-NetTCPConnection` was available or you had to fall back to parsing `netstat`.
 - Whether the `PYTHONUTF8=1` workaround was needed.
 - Anything you found stale in `README.md` §"Running the System" or its structure tree.
+
+### Executed — answers
+
+`Get-NetTCPConnection` was available; the `netstat` fallback path exists but was not exercised on
+the machine this was built and verified on. `README.md`'s structure tree was already current (PR
+#76 fixed it before this package started).
+
+Manual verification (checks 1–3) surfaced two real bugs, both fixed and committed
+(`7f5be8e`): `Start-Process -ArgumentList`'s quoting did not nest reliably against a repo path
+containing spaces plus the frontend command's own embedded quotes, fixed by switching to
+`-EncodedCommand`; and hardcoding `pwsh` as the spawned shell failed outright on a stock Windows
+box shipping only Windows PowerShell 5.1, fixed with a `pwsh`-if-present-else-`powershell.exe`
+fallback.
+
+### Follow-up fixes — 2026-08-12, from a pre-merge cross-package audit
+
+Three gaps surfaced reviewing this package alongside A/B/C, none of which the original manual
+checks were positioned to catch:
+
+1. **`PYTHONUTF8=1` was never actually implemented.** The "Known wrinkle" section above called for
+   it, but grepping the committed scripts found it nowhere — the manual checks that ran cleanly
+   apparently didn't hit the cp1252 crash, so its absence went unnoticed. Now set unconditionally
+   on the backend's spawned command (`$env:PYTHONUTF8 = '1'` in the same process, before `uv run`)
+   rather than reactively, since there's no reliable way to detect the parent shell's encoding
+   before the crash would happen.
+2. **`stop-dev.ps1`'s port re-check was a single 300ms sleep.** If `uv run fastapi dev`'s reload
+   supervisor treats an unexpected worker death as a trigger to respawn, that window could report
+   "stopped" moments before the port rebinds. Added a second check after a longer pause (300ms +
+   700ms) before declaring the port free.
+3. **The `-Ai` preflight warning covered only `--extra ai`/GPU**, not `epoch50.pt` (no fallback,
+   hard startup failure if missing), that `machine_profile.json`'s absence is expected, or
+   `ai_engine/capacity.py` as the way to generate it — all of which this section originally asked
+   for. Warning text expanded to cover all three.
