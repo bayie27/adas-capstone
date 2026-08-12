@@ -26,6 +26,7 @@ const ORIGIN_REJECTED_CLOSE_CODE = 4003
 function incidentToAlertLog(payload: IncidentPayload): AlertLog {
   return {
     log_id: payload.log_id,
+    source_event_id: payload.source_event_id,
     camera_id: payload.camera_id,
     detected_at: payload.detected_at,
     snapshot_url: payload.snapshot_url,
@@ -40,6 +41,8 @@ function incidentToAlertLog(payload: IncidentPayload): AlertLog {
     camera_name: payload.camera_name,
     snoozed_until: payload.snoozed_until,
     snoozed_by_id: payload.snoozed_by_id,
+    created_at: payload.created_at,
+    updated_at: payload.updated_at,
   }
 }
 
