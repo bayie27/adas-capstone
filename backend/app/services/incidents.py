@@ -9,12 +9,21 @@ lost race or an already-terminal incident (409 CONFLICT_STATE, D-002).
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import update as sa_update
-from sqlmodel import Session
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, col, select
 
-from app.models import AuditAction, DetectionLog, DetectionStatus, User
+from app.core.types import parse_utc_query_datetime
+from app.models import AuditAction, Camera, DetectionLog, DetectionStatus, User
+from app.services.cameras import apply_desired_state
 from app.services.formatting import format_user_name
+
+if TYPE_CHECKING:
+    from app.schemas import DetectionLogCreateV2
+
+_OPEN_STATUSES = (DetectionStatus.UNVERIFIED.value, DetectionStatus.ONGOING.value)
 
 # 01_CONTRACTS.md §10 / D-002 — the only four legal transitions.
 ALLOWED: dict[tuple[DetectionStatus, DetectionStatus], AuditAction] = {
@@ -75,11 +84,106 @@ class PreconditionFailed(Exception):
         super().__init__(detail)
 
 
+class CameraUnavailableForIngest(Exception):
+    """The camera is missing, soft-deleted or disabled — a 404 to the
+    engine, which should drop the event rather than retry it."""
+
+    def __init__(self, camera_id: int) -> None:
+        self.camera_id = camera_id
+        super().__init__(
+            f"Camera with ID {camera_id} not found, inactive, or disabled."
+        )
+
+
+class OpenIncidentConflict(Exception):
+    """ux_detection_open_camera rejected the insert: this camera already has
+    an Unverified/Ongoing incident. Carries the incumbent so the route can
+    name it in the 409 body."""
+
+    def __init__(self, camera_id: int, existing: DetectionLog | None) -> None:
+        self.camera_id = camera_id
+        self.existing = existing
+        super().__init__(f"Camera {camera_id} already has an open incident.")
+
+
 @dataclass
 class TransitionResult:
     log: DetectionLog
     action: AuditAction
     expected: DetectionStatus
+
+
+def ingest_detection(
+    session: Session,
+    payload: "DetectionLogCreateV2",
+) -> tuple[DetectionLog, Camera, bool]:
+    """01_CONTRACTS.md §6.3 — the v2 idempotent AI-engine ingest path,
+    lifted out of routes/internal.py so the dev-tools injector runs the
+    real one instead of a reimplementation that would drift from it.
+
+    Returns `(log, camera, created)`. `created` is False for an idempotent
+    replay, which the caller maps to 200 and must *not* broadcast for.
+
+    The broadcast deliberately stays with the caller: 01_CONTRACTS.md §9.4
+    forbids announcing a row a later rollback could undo, and the ordering
+    (commit, then apply_desired_state, then broadcast) is what makes the
+    self-blindfold correct. Nothing here changes ordering, status mapping
+    or error codes — this seam carries the F20 fix (be_audit/A3_ai_seam.md).
+    """
+    camera = session.get(Camera, payload.camera_id)
+    if not camera or not camera.is_active or not camera.is_enabled:
+        raise CameraUnavailableForIngest(payload.camera_id)
+
+    source_event_id = payload.source_event_id
+    detected_at = parse_utc_query_datetime(payload.detected_at)
+    # Idempotent retry (01_CONTRACTS.md §6.3): a pre-check here is safe
+    # (unlike the open-camera check below) because a genuinely
+    # concurrent duplicate is still caught by the ux_detection_source_event
+    # unique constraint as a backstop.
+    existing = session.exec(
+        select(DetectionLog).where(DetectionLog.source_event_id == source_event_id)
+    ).first()
+    if existing is not None:
+        return existing, camera, False
+
+    now = datetime.now(UTC)
+    db_alert = DetectionLog(
+        camera_id=payload.camera_id,
+        detected_at=detected_at,
+        snapshot_key=payload.snapshot_key,
+        confidence_score=payload.confidence_score,
+        source_event_id=source_event_id,
+    )
+    session.add(db_alert)
+    # The self-blindfold: pause this camera the instant the incident is
+    # committed. Never pre-checked for an existing open incident — the
+    # ux_detection_open_camera partial unique index is what makes this
+    # race-proof, not a SELECT before the INSERT.
+    apply_desired_state(camera, has_open_incident=True, now=now)
+    session.add(camera)
+
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        existing = session.exec(
+            select(DetectionLog).where(DetectionLog.source_event_id == source_event_id)
+        ).first()
+        if existing is not None:
+            # A concurrent duplicate committed first — this is the
+            # ux_detection_source_event backstop, not the open-camera one.
+            return existing, camera, False
+        open_alert = session.exec(
+            select(DetectionLog).where(
+                col(DetectionLog.camera_id) == payload.camera_id,
+                col(DetectionLog.detection_status).in_(_OPEN_STATUSES),
+            )
+        ).first()
+        raise OpenIncidentConflict(payload.camera_id, open_alert) from exc
+
+    session.refresh(db_alert)
+    session.refresh(camera)
+    return db_alert, camera, True
 
 
 def transition(

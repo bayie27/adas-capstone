@@ -7,6 +7,7 @@ import { GlobalAlerts } from "@/components/GlobalAlerts"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { RealtimeAlertsBridge } from "@/components/RealtimeAlertsBridge"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
+import { DevPanelTrigger } from "@/components/dev/DevPanelTrigger"
 
 const Login = lazy(() => import("@/pages/Login"))
 const Dashboard = lazy(() => import("@/pages/Dashboard"))
@@ -31,6 +32,11 @@ function App() {
     <Router>
       <RealtimeAlertsBridge />
       <GlobalAlerts />
+      {/* Same placement as GlobalAlerts: inside Router (useNavigate) and
+          QueryClientProvider (useQueryClient), but outside ErrorBoundary and
+          Suspense so it survives a page crash and lazy-route loading — and
+          so it is available on /login too. */}
+      <DevPanelTrigger />
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
           <Routes>

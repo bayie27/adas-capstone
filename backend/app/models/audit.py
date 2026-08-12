@@ -102,5 +102,15 @@ _NO_DELETE_TRIGGER = DDL(
     """
 )
 
-event.listen(AuditLog.__table__, "after_create", _NO_UPDATE_TRIGGER)
-event.listen(AuditLog.__table__, "after_create", _NO_DELETE_TRIGGER)
+# Public so app/dev/wipe.py can drop and *re-execute these same objects*
+# rather than re-typing the SQL. NFR-21's append-only guarantee must have
+# exactly one source of truth: a second copy of this DDL that drifted from
+# this one would be undetectable until it mattered.
+AUDIT_IMMUTABILITY_TRIGGERS = (_NO_UPDATE_TRIGGER, _NO_DELETE_TRIGGER)
+AUDIT_IMMUTABILITY_TRIGGER_NAMES = (
+    "trg_audit_log_no_update",
+    "trg_audit_log_no_delete",
+)
+
+for _trigger in AUDIT_IMMUTABILITY_TRIGGERS:
+    event.listen(AuditLog.__table__, "after_create", _trigger)

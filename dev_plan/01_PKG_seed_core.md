@@ -344,3 +344,42 @@ uv run pytest -n auto
 - Whether Step 4's unification changed which open incident survives in any existing profile.
 - Any column you found you could not populate without a migration (there should be none).
 - The final `SeedResult` field list — Package C renders it.
+
+---
+
+## Executed 2026-08-11 — answers
+
+**Step 4 changed which row survives, and it is time-of-day dependent.** Several seeded timestamps
+are relative to `now`, so a pinned `hour:minute` spec can land inside a relative one's lookback.
+Swept over 96 times of day: `demo` differs at 1/96 (at 08:17, `ayala_ongoing_morning` at 08:12 beats
+`ayala_recent_unverified` at `now-12min`); `analytics` at 4/96 (that case plus 21:17/21:30/21:47,
+where `analytics_southbound_unverified_day_1` at 21:15 beats `southbound_recent_unverified` at
+`now-33min`); `edge` is identical at all 96. Demoted-row closure metadata is unified on the perf
+path's numbers (4 minutes to verify, 20 to close), so the spec path's demoted rows shift slightly.
+
+**No migration was needed.** Every column the enrichment populates already existed.
+
+**`SeedResult` fields** (one more than the doc listed — `profile`, since Package B's endpoint
+returns it anyway): `profile`, `users`, `cameras`, `detections`, `audit_rows`, `health_samples`,
+`export_jobs`, `snapshots`. All except `snapshots` are read back from the database after seeding
+rather than tallied during it; `snapshots` counts files written this run, so a re-seed reports 0.
+
+### Deviations from this doc, and why
+
+1. **`seeded_timestamp` lives in `profiles.py`, not `seed.py`.** Step 1 assigns it to `seed.py`, but
+   every `build_*_alert_specs` calls it and `seed.py` already imports from `profiles.py` — following
+   the doc creates an import cycle.
+2. **`SeedCameraSpec` cannot store `connection_status='Unresponsive'`.** `presented_statuses()`
+   derives it from a stale heartbeat and never writes it to the row. The spec carries
+   `last_heartbeat_minutes_ago` instead — the same mechanism Package B §5 specifies for
+   `POST /api/dev/cameras/{id}/state`. Note the limit: `HEARTBEAT_STALE_SECONDS` is 10, so with no
+   AI engine running every seeded camera presents as Unresponsive ten seconds after seeding. The
+   dedicated camera is only distinguishable at a pinned `now`, which is how `test_dev_seed.py`
+   asserts it.
+3. **Both entry points take an optional `target_settings`.** `init_db(engine)` alone migrates the
+   _wrong_ database — `check_schema_revision()` reopens `target_settings.DATABASE_URL` through
+   `alembic/env.py` and ignores the engine argument (F18 in `be_audit/00_FINDINGS.md`). Step 2's
+   signature as written walks into it. **Package B must pass the Settings its engine was built
+   from.**
+4. **Alarm sounds cycle over `settings.ALARM_SOUND_KEYS`**, not invented names —
+   `PATCH /api/settings/alarm` validates against that list, which holds only `"default"` today.
