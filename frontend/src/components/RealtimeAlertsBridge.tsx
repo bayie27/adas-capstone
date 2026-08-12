@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 
 import { useAdasWebSocket } from "@/hooks/useAdasWebSocket"
 import { getAlerts } from "@/services/alerts"
-import { redirectToLogin } from "@/services/api"
+import { isAuthRedirectSuspended, redirectToLogin } from "@/services/api"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
 import type { AlertLog } from "@/types/alerts"
@@ -46,6 +46,7 @@ function incidentToAlertLog(payload: IncidentPayload): AlertLog {
 export function RealtimeAlertsBridge() {
   const queryClient = useQueryClient()
   const role = useAuthStore((state) => state.role)
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch)
   const addAlert = useAlertStore((state) => state.addAlert)
   const clearAlerts = useAlertStore((state) => state.clearAlerts)
   const activateSnooze = useAlertStore((state) => state.activateSnooze)
@@ -190,6 +191,13 @@ export function RealtimeAlertsBridge() {
 
   function handleWsClose(code: number) {
     if (SESSION_LOST_CLOSE_CODES.has(code)) {
+      // A dev reseed/login-as rotates the session and bumps sessionEpoch,
+      // which tears this socket down cleanly before the server-side
+      // revalidation sweep ever gets to it (see useAdasWebSocket's
+      // resetKey). This guard is the backstop for the rest of that race —
+      // same suspension the axios interceptor honors in services/api.ts,
+      // so an in-flight reseed can't bounce the operator to /login twice.
+      if (isAuthRedirectSuspended()) return
       useAuthStore.getState().clearSession()
       redirectToLogin("Your session expired. Please sign in again.")
       return
@@ -205,7 +213,7 @@ export function RealtimeAlertsBridge() {
       const envelope = parseEventEnvelope(raw)
       if (envelope) handleEnvelope(envelope)
     },
-    { enabled: Boolean(role), onClose: handleWsClose },
+    { enabled: Boolean(role), resetKey: sessionEpoch, onClose: handleWsClose },
   )
 
   return null

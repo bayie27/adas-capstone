@@ -2,9 +2,6 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy import case, or_
-from sqlalchemy import update as sa_update
-from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from app.api.dependencies import get_realtime_manager, verify_internal_api_key
@@ -12,13 +9,7 @@ from app.core.config import settings
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
 from app.core.types import parse_utc_query_datetime
-from app.models import (
-    Camera,
-    DesiredAIState,
-    DesiredStateReason,
-    DetectionLog,
-    DetectionStatus,
-)
+from app.models import Camera, DetectionLog, DetectionStatus
 from app.schemas import DetectionLogCreateV2
 from app.schemas.internal import (
     HeartbeatCameraSnapshot,
@@ -27,6 +18,11 @@ from app.schemas.internal import (
 )
 from app.services.cameras import ObservedReport, apply_observed
 from app.services.events import camera_status_update_event, new_detection_event
+from app.services.incidents import (
+    CameraUnavailableForIngest,
+    OpenIncidentConflict,
+    ingest_detection,
+)
 from app.services.realtime import RealtimeManager
 
 logger = logging.getLogger("uvicorn.error")
@@ -119,95 +115,22 @@ def receive_ai_alert(
     """01_CONTRACTS.md §6.3 — the v2 idempotent AI-engine payload. The v1
     legacy shape (bare `snapshot_path`, no `source_event_id`) was removed by
     the A3 audit pack (be_audit/A3_ai_seam.md, F3): its only caller,
-    ai_engine/sync.py, was already gone as of PR #67."""
-    camera = session.get(Camera, alert_in.camera_id)
-    if not camera or not camera.is_active or not camera.is_enabled:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Camera with ID {alert_in.camera_id} not found, inactive, or disabled.",
-        )
+    ai_engine/sync.py, was already gone as of PR #67.
 
-    source_event_id = alert_in.source_event_id
-    snapshot_key = alert_in.snapshot_key
-    detected_at = parse_utc_query_datetime(alert_in.detected_at)
-    # Idempotent retry (01_CONTRACTS.md §6.3): a pre-check here is safe
-    # (unlike the open-camera check below) because a genuinely
-    # concurrent duplicate is still caught by the ux_detection_source_event
-    # unique constraint as a backstop.
-    existing = session.exec(
-        select(DetectionLog).where(DetectionLog.source_event_id == source_event_id)
-    ).first()
-    if existing is not None:
-        response.status_code = 200
-        return existing
-
-    db_alert = DetectionLog(
-        camera_id=alert_in.camera_id,
-        detected_at=detected_at,
-        snapshot_key=snapshot_key,
-        confidence_score=alert_in.confidence_score,
-        source_event_id=source_event_id,
-    )
-    session.add(db_alert)
-    # The self-blindfold: pause this camera the instant the incident is
-    # committed. Never pre-checked for an existing open incident — the
-    # ux_detection_open_camera partial unique index is what makes this
-    # race-proof, not a SELECT before the INSERT.
-    #
-    # Written as a conditional UPDATE against the row's *live* is_active/
-    # is_enabled, not apply_desired_state() on the `camera` object read
-    # above — that read can go stale before this commits. A concurrent
-    # operator disable (edge case 1.7, be_audit/A5_edge_cases.md) only
-    # touches the is_enabled column, so a plain read-then-write here would
-    # silently clobber a disabled camera's correct Inactive/disabled state
-    # with Paused/incident, using a since-invalidated "is_enabled was true"
-    # assumption. The CASE is evaluated by SQLite against the row's current
-    # value at write time, so whichever request commits last always leaves
-    # the row internally consistent, regardless of interleaving.
-    camera_disabled = or_(~Camera.is_active, ~Camera.is_enabled)
-
+    The ingest itself lives in services/incidents.ingest_detection() so the
+    dev-tools injector exercises this exact path rather than a copy of it.
+    The broadcasts stay here: CLAUDE.md forbids a WebSocket send inside an
+    open transaction, and commit -> apply_desired_state -> broadcast is
+    load-bearing for the self-blindfold."""
     try:
-        # Inside the try, not before it: this session.execute() autoflushes
-        # the pending DetectionLog insert above, which is exactly where the
-        # ux_detection_open_camera / ux_detection_source_event IntegrityError
-        # actually raises from — it must land in this except, not escape as
-        # an unhandled 500.
-        session.execute(
-            sa_update(Camera)
-            .where(Camera.camera_id == alert_in.camera_id)
-            .values(
-                desired_ai_state=case(
-                    (camera_disabled, DesiredAIState.INACTIVE.value),
-                    else_=DesiredAIState.PAUSED.value,
-                ),
-                desired_state_reason=case(
-                    (camera_disabled, DesiredStateReason.DISABLED.value),
-                    else_=DesiredStateReason.INCIDENT.value,
-                ),
-                cooldown_until=None,
-                config_version=Camera.config_version + 1,
-            )
-        )
-        session.commit()
-    except IntegrityError as exc:
-        session.rollback()
-        existing = session.exec(
-            select(DetectionLog).where(DetectionLog.source_event_id == source_event_id)
-        ).first()
-        if existing is not None:
-            # A concurrent duplicate committed first — this is the
-            # ux_detection_source_event backstop, not the open-camera one.
-            response.status_code = 200
-            return existing
-        open_alert = session.exec(
-            select(DetectionLog).where(
-                col(DetectionLog.camera_id) == alert_in.camera_id,
-                col(DetectionLog.detection_status).in_(_OPEN_STATUSES),
-            )
-        ).first()
+        db_alert, camera, created = ingest_detection(session, alert_in)
+    except CameraUnavailableForIngest as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OpenIncidentConflict as exc:
+        open_alert = exc.existing
         raise AppHTTPException(
             409,
-            f"Camera {alert_in.camera_id} already has an open incident.",
+            str(exc),
             code="CONFLICT_STATE",
             extra={
                 "existing_log_id": open_alert.log_id if open_alert else None,
@@ -215,8 +138,9 @@ def receive_ai_alert(
             },
         ) from exc
 
-    session.refresh(db_alert)
-    session.refresh(camera)
+    if not created:
+        response.status_code = 200
+        return db_alert
 
     # Enqueue only after commit (01_CONTRACTS.md §9.4) — a broadcast inside
     # the transaction could announce a row a later rollback undoes.

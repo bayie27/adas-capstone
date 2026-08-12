@@ -26,6 +26,7 @@ from app.api.routes import (
     audit,
     auth,
     cameras,
+    dev,
     events,
     exports,
     help,
@@ -558,6 +559,12 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(help.router)
     application.include_router(settings.router)
     application.include_router(exports.router)
+
+    # DT-3 — registered only when the flag resolves true, so with dev tools
+    # off the routes genuinely do not exist (404) rather than existing and
+    # refusing. Package C's probe reads that 404 as "disabled".
+    if resolved_settings.DEV_TOOLS_ENABLED:
+        application.include_router(dev.router)
 
     application.add_exception_handler(HTTPException, http_exception_handler)
     application.add_exception_handler(

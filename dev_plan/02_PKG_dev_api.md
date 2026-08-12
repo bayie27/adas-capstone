@@ -21,7 +21,7 @@ WebSocket connections alive, and the operator still logged in on the same page.
 Second gap: nothing in the repo can produce a live incident over HTTP against a running backend.
 `backend/tests/perf/test_alert_latency.py` gets closest with an in-process `TestClient` POST, but
 it's test-only. Everything else either writes `detection_log` rows directly (no broadcast, no
-self-blindfold pause) or needs MediaMTX + ffmpeg + sample clips + a working TensorRT engine.
+self-blindfold pause) or needs MediaMTX + ffmpeg + sample clips + an NVIDIA GPU.
 
 ---
 
@@ -313,3 +313,68 @@ old session is dead but the returned cookie works, and `GET /api/alerts/` reflec
   the route to keep it so.
 - The final request/response shapes for all six endpoints — Package C codes against them.
 - Whether `perf` is usable over HTTP or too slow to be worth exposing in the panel.
+
+---
+
+## Executed 2026-08-11 — answers
+
+**Step 2 was fully behaviour-preserving.** No ordering change was needed, so there was nothing to
+stop and report. `ingest_detection(session, payload) -> (log, camera, created)` carries the camera
+checks, the `source_event_id` short-circuit, the `IntegrityError` → source-event recheck →
+open-camera 409 backstop, and the commit → `apply_desired_state` → refresh ordering. It raises
+`CameraUnavailableForIngest` / `OpenIncidentConflict`, matching the domain-exception pattern
+`transition()` already uses. **Left in the route deliberately:** both broadcasts (a WebSocket send
+inside an open transaction is forbidden) and the 200/201 status mapping, since only the `created`
+path broadcasts — an idempotent replay stays silent, as before.
+
+**`perf` is usable over HTTP.** Measured through `POST /api/dev/reseed` on the demo laptop:
+
+| profile   | wipe + reseed | detections |
+| --------- | ------------- | ---------- |
+| empty     | 0.17s         | 0          |
+| edge      | 1.00s         | 13         |
+| demo      | 1.03s         | 18         |
+| analytics | 1.65s         | 62         |
+| perf      | **15.21s**    | 100,000    |
+
+Faster than the ~33s this doc assumed, because the wipe leaves an empty table to insert into. One
+request, no timeout involvement — it runs under `run_in_threadpool`, so the event loop and the
+WebSocket heartbeats are unaffected throughout. Package C should still label it slow and require a
+second click, but it is worth exposing.
+
+### Endpoint shapes — Package C codes against these
+
+All request bodies are `extra="forbid"`. Models live in `app/schemas/dev.py`.
+
+| Route                              | Auth  | Request                                                                           | Response                                                                                                                                       |
+| ---------------------------------- | ----- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/dev/status`              | none  | —                                                                                 | `{enabled: bool, profiles: [{name, description}]}`                                                                                             |
+| `POST /api/dev/reseed`             | admin | `{profile: str, login_as?: str}`                                                  | `{profile, users, cameras, detections, audit_rows, health_samples, export_jobs, snapshots, session: {user_id, username, role}}` + `Set-Cookie` |
+| `POST /api/dev/login-as`           | any   | `{username: str}`                                                                 | `{session: {user_id, username, role}}` + `Set-Cookie`                                                                                          |
+| `POST /api/dev/detections`         | admin | `{camera_id?: int, confidence?: float 0-1, detected_at?: datetime}`               | `DetectionLog`, 201                                                                                                                            |
+| `POST /api/dev/cameras/{id}/state` | admin | `{connection_status?, ai_status?, stale_heartbeat?: bool, clear_cooldown?: bool}` | `Camera`                                                                                                                                       |
+| `POST /api/dev/health-history`     | admin | `{days: int 1-90}`                                                                | `{rows_written: int}`                                                                                                                          |
+
+Error cases worth handling in the panel: unknown profile → **404**; unknown `login_as` on
+`/login-as` → **404**; every enabled camera already has an open incident → **409**
+`CONFLICT_STATE`; a second injection on the same camera → **409** `CONFLICT_STATE`.
+`/health-history` returns `rows_written: 0` against a profile that already seeded history — its
+idempotency guard, not a failure.
+
+### Deviations and findings
+
+1. **`init_db()` runs before the wipe**, not only inside `seed_profile()` after it — the wipe
+   DELETEs against tables a never-migrated database does not have.
+2. **`MaintenanceNoticeData.backup_id` is now optional.** Reusing the event as specified was
+   impossible with it required. That event type had no producer and no consumer anywhere, so
+   nothing breaks.
+3. **The wipe's `finally` needs its own commit.** pysqlite does not open a transaction until the
+   first DML statement, so the `DROP TRIGGER`s autocommit while a recreate issued after a failing
+   DELETE rolls back with it — leaving `audit_log` mutable. Reproduced and fixed; both the
+   happy path and the injected-failure path are asserted in `test_dev_tools.py`.
+4. **`seed_profile()` needs `target_settings`** alongside the engine (F18), which is why `reseed()`
+   takes and forwards it.
+5. **Pre-existing, left alone:** `GET /api/alerts/{log_id}/snapshot` resolves against the
+   process-global `settings.SNAPSHOT_ROOT`, not `app.state.settings`. Harmless in production where
+   they are the same object; it means an app built with an isolated root cannot serve snapshots it
+   just wrote. The test patches the global and explains why.

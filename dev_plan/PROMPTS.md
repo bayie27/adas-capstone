@@ -220,7 +220,6 @@ the SQLite file, which only works while nothing holds it open. If the reseed fai
 start nothing.
 
 Done means: the six manual verification checks pass, README.md and CLAUDE.md are
-updated (including the stale ai_engine/sync.py line in README's structure tree), the
-status table in dev_plan/00_OVERVIEW.md is updated, and you have reported the three
-items under "Report back".
+updated, the status table in dev_plan/00_OVERVIEW.md is updated, and you have
+reported the three items under "Report back".
 ```

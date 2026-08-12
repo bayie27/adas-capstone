@@ -116,8 +116,28 @@ class Settings(BaseSettings):
     # Maintenance
     MAINTENANCE_HOUR_LOCAL: int = 3
 
+    # Dev tools (dev_plan/02_PKG_dev_api.md, DT-3). Deliberately its own
+    # setting rather than a read of ENVIRONMENT: the demo box runs a
+    # production build on the LAN and still needs the panel. `None` resolves
+    # to ENVIRONMENT == "development" below, so production defaults to off
+    # and an explicit .env value always wins.
+    #
+    # Because this can legitimately be true outside development, the routes
+    # it enables are admin-gated and POST /api/dev/login-as requires an
+    # existing session — it is an account switcher, not a way in (DT-5).
+    DEV_TOOLS_ENABLED: bool | None = None
+
     # Automatically load from the .env file in the root directory
     model_config = SettingsConfigDict(env_file=ROOT_ENV_FILE, extra="ignore")
+
+    @model_validator(mode="after")
+    def resolve_dev_tools_enabled(self) -> "Settings":
+        if self.DEV_TOOLS_ENABLED is None:
+            # object.__setattr__ is not needed — BaseSettings is mutable by
+            # default — but assigning inside a mode="after" validator does
+            # not re-trigger validation, which is what we want here.
+            self.DEV_TOOLS_ENABLED = self.ENVIRONMENT == "development"
+        return self
 
     @field_validator("DATABASE_URL")
     @classmethod

@@ -2,6 +2,9 @@
 
 > **Audience:** an AI coding session (or a teammate) executing one work package at a time.
 > **Created:** August 11, 2026. **Baseline:** branch `main`, commit `37bcb2f`.
+> **Refreshed:** August 11, 2026 against `52a1f7a`. The original baseline predated the
+> detection-core port (PR #76) and the A6 perf work (PR #78); the AI-engine and `perf`-fixture
+> facts in Packages A and D were re-checked and corrected against what is actually on `main`.
 
 This directory turns "make the demo convenient" into four executable work packages plus a
 kickoff-prompt companion. It is a sibling of `be_plan/` and `be_audit/` and follows their
@@ -29,7 +32,7 @@ than it needs to be:
 4. **Nothing can produce a live incident without the full RTSP+GPU stack.** The seeders insert
    `detection_log` rows directly — no WebSocket broadcast, no siren, no self-blindfold camera pause.
    The realtime path, which is the most impressive thing this system does, can only be shown with
-   MediaMTX, ffmpeg, the (gitignored) sample clips, and a loadable TensorRT engine.
+   MediaMTX, ffmpeg, the (gitignored) sample clips, and an NVIDIA GPU running `ai_engine/epoch50.pt`.
 
 The end state: one launcher command, a seed corpus that populates every page, and an in-app dev
 panel that reseeds, fires synthetic incidents, drives camera state and switches accounts — with the
@@ -74,12 +77,12 @@ any order relative to the others. The one soft coupling is documented in its §N
 
 ### Status
 
-| Package       | Status      | Commit |
-| ------------- | ----------- | ------ |
-| A — seed core | Not started | —      |
-| B — dev API   | Not started | —      |
-| C — dev panel | Not started | —      |
-| D — launcher  | Not started | —      |
+| Package       | Status   | Commit                                     |
+| ------------- | -------- | ------------------------------------------ |
+| A — seed core | Complete | `517fd9c`..`093171e` — one commit per step |
+| B — dev API   | Complete | `3354369`..`11e92ab` — one commit per step |
+| C — dev panel | Complete | `8da848c`..`aae15bb` — one commit per step |
+| D — launcher  | Complete | `chore/dev-launcher`                       |
 
 An executing session updates its own row before opening the PR.
 
