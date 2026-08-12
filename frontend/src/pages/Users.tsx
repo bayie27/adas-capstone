@@ -45,7 +45,7 @@ export default function Users() {
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
 
   // usePagination derives `page`/`offset` from the total, but the query supplies
-  // the total â€” so mirror it into state and sync during render (placeholderData
+  // the total — so mirror it into state and sync during render (placeholderData
   // keeps it stable across refetches). This clamps the page without an effect.
   const [seenTotal, setSeenTotal] = useState(0)
   const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
