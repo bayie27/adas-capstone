@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-@import "tailwindcss";
-
 @theme {
   /* Inter is self-hosted via @fontsource-variable/inter, which registers the
      family as "Inter Variable"; keep "Inter" as a fallback. */
