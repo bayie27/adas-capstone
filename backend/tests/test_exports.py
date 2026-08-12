@@ -6,6 +6,7 @@ artifact expiry, and the retraining ZIP package.
 
 import csv
 import io
+import sys
 import uuid
 import zipfile
 from datetime import UTC, datetime
@@ -395,6 +396,15 @@ class TestArtifactExpiry:
         )
         assert download_resp.status_code == 404
 
+    @pytest.mark.skipif(
+        sys.platform != "win32",
+        reason=(
+            "Unlinking a file that's still open for reading is a silent "
+            "no-op on POSIX (the inode persists until the last handle "
+            "closes) — only Windows raises PermissionError, which is the "
+            "behavior this test exercises."
+        ),
+    )
     def test_cleanup_backs_off_when_artifact_is_open_for_reading(
         self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
     ):
