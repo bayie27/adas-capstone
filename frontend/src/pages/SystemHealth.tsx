@@ -191,7 +191,7 @@ export default function SystemHealth() {
   })
 
   const live = liveQuery.data
-  const historyData = historyQuery.data?.data ?? []
+  const historyData = historyQuery.data?.points ?? []
   const isOnline = onlineQuery.data ?? null
 
   return (
@@ -307,7 +307,7 @@ export default function SystemHealth() {
         <HealthChart
           title="GPU Temperature"
           data={historyData}
-          dataKey="gpu_temperature"
+          dataKey="gpu_temp_peak"
           color="#ef4444"
           range={activeTab}
           unit="Â°C"
