@@ -10,6 +10,13 @@ export interface CameraRecord {
   ai_status: CameraAiStatus
   is_enabled: boolean
   is_active: boolean
+  // Backend-owned desired state (D-003). `config_version` is the merge key for
+  // CAMERA_STATUS_UPDATE per 01_CONTRACTS.md §9.5 — an event carrying an older
+  // version than the cached record must not be applied.
+  desired_ai_state: string
+  desired_state_reason: string | null
+  cooldown_until: string | null
+  config_version: number
   created_at: string
   updated_at: string
 }
