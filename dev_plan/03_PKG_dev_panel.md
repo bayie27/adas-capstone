@@ -257,9 +257,52 @@ trigger when enabled, one button per profile with `perf` marked slow), `SidePane
 `QueryClientProvider` + `MemoryRouter` wrapper lives in `src/test/wrapper.tsx`; service modules are
 mocked with `vi.mock` since there is no MSW.
 
-### Not run
+### Manual browser checks — executed 2026-08-12
 
-The nine manual checks in the Verification section need a browser against a running backend. Checks
-that could be verified without one are covered by the tests and the build inspection above; the
-rest — the siren firing, the alarm modal stacking above the panel, the operator-view route change,
-empty states after reseeding to `empty` — have **not** been executed.
+Driven in a real browser against a running backend and Vite dev server.
+
+| #   | Check                       | Result                                                                                    |
+| --- | --------------------------- | ----------------------------------------------------------------------------------------- |
+| 1   | Trigger appears             | PASS                                                                                      |
+| 2   | `Ctrl+Shift+D` toggles      | PASS                                                                                      |
+| 3   | Reseed to `analytics`       | **PARTIAL** — no longer bounces at the moment of reseed, but see the open issue below     |
+| 4   | Inject a detection          | PASS — alarm modal `z-index: 9999` over the panel; camera went `Paused`/`incident`        |
+| 5   | Snapshot renders            | **INCONCLUSIVE** — environment, not code; see below                                       |
+| 6   | Login-as `dsahagun`         | PASS — `/admin` → `/user`, sidebar switched                                               |
+| 7   | Reseed to `empty`           | PASS — proper empty states on Detections and Cameras, no new console errors               |
+| 8   | Flag off ⇒ no button        | Covered by `test_app_factory.py` instead (404 when disabled) — not re-done in the browser |
+| 9   | Survives a production build | PASS — verified in the built output, not the browser                                      |
+
+**Two real bugs were found here that the unit tests could not see, and both are fixed:**
+
+1. Every path in `services/dev.ts` was `/api/dev/...` on top of a `baseURL` already ending in
+   `/api`, so all six calls 404'd and the panel silently never rendered. The component tests mock
+   `@/services/dev` wholesale, so no real URL was ever constructed. `services/dev.test.ts` now
+   mocks the axios instance one level down and asserts the paths.
+2. A reseed bounced the operator to `/login` — a direct DT-2 violation, reproduced 2/2. Awaiting
+   the reseed is not sufficient: the wipe deletes every `auth_session` row, so requests _other
+   components_ already have in flight 401 and trip the interceptor. Fixed with
+   `suspendAuthRedirect()` plus `cancelQueries()`.
+
+### Still open
+
+**The `/login` bounce is reduced, not eliminated.** With the guard in place the reseed itself is
+clean at 0s and ~3s, both profiles — but a client-side navigation to another route a few seconds
+later still landed on `/login` once. The 2s grace window evidently does not cover a query fired by
+a later route's mount. Next step is to determine whether the newly minted cookie is actually being
+accepted on those later requests (a scripted login → reseed → probe at intervals would settle it in
+one run) rather than widening the grace window blindly.
+
+**Check 5 could not be completed in this environment.** The browser pane never composited a frame,
+so `document.hidden` stayed true, and Chromium's native `loading="lazy"` deliberately withholds the
+fetch for images in a hidden document — the image sat at `naturalWidth: 0`, never requested. Forcing
+`loading="eager"` on the live element loaded it immediately (160×90), which proves the endpoint, the
+cookie and `SnapshotImage.tsx` all work; it does not prove the shipped lazy path works in a real
+visible tab. Worth one look on a normal desktop browser.
+
+### Found in passing, out of scope
+
+`SystemHealth.tsx` crashed on every load — it read `disk_used_gb`, `disk_total_gb`,
+`disk_usage_percent`, `gpu_usage`, `gpu_temperature` and `uptime_seconds`, none of which the backend
+sends. Pre-existing and unrelated to this package; fixed on its own branch,
+`fix/system-health-live-fields`.
