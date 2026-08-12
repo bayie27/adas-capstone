@@ -13,10 +13,30 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:5173",
     trace: "on-first-retry",
   },
+  // Antialiasing differs enough between machines to trip a byte-exact compare;
+  // 1% absorbs that without hiding a real palette change.
+  expect: {
+    toHaveScreenshot: { maxDiffPixelRatio: 0.01 },
+  },
   projects: [
     {
       name: "chromium",
+      // The visual project is deliberately outside the default run: `test:e2e`
+      // feeds `full:check`, and a screenshot diff failing the pre-PR gate on a
+      // legitimate design change would be noise (FE_Implementation.md §6.5).
+      testIgnore: /visual\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "visual",
+      testMatch: /visual\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        // The Figma artboard. deviceScaleFactor 1 keeps the baselines at CSS
+        // pixel size rather than 2x.
+        viewport: { width: 1440, height: 1024 },
+        deviceScaleFactor: 1,
+      },
     },
   ],
   webServer: [

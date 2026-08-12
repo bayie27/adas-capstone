@@ -120,10 +120,58 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: cp .env.example .env
       - run: uv run python backend/scripts/reset_db.py
-      - run: pnpm exec playwright test
+      - run: pnpm exec playwright test --project=chromium
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  # Screenshot diff (FE_Implementation.md §6.5). Separate from `e2e` because it
+  # is not a pass/fail gate on a legitimate design change — it is the reviewable
+  # record of what a change did to every route.
+  #
+  # Baselines are generated HERE and nowhere else: font rasterisation on
+  # ubuntu-latest and on Windows do not agree, so a locally generated PNG is
+  # guaranteed to fail this job. When a phase legitimately changes a screen,
+  # download the `visual-snapshots` artifact from this run and commit it.
+  visual:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12.13"
+      - run: uv sync
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: cp .env.example .env
+      - run: uv run python backend/scripts/reset_db.py
+      # Run in compare mode, not --update-snapshots: once baselines exist this
+      # produces an expected/actual/diff triple per changed route in the report,
+      # which is the artefact worth having. On the first run — or any route
+      # whose baseline is missing — Playwright writes the PNG and reports the
+      # test as failed; continue-on-error above keeps that from blocking, and
+      # the snapshots artifact below is what gets committed.
+      - run: pnpm exec playwright test --project=visual
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-snapshots
+          path: e2e/visual.spec.ts-snapshots/
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-report
           path: playwright-report/
           retention-days: 7
