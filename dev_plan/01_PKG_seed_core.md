@@ -282,6 +282,14 @@ Replace the `sys.path` hack in `backend/tests/perf/conftest.py` with plain
 "Perf Isolation Cam" ch.202) exist because the enforcer leaves every seeded camera with exactly one
 open incident, so a latency test POSTing a new incident would hit a 409 — keep them.
 
+**That hack has two consumers now, not one.** PR #78 (A6's NFR-06 re-scope) added a second
+session-scoped fixture, `envelope_seeded`, alongside `perf_seeded`; both call
+`perf_seed.ensure_default_operators`, `seed_sample_cameras`, `_build_perf_rows` and
+`_enforce_open_camera_limit`, so there are four call sites to repoint. `_build_perf_rows` also
+gained a `spread_days` parameter in that PR (defaulting to `PERF_SPREAD_DAYS`, so the `perf`
+profile's distribution is unchanged) — carry the parameter through the move verbatim, since
+`envelope_seeded` passes a 30-day window to build its ~10-incidents/day dataset.
+
 Update `backend/scripts/README.md`: the new `empty` profile, the `--count` passthrough, the
 optional real-snapshot directory, and a note that the logic now lives in `backend/app/dev/`.
 

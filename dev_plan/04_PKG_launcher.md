@@ -100,9 +100,13 @@ Fail fast with an actionable message, the way `start-sim.ps1` does for ffmpeg an
 - **`uv` not on PATH** — point at the install docs.
 - **`pnpm` not on PATH**, or `frontend/node_modules` missing — tell them to run `pnpm install` at
   the **repo root** (it's a workspace, and the root install is what activates the git hooks).
-- **`-Ai`** — warn that it needs `uv sync --extra ai` and an NVIDIA GPU. Note that
-  `ai_engine/best.engine` is GPU/driver/TensorRT-version-specific and the engine falls back to
-  `best.pt` on load failure — that's intentional, not an error to report.
+- **`-Ai`** — warn that it needs `uv sync --extra ai` (or `--extra ai-cpu` without a GPU) and an
+  NVIDIA GPU. The weights are `ai_engine/epoch50.pt`, committed to the repo and loaded directly
+  with **no fallback** — `best.pt`/`best.engine` were deleted during the detection-core port, so
+  don't preflight for them. A missing `epoch50.pt` is a hard startup failure, not a degradation.
+  `ai_engine/machine_profile.json` is machine-specific and gitignored: its absence is **not** an
+  error — the engine falls back to one camera and says so on startup. Mention
+  `uv run python ai_engine/capacity.py` as the way to generate it.
 - **`-Sim`** — reuse `start-sim.ps1`'s ffmpeg / mediamtx / `ai_engine/sample_vids` checks rather
   than duplicating them. `sample_vids/` is gitignored, so a fresh clone won't have the clips.
 
@@ -158,8 +162,10 @@ dependency.
 instructions below it as the manual fallback (`be_audit/DEMO_TOPOLOGY.md`'s fallback ladder depends
 on people knowing them).
 
-While you're in `README.md`: the repo-structure tree still lists `ai_engine/sync.py`, which was
-deleted in favour of `supervisor.py`. Fix that.
+The repo-structure tree in `README.md` used to list `ai_engine/sync.py` (deleted in favour of
+`supervisor.py`), and this doc originally asked you to fix it. **That is already done** — the
+detection-core port (PR #76) rewrote that section, and as of `52a1f7a` the tree is current. Read it
+anyway, since it sits next to what you're editing, and report anything else you find stale.
 
 `CLAUDE.md` command table — add a row:
 
@@ -201,4 +207,4 @@ Run from a clean shell, not one that already has the servers running.
 
 - Whether `Get-NetTCPConnection` was available or you had to fall back to parsing `netstat`.
 - Whether the `PYTHONUTF8=1` workaround was needed.
-- Anything in `README.md` you found stale beyond the `sync.py` line.
+- Anything you found stale in `README.md` §"Running the System" or its structure tree.

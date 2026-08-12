@@ -21,7 +21,7 @@ WebSocket connections alive, and the operator still logged in on the same page.
 Second gap: nothing in the repo can produce a live incident over HTTP against a running backend.
 `backend/tests/perf/test_alert_latency.py` gets closest with an in-process `TestClient` POST, but
 it's test-only. Everything else either writes `detection_log` rows directly (no broadcast, no
-self-blindfold pause) or needs MediaMTX + ffmpeg + sample clips + a working TensorRT engine.
+self-blindfold pause) or needs MediaMTX + ffmpeg + sample clips + an NVIDIA GPU.
 
 ---
 
