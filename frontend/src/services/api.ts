@@ -47,6 +47,13 @@ export function suspendAuthRedirect(): () => void {
   }
 }
 
+// Exposed so other session-loss signals besides this axios interceptor —
+// notably the WebSocket's SESSION_LOST close codes in RealtimeAlertsBridge —
+// can honor the same guard instead of bouncing the operator mid-reseed.
+export function isAuthRedirectSuspended(): boolean {
+  return authRedirectSuspensions > 0
+}
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {

@@ -265,7 +265,7 @@ Driven in a real browser against a running backend and Vite dev server.
 | --- | --------------------------- | ----------------------------------------------------------------------------------------- |
 | 1   | Trigger appears             | PASS                                                                                      |
 | 2   | `Ctrl+Shift+D` toggles      | PASS                                                                                      |
-| 3   | Reseed to `analytics`       | **PARTIAL** — no longer bounces at the moment of reseed, but see the open issue below     |
+| 3   | Reseed to `analytics`       | PASS — re-verified 2026-08-12 with the WS fix below; held for 70s+ post-reseed            |
 | 4   | Inject a detection          | PASS — alarm modal `z-index: 9999` over the panel; camera went `Paused`/`incident`        |
 | 5   | Snapshot renders            | **INCONCLUSIVE** — environment, not code; see below                                       |
 | 6   | Login-as `dsahagun`         | PASS — `/admin` → `/user`, sidebar switched                                               |
@@ -284,14 +284,44 @@ Driven in a real browser against a running backend and Vite dev server.
    components_ already have in flight 401 and trip the interceptor. Fixed with
    `suspendAuthRedirect()` plus `cancelQueries()`.
 
-### Still open
+### The delayed `/login` bounce — root cause found and fixed, 2026-08-12
 
-**The `/login` bounce is reduced, not eliminated.** With the guard in place the reseed itself is
-clean at 0s and ~3s, both profiles — but a client-side navigation to another route a few seconds
-later still landed on `/login` once. The 2s grace window evidently does not cover a query fired by
-a later route's mount. Next step is to determine whether the newly minted cookie is actually being
-accepted on those later requests (a scripted login → reseed → probe at intervals would settle it in
-one run) rather than widening the grace window blindly.
+The "a few seconds later" bounce was never about the 2s grace window being too short — widening it
+would not have fixed this. `RealtimeAlertsBridge.handleWsClose` (`frontend/src/components/
+RealtimeAlertsBridge.tsx`) calls `redirectToLogin()` directly on a `SESSION_LOST` WS close code,
+entirely bypassing the `authRedirectSuspensions` guard that `suspendAuthRedirect()` sets up — that
+guard only ever covered the axios interceptor.
+
+A reseed wipes every `auth_session` row, including the one backing the operator's already-open
+`/ws/alerts` connection. That connection doesn't error immediately — it keeps working, silently
+authenticated against a session that no longer exists — until the backend's `ws_session_revalidation`
+scheduler job (`backend/app/services/realtime_revalidation.py`, wired up in `app/main.py` on a 60s
+interval) does its next sweep, finds no matching `auth_session` row, and closes the socket with code
+4009 (`SESSION_REVOKED`). `useAdasWebSocket` treats 4009 as terminal and does not reconnect, so
+`handleWsClose` fires unconditionally and bounces the operator — anywhere up to 60s after the reseed,
+which is exactly the "reduced, not eliminated" symptom the previous session saw.
+
+Fixed two ways, in `frontend/src/`:
+
+1. **Root cause** — `useAuthStore` now bumps a `sessionEpoch` counter on every `setSession()` call
+   (reseed and login-as both go through it). `useAdasWebSocket` gained a `resetKey` option that
+   tears down the current socket and opens a fresh one when it changes; `RealtimeAlertsBridge` wires
+   `sessionEpoch` into it. The old socket is now closed by the client itself, under the new cookie,
+   within the same tick as the reseed — long before the 60s sweep would ever reach it. This also
+   fixes the identical latent issue for `login-as` between two accounts of the same role, which
+   didn't trigger a route change and so never got a fresh connection either.
+2. **Defense in depth** — `services/api.ts` exports `isAuthRedirectSuspended()`; `handleWsClose`
+   checks it before bouncing, mirroring the axios interceptor's existing guard. Belt-and-suspenders
+   only — the reconnect above means the old socket's `onclose` never actually fires this branch
+   during a reseed (`isDisposed` swallows it, see `useAdasWebSocket.test.ts`), but this covers any
+   future session-loss signal that isn't routed through the reconnect.
+
+Verified in a real browser (backend + Vite dev server, `admin` account): reseeded to `analytics`,
+then waited 70s+ (past the 60s scheduler tick) — stayed on `/admin`, no `/login` bounce, and
+`injectDetection()` fired a live alarm over the reconnected socket (no page reload). Repeated for
+`login-as dsahagun`, same result. `pnpm --filter frontend test:run` — 34 passing (was 31); new
+`useAdasWebSocket.test.ts` asserts the resetKey teardown/reconnect and that it doesn't surface as an
+`onClose`.
 
 **Check 5 could not be completed in this environment.** The browser pane never composited a frame,
 so `document.hidden` stayed true, and Chromium's native `loading="lazy"` deliberately withholds the

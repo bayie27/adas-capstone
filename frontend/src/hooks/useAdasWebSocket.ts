@@ -14,13 +14,22 @@ const CONNECTION_LIMIT_CLOSE_CODE = 4008
 interface UseAdasWebSocketOptions {
   enabled?: boolean
   reconnectDelayMs?: number
+  /**
+   * Changing this value tears down the current socket and opens a fresh one
+   * under whatever cookie the browser holds now. Use it when the session
+   * itself was replaced (dev reseed, login-as) — the old socket doesn't
+   * error on its own, it just keeps working under a session that's already
+   * gone until something else notices, and the cleanup here closes it
+   * before `onClose` ever sees it (see the `isDisposed` guard below).
+   */
+  resetKey?: unknown
   /** Fired on every close, including ones the hook will reconnect from. */
   onClose?: (code: number) => void
 }
 
 export function useAdasWebSocket(
   onMessage: (data: unknown) => void,
-  { enabled = true, reconnectDelayMs = 1500, onClose }: UseAdasWebSocketOptions = {},
+  { enabled = true, reconnectDelayMs = 1500, resetKey, onClose }: UseAdasWebSocketOptions = {},
 ) {
   const onMessageRef = useRef(onMessage)
   const onCloseRef = useRef(onClose)
@@ -111,5 +120,5 @@ export function useAdasWebSocket(
         websocket.close()
       }
     }
-  }, [enabled, reconnectDelayMs])
+  }, [enabled, reconnectDelayMs, resetKey])
 }

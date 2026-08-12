@@ -19,6 +19,15 @@ interface AuthState {
   role: AppUserRole | null
   username: string | null
   userId: number | null
+  /**
+   * Bumped on every setSession() call. The cookie is the actual credential,
+   * but a WS connection authenticates once at handshake time and has no way
+   * to notice the browser is now holding a different cookie (e.g. a dev
+   * reseed, which rotates the session but leaves role/userId unchanged for
+   * the same admin). RealtimeAlertsBridge keys its reconnect off this so the
+   * socket never outlives the session it was opened under.
+   */
+  sessionEpoch: number
   setSession: (role: AppUserRole, username: string, userId: number) => void
   clearSession: () => void
 }
@@ -97,9 +106,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   role: initialSession.role,
   username: initialSession.username,
   userId: initialSession.userId,
+  sessionEpoch: 0,
   setSession: (role, username, userId) => {
     writeStoredSession({ role, username, userId })
-    set({ role, username, userId })
+    set((state) => ({ role, username, userId, sessionEpoch: state.sessionEpoch + 1 }))
   },
   clearSession: () => {
     const emptySession = createEmptySession()
