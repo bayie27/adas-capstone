@@ -1,4 +1,4 @@
-﻿import {
+import {
   RiArrowRightLine,
   RiBookOpenLine,
   RiCustomerService2Line,

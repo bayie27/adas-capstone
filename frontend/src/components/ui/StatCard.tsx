@@ -1,4 +1,4 @@
-﻿import type { ElementType, ReactNode } from "react"
+import type { ElementType, ReactNode } from "react"
 
 interface StatCardProps {
   icon: ElementType

@@ -1,4 +1,4 @@
-﻿import { useState } from "react"
+import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"

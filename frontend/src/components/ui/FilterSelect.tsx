@@ -1,4 +1,4 @@
-﻿import { RiArrowRightSLine } from "@remixicon/react"
+import { RiArrowRightSLine } from "@remixicon/react"
 
 type FilterOption<T extends string> = {
   value: T
