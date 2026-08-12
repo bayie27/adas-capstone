@@ -1,7 +1,13 @@
 """SQLModel table definitions and shared enums. Pydantic-only request/response
 schemas live in app.schemas, not here — see 02_PKG_foundation.md Step 3."""
 
-from app.models.audit import AUDIT_ACTIONS, AuditAction, AuditLog
+from app.models.audit import (
+    AUDIT_ACTIONS,
+    AUDIT_IMMUTABILITY_TRIGGER_NAMES,
+    AUDIT_IMMUTABILITY_TRIGGERS,
+    AuditAction,
+    AuditLog,
+)
 from app.models.camera import Camera, CameraBase
 from app.models.detection import DetectionLog, DetectionLogBase
 from app.models.enums import (
@@ -27,6 +33,8 @@ from app.models.user import AlarmSettings, AuthSession, User, UserBase
 __all__ = [
     "AIStatus",
     "AUDIT_ACTIONS",
+    "AUDIT_IMMUTABILITY_TRIGGERS",
+    "AUDIT_IMMUTABILITY_TRIGGER_NAMES",
     "AlarmSettings",
     "AuditAction",
     "AuditLog",

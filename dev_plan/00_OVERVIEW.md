@@ -77,12 +77,12 @@ any order relative to the others. The one soft coupling is documented in its §N
 
 ### Status
 
-| Package       | Status      | Commit |
-| ------------- | ----------- | ------ |
-| A — seed core | Not started | —      |
-| B — dev API   | Not started | —      |
-| C — dev panel | Not started | —      |
-| D — launcher  | Not started | —      |
+| Package       | Status   | Commit                                     |
+| ------------- | -------- | ------------------------------------------ |
+| A — seed core | Complete | `517fd9c`..`093171e` — one commit per step |
+| B — dev API   | Complete | `3354369`..`11e92ab` — one commit per step |
+| C — dev panel | Complete | `8da848c`..`aae15bb` — one commit per step |
+| D — launcher  | Complete | `chore/dev-launcher`                       |
 
 An executing session updates its own row before opening the PR.
 

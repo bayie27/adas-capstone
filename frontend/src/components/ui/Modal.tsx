@@ -1,5 +1,5 @@
-﻿import { useEffect, useRef } from "react"
-import { RiCloseLine } from "@remixicon/react"
+﻿import { RiCloseLine } from "@remixicon/react"
+import { useOverlayBehavior } from "@/hooks/useOverlayBehavior"
 import { cn } from "@/utils/cn"
 
 interface ModalProps {
@@ -25,32 +25,7 @@ export function Modal({
   hideClose,
   closeOnBackdrop = true,
 }: ModalProps) {
-  const dialogRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!isOpen) return
-
-    // Focus the dialog on open
-    dialogRef.current?.focus()
-
-    // Lock scroll
-    const originalOverflow = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-
-    // Handle Escape key
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose()
-      }
-    }
-
-    document.addEventListener("keydown", handleEscape)
-
-    return () => {
-      document.removeEventListener("keydown", handleEscape)
-      document.body.style.overflow = originalOverflow
-    }
-  }, [isOpen, onClose])
+  const dialogRef = useOverlayBehavior(isOpen, onClose)
 
   if (!isOpen) return null
 

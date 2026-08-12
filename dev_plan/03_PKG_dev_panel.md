@@ -225,3 +225,118 @@ Don't run `pnpm check` manually — `.husky/pre-push` runs it on every push.
 
 - Whether the `Modal` extraction caused any visible change (it shouldn't).
 - The production bundle size delta from `pnpm build`, so the DT-3 trade-off is on record.
+
+---
+
+## Executed 2026-08-11 — answers
+
+**The `Modal` extraction caused no visible change.** Only the `useEffect` body moved; the returned
+JSX, the props and the class strings are untouched. `Modal` had no test, so one was added covering
+open/closed rendering, Escape, `closeOnBackdrop={false}`, and the scroll lock being restored on
+unmount.
+
+**Bundle delta: +10,385 bytes** in the main `index` chunk (290,217 → 300,602), plus a separate
+**5,962-byte `DevPanel` chunk** that is only fetched when the panel is opened. That ~10 KB is the
+DT-3 trade-off in full: the trigger, the probe hook and the service wrappers ship to production
+because the gate is a runtime probe rather than `import.meta.env.DEV`. Verified in the built
+output — `"Open dev tools"` is present in the production `index` bundle and `"Inject a detection"`
+is not, i.e. the split held.
+
+### One thing this doc did not anticipate
+
+`queryClient.clear()` **drops the dev-tools probe entry too.** `enabled` then falls back to
+`false`, which unmounts `DevPanelTrigger` and closes the panel in the middle of the reseed that
+just succeeded. `useDevTools` exports `DEV_STATUS_QUERY_KEY` so the reset writes the probe result
+straight back after clearing. `gcTime` does not help — `clear()` empties the cache outright.
+
+### Frontend tests
+
+29 passing (was 16). New: `DevPanel.test.tsx` (renders nothing when the probe 404s, renders the
+trigger when enabled, one button per profile with `perf` marked slow), `SidePanel.test.tsx`
+(closed/open, Escape, backdrop, scroll restore) and `Modal.test.tsx`. A reusable
+`QueryClientProvider` + `MemoryRouter` wrapper lives in `src/test/wrapper.tsx`; service modules are
+mocked with `vi.mock` since there is no MSW.
+
+### Manual browser checks — executed 2026-08-12
+
+Driven in a real browser against a running backend and Vite dev server.
+
+| #   | Check                       | Result                                                                                    |
+| --- | --------------------------- | ----------------------------------------------------------------------------------------- |
+| 1   | Trigger appears             | PASS                                                                                      |
+| 2   | `Ctrl+Shift+D` toggles      | PASS                                                                                      |
+| 3   | Reseed to `analytics`       | PASS — re-verified 2026-08-12 with the WS fix below; held for 70s+ post-reseed            |
+| 4   | Inject a detection          | PASS — alarm modal `z-index: 9999` over the panel; camera went `Paused`/`incident`        |
+| 5   | Snapshot renders            | PASS — re-verified 2026-08-12 in a real visible browser tab, see below                    |
+| 6   | Login-as `dsahagun`         | PASS — `/admin` → `/user`, sidebar switched                                               |
+| 7   | Reseed to `empty`           | PASS — proper empty states on Detections and Cameras, no new console errors               |
+| 8   | Flag off ⇒ no button        | Covered by `test_app_factory.py` instead (404 when disabled) — not re-done in the browser |
+| 9   | Survives a production build | PASS — verified in the built output, not the browser                                      |
+
+**Two real bugs were found here that the unit tests could not see, and both are fixed:**
+
+1. Every path in `services/dev.ts` was `/api/dev/...` on top of a `baseURL` already ending in
+   `/api`, so all six calls 404'd and the panel silently never rendered. The component tests mock
+   `@/services/dev` wholesale, so no real URL was ever constructed. `services/dev.test.ts` now
+   mocks the axios instance one level down and asserts the paths.
+2. A reseed bounced the operator to `/login` — a direct DT-2 violation, reproduced 2/2. Awaiting
+   the reseed is not sufficient: the wipe deletes every `auth_session` row, so requests _other
+   components_ already have in flight 401 and trip the interceptor. Fixed with
+   `suspendAuthRedirect()` plus `cancelQueries()`.
+
+### The delayed `/login` bounce — root cause found and fixed, 2026-08-12
+
+The "a few seconds later" bounce was never about the 2s grace window being too short — widening it
+would not have fixed this. `RealtimeAlertsBridge.handleWsClose` (`frontend/src/components/
+RealtimeAlertsBridge.tsx`) calls `redirectToLogin()` directly on a `SESSION_LOST` WS close code,
+entirely bypassing the `authRedirectSuspensions` guard that `suspendAuthRedirect()` sets up — that
+guard only ever covered the axios interceptor.
+
+A reseed wipes every `auth_session` row, including the one backing the operator's already-open
+`/ws/alerts` connection. That connection doesn't error immediately — it keeps working, silently
+authenticated against a session that no longer exists — until the backend's `ws_session_revalidation`
+scheduler job (`backend/app/services/realtime_revalidation.py`, wired up in `app/main.py` on a 60s
+interval) does its next sweep, finds no matching `auth_session` row, and closes the socket with code
+4009 (`SESSION_REVOKED`). `useAdasWebSocket` treats 4009 as terminal and does not reconnect, so
+`handleWsClose` fires unconditionally and bounces the operator — anywhere up to 60s after the reseed,
+which is exactly the "reduced, not eliminated" symptom the previous session saw.
+
+Fixed two ways, in `frontend/src/`:
+
+1. **Root cause** — `useAuthStore` now bumps a `sessionEpoch` counter on every `setSession()` call
+   (reseed and login-as both go through it). `useAdasWebSocket` gained a `resetKey` option that
+   tears down the current socket and opens a fresh one when it changes; `RealtimeAlertsBridge` wires
+   `sessionEpoch` into it. The old socket is now closed by the client itself, under the new cookie,
+   within the same tick as the reseed — long before the 60s sweep would ever reach it. This also
+   fixes the identical latent issue for `login-as` between two accounts of the same role, which
+   didn't trigger a route change and so never got a fresh connection either.
+2. **Defense in depth** — `services/api.ts` exports `isAuthRedirectSuspended()`; `handleWsClose`
+   checks it before bouncing, mirroring the axios interceptor's existing guard. Belt-and-suspenders
+   only — the reconnect above means the old socket's `onclose` never actually fires this branch
+   during a reseed (`isDisposed` swallows it, see `useAdasWebSocket.test.ts`), but this covers any
+   future session-loss signal that isn't routed through the reconnect.
+
+Verified in a real browser (backend + Vite dev server, `admin` account): reseeded to `analytics`,
+then waited 70s+ (past the 60s scheduler tick) — stayed on `/admin`, no `/login` bounce, and
+`injectDetection()` fired a live alarm over the reconnected socket (no page reload). Repeated for
+`login-as dsahagun`, same result. `pnpm --filter frontend test:run` — 34 passing (was 31); new
+`useAdasWebSocket.test.ts` asserts the resetKey teardown/reconnect and that it doesn't surface as an
+`onClose`.
+
+### Check 5 — closed, 2026-08-12
+
+Closed by the user in their own browser (this environment's sandboxed preview pane still can't
+composite a visible tab — `document.hidden` stayed `true` on retry, same as before, and a
+teammate's real Chrome wasn't reachable via the Claude in Chrome extension in this session either).
+Logging in surfaced a still-`Unverified` incident left over from this session's WS testing; its
+alarm modal rendered the snapshot correctly on first load — the grey box with a **"SEED SNAPSHOT"**
+label baked into it is `backend/app/dev/assets.py`'s deliberate placeholder JPEG (Package A Step 6,
+no Pillow dependency), not a broken image. Confirms the endpoint, the cookie, `SnapshotImage.tsx`
+and native `loading="lazy"` all work end to end in a real visible tab.
+
+### Found in passing, out of scope
+
+`SystemHealth.tsx` crashed on every load — it read `disk_used_gb`, `disk_total_gb`,
+`disk_usage_percent`, `gpu_usage`, `gpu_temperature` and `uptime_seconds`, none of which the backend
+sends. Pre-existing and unrelated to this package; fixed on its own branch,
+`fix/system-health-live-fields`.

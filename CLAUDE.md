@@ -9,6 +9,7 @@ Intelligent Real-Time Road Accident Detection & Alert System. Three components: 
 | Install (backend only)            | `uv sync`                                              |
 | Install (backend + AI engine)     | `uv sync --extra ai` (`--extra ai-cpu` without a GPU)  |
 | Install (frontend + root tooling) | `pnpm install` (repo root — activates git hooks)       |
+| Start dev stack                   | `pwsh -File scripts/start-dev.ps1`                     |
 | Run backend                       | `uv run fastapi dev backend/app/main.py`               |
 | Run frontend                      | `cd frontend && pnpm dev`                              |
 | Run AI engine                     | `uv run python ai_engine/main.py` (needs `--extra ai`) |
