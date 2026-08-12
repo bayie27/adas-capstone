@@ -11,13 +11,21 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from sqlalchemy import case, or_
 from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from app.core.types import parse_utc_query_datetime
-from app.models import AuditAction, Camera, DetectionLog, DetectionStatus, User
-from app.services.cameras import apply_desired_state
+from app.models import (
+    AuditAction,
+    Camera,
+    DesiredAIState,
+    DesiredStateReason,
+    DetectionLog,
+    DetectionStatus,
+    User,
+)
 from app.services.formatting import format_user_name
 
 if TYPE_CHECKING:
@@ -126,9 +134,10 @@ def ingest_detection(
 
     The broadcast deliberately stays with the caller: 01_CONTRACTS.md §9.4
     forbids announcing a row a later rollback could undo, and the ordering
-    (commit, then apply_desired_state, then broadcast) is what makes the
-    self-blindfold correct. Nothing here changes ordering, status mapping
-    or error codes — this seam carries the F20 fix (be_audit/A3_ai_seam.md).
+    (commit, then broadcast) is what makes the self-blindfold correct.
+    Nothing here changes ordering, status mapping or error codes — this
+    seam carries the F20 fix (be_audit/A3_ai_seam.md) and the F23 race fix
+    (be_audit/00_FINDINGS.md).
     """
     camera = session.get(Camera, payload.camera_id)
     if not camera or not camera.is_active or not camera.is_enabled:
@@ -146,7 +155,6 @@ def ingest_detection(
     if existing is not None:
         return existing, camera, False
 
-    now = datetime.now(UTC)
     db_alert = DetectionLog(
         camera_id=payload.camera_id,
         detected_at=detected_at,
@@ -159,10 +167,42 @@ def ingest_detection(
     # committed. Never pre-checked for an existing open incident — the
     # ux_detection_open_camera partial unique index is what makes this
     # race-proof, not a SELECT before the INSERT.
-    apply_desired_state(camera, has_open_incident=True, now=now)
-    session.add(camera)
+    #
+    # Written as a conditional UPDATE against the row's *live* is_active/
+    # is_enabled, not apply_desired_state() on the `camera` object read
+    # above — that read can go stale before this commits. A concurrent
+    # operator disable (edge case 1.7, be_audit/A5_edge_cases.md) only
+    # touches the is_enabled column, so a plain read-then-write here would
+    # silently clobber a disabled camera's correct Inactive/disabled state
+    # with Paused/incident, using a since-invalidated "is_enabled was true"
+    # assumption. The CASE is evaluated by the DB against the row's current
+    # value at write time, so whichever request commits last always leaves
+    # the row internally consistent, regardless of interleaving (F23,
+    # be_audit/00_FINDINGS.md).
+    camera_disabled = or_(~Camera.is_active, ~Camera.is_enabled)
 
     try:
+        # Inside the try, not before it: this session.execute() autoflushes
+        # the pending DetectionLog insert above, which is exactly where the
+        # ux_detection_open_camera / ux_detection_source_event IntegrityError
+        # actually raises from — it must land in this except, not escape as
+        # an unhandled 500.
+        session.execute(
+            sa_update(Camera)
+            .where(Camera.camera_id == payload.camera_id)
+            .values(
+                desired_ai_state=case(
+                    (camera_disabled, DesiredAIState.INACTIVE.value),
+                    else_=DesiredAIState.PAUSED.value,
+                ),
+                desired_state_reason=case(
+                    (camera_disabled, DesiredStateReason.DISABLED.value),
+                    else_=DesiredStateReason.INCIDENT.value,
+                ),
+                cooldown_until=None,
+                config_version=Camera.config_version + 1,
+            )
+        )
         session.commit()
     except IntegrityError as exc:
         session.rollback()

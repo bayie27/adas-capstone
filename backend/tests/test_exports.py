@@ -6,6 +6,7 @@ artifact expiry, and the retraining ZIP package.
 
 import csv
 import io
+import sys
 import uuid
 import zipfile
 from datetime import UTC, datetime
@@ -394,6 +395,80 @@ class TestArtifactExpiry:
             f"/api/exports/jobs/{job_id}/download", headers=headers
         )
         assert download_resp.status_code == 404
+
+    @pytest.mark.skipif(
+        sys.platform != "win32",
+        reason=(
+            "Unlinking a file that's still open for reading is a silent "
+            "no-op on POSIX (the inode persists until the last handle "
+            "closes) — only Windows raises PermissionError, which is the "
+            "behavior this test exercises."
+        ),
+    )
+    def test_cleanup_backs_off_when_artifact_is_open_for_reading(
+        self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Edge case 1.14 (be_audit/A5_edge_cases.md) — cleanup racing a
+        streaming download. On Windows, unlinking a file that another
+        handle still has open for reading (exactly what `FileResponse` does
+        while it streams a download) raises `PermissionError`, not a
+        silent no-op like POSIX — confirmed empirically on this platform,
+        not assumed. `cleanup_expired_artifacts`'s existing `except
+        OSError` (`PermissionError` is an `OSError` subclass) must catch
+        this and leave the job `completed` with its artifact intact for the
+        next sweep, never crash the scheduler job and never mark the row
+        `expired` while the file is still actually on disk."""
+        from app.core import config as config_module
+
+        monkeypatch.setattr(config_module.settings, "EXPORT_ARTIFACT_TTL_HOURS", 0)
+        make_operator(session, username="openhandleop")
+        headers = auth_headers(client, "openhandleop", "Operator123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=headers,
+        )
+        job_id = resp.json()["job_id"]
+        process_export_job(session.get_bind(), job_id)
+
+        job = session.get(ExportJob, job_id)
+        artifact_path = job.artifact_path
+        assert artifact_path is not None
+
+        from pathlib import Path
+
+        # Simulates a download actively streaming: a genuine, open OS-level
+        # file handle, held for the whole sweep — not a mocked exception.
+        with open(artifact_path, "rb") as handle:
+            handle.read(1)  # prove the handle is genuinely live
+
+            cleanup_expired_artifacts(session.get_bind())  # must not raise
+
+            session.refresh(job)
+            assert job.status == "completed"
+            assert job.artifact_path == artifact_path
+            assert Path(artifact_path).exists()
+
+            # The still-open download keeps working — the artifact was
+            # never truncated or partially removed by the failed unlink.
+            rest = handle.read()
+            assert rest  # more bytes remain readable past the first one
+
+            # A genuinely new download request also still succeeds while
+            # the artifact is mid-sweep-retry.
+            download_resp = client.get(
+                f"/api/exports/jobs/{job_id}/download", headers=headers
+            )
+            assert download_resp.status_code == 200
+
+        # Handle released — the next sweep now succeeds and the row and
+        # the filesystem converge again.
+        cleanup_expired_artifacts(session.get_bind())
+        session.refresh(job)
+        assert job.status == "expired"
+        assert job.artifact_path is None
+        assert not Path(artifact_path).exists()
 
 
 class TestConcurrentJobs:

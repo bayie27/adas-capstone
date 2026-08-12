@@ -239,6 +239,41 @@ class TestAuditViewer:
         body = resp.json()
         assert body == {"total_filtered": 0, "items": []}
 
+    @pytest.mark.parametrize("query", ["limit=0", "limit=101", "offset=-1"])
+    def test_pagination_boundary_rejections(
+        self, client: TestClient, session: Session, query: str
+    ):
+        """Edge case 2.1/2.2 (be_audit/00_FINDINGS.md F29)."""
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        resp = client.get(f"/api/audit-logs/?{query}", headers=headers)
+        assert resp.status_code == 422
+
+    @pytest.mark.parametrize("query", ["limit=1", "limit=100", "offset=0"])
+    def test_pagination_boundary_accepted(
+        self, client: TestClient, session: Session, query: str
+    ):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        resp = client.get(f"/api/audit-logs/?{query}", headers=headers)
+        assert resp.status_code == 200
+
+    def test_offset_beyond_total_returns_empty_page_with_correct_total(
+        self, client: TestClient, session: Session
+    ):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        # make_admin itself commits a couple of rows via its own setup;
+        # what matters is total_filtered agreeing with an empty items list.
+        total = client.get("/api/audit-logs/", headers=headers).json()["total_filtered"]
+
+        resp = client.get("/api/audit-logs/?offset=100000", headers=headers)
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == total
+        assert body["items"] == []
+
     def test_viewer_stable_pagination_no_duplicates_or_gaps(
         self, client: TestClient, session: Session
     ):

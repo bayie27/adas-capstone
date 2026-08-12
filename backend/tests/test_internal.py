@@ -5,18 +5,29 @@ internal auth. The v1 poll/PATCH routes were removed by the A3 audit pack
 (be_audit/A3_ai_seam.md, F3) — no caller since PR #67.
 """
 
+import json
 import logging
+import threading
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from app.core.config import Settings, settings
 from app.core.redaction import redact_text
-from app.models import AIStatus, ConnectionStatus, DetectionLog, DetectionStatus
+from app.main import create_app
+from app.models import AIStatus, Camera, ConnectionStatus, DetectionLog, DetectionStatus
 from app.schemas.events import EventEnvelope
+from app.services.cameras import recompute_desired_state
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from .conftest import internal_headers, make_camera, make_detection
+from .conftest import (
+    auth_headers,
+    internal_headers,
+    make_camera,
+    make_detection,
+    make_operator,
+)
 
 
 def _capture_broadcasts(
@@ -252,6 +263,44 @@ class TestReceiveAiAlertV2:
         )
         assert resp.status_code == 422
 
+    def test_malformed_json_body_is_422_not_500(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 4.14 — syntactically broken JSON bytes, not just a
+        semantically wrong shape."""
+        resp = client.post(
+            "/api/internal/alert",
+            headers={**internal_headers(), "Content-Type": "application/json"},
+            content=b'{"not": valid json,,,',
+        )
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "VALIDATION_ERROR"
+
+    def test_wrong_content_type_is_422_not_500(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 4.14 — a valid JSON payload sent with a non-JSON
+        Content-Type must still 422 cleanly, not 500."""
+        camera = make_camera(session, name="Wrong Content-Type Cam", channel_id=37)
+        body = json.dumps(self._payload_dict(camera.camera_id)).encode()
+
+        resp = client.post(
+            "/api/internal/alert",
+            headers={**internal_headers(), "Content-Type": "text/plain"},
+            content=body,
+        )
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "VALIDATION_ERROR"
+
+    def _payload_dict(self, camera_id: int) -> dict:
+        return {
+            "source_event_id": str(uuid.uuid4()),
+            "camera_id": camera_id,
+            "detected_at": "2026-07-12T10:30:00+00:00",
+            "snapshot_key": "wrongct.jpg",
+            "confidence_score": 0.9,
+        }
+
 
 class TestInternalAuth:
     def _valid_heartbeat_body(self) -> dict:
@@ -277,6 +326,35 @@ class TestInternalAuth:
 
         assert resp.status_code == 401
         assert resp.json()["detail"] == "Invalid Internal API Key"
+
+    def test_wrong_api_key_is_compared_constant_time(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Edge case 8.14 — asserting wall-clock timing is flaky; this
+        instead pins the *mechanism*, the same way test_auth.py's
+        test_unknown_username_still_runs_a_real_password_verification does
+        for 8.8: verify_internal_api_key must go through
+        secrets.compare_digest, not a short-circuiting `==`, which a
+        future refactor could otherwise introduce without any existing
+        test failing."""
+        import app.api.dependencies as dependencies_module
+
+        calls = []
+        original = dependencies_module.secrets.compare_digest
+        monkeypatch.setattr(
+            dependencies_module.secrets,
+            "compare_digest",
+            lambda a, b: (calls.append((a, b)), original(a, b))[1],
+        )
+
+        resp = client.post(
+            "/api/internal/heartbeat",
+            headers={"x-api-key": "wrong-key"},
+            json=self._valid_heartbeat_body(),
+        )
+
+        assert resp.status_code == 401
+        assert calls == [("wrong-key", settings.INTERNAL_API_KEY.get_secret_value())]
 
 
 class TestHeartbeat:
@@ -625,3 +703,404 @@ class TestHeartbeat:
     def test_rtsp_url_covered_by_generic_credential_redaction(self):
         leaky = "rtsp://opuser:sekret@10.0.0.5:554/x"
         assert "sekret" not in redact_text(leaky)
+
+
+class TestConcurrentDisableRace:
+    """Edge case 1.7 (be_audit/A5_edge_cases.md) — an AI event arriving
+    while an operator disables that camera. Needs genuinely parallel
+    requests, which the shared-session `client` fixture used everywhere
+    else in this file cannot provide (every request would serialize
+    through one Python-level `Session` object). Instead this builds its own
+    app on a real file-backed database with the ordinary, non-overridden
+    `get_session` dependency, so each thread's request gets its own
+    session against the same engine — the same shape production traffic
+    has."""
+
+    def _make_client(self, tmp_path) -> TestClient:
+        app_settings = Settings(
+            _env_file=None,
+            SECRET_KEY="test-secret-key-not-for-production-use",
+            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            DATABASE_URL=f"sqlite:///{tmp_path / 'race.db'}",
+            SCHEDULER_ENABLED=False,
+            SNAPSHOT_ROOT=tmp_path / "snapshots",
+        )
+        app = create_app(app_settings)
+        return TestClient(app)
+
+    def test_ai_alert_racing_operator_disable_never_500s_and_stays_consistent(
+        self, tmp_path
+    ):
+        with self._make_client(tmp_path) as client:
+            with Session(client.app.state.engine) as session:
+                make_operator(session, username="racer", password="Operator123")
+            headers = auth_headers(client, "racer", "Operator123")
+
+            outcomes: set[tuple[int, int]] = set()
+
+            for attempt in range(25):
+                with Session(client.app.state.engine) as session:
+                    camera = make_camera(
+                        session, name=f"Race Cam {attempt}", channel_id=1000 + attempt
+                    )
+                    camera_id = camera.camera_id
+
+                alert_payload = {
+                    "source_event_id": str(uuid.uuid4()),
+                    "camera_id": camera_id,
+                    "detected_at": datetime.now(UTC).isoformat(),
+                    "snapshot_key": f"race/{attempt}.jpg",
+                    "confidence_score": 0.9,
+                }
+
+                barrier = threading.Barrier(2)
+                results: dict[str, object] = {}
+                errors: list[BaseException] = []
+
+                def send_alert(
+                    barrier=barrier,
+                    results=results,
+                    errors=errors,
+                    alert_payload=alert_payload,
+                ):
+                    try:
+                        barrier.wait(timeout=5)
+                        results["alert"] = client.post(
+                            "/api/internal/alert",
+                            headers=internal_headers(),
+                            json=alert_payload,
+                        )
+                    except BaseException as exc:  # noqa: BLE001
+                        errors.append(exc)
+
+                def send_disable(
+                    barrier=barrier,
+                    results=results,
+                    errors=errors,
+                    camera_id=camera_id,
+                ):
+                    try:
+                        barrier.wait(timeout=5)
+                        results["disable"] = client.patch(
+                            f"/api/cameras/{camera_id}",
+                            headers=headers,
+                            json={"is_enabled": False},
+                        )
+                    except BaseException as exc:  # noqa: BLE001
+                        errors.append(exc)
+
+                t_alert = threading.Thread(target=send_alert)
+                t_disable = threading.Thread(target=send_disable)
+                t_alert.start()
+                t_disable.start()
+                t_alert.join(timeout=10)
+                t_disable.join(timeout=10)
+
+                assert not errors, f"attempt {attempt}: {errors}"
+                alert_resp = results["alert"]
+                disable_resp = results["disable"]
+
+                # No 500s, no unhandled OperationalError leaking as anything
+                # but the documented 503.
+                assert alert_resp.status_code in (201, 404, 503), (
+                    attempt,
+                    alert_resp.status_code,
+                    alert_resp.text,
+                )
+                assert disable_resp.status_code in (200, 503), (
+                    attempt,
+                    disable_resp.status_code,
+                    disable_resp.text,
+                )
+                outcomes.add((alert_resp.status_code, disable_resp.status_code))
+
+                if alert_resp.status_code != 201 or disable_resp.status_code != 200:
+                    # A 503 (lock timeout) is a legitimate, already-covered
+                    # outcome (edge case 6.1) — nothing more to check for
+                    # this attempt.
+                    continue
+
+                # Both succeeded — assert desired-state self-consistency and
+                # that any created incident is not stranded.
+                with Session(client.app.state.engine) as session:
+                    db_camera = session.get(Camera, camera_id)
+                    assert db_camera is not None
+                    has_open_incident = (
+                        session.exec(
+                            select(DetectionLog).where(
+                                DetectionLog.camera_id == camera_id,
+                                DetectionLog.detection_status.in_(
+                                    [
+                                        DetectionStatus.UNVERIFIED.value,
+                                        DetectionStatus.ONGOING.value,
+                                    ]
+                                ),
+                            )
+                        ).first()
+                        is not None
+                    )
+
+                    # recompute_desired_state is the single source of truth
+                    # for what desired state *should* be given the camera's
+                    # current facts — replay it and compare, rather than
+                    # hand-deriving the invariant here.
+                    expected = Camera(
+                        camera_name=db_camera.camera_name,
+                        channel_id=db_camera.channel_id,
+                        is_active=db_camera.is_active,
+                        is_enabled=db_camera.is_enabled,
+                        cooldown_until=db_camera.cooldown_until,
+                    )
+                    recompute_desired_state(
+                        expected,
+                        has_open_incident=has_open_incident,
+                        now=datetime.now(UTC),
+                    )
+                    assert db_camera.desired_ai_state == expected.desired_ai_state, (
+                        attempt,
+                        db_camera.is_enabled,
+                        has_open_incident,
+                        db_camera.desired_ai_state,
+                        expected.desired_ai_state,
+                    )
+                    assert (
+                        db_camera.desired_state_reason == expected.desired_state_reason
+                    )
+
+                    if has_open_incident:
+                        # An incident on a now-disabled camera must still be
+                        # resolvable by an operator, not stranded.
+                        log = session.exec(
+                            select(DetectionLog).where(
+                                DetectionLog.camera_id == camera_id
+                            )
+                        ).first()
+                        assert log is not None
+                        detail_resp = client.get(
+                            f"/api/alerts/{log.log_id}", headers=headers
+                        )
+                        assert detail_resp.status_code == 200
+                        confirm_resp = client.post(
+                            f"/api/alerts/{log.log_id}/confirm", headers=headers
+                        )
+                        assert confirm_resp.status_code == 200
+
+            # Documented per be_audit/A5_edge_cases.md: both outcomes are
+            # acceptable, and this assertion is the record of which one(s)
+            # this suite actually observes. If this ever starts failing
+            # because a third status pair shows up, that is new information
+            # worth looking at, not a flake to silence.
+            assert outcomes <= {
+                (201, 200),
+                (404, 200),
+                (201, 503),
+                (404, 503),
+                (503, 200),
+                (503, 503),
+            }
+
+
+class TestConcurrentHeartbeatRace:
+    """Edge case 1.18 (be_audit/00_FINDINGS.md F26) — two engine instances
+    heartbeating the same camera concurrently. The same real-file-DB,
+    real-thread harness as TestConcurrentDisableRace, because F23's bug
+    hunt for edge case 1.7 showed sequential/deterministic simulation
+    misses real SQLAlchemy dirty-tracking races — deterministic
+    reproduction (be_audit/00_FINDINGS.md F26 writeup) found the identical
+    mechanism here before it was fixed in apply_observed(): whichever
+    heartbeat commits last must leave the row matching its own report in
+    full, never a mixed-provenance row with some fields surviving from the
+    other engine's concurrently committed report."""
+
+    def _make_client(self, tmp_path) -> TestClient:
+        app_settings = Settings(
+            _env_file=None,
+            SECRET_KEY="test-secret-key-not-for-production-use",
+            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            DATABASE_URL=f"sqlite:///{tmp_path / 'hbrace.db'}",
+            SCHEDULER_ENABLED=False,
+            SNAPSHOT_ROOT=tmp_path / "snapshots",
+        )
+        app = create_app(app_settings)
+        return TestClient(app)
+
+    def test_two_engines_heartbeating_the_same_camera_never_corrupt_it(self, tmp_path):
+        with self._make_client(tmp_path) as client:
+            for attempt in range(25):
+                with Session(client.app.state.engine) as session:
+                    camera = make_camera(
+                        session,
+                        name=f"HB Race Cam {attempt}",
+                        channel_id=2000 + attempt,
+                        connection_status=ConnectionStatus.DISCONNECTED.value,
+                        ai_status=AIStatus.INACTIVE.value,
+                    )
+                    camera_id = camera.camera_id
+
+                # Deliberately varies per attempt so a report can't
+                # coincidentally match the *initial* seed state above and
+                # mask the bug this test targets.
+                report_a = {
+                    "camera_id": camera_id,
+                    "connection_status": "Reconnecting",
+                    "ai_status": "Unresponsive",
+                    "measured_fps": 5.0 + attempt,
+                    "inference_latency_ms": 90.0 + attempt,
+                }
+                report_b = {
+                    "camera_id": camera_id,
+                    "connection_status": "Connected",
+                    "ai_status": "Active",
+                    "measured_fps": 30.0 + attempt,
+                    "inference_latency_ms": 12.0 + attempt,
+                }
+
+                barrier = threading.Barrier(2)
+                results: dict[str, object] = {}
+                errors: list[BaseException] = []
+
+                def send(
+                    engine_id,
+                    report,
+                    barrier=barrier,
+                    results=results,
+                    errors=errors,
+                ):
+                    try:
+                        barrier.wait(timeout=5)
+                        results[engine_id] = client.post(
+                            "/api/internal/heartbeat",
+                            headers=internal_headers(),
+                            json={
+                                "engine_id": engine_id,
+                                "sent_at": datetime.now(UTC).isoformat(),
+                                "cameras": [report],
+                            },
+                        )
+                    except BaseException as exc:  # noqa: BLE001
+                        errors.append(exc)
+
+                t_a = threading.Thread(target=send, args=("engine-A", report_a))
+                t_b = threading.Thread(target=send, args=("engine-B", report_b))
+                t_a.start()
+                t_b.start()
+                t_a.join(timeout=10)
+                t_b.join(timeout=10)
+
+                assert not errors, f"attempt {attempt}: {errors}"
+                assert results["engine-A"].status_code == 200
+                assert results["engine-B"].status_code == 200
+
+                with Session(client.app.state.engine) as session:
+                    db_camera = session.get(Camera, camera_id)
+                    observed = (
+                        db_camera.connection_status,
+                        db_camera.ai_status,
+                        db_camera.measured_fps,
+                        db_camera.inference_latency_ms,
+                    )
+                    pure_a = (
+                        report_a["connection_status"],
+                        report_a["ai_status"],
+                        report_a["measured_fps"],
+                        report_a["inference_latency_ms"],
+                    )
+                    pure_b = (
+                        report_b["connection_status"],
+                        report_b["ai_status"],
+                        report_b["measured_fps"],
+                        report_b["inference_latency_ms"],
+                    )
+                    assert observed in (pure_a, pure_b), (
+                        attempt,
+                        observed,
+                        "row is a corrupted mix of both engines' reports",
+                    )
+
+
+class TestConcurrentDuplicateSourceEventId:
+    """Edge case 1.6 (be_audit/00_FINDINGS.md F26) — the same
+    source_event_id posted twice genuinely concurrently must hit the
+    ux_detection_source_event unique-index IntegrityError backstop
+    (internal.py's except IntegrityError branch), not just the pre-commit
+    SELECT idempotency check, which a sequential test can't tell apart
+    from the backstop actually working."""
+
+    def _make_client(self, tmp_path) -> TestClient:
+        app_settings = Settings(
+            _env_file=None,
+            SECRET_KEY="test-secret-key-not-for-production-use",
+            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            DATABASE_URL=f"sqlite:///{tmp_path / 'duprace.db'}",
+            SCHEDULER_ENABLED=False,
+            SNAPSHOT_ROOT=tmp_path / "snapshots",
+        )
+        app = create_app(app_settings)
+        return TestClient(app)
+
+    def test_same_source_event_id_posted_by_two_threads_yields_one_row(self, tmp_path):
+        with self._make_client(tmp_path) as client:
+            for attempt in range(25):
+                with Session(client.app.state.engine) as session:
+                    camera = make_camera(
+                        session,
+                        name=f"Dup Race Cam {attempt}",
+                        channel_id=3000 + attempt,
+                    )
+                    camera_id = camera.camera_id
+
+                source_event_id = str(uuid.uuid4())
+                payload = {
+                    "source_event_id": source_event_id,
+                    "camera_id": camera_id,
+                    "detected_at": datetime.now(UTC).isoformat(),
+                    "snapshot_key": f"duprace/{attempt}.jpg",
+                    "confidence_score": 0.9,
+                }
+
+                barrier = threading.Barrier(2)
+                results: list = []
+                errors: list[BaseException] = []
+                lock = threading.Lock()
+
+                def send(
+                    barrier=barrier,
+                    results=results,
+                    errors=errors,
+                    lock=lock,
+                    payload=payload,
+                ):
+                    try:
+                        barrier.wait(timeout=5)
+                        resp = client.post(
+                            "/api/internal/alert",
+                            headers=internal_headers(),
+                            json=payload,
+                        )
+                        with lock:
+                            results.append(resp)
+                    except BaseException as exc:  # noqa: BLE001
+                        errors.append(exc)
+
+                threads = [threading.Thread(target=send) for _ in range(2)]
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join(timeout=10)
+
+                assert not errors, f"attempt {attempt}: {errors}"
+                statuses = sorted(r.status_code for r in results)
+                assert statuses == [200, 201], (attempt, statuses)
+
+                with Session(client.app.state.engine) as session:
+                    rows = session.exec(
+                        select(DetectionLog).where(
+                            DetectionLog.source_event_id == source_event_id
+                        )
+                    ).all()
+                    assert len(rows) == 1, (attempt, len(rows))
+                    returned_log_ids = {r.json()["log_id"] for r in results}
+                    assert returned_log_ids == {rows[0].log_id}

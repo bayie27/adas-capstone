@@ -121,6 +121,7 @@ def _build_app(tmp_path, **overrides):
         DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
         DATABASE_URL=f"sqlite:///{tmp_path / 'realtime.db'}",
         SCHEDULER_ENABLED=False,
+        SNAPSHOT_ROOT=tmp_path / "snapshots",
         **overrides,
     )
     return create_app(app_settings), app_settings

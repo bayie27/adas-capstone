@@ -168,6 +168,39 @@ class TestUsernameNormalization:
         )
         assert resp.status_code == 200
 
+    @pytest.mark.parametrize("space", [" ", " "])
+    def test_login_strips_unicode_whitespace(
+        self, client: TestClient, session: Session, space: str
+    ):
+        """Edge case 4.7 — not just ASCII spaces: U+00A0 (NBSP) and U+2003
+        (em space) are both `str.isspace()`-true and must strip too."""
+        make_admin(session)
+        resp = client.post(
+            "/api/auth/login",
+            data={"username": f"{space}admin{space}", "password": "Admin123"},
+        )
+        assert resp.status_code == 200
+
+    def test_unicode_padded_username_cannot_create_a_second_account(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 4.7 — same as test_padded_username_cannot_create_a_
+        second_account below, but with Unicode whitespace padding."""
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        resp = client.post(
+            "/api/users/",
+            json={
+                "username": " admin ",
+                "first_name": "Dup",
+                "last_name": "User",
+                "role": "Operator",
+                "password": "Duppass1",
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 400
+
     def test_padded_username_cannot_create_a_second_account(
         self, client: TestClient, session: Session
     ):
@@ -861,3 +894,38 @@ class TestRBAC:
 
         me = client.get("/api/users/me", headers=headers)
         assert me.json()["role"] == "Operator"
+
+    # Every admin-only route in the API (be_audit/00_FINDINGS.md F27,
+    # edge case 8.11). A POST/PATCH body is deliberately `{}` — missing
+    # every required field — so a 422 slipping through would mean the
+    # route handler's body validation ran before the role check, not
+    # just that the route is admin-gated at all.
+    _ADMIN_ROUTES: list[tuple[str, str, dict | None]] = [
+        ("GET", "/api/audit-logs/", None),
+        ("GET", "/api/audit-logs/export", None),
+        ("POST", "/api/exports/retraining", {}),
+        ("GET", "/api/system/backups", None),
+        ("POST", "/api/system/backups", None),
+        ("POST", "/api/system/restores", {}),
+        ("GET", "/api/system/restores/latest", None),
+        ("GET", "/api/users/", None),
+        ("POST", "/api/users/", {}),
+        ("PATCH", "/api/users/1", {}),
+        ("POST", "/api/users/1/reset-password", {}),
+        ("DELETE", "/api/users/1", None),
+    ]
+
+    @pytest.mark.parametrize(("method", "path", "body"), _ADMIN_ROUTES)
+    def test_operator_gets_403_before_payload_processing_on_every_admin_route(
+        self,
+        client: TestClient,
+        session: Session,
+        method: str,
+        path: str,
+        body: dict | None,
+    ):
+        make_operator(session)
+        headers = auth_headers(client, "operator", "Operator123")
+        resp = client.request(method, path, json=body, headers=headers)
+        assert resp.status_code == 403, (method, path, resp.status_code, resp.text)
+        assert resp.json()["code"] == "FORBIDDEN"

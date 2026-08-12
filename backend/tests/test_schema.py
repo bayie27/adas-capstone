@@ -394,6 +394,15 @@ class TestUnicodeLength:
         with pytest.raises(ValidationError, match="at most 100 characters"):
             CameraCreate(camera_name="\U0001f3a5" * 101, channel_id=1)
 
+    def test_empty_camera_name_rejected(self):
+        """Edge case 2.10 — the lower boundary: 0 chars."""
+        with pytest.raises(ValidationError, match="at least 1 character"):
+            CameraCreate(camera_name="", channel_id=1)
+
+    def test_single_character_camera_name_accepted(self):
+        """Edge case 2.10 — 1 char is the smallest valid name."""
+        CameraCreate(camera_name="A", channel_id=1)  # must not raise
+
 
 class TestCascadeDeletes:
     def test_deleting_a_user_cascades_their_alarm_settings(self, db_session):

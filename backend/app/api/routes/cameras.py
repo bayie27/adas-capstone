@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import Session, col, func, select
 
 from app.api.dependencies import get_current_user, get_realtime_manager
@@ -242,6 +243,20 @@ def update_camera(
     # even when nothing about desired state actually changed.
     recompute_desired_state(db_camera, has_open_incident=has_open_incident, now=now)
     ai_relevant_changed = bump_if_ai_relevant_changed(db_camera, before)
+
+    # Edge case 1.7 (be_audit/A5_edge_cases.md): recompute_desired_state()'s
+    # result can coincidentally equal *this session's own original read* of
+    # these columns (e.g. a fresh camera's Inactive default) even though a
+    # concurrent AI alert has, in between, committed a different value to
+    # the row (Paused/incident). SQLAlchemy's dirty-tracking only diffs
+    # against this session's own load, not the live row, so an unflagged
+    # UPDATE would then silently omit that column from its SET clause and
+    # leave the concurrent writer's value in place — a disabled camera
+    # stuck presenting as Paused. Force these three into the UPDATE
+    # regardless of whether this session thinks they changed.
+    flag_modified(db_camera, "desired_ai_state")
+    flag_modified(db_camera, "desired_state_reason")
+    flag_modified(db_camera, "cooldown_until")
 
     if other_changed_fields:
         audit.record(

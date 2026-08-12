@@ -11,10 +11,10 @@ from io import StringIO
 
 import pytest
 from app.core.scheduler import create_scheduler
-from app.models import DetectionLog, DetectionStatus
+from app.models import AuditLog, DetectionLog, DetectionStatus
 from app.schemas.events import EventEnvelope
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from .conftest import auth_headers, make_camera, make_operator
 
@@ -288,6 +288,79 @@ class TestGetAlerts:
 
         assert resp.status_code == 422
 
+    def test_start_equals_end_returns_that_instants_row(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 2.11 — start_date == end_date is a valid (not
+        rejected) single-instant window, inclusive on both ends."""
+        _, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name="Instant Window Cam", channel_id=3)
+        target_at = datetime(2026, 1, 2, 9, 0, tzinfo=UTC)
+        target = make_alert(
+            session, camera, status=DetectionStatus.RESOLVED, detected_at=target_at
+        )
+        other_camera = make_camera(session, name="Instant Window Cam 2", channel_id=4)
+        make_alert(
+            session,
+            other_camera,
+            status=DetectionStatus.RESOLVED,
+            detected_at=target_at + timedelta(hours=1),
+        )
+
+        iso = target_at.isoformat().replace("+00:00", "Z")
+        resp = client.get(
+            f"/api/alerts/?start_date={iso}&end_date={iso}", headers=headers
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert [log["log_id"] for log in body["logs"]] == [target.log_id]
+
+    @pytest.mark.parametrize(
+        "query",
+        ["limit=0", "limit=101", "offset=-1"],
+    )
+    def test_pagination_boundary_rejections(
+        self, client: TestClient, session: Session, query: str
+    ):
+        """Edge case 2.1/2.2 (be_audit/00_FINDINGS.md F29)."""
+        _, headers = operator_with_headers(client, session)
+        resp = client.get(f"/api/alerts/?{query}", headers=headers)
+        assert resp.status_code == 422
+
+    @pytest.mark.parametrize("query", ["limit=1", "limit=100", "offset=0"])
+    def test_pagination_boundary_accepted(
+        self, client: TestClient, session: Session, query: str
+    ):
+        _, headers = operator_with_headers(client, session)
+        resp = client.get(f"/api/alerts/?{query}", headers=headers)
+        assert resp.status_code == 200
+
+    def test_extremely_long_search_string_is_rejected(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 4.13 — the list endpoint's own `search` param, not
+        just the export/help variants covered elsewhere."""
+        _, headers = operator_with_headers(client, session)
+        resp = client.get(
+            "/api/alerts/", params={"search": "x" * 10_000}, headers=headers
+        )
+        assert resp.status_code == 422
+
+    def test_offset_beyond_total_returns_empty_page_with_correct_total(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name="Beyond Offset Cam", channel_id=2)
+        make_alert(session, camera, status=DetectionStatus.RESOLVED)
+
+        resp = client.get("/api/alerts/?offset=50", headers=headers)
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert body["logs"] == []
+
     def test_invalid_camera_id_returns_422(self, client: TestClient, session: Session):
         _, headers = operator_with_headers(client, session)
 
@@ -523,6 +596,21 @@ class TestAlertSnapshotRoute:
         resp = client.get(f"/api/alerts/{log.log_id}/snapshot", headers=headers)
         assert resp.status_code == 404
 
+    def test_detail_returns_200_when_snapshot_file_missing(
+        self, client: TestClient, session: Session
+    ):
+        """Edge case 3.15 — the detail endpoint never touches the
+        filesystem, so a missing snapshot file must not affect it; only
+        the dedicated /snapshot route 404s."""
+        _, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name="Missing File Detail Cam", channel_id=1)
+        log = make_alert(session, camera, snapshot_key="does/not/exist.jpg")
+
+        resp = client.get(f"/api/alerts/{log.log_id}", headers=headers)
+
+        assert resp.status_code == 200
+        assert resp.json()["log_id"] == log.log_id
+
     def test_public_snapshots_mount_is_gone(self, client: TestClient):
         resp = client.get("/snapshots/whatever.jpg")
         assert resp.status_code == 404
@@ -717,6 +805,102 @@ class TestAlertTransitions:
         assert body["handled_at"] is not None
 
 
+class TestTransitionSideEffects:
+    """Edge case 7 (be_audit/00_FINDINGS.md F30) — three side-effects of
+    the four legal transitions, verified directly rather than inferred
+    from a plausible-sounding assertion elsewhere: the audit_log row's
+    `action` (previously only checked via the WS broadcast payload, and
+    only for resolve/correction), detected_at/created_at immutability, and
+    snooze-field clearing."""
+
+    _TRANSITIONS = [
+        ("confirm", DetectionStatus.UNVERIFIED, "ALERT_CONFIRM"),
+        ("dismiss", DetectionStatus.UNVERIFIED, "ALERT_DISMISS"),
+        ("resolve", DetectionStatus.ONGOING, "ALERT_RESOLVE"),
+        ("dismiss", DetectionStatus.ONGOING, "ALERT_CORRECTION"),
+    ]
+
+    @pytest.mark.parametrize(("route", "source_status", "action"), _TRANSITIONS)
+    def test_audit_log_action_is_correct_for_every_legal_transition(
+        self,
+        client: TestClient,
+        session: Session,
+        route: str,
+        source_status: DetectionStatus,
+        action: str,
+    ):
+        operator, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name=f"Audit Action Cam {action}", channel_id=1)
+        extra = (
+            {"verified_by_id": operator.user_id, "verified_at": datetime.now(UTC)}
+            if source_status == DetectionStatus.ONGOING
+            else {}
+        )
+        log = make_alert(session, camera, status=source_status, **extra)
+
+        resp = client.post(f"/api/alerts/{log.log_id}/{route}", headers=headers)
+        assert resp.status_code == 200
+
+        rows = session.exec(select(AuditLog).where(AuditLog.action == action)).all()
+        assert len(rows) == 1, (action, [r.action for r in rows])
+        assert rows[0].result == "success"
+        assert rows[0].target_ref == str(log.log_id)
+
+    @pytest.mark.parametrize(("route", "source_status", "action"), _TRANSITIONS)
+    def test_detected_at_and_created_at_never_modified_by_a_transition(
+        self,
+        client: TestClient,
+        session: Session,
+        route: str,
+        source_status: DetectionStatus,
+        action: str,
+    ):
+        operator, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name=f"Immutable Ts Cam {action}", channel_id=1)
+        extra = (
+            {"verified_by_id": operator.user_id, "verified_at": datetime.now(UTC)}
+            if source_status == DetectionStatus.ONGOING
+            else {}
+        )
+        log = make_alert(session, camera, status=source_status, **extra)
+        detected_at_before = log.detected_at
+        created_at_before = log.created_at
+
+        resp = client.post(f"/api/alerts/{log.log_id}/{route}", headers=headers)
+        assert resp.status_code == 200
+
+        session.refresh(log)
+        assert log.detected_at == detected_at_before
+        assert log.created_at == created_at_before
+
+    @pytest.mark.parametrize("route", ["confirm", "dismiss"])
+    def test_snooze_fields_cleared_by_a_transition_out_of_unverified(
+        self, client: TestClient, session: Session, route: str
+    ):
+        """Only Unverified incidents can carry an active snooze (the
+        Ongoing-sourced transitions have nothing to clear, since
+        Ongoing incidents can't be snoozed in the first place)."""
+        _, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name=f"Snooze Clear Cam {route}", channel_id=1)
+        snoozer = make_operator(session, username=f"snoozer_{route}")
+        log = make_alert(
+            session,
+            camera,
+            status=DetectionStatus.UNVERIFIED,
+            snoozed_at=datetime.now(UTC),
+            snoozed_until=datetime.now(UTC) + timedelta(minutes=15),
+            snoozed_by_id=snoozer.user_id,
+        )
+
+        resp = client.post(f"/api/alerts/{log.log_id}/{route}", headers=headers)
+        assert resp.status_code == 200
+
+        session.refresh(log)
+        assert log.snoozed_at is None
+        assert log.snoozed_until is None
+        assert log.snoozed_by_id is None
+
+
 class TestStateMachineExhaustiveness:
     """14_EDGE_CASES.md §7 — four statuses, sixteen ordered pairs, four
     legal. Parametrized over every illegal pair including self-transitions."""
@@ -776,14 +960,24 @@ class TestStateMachineExhaustiveness:
         }
         for path, methods in alert_paths.items():
             for method in methods:
-                if method.lower() != "post":
-                    continue
-                assert path.rsplit("/", 1)[-1] in {
-                    "confirm",
-                    "dismiss",
-                    "resolve",
-                    "snooze",
-                }, f"unexpected POST route {path} could reopen an incident"
+                lowered = method.lower()
+                if lowered not in {"get", "head", "options"}:
+                    # Edge case 7 (terminal-no-reopen-no-edit-delete,
+                    # be_audit/00_FINDINGS.md) — a future PUT/PATCH/DELETE
+                    # edit-or-delete route on an incident must fail this
+                    # assertion, not just an unexpected POST subroute; the
+                    # original version of this test only inspected POST
+                    # and silently `continue`d past every other method.
+                    assert lowered == "post", (
+                        f"unexpected {method} route {path} — terminal "
+                        "incidents must have no edit or delete API"
+                    )
+                    assert path.rsplit("/", 1)[-1] in {
+                        "confirm",
+                        "dismiss",
+                        "resolve",
+                        "snooze",
+                    }, f"unexpected POST route {path} could reopen an incident"
 
 
 class TestAlertCameraStatusSideEffects:

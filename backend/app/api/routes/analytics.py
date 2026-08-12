@@ -437,16 +437,30 @@ def _fetch_per_camera_stats(
     }
 
 
-def _matching_camera_ids(session: Session, search: str | None) -> set[int] | None:
-    """Performance's `search` filters the per-camera table by camera name.
-    07_PKG_reports.md Step 1 — moved into the query (a SQL lookup against
-    `camera`) instead of a Python substring check applied after fetching."""
-    if not search:
-        return None
-    rows = session.exec(
-        select(Camera.camera_id).where(col(Camera.camera_name).icontains(search))
-    ).all()
-    return set(rows)
+def _performance_camera_population(
+    session: Session,
+    *,
+    camera_id: list[int] | None,
+    search: str | None,
+    ids_with_history: set[int],
+) -> dict[int, str]:
+    """The per-camera table's row population: every *active* camera matching
+    the `camera_id`/`search` filters, whether or not it has any
+    confirmed/dismissed incidents in range (edge case 3.5,
+    be_audit/00_FINDINGS.md F24) — a quiet camera must still appear with
+    null averages, not vanish from the table — **plus** any soft-deleted
+    camera that does have history in range (edge case 9.7): removing a
+    camera must not change what already happened. `is_active=0` cameras
+    with no history in range are correctly excluded either way. Returns
+    {camera_id: name}."""
+    query = select(Camera.camera_id, Camera.camera_name).where(
+        col(Camera.is_active).is_(True) | col(Camera.camera_id).in_(ids_with_history)
+    )
+    if camera_id:
+        query = query.where(col(Camera.camera_id).in_(camera_id))
+    if search:
+        query = query.where(col(Camera.camera_name).icontains(search))
+    return {row[0]: row[1] for row in session.exec(query).all()}
 
 
 def _weighted_avg(stat_map: dict[int, tuple[int, float | None]]) -> float | None:
@@ -505,26 +519,19 @@ def _compute_performance_data(
     global_avg_dismissed_conf = _weighted_avg(dismissed_map)
 
     # --- Per-camera breakdown -------------------------------------------------
-
-    all_camera_ids = set(confirmed_map.keys()) | set(dismissed_map.keys())
-    matching_ids = _matching_camera_ids(session, search)
-    if matching_ids is not None:
-        all_camera_ids &= matching_ids
-
-    # Resolve camera names in one query rather than N individual lookups
-    camera_name_map: dict[int, str] = {}
-    if all_camera_ids:
-        camera_name_map = {
-            c.camera_id: c.camera_name
-            for c in session.exec(
-                select(Camera).where(col(Camera.camera_id).in_(list(all_camera_ids)))
-            ).all()
-        }
+    # Population is every active camera matching the filters — not just
+    # cameras that happen to have a confirmed/dismissed row — so a quiet
+    # camera still appears with null averages rather than being omitted
+    # (edge case 3.5, F24).
+    camera_name_map = _performance_camera_population(
+        session,
+        camera_id=camera_id,
+        search=search,
+        ids_with_history=set(confirmed_map) | set(dismissed_map),
+    )
 
     per_camera: list[dict] = []
-    for cam_id in all_camera_ids:
-        cam_name = camera_name_map.get(cam_id, f"Camera {cam_id}")
-
+    for cam_id, cam_name in camera_name_map.items():
         conf_count, acc_avg = confirmed_map.get(cam_id, (0, None))
         dis_count, dis_avg = dismissed_map.get(cam_id, (0, None))
 

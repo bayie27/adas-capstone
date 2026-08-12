@@ -96,6 +96,41 @@ class TestClearExpiredSnooze:
 
         assert cleared is None
 
+    def test_server_clock_stepping_backwards_does_not_fire_early(self):
+        """Edge case 5.12 — a snooze deadline in the future stays pending
+        rather than firing repeatedly (or firing at all) if the server
+        clock steps backwards. clear_expired_snooze() is stateless (a
+        plain `now() <= snoozed_until` comparison via `now`, no cached
+        prior observation), so this mainly locks that property in against
+        a future change that introduced any kind of elapsed-time state."""
+        engine = _make_engine()
+        with Session(engine) as session:
+            camera = _make_camera(session)
+            deadline = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+            log = _make_log(
+                session,
+                camera,
+                snoozed_at=deadline - timedelta(minutes=15),
+                snoozed_until=deadline,
+            )
+
+        # The clock steps backwards to well before the snooze was even
+        # created — the most extreme version of "backwards," not just a
+        # few seconds.
+        with Session(engine) as session:
+            stepped_back_now = deadline - timedelta(hours=1)
+            cleared = clear_expired_snooze(
+                session, log_id=log.log_id, now=stepped_back_now
+            )
+        assert cleared is None
+
+        # Once real time actually reaches the deadline, it still fires
+        # normally — the earlier backward step left no stuck state.
+        with Session(engine) as session:
+            cleared = clear_expired_snooze(session, log_id=log.log_id, now=deadline)
+        assert cleared is not None
+        assert cleared.snoozed_until is None
+
     def test_duplicate_call_after_clearing_is_a_no_op(self):
         """D-004 — only the process whose UPDATE actually clears a row may
         broadcast RE_ALARM; a second call must update zero rows."""
