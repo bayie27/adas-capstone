@@ -64,15 +64,26 @@ export interface SystemHealthLiveResponse {
   state: "healthy" | "degraded" | "critical"
 }
 
+/**
+ * Mirrors `HealthHistoryPoint` in backend/app/schemas/health.py. One shape
+ * shared by both raw (48h) and hourly (30d) ranges — for a raw point the
+ * `_avg`/`_peak` variants of the same metric are identical, so the chart
+ * never has to branch on `range`.
+ */
 export interface SystemHealthDataPoint {
   timestamp: string
-  cpu_usage: number
-  gpu_usage: number
-  ram_usage: number
-  gpu_temperature: number
+  cpu_usage: number | null
+  ram_usage: number | null
+  gpu_usage: number | null
+  cpu_temp_avg: number | null
+  cpu_temp_peak: number | null
+  gpu_temp_peak: number | null
+  gpu_mem_pct_avg: number | null
+  gpu_mem_pct_peak: number | null
+  sample_count: number
 }
 
 export interface SystemHealthHistoryResponse {
   range: "48h" | "30d"
-  data: SystemHealthDataPoint[]
+  points: SystemHealthDataPoint[]
 }
