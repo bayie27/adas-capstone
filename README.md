@@ -1,6 +1,6 @@
 # ADAS — Intelligent Real-Time Road Accident Detection & Alert System
 
-> Last updated: August 10, 2026
+> Last updated: August 12, 2026
 
 A capstone project for De La Salle Lipa, Bachelor of Science in Information Technology, College of Information Technology and Engineering. ADAS automates vehicle-to-vehicle collision detection across a CCTV network, eliminating reliance on manual monitoring and reducing emergency notification latency to seconds.
 
@@ -170,25 +170,71 @@ pnpm install
 
 ## Running the System
 
-**One command, from the repo root:**
+The system has two ways to run it: a **one-command launcher** for everyday use, and a **manual, component-by-component path** for when you need one piece in isolation or the launcher doesn't fit your setup. Both end up in the same place. Read the launcher section even if you plan to run things manually — it explains the dev panel, which is the fastest way to get a working demo without touching MediaMTX, ffmpeg, or a GPU at all.
+
+**Run every command in this whole section from the repo root.** For the backend and frontend this is a convention rather than a hard requirement — the FastAPI CLI injects `backend/` into `sys.path` itself, and `DATABASE_URL` resolves to an absolute path under the repo root regardless of CWD — but the AI engine's `from config import ...`-style imports need `ai_engine/` to be the running script's own directory, which only `uv run python ai_engine/main.py` from the root gives it.
+
+### The fast path: `scripts/start-dev.ps1`
 
 ```powershell
 pwsh -File scripts/start-dev.ps1
 ```
 
-No switches starts the everyday case — backend + frontend, each in its own window. Add `-Sim` and/or `-Ai` for the camera simulation and the AI engine, or `-All` for all four. `-Reseed <profile>` reseeds the dev DB before anything starts (see [Development Workflow](#development-workflow) for the profile names). `pnpm dev` at the repo root is the same thing. Tear it down with:
+No switches starts the everyday case — backend + frontend, each in its own titled window (`ADAS - Backend`, `ADAS - Frontend`, ...). `pnpm dev` at the repo root runs the identical command.
+
+| Flag                | What it does                                                                                                                                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-Backend`          | `uv run fastapi dev backend/app/main.py`                                                                                                                                                                  |
+| `-Frontend`         | `cd frontend && pnpm dev`                                                                                                                                                                                 |
+| `-Sim`              | MediaMTX + one ffmpeg per channel, by delegating to `scripts/start-sim.ps1` (see [Simulate camera streams](#3-simulate-camera-streams-development))                                                       |
+| `-Ai`               | The AI engine (`uv run python ai_engine/main.py`) — needs `uv sync --extra ai` and ideally a GPU (see [Start the AI engine](#4-start-the-ai-engine))                                                      |
+| `-All`              | Shorthand for all four                                                                                                                                                                                    |
+| `-Reseed <profile>` | Reseeds the dev DB **before** anything starts, via `backend/scripts/reseed_dev.py --profile <value>`. Fails the whole script (nothing starts) on a bad profile name — see [Seed profiles](#seed-profiles) |
+| `-NoNewWindow`      | Runs a single requested component in the current terminal instead of a new window; errors if combined with more than one component                                                                        |
+
+Preflights fail fast with an actionable message rather than a cryptic crash three steps later: missing `.env` (offers to copy `.env.example`), `uv`/`pnpm` not on PATH, missing `frontend/node_modules`, and — for `-Ai` — a reminder about `--extra ai`/GPU, that `ai_engine/epoch50.pt` has no fallback and is a hard failure if missing, and that a missing `machine_profile.json` is expected (not an error) until you run `ai_engine/capacity.py`.
+
+Tear everything down with:
 
 ```powershell
 pwsh -File scripts/stop-dev.ps1
 ```
 
-Run `Get-Help scripts/start-dev.ps1 -Full` (or open the script) for every switch, or see [`dev_plan/04_PKG_launcher.md`](dev_plan/04_PKG_launcher.md) for the design rationale.
+Same flags, no flags stops everything. It resolves each process by the port it's actually listening on (8000/5173/8554), not by a stored PID or process name — `uv run fastapi dev` and `uv run python ai_engine/main.py` don't exec-replace themselves on Windows, so `uv` stays alive as a parent and the wrapper PID isn't the one holding the port. Stopping something that isn't running just says so; it's not an error, which is why running it with no arguments is a safe default when you don't remember exactly what you started.
 
-This is the fast path; the rest of this section is the manual four-terminal fallback it replaces, useful when you want one component in isolation or the launcher doesn't fit your setup. **Run every command from the repo root.** This is a convention, not a hard requirement anymore — the FastAPI CLI injects `backend/` into `sys.path` itself, and `DATABASE_URL` resolves to an absolute path under the repo root regardless of CWD — but the AI engine's `from config import ...`-style imports still need `ai_engine/` to be the script's own directory (which `uv run python ai_engine/main.py` gives it), so running from the root is simplest across the board.
+Run `Get-Help scripts/start-dev.ps1 -Full` (or open the script) for the full comment-based help, or see [`dev_plan/04_PKG_launcher.md`](dev_plan/04_PKG_launcher.md) for the design rationale behind both scripts.
+
+**A note on Windows PATH staleness.** If `start-dev.ps1` reports `pnpm not found on PATH` or `-Sim` reports `mediamtx not found on PATH` immediately after you've just installed one of them, the tool is almost always actually there — Windows snapshots `PATH` when a process starts, so a terminal (or terminal-hosting app) that was already open won't see a PATH change until it's restarted. Closing a tab isn't enough if you're in Windows Terminal or VS Code's integrated terminal — those cache the environment at the _application's_ launch, and every new tab inherits that same stale snapshot. Fully quit and relaunch the terminal application, not just the window.
+
+### The dev panel — reseed, fire incidents, and switch accounts without restarting anything
+
+Once the backend and frontend are up, log in at `http://localhost:5173` and press **`Ctrl+Shift+D`** (or click the small terminal icon bottom-right). This opens a drawer that talks to five backend routes under `/api/dev/*`, gated behind the `DEV_TOOLS_ENABLED` setting (on by default when `ENVIRONMENT=development`; an explicit `.env` value always wins, which is what lets it stay on for a LAN demo box running a production build). If the trigger doesn't appear, either the flag is off or the backend isn't reachable — it's a runtime probe against `GET /api/dev/status`, not a build-time flag, so it also works in a `pnpm build` bundle.
+
+**Data — reseed without restarting the server.** This is the in-process equivalent of `reseed_dev.py`: it wipes every operational table, reseeds the chosen profile, and mints a fresh session cookie in the same response so you stay logged in — no restart, no re-login, and every other connected dashboard's WebSocket reconnects onto the new session automatically. See [Seed profiles](#seed-profiles) below for what each one contains.
+
+**Simulate — fire a detection with no AI engine, RTSP feed, or GPU involved.** "Inject a detection" runs the exact same ingest path a real webhook from the AI engine would (`services/incidents.ingest_detection`) — the camera self-blindfolds, the WebSocket broadcasts to every connected dashboard, the alarm modal pops and the siren plays, all for real. Pick a camera ID or let it choose a free one, set a confidence, and watch the full HITL pipeline fire without touching MediaMTX or a GPU. "Make stale" / "Clear cooldown" push a camera's heartbeat state directly, for exercising the `Unresponsive` presentation or an operator's post-incident cooldown window on demand.
+
+**Session — switch accounts instantly.** Click any seeded username to become that user immediately, no password, no page reload. This requires only _some_ existing authenticated session, by design — it's an account switcher for hopping between seeded demo accounts once you're in, not a way to authenticate without credentials in the first place.
+
+Full endpoint reference and the reasoning behind each design choice: [`dev_plan/02_PKG_dev_api.md`](dev_plan/02_PKG_dev_api.md) and [`dev_plan/03_PKG_dev_panel.md`](dev_plan/03_PKG_dev_panel.md).
+
+#### Seed profiles
+
+Both `-Reseed <profile>` and the dev panel's Data section take one of these (also listed by `GET /api/dev/status`, and enforced by `reseed_dev.py --profile` itself, so an unrecognized name fails loudly rather than silently seeding the wrong thing):
+
+| Profile     | What it seeds                                                                                                                                                                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `demo`      | **Default.** A balanced dataset for manual testing and demos — 8 cameras, 7 users, 18 alerts across every detection status, 7 days of health history, 5 export jobs.                                         |
+| `analytics` | Denser, chart-friendly data across 14 days — same camera/user roster as `demo`, 62 alerts, 30 days of health history.                                                                                        |
+| `edge`      | Unusual workflow combinations and boundary values — confidence scores at 0.0/1.0, cameras mid-cooldown, disabled/soft-deleted accounts, every audit action at least once.                                    |
+| `empty`     | Schema and the default admin account only. Nothing else — the first-run/empty-states case.                                                                                                                   |
+| `perf`      | 100,000 incidents over ~18 months (NFR-08), for measuring query/export performance against a realistic dataset size. Slow (~30s) — both the launcher and the dev panel ask you to confirm before running it. |
+
+Full seed-data reference, including exactly which audit actions and health-sample shapes each profile produces: [`backend/scripts/README.md`](backend/scripts/README.md).
 
 ### Quickstart — clone to first detection
 
-The whole path, in order. Each step is verified; the detailed sections below explain the parts.
+The whole path, in order, using the fast path throughout.
 
 **One-time, in this order:**
 
@@ -201,26 +247,18 @@ cp .env.example .env                            # then fill in all 10 keys
 Populate `ai_engine/eval/clips/` — no video ships in a clone. See [Obtaining the clips](#obtaining-the-clips).
 
 ```bash
-uv run python backend/scripts/reseed_dev.py     # REQUIRED — creates the cameras
 uv run python ai_engine/capacity.py             # once per machine
 ```
 
-> **`reseed_dev.py` is not optional.** Starting the backend creates the tables and an admin account, but **no cameras**. Without seeding, the engine connects, is told there are zero cameras, and does nothing — which looks exactly like it is broken.
+**Then one command:**
 
-**Then four terminals, in this order:**
-
-```bash
-mediamtx mediamtx.yml                           # 1. streams
-uv run fastapi dev backend/app/main.py          # 2. backend — must precede the engine
-cd frontend && pnpm dev                         # 3. dashboard at :5173
-uv run python ai_engine/main.py                 # 4. engine
+```powershell
+pwsh -File scripts/start-dev.ps1 -Reseed demo -All
 ```
 
-Log in at `http://localhost:5173` as `admin` with the `DEFAULT_ADMIN_PASSWORD` from your `.env`.
+This reseeds `demo` (which is the default profile, but stating it explicitly is clearer on a first run), then brings up all four components in the bring-up order MediaMTX → backend → frontend → AI engine. Log in at `http://localhost:5173` as `admin` with the `DEFAULT_ADMIN_PASSWORD` from your `.env`.
 
-**Last step: release a camera.** Every seeded camera is paused by an open alert — deliberately, see [below](#cameras-start-paused-after-seeding--this-is-deliberate). Resolve or dismiss one in the dashboard and that camera starts detecting within seconds.
-
-**What a working run looks like:** four cameras alert within a loop or two, and **camera 5 stays silent** — it serves the crash-free clip. A camera that never alerts is as much a result as one that does. The engine log reads:
+**What a working run looks like:** of `demo`'s 8 cameras, 5 sit on the simulation's real channels (`channel1`–`channel5`); the other 3 structurally can't (see [Camera and seed-data behaviour](#camera-and-seed-data-behaviour--what-to-expect) below). Of those 5: four alert within a loop or two of their clip, and **one stays silent** — it serves the crash-free negative-control clip, and a camera that never alerts is as much a result as one that does. The engine log reads:
 
 ```
 [SYSTEM] Machine profile: 0 · capacity 8 camera(s) @ 15 FPS
@@ -228,9 +266,15 @@ Log in at `http://localhost:5173` as `admin` with the `DEFAULT_ADMIN_PASSWORD` f
 [ALERT] Channel 4: accident detected (peak 0.76, 2.2s of evidence).
 ```
 
+No GPU, or don't want to populate the clips yet? Drop `-Ai` (and `-Sim`) and use the dev panel's "Inject a detection" instead — it exercises the identical downstream pipeline (self-blindfold, WebSocket broadcast, alarm modal, siren) without either.
+
 ---
 
-**1. Start the backend**
+### Running components manually
+
+The fast path above replaces everything in this subsection; use it when you want one component in isolation.
+
+#### 1. Start the backend
 
 ```bash
 uv run fastapi dev backend/app/main.py
@@ -238,7 +282,7 @@ uv run fastapi dev backend/app/main.py
 
 API available at `http://localhost:8000`. Interactive docs at `http://localhost:8000/docs`.
 
-**2. Start the frontend**
+#### 2. Start the frontend
 
 ```bash
 cd frontend
@@ -247,7 +291,7 @@ pnpm dev
 
 Dashboard available at `http://localhost:5173`.
 
-**3. Simulate camera streams (development)**
+#### 3. Simulate camera streams (development)
 
 The AI engine expects RTSP feeds at `rtsp://localhost:8554/channel1` through `channel5`. There are three ways to produce them; pick whichever fits what you're doing. All three need `ai_engine/eval/clips/` populated first — see [Obtaining the clips](#obtaining-the-clips) below.
 
@@ -311,7 +355,7 @@ See [`ai_engine/eval/README.md`](ai_engine/eval/README.md) for what the 17 clips
 
 > **Historical note.** Earlier revisions of this README described a second directory, `ai_engine/sample_vids/`, with five differently-named clips and a `TODO` where its download link should have been. That directory never had a documented source, four of its five filenames existed nowhere, and both `mediamtx.yml` and `start-sim.ps1` pointed at it — so the "default, recommended" path could not work on any machine. It has been retired in favour of the single location above.
 
-**4. Start the AI engine**
+#### 4. Start the AI engine
 
 Requires `uv sync --extra ai` (see [Installation](#installation)). Run from the repo root:
 
@@ -329,28 +373,25 @@ uv run python ai_engine/capacity.py
 
 This reports how many cameras the machine can carry at 10 and at 15 FPS and writes a gitignored `machine_profile.json`. See [`ai_engine/eval/README.md`](ai_engine/eval/README.md).
 
-#### Cameras start paused after seeding — this is deliberate
+#### Camera and seed-data behaviour — what to expect
 
-`reseed_dev.py` seeds sample alerts across every detection status, and any camera with an open (`Unverified` or `Ongoing`) alert is **self-blindfolded** — `desired_ai_state = Paused, reason = incident`. On a freshly seeded database that is _every_ camera.
+**A camera's connection/AI status is computed at read time, not stored.** `presented_statuses()` overrides whatever's in the database based on how long it's been since the camera last heartbeated: no heartbeat ever → `Reconnecting`; a heartbeat older than `HEARTBEAT_STALE_SECONDS` (10s by default) → `Unresponsive` for both dimensions, regardless of the stored value; a disabled camera is exempt and always shows its raw stored value. Heartbeats come from the AI engine while it's actively watching a stream — with `-Backend -Frontend` only (no `-Ai`), every seeded camera will drift to `Unresponsive` within about 10 seconds of being seeded, and that's the system correctly reporting "nothing is watching this camera," not a bug.
 
-**That is the self-blindfold invariant working correctly, not a bug.** An unresolved incident means the camera should not be re-alerting on the same scene, and it means the operator decides when each camera goes live rather than being flooded the moment the engine starts.
+**Only 5 RTSP channels exist** in both simulation configs (`mediamtx.yml` and `start-sim.ps1`), but the `demo`/`analytics` camera roster has 8 entries. `channel1`–`channel5` map to the 5 cameras in the [clip table](#3-simulate-camera-streams-development) above; the other 3 — Dagatan Entry Cam, Silang Junction Cam, and the disabled/soft-deleted Retired Depot Cam — have no channel at all and will sit `Unresponsive`/`Disconnected` forever no matter how correctly everything else is configured. This isn't a bug to fix; it's a 5-clip simulation intentionally covering a larger camera roster so the UI has something realistic to show for a camera that's actually down.
 
-The only catch is discoverability: the engine reports `Connected` and then deliberately runs no inference, so it can look broken. The log shows repeated `Stream dropped ... while paused` rather than anything about detection. That is what to expect.
-
-Clear an alert to release its camera — resolve or dismiss it in the dashboard, which is also how you exercise the HITL workflow. To bring everything online at once for a demo:
+**Self-blindfold: any camera with an open (`Unverified` or `Ongoing`) incident pauses itself.** This is deliberate — an unresolved incident means the camera shouldn't be re-alerting on the same scene, and it puts the operator in control of when a camera goes back online rather than the engine flooding them the moment it starts. `demo` and `analytics` seed a realistic mix of open and closed incidents (not every camera), so expect some — not necessarily all — of the 5 real-feed cameras to start paused. Resolve or dismiss the open incident in the dashboard (or via the dev panel) and that camera resumes within seconds. To force every seeded camera active at once for a demo:
 
 ```bash
 uv run python -c "import sqlite3; d=sqlite3.connect('adas.db'); d.execute(\"UPDATE detection_log SET detection_status='Resolved' WHERE detection_status IN ('Unverified','Ongoing')\"); d.execute(\"UPDATE camera SET desired_ai_state='Active', desired_state_reason=NULL WHERE is_active=1\"); d.commit()"
 ```
 
-Within a few seconds the engine logs `Resuming AI ingestion` and starts alerting.
+The engine reports `Connected` on a paused camera and then deliberately runs no inference on it, so it can look broken if you don't know to expect `Stream dropped ... while paused` in its log instead of anything about detection.
 
 #### Other things worth knowing on a first run
 
 - **Start the backend first.** The engine holds no camera configuration of its own — it heartbeats the backend and is told which cameras exist and where to reach them. It cannot run standalone.
 - **`RTSP_URL_TEMPLATE` changes need a backend restart.** Settings load once at startup.
-- **`UnicodeEncodeError` starting the backend on Windows.** The FastAPI CLI prints an emoji and the console codepage cannot encode it; this bites when output is redirected to a file. Prefix with `PYTHONIOENCODING=utf-8`.
-- **Only 5 RTSP channels exist** in both simulation configs, but `reseed_dev.py` seeds 6 cameras. The sixth has nothing to connect to and will sit reconnecting — deactivate it, or ignore it.
+- **`UnicodeEncodeError` starting the backend on Windows, running it manually.** The FastAPI CLI prints an emoji and the console codepage can't encode it; this bites when output is redirected to a file, or when launched from a Bash-flavoured shell. Prefix with `PYTHONUTF8=1` (or `PYTHONIOENCODING=utf-8`). `start-dev.ps1` sets this automatically for you — this only matters if you're running `uv run fastapi dev` by hand.
 
 ---
 
@@ -362,7 +403,7 @@ Within a few seconds the engine logs `Resuming AI ingestion` and starts alerting
 uv run python backend/scripts/reseed_dev.py
 ```
 
-Always use `uv run python`, never a bare `python` — the `python` on PATH may be a different, unpinned interpreter (e.g. a system install) rather than the project's pinned 3.12.13. This gives you a fresh DB with an admin account, six cameras, operator accounts, and sample alerts across all detection statuses. Schema is provisioned by running `alembic upgrade head` under the hood, not `CREATE TABLE`-equivalent metadata calls — see [CONTRIBUTING.md](CONTRIBUTING.md)'s "Database migrations" section before changing a model. See [`backend/scripts/README.md`](backend/scripts/README.md) for the full script reference, including the `perf` profile (100,000 incidents, for measuring query/export performance against a realistic dataset size).
+Always use `uv run python`, never a bare `python` — the `python` on PATH may be a different, unpinned interpreter (e.g. a system install) rather than the project's pinned 3.12.13. This deletes the SQLite file and reseeds the `demo` profile by default (see [Seed profiles](#seed-profiles)) — an admin account, cameras, operator accounts, and sample alerts across all detection statuses. It cannot run while the backend holds the database file open; if you just need to switch profiles without stopping anything, use the dev panel's reseed instead (`Ctrl+Shift+D` in the running dashboard), which is the in-process equivalent. Schema is provisioned by running `alembic upgrade head` under the hood, not `CREATE TABLE`-equivalent metadata calls — see [CONTRIBUTING.md](CONTRIBUTING.md)'s "Database migrations" section before changing a model. See [`backend/scripts/README.md`](backend/scripts/README.md) for the full script reference.
 
 **This is a required first-run step, not just a reset.** Starting the backend creates the tables and an admin account but no cameras at all, so the AI engine has nothing to work with until you seed. See the [Quickstart](#quickstart--clone-to-first-detection) for where it belongs in the order.
 
