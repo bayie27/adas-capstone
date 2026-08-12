@@ -705,7 +705,7 @@ def seed_profile(
     # Derive desired_ai_state/reason/cooldown_until from the incidents just
     # seeded (D-003) — a camera with a seeded open incident must come out
     # Paused/'incident', or it would contradict ux_detection_open_camera.
-    reconcile_camera_desired_states(engine)
+    reconcile_camera_desired_states(engine, now=now)
 
     return result
 
@@ -892,7 +892,7 @@ def seed_perf_data(
                 f"(>= target {target_count}); skipping bulk insert."
             )
             result = _collect_result(session, profile=PERF_PROFILE)
-            reconcile_camera_desired_states(engine)
+            reconcile_camera_desired_states(engine, now=now)
             return result
 
         print(f"Generating {target_count} detection_log rows...")
@@ -921,7 +921,7 @@ def seed_perf_data(
 
     # Derive desired_ai_state/reason/cooldown_until from the incidents just
     # seeded (D-003), same as every other profile.
-    reconcile_camera_desired_states(engine)
+    reconcile_camera_desired_states(engine, now=now)
 
     return result
 
