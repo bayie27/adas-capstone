@@ -267,7 +267,7 @@ Driven in a real browser against a running backend and Vite dev server.
 | 2   | `Ctrl+Shift+D` toggles      | PASS                                                                                      |
 | 3   | Reseed to `analytics`       | PASS — re-verified 2026-08-12 with the WS fix below; held for 70s+ post-reseed            |
 | 4   | Inject a detection          | PASS — alarm modal `z-index: 9999` over the panel; camera went `Paused`/`incident`        |
-| 5   | Snapshot renders            | **INCONCLUSIVE** — environment, not code; see below                                       |
+| 5   | Snapshot renders            | PASS — re-verified 2026-08-12 in a real visible browser tab, see below                    |
 | 6   | Login-as `dsahagun`         | PASS — `/admin` → `/user`, sidebar switched                                               |
 | 7   | Reseed to `empty`           | PASS — proper empty states on Detections and Cameras, no new console errors               |
 | 8   | Flag off ⇒ no button        | Covered by `test_app_factory.py` instead (404 when disabled) — not re-done in the browser |
@@ -323,12 +323,16 @@ then waited 70s+ (past the 60s scheduler tick) — stayed on `/admin`, no `/logi
 `useAdasWebSocket.test.ts` asserts the resetKey teardown/reconnect and that it doesn't surface as an
 `onClose`.
 
-**Check 5 could not be completed in this environment.** The browser pane never composited a frame,
-so `document.hidden` stayed true, and Chromium's native `loading="lazy"` deliberately withholds the
-fetch for images in a hidden document — the image sat at `naturalWidth: 0`, never requested. Forcing
-`loading="eager"` on the live element loaded it immediately (160×90), which proves the endpoint, the
-cookie and `SnapshotImage.tsx` all work; it does not prove the shipped lazy path works in a real
-visible tab. Worth one look on a normal desktop browser.
+### Check 5 — closed, 2026-08-12
+
+Closed by the user in their own browser (this environment's sandboxed preview pane still can't
+composite a visible tab — `document.hidden` stayed `true` on retry, same as before, and a
+teammate's real Chrome wasn't reachable via the Claude in Chrome extension in this session either).
+Logging in surfaced a still-`Unverified` incident left over from this session's WS testing; its
+alarm modal rendered the snapshot correctly on first load — the grey box with a **"SEED SNAPSHOT"**
+label baked into it is `backend/app/dev/assets.py`'s deliberate placeholder JPEG (Package A Step 6,
+no Pillow dependency), not a broken image. Confirms the endpoint, the cookie, `SnapshotImage.tsx`
+and native `loading="lazy"` all work end to end in a real visible tab.
 
 ### Found in passing, out of scope
 
