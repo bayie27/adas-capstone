@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import type { AlertLog } from "@/types/alerts"
 import type { CameraListResponse } from "@/types/cameras"
 import type { CameraStatusUpdateData, EventEnvelope, IncidentPayload } from "@/types/realtime"
+import { shouldApplyCameraEvent } from "@/utils/merge"
 import {
   asAlertStatusUpdateData,
   asCameraStatusUpdateData,
@@ -121,15 +122,27 @@ export function RealtimeAlertsBridge() {
 
         return {
           ...existingResponse,
-          cameras: existingResponse.cameras.map((camera) =>
-            camera.camera_id === cameraStatus.camera_id
-              ? {
-                  ...camera,
-                  connection_status: cameraStatus.connection_status,
-                  ai_status: cameraStatus.ai_status,
-                }
-              : camera,
-          ),
+          cameras: existingResponse.cameras.map((camera) => {
+            if (camera.camera_id !== cameraStatus.camera_id) return camera
+
+            // 01_CONTRACTS.md §9.5 — config_version is the merge key. A status
+            // event older than the cached record must not resurrect superseded
+            // state; the engine's 3s heartbeat races the recovery refetch.
+            if (!shouldApplyCameraEvent(cameraStatus.config_version, camera.config_version)) {
+              return camera
+            }
+
+            return {
+              ...camera,
+              is_enabled: cameraStatus.is_enabled,
+              desired_ai_state: cameraStatus.desired_ai_state,
+              desired_state_reason: cameraStatus.desired_state_reason,
+              cooldown_until: cameraStatus.cooldown_until,
+              config_version: cameraStatus.config_version,
+              connection_status: cameraStatus.connection_status,
+              ai_status: cameraStatus.ai_status,
+            }
+          }),
         }
       },
     )

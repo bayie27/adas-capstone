@@ -2,6 +2,7 @@ import { create } from "zustand"
 
 import type { AlertLog } from "@/types/alerts"
 import { playDetectionSound, stopDetectionSound } from "@/utils/detectionSound"
+import { shouldApplyIncidentEvent } from "@/utils/merge"
 
 const HANDLED_IDS_KEY = "adas-handled-alert-ids"
 // Reconnect-race dedup only needs to survive the live connection, not a page
@@ -89,6 +90,13 @@ export const useAlertStore = create<AlertState>((set, get) => ({
   addAlert: (alert) => {
     const before = activeCount(get().alerts, get().snoozedUntil)
     set((state) => {
+      // 01_CONTRACTS.md §9.5 — drop anything carrying an older merge key than
+      // the incident already queued, before it can revert a newer status.
+      const queued = state.alerts.find((a) => a.log_id === alert.log_id)
+      if (queued && !shouldApplyIncidentEvent(alert.updated_at, queued.updated_at)) {
+        return state
+      }
+
       // If the alert is now Dismissed or Resolved, it should definitely be removed
       // from the active queue and marked as handled.
       if (alert.detection_status === "Dismissed" || alert.detection_status === "Resolved") {
