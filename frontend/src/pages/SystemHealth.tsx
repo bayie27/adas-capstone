@@ -13,16 +13,32 @@ import {
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/services/health"
-import type { SystemHealthDataPoint } from "@/types/health"
+import type { SystemHealthDataPoint, SystemHealthLiveResponse } from "@/types/health"
 import { RiDashboard3Line, RiHardDrive2Line, RiServerLine, RiTimerLine } from "@remixicon/react"
 
 // â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function formatUptime(seconds: number): string {
+function formatUptime(seconds: number | null | undefined): string {
+  // Nullable like every other measurement: the collector reports null until
+  // its first sample completes.
+  if (seconds == null) return "N/A"
   const d = Math.floor(seconds / 86400)
   const h = Math.floor((seconds % 86400) / 3600)
   const m = Math.floor((seconds % 3600) / 60)
   return `${d}d ${String(h).padStart(2, "0")}h ${String(m).padStart(2, "0")}m`
+}
+
+const BYTES_PER_GB = 1024 ** 3
+
+function formatDiskSubtext(live: SystemHealthLiveResponse | undefined): string | undefined {
+  if (!live) return undefined
+  // `disk_available: false` is a legitimate backend state — that sensor
+  // failed on an otherwise-good sample — so it gets a message rather than
+  // a number, and never a crash.
+  if (!live.disk_available) return "Disk metrics unavailable"
+  const { disk_used_bytes: used, disk_total_bytes: total } = live
+  if (used == null || total == null) return undefined
+  return `${(used / BYTES_PER_GB).toFixed(1)} GB / ${(total / BYTES_PER_GB).toFixed(1)} GB`
 }
 
 function formatPercent(value: number | null | undefined): string {
@@ -216,7 +232,7 @@ export default function SystemHealth() {
         <StatCard
           icon={RiServerLine}
           title="Server Uptime"
-          value={liveQuery.isLoading ? "..." : live ? formatUptime(live.uptime_seconds) : "N/A"}
+          value={liveQuery.isLoading ? "..." : formatUptime(live?.host_uptime_seconds)}
         />
         <StatCard
           icon={RiTimerLine}
@@ -233,12 +249,8 @@ export default function SystemHealth() {
         <StatCard
           icon={RiHardDrive2Line}
           title="Disk Storage Usage"
-          value={liveQuery.isLoading ? "..." : formatPercent(live?.disk_usage_percent)}
-          subtext={
-            live
-              ? `${live.disk_used_gb.toFixed(1)} GB / ${live.disk_total_gb.toFixed(1)} GB`
-              : undefined
-          }
+          value={liveQuery.isLoading ? "..." : formatPercent(live?.disk_percent)}
+          subtext={formatDiskSubtext(live)}
         />
       </div>
 
