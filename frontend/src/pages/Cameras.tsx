@@ -125,19 +125,19 @@ export default function Cameras() {
         <StatCard
           icon={RiCameraLine}
           title="Total Cameras"
-          value={camerasQuery.isLoading ? "..." : (camerasQuery.data?.total_cameras ?? 0)}
+          value={camerasQuery.isLoading ? "..." : (camerasQuery.data?.kpis.total ?? 0)}
           subtext="All active camera records"
         />
         <StatCard
           icon={RiGlobalLine}
           title="Network Connected Cameras"
-          value={camerasQuery.isLoading ? "..." : (camerasQuery.data?.network_connected ?? 0)}
+          value={camerasQuery.isLoading ? "..." : (camerasQuery.data?.kpis.network_connected ?? 0)}
           subtext="Currently connected to the network"
         />
         <StatCard
           icon={RiRobotLine}
           title="Active Detection Cameras"
-          value={camerasQuery.isLoading ? "..." : (camerasQuery.data?.active_detection ?? 0)}
+          value={camerasQuery.isLoading ? "..." : (camerasQuery.data?.kpis.active_detection ?? 0)}
           subtext="AI detection running"
         />
       </div>

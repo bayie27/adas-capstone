@@ -2,6 +2,7 @@ export type AlertStatus = "Unverified" | "Ongoing" | "Dismissed" | "Resolved"
 
 export interface AlertLog {
   log_id: number
+  source_event_id: string
   camera_id: number
   detected_at: string
   // 01_CONTRACTS.md §5.9/§9.3 — an authorized API path (e.g.
@@ -19,6 +20,10 @@ export interface AlertLog {
   camera_name: string | null
   snoozed_until: string | null
   snoozed_by_id: number | null
+  created_at: string
+  // 01_CONTRACTS.md §9.5 — the merge key for incident events. An
+  // ALERT_STATUS_UPDATE older than the incident already held must be dropped.
+  updated_at: string
 }
 
 export interface AlertListResponse {

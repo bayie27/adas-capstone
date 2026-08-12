@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import type { AlertLog } from "@/types/alerts"
 import type { CameraListResponse } from "@/types/cameras"
 import type { CameraStatusUpdateData, EventEnvelope, IncidentPayload } from "@/types/realtime"
+import { shouldApplyCameraEvent } from "@/utils/merge"
 import {
   asAlertStatusUpdateData,
   asCameraStatusUpdateData,
@@ -26,6 +27,7 @@ const ORIGIN_REJECTED_CLOSE_CODE = 4003
 function incidentToAlertLog(payload: IncidentPayload): AlertLog {
   return {
     log_id: payload.log_id,
+    source_event_id: payload.source_event_id,
     camera_id: payload.camera_id,
     detected_at: payload.detected_at,
     snapshot_url: payload.snapshot_url,
@@ -40,6 +42,8 @@ function incidentToAlertLog(payload: IncidentPayload): AlertLog {
     camera_name: payload.camera_name,
     snoozed_until: payload.snoozed_until,
     snoozed_by_id: payload.snoozed_by_id,
+    created_at: payload.created_at,
+    updated_at: payload.updated_at,
   }
 }
 
@@ -118,15 +122,27 @@ export function RealtimeAlertsBridge() {
 
         return {
           ...existingResponse,
-          cameras: existingResponse.cameras.map((camera) =>
-            camera.camera_id === cameraStatus.camera_id
-              ? {
-                  ...camera,
-                  connection_status: cameraStatus.connection_status,
-                  ai_status: cameraStatus.ai_status,
-                }
-              : camera,
-          ),
+          cameras: existingResponse.cameras.map((camera) => {
+            if (camera.camera_id !== cameraStatus.camera_id) return camera
+
+            // 01_CONTRACTS.md §9.5 — config_version is the merge key. A status
+            // event older than the cached record must not resurrect superseded
+            // state; the engine's 3s heartbeat races the recovery refetch.
+            if (!shouldApplyCameraEvent(cameraStatus.config_version, camera.config_version)) {
+              return camera
+            }
+
+            return {
+              ...camera,
+              is_enabled: cameraStatus.is_enabled,
+              desired_ai_state: cameraStatus.desired_ai_state,
+              desired_state_reason: cameraStatus.desired_state_reason,
+              cooldown_until: cameraStatus.cooldown_until,
+              config_version: cameraStatus.config_version,
+              connection_status: cameraStatus.connection_status,
+              ai_status: cameraStatus.ai_status,
+            }
+          }),
         }
       },
     )
