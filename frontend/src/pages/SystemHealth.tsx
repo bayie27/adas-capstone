@@ -91,14 +91,14 @@ function HealthChart({
   }))
 
   return (
-    <div className="flex h-[260px] flex-col rounded-xl border border-[#2A2A2A] bg-[#111111] p-5">
-      <h3 className="mb-4 text-xs font-medium text-[#D4D4D4]">{title}</h3>
+    <div className="flex h-[260px] flex-col rounded-xl border border-stroke bg-surface-1 p-5">
+      <h3 className="mb-4 text-xs font-medium text-fg-body">{title}</h3>
       {isLoading ? (
-        <div className="flex flex-1 items-center justify-center text-xs text-[#555]">
+        <div className="flex flex-1 items-center justify-center text-xs text-fg-muted">
           Loading...
         </div>
       ) : data.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center text-xs text-[#555]">
+        <div className="flex flex-1 items-center justify-center text-xs text-fg-muted">
           No data available
         </div>
       ) : (
@@ -117,11 +117,15 @@ function HealthChart({
                   <stop offset="95%" stopColor={color} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" vertical={false} />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="var(--color-chart-grid)"
+                vertical={false}
+              />
               <XAxis
                 dataKey="time"
-                stroke="#333"
-                tick={{ fill: "#555", fontSize: 11 }}
+                stroke="var(--color-chart-grid)"
+                tick={{ fill: "var(--color-chart-axis)", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 dy={8}
@@ -129,8 +133,8 @@ function HealthChart({
               />
               <YAxis
                 domain={[0, 100]}
-                stroke="#333"
-                tick={{ fill: "#555", fontSize: 11 }}
+                stroke="var(--color-chart-grid)"
+                tick={{ fill: "var(--color-chart-axis)", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 width={32}
@@ -138,13 +142,13 @@ function HealthChart({
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "#1A1A1A",
-                  border: "1px solid #2A2A2A",
+                  backgroundColor: "var(--color-surface-1)",
+                  border: "1px solid var(--color-stroke)",
                   borderRadius: "6px",
                   fontSize: 12,
                 }}
-                itemStyle={{ color: "#E4E4E7" }}
-                labelStyle={{ color: "#737373" }}
+                itemStyle={{ color: "var(--color-fg-body)" }}
+                labelStyle={{ color: "var(--color-fg-muted)" }}
                 formatter={(v) => [`${Number(v).toFixed(1)}${unit}`, title]}
               />
               <Area
@@ -198,22 +202,22 @@ export default function SystemHealth() {
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="mb-0.5 text-xl font-semibold text-white">System Health</h1>
-          <p className="text-xs text-[#737373]">
+          <h1 className="mb-0.5 text-xl font-semibold text-fg">System Health</h1>
+          <p className="text-xs text-fg-muted">
             Oversee system diagnostics and hardware performance
           </p>
         </div>
         <div className="flex items-center gap-2">
           {isOnline === null ? (
-            <span className="text-xs text-[#737373]">Checking status...</span>
+            <span className="text-xs text-fg-muted">Checking status...</span>
           ) : isOnline ? (
-            <div className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <div className="flex items-center gap-2 rounded-full border border-success-border bg-success-subtle px-3 py-1 text-xs font-medium text-success">
+              <span className="h-2 w-2 rounded-full bg-success" />
               Online
             </div>
           ) : (
-            <div className="flex items-center gap-2 rounded-full border border-[#F87171]/30 bg-[#F87171]/10 px-3 py-1 text-xs font-medium text-[#F87171]">
-              <span className="h-2 w-2 rounded-full bg-[#F87171]" />
+            <div className="flex items-center gap-2 rounded-full border border-danger-border bg-danger-subtle px-3 py-1 text-xs font-medium text-danger">
+              <span className="h-2 w-2 rounded-full bg-danger" />
               Offline / Unreachable
             </div>
           )}
@@ -260,8 +264,8 @@ export default function SystemHealth() {
           onClick={() => setActiveTab("48h")}
           className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
             activeTab === "48h"
-              ? "border border-[#333] bg-[#1E1E1E] text-white"
-              : "text-[#737373] hover:text-[#D4D4D4]"
+              ? "border border-stroke-strong bg-surface-2 text-fg"
+              : "text-fg-muted hover:text-fg-body"
           }`}
         >
           Last 48 Hours
@@ -271,8 +275,8 @@ export default function SystemHealth() {
           onClick={() => setActiveTab("30d")}
           className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
             activeTab === "30d"
-              ? "border border-[#333] bg-[#1E1E1E] text-white"
-              : "text-[#737373] hover:text-[#D4D4D4]"
+              ? "border border-stroke-strong bg-surface-2 text-fg"
+              : "text-fg-muted hover:text-fg-body"
           }`}
         >
           30-Day Trend
@@ -292,7 +296,7 @@ export default function SystemHealth() {
           title="CPU Utilization"
           data={historyData}
           dataKey="cpu_usage"
-          color="#ffffff"
+          color="var(--color-chart-line)"
           range={activeTab}
           isLoading={historyQuery.isLoading}
         />
@@ -300,7 +304,7 @@ export default function SystemHealth() {
           title="GPU Utilization"
           data={historyData}
           dataKey="gpu_usage"
-          color="#ffffff"
+          color="var(--color-chart-line)"
           range={activeTab}
           isLoading={historyQuery.isLoading}
         />
@@ -308,7 +312,7 @@ export default function SystemHealth() {
           title="GPU Temperature"
           data={historyData}
           dataKey="gpu_temp_peak"
-          color="#ef4444"
+          color="var(--color-danger)"
           range={activeTab}
           unit="°C"
           isLoading={historyQuery.isLoading}
@@ -317,7 +321,7 @@ export default function SystemHealth() {
           title="RAM Utilization"
           data={historyData}
           dataKey="ram_usage"
-          color="#ffffff"
+          color="var(--color-chart-line)"
           range={activeTab}
           isLoading={historyQuery.isLoading}
         />

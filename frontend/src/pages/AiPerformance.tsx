@@ -77,8 +77,8 @@ export default function AiPerformance() {
   return (
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6">
-        <h1 className="mb-0.5 text-xl font-semibold text-white">AI Performance</h1>
-        <p className="text-xs text-[#737373]">
+        <h1 className="mb-0.5 text-xl font-semibold text-fg">AI Performance</h1>
+        <p className="text-xs text-fg-muted">
           Analyze confidence levels and track overall detection accuracy of cameras
         </p>
       </div>
@@ -138,8 +138,8 @@ export default function AiPerformance() {
             }}
             placeholder="Search..."
           />
-          <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-            <RiCalendarLine size={13} className="text-[#737373]" />
+          <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
+            <RiCalendarLine size={13} className="text-fg-muted" />
             <input
               type="date"
               value={startDate}
@@ -147,12 +147,12 @@ export default function AiPerformance() {
                 reset()
                 setStartDate(e.target.value)
               }}
-              className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
+              className="bg-transparent text-xs text-fg-body focus:outline-none [color-scheme:dark]"
             />
           </div>
-          <span className="text-xs text-[#555]">to</span>
-          <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-            <RiCalendarLine size={13} className="text-[#737373]" />
+          <span className="text-xs text-fg-muted">to</span>
+          <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
+            <RiCalendarLine size={13} className="text-fg-muted" />
             <input
               type="date"
               value={endDate}
@@ -160,18 +160,18 @@ export default function AiPerformance() {
                 reset()
                 setEndDate(e.target.value)
               }}
-              className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
+              className="bg-transparent text-xs text-fg-body focus:outline-none [color-scheme:dark]"
             />
           </div>
-          <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-            <RiCameraLine size={13} className="text-[#737373]" />
+          <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
+            <RiCameraLine size={13} className="text-fg-muted" />
             <select
               value={cameraId}
               onChange={(e) => {
                 reset()
                 setCameraId(e.target.value)
               }}
-              className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none"
+              className="bg-transparent text-xs text-fg-body focus:outline-none"
             >
               <option value="">All cameras</option>
               {camerasQuery.data?.cameras.map((c) => (
@@ -190,7 +190,7 @@ export default function AiPerformance() {
                 setCameraId("")
                 reset()
               }}
-              className="flex items-center gap-1 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1.5 text-xs text-[#737373] transition-colors hover:text-white"
+              className="flex items-center gap-1 rounded-md border border-stroke bg-surface-1 px-2 py-1.5 text-xs text-fg-muted transition-colors hover:text-fg"
             >
               <RiCloseLine size={12} />
               Clear
@@ -201,7 +201,7 @@ export default function AiPerformance() {
           type="button"
           disabled={exportMutation.isPending}
           onClick={() => exportMutation.mutate()}
-          className="flex items-center gap-2 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           <RiDownloadLine size={13} />
           {exportMutation.isPending ? "Exporting..." : "Export"}
@@ -215,11 +215,11 @@ export default function AiPerformance() {
         />
       ) : null}
 
-      <div className="overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#111111]">
+      <div className="overflow-hidden rounded-xl border border-stroke bg-surface-1">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-[#2A2A2A] bg-[#141414] text-[#737373]">
+              <tr className="border-b border-stroke bg-surface-1 text-fg-muted">
                 <th className="px-6 py-4 text-xs font-medium">Camera Name</th>
                 <th className="px-6 py-4 text-center text-xs font-medium">Accidents</th>
                 <th className="px-6 py-4 text-center text-xs font-medium">Dismissed</th>
@@ -228,7 +228,7 @@ export default function AiPerformance() {
                 <th className="px-6 py-4 text-center text-xs font-medium">Dismissed Score</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#2A2A2A]">
+            <tbody className="divide-y divide-stroke">
               {performanceQuery.isLoading ? (
                 <TableStateRow colSpan={6}>Loading AI performance...</TableStateRow>
               ) : visibleRows.length === 0 ? (
@@ -239,26 +239,24 @@ export default function AiPerformance() {
                 visibleRows.map((item) => (
                   <tr
                     key={item.camera_id}
-                    className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]"
+                    className="text-fg-body transition-colors hover:bg-surface-1"
                   >
                     <td className="px-6 py-4 text-xs font-medium">{item.camera_name}</td>
                     <td className="px-6 py-4 text-center text-xs">{item.total_accidents}</td>
                     <td className="px-6 py-4 text-center text-xs">{item.total_dismissed}</td>
-                    <td className="px-6 py-4 text-center text-xs font-medium text-[#ef4444]">
+                    <td className="px-6 py-4 text-center text-xs font-medium text-danger">
                       {formatPercent(item.precision_score)}
                     </td>
                     <td
                       className={`px-6 py-4 text-center text-xs font-medium ${
-                        item.avg_accident_confidence === null
-                          ? "text-[#737373]"
-                          : "text-emerald-500"
+                        item.avg_accident_confidence === null ? "text-fg-muted" : "text-success"
                       }`}
                     >
                       {formatPercent(item.avg_accident_confidence)}
                     </td>
                     <td
                       className={`px-6 py-4 text-center text-xs font-medium ${
-                        item.avg_dismissed_confidence === null ? "text-[#737373]" : "text-[#ef4444]"
+                        item.avg_dismissed_confidence === null ? "text-fg-muted" : "text-danger"
                       }`}
                     >
                       {formatPercent(item.avg_dismissed_confidence)}

@@ -41,7 +41,7 @@ export function SnapshotImage({
     return (
       <div
         className={cn(
-          "flex items-center justify-center rounded-md border border-dashed border-[#7F1D1D] bg-[#111111] text-xs text-[#FCA5A5]",
+          "flex items-center justify-center rounded-md border border-dashed border-danger-border bg-surface-1 text-xs text-danger",
           fallbackClassName,
         )}
       >

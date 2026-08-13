@@ -24,26 +24,26 @@ export const CAMERA_AI_STATUS_OPTIONS: Array<{
 
 export function getCameraConnectionClass(status: CameraConnectionStatus) {
   if (status === "Connected") {
-    return "text-emerald-500"
+    return "text-success"
   }
 
   if (status === "Reconnecting") {
-    return "text-amber-500"
+    return "text-warning"
   }
 
-  return "text-[#ef4444]"
+  return "text-danger"
 }
 
 export function getCameraAiClass(status: CameraAiStatus) {
   if (status === "Active") {
-    return "text-emerald-500"
+    return "text-success"
   }
 
   if (status === "Paused") {
-    return "text-amber-500"
+    return "text-warning"
   }
 
-  return "text-[#ef4444]"
+  return "text-danger"
 }
 
 export function buildCameraUpdatePayload(

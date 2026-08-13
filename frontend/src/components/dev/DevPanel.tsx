@@ -176,17 +176,17 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
               key={profile.name}
               disabled={busy !== null}
               onClick={() => handleReseed(profile.name)}
-              className="rounded-lg border border-[#2A2A2A] bg-[#161616] px-3 py-2 text-left transition-colors hover:border-[#3A3A3A] disabled:opacity-50"
+              className="rounded-lg border border-stroke bg-surface-1 px-3 py-2 text-left transition-colors hover:border-stroke-strong disabled:opacity-50"
             >
-              <span className="text-sm font-medium text-white">
+              <span className="text-sm font-medium text-fg">
                 {profile.name}
                 {profile.name === SLOW_PROFILE && (
-                  <span className="ml-2 text-[10px] uppercase tracking-wide text-[#F59E0B]">
+                  <span className="ml-2 text-[10px] uppercase tracking-wide text-warning">
                     slow
                   </span>
                 )}
               </span>
-              <span className="mt-0.5 block text-xs text-[#A1A1AA]">
+              <span className="mt-0.5 block text-xs text-fg-muted">
                 {busy === `reseed:${profile.name}` ? "Seeding..." : profile.description}
               </span>
             </button>
@@ -195,7 +195,7 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
       </Section>
 
       <Section title="Simulate">
-        <label className="mb-1 block text-xs text-[#A1A1AA]">
+        <label className="mb-1 block text-xs text-fg-muted">
           Camera ID (blank picks a free one)
         </label>
         <input
@@ -206,14 +206,14 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
           step={1}
           inputMode="numeric"
           placeholder="auto"
-          className="mb-3 w-full rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] px-3 py-2 text-sm text-white"
+          className="mb-3 w-full rounded-lg border border-stroke bg-canvas px-3 py-2 text-sm text-fg"
         />
         {cameraIdIsInvalid && (
-          <p className="-mt-2 mb-3 text-xs text-[#F87171]">
+          <p className="-mt-2 mb-3 text-xs text-danger">
             Enter a whole camera ID, or leave it blank.
           </p>
         )}
-        <label className="mb-1 block text-xs text-[#A1A1AA]">
+        <label className="mb-1 block text-xs text-fg-muted">
           Confidence: {(confidence / 100).toFixed(2)}
         </label>
         <input
@@ -300,7 +300,7 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
                   return `Signed in as ${session.username} (${session.role}).`
                 })
               }
-              className="rounded-lg border border-[#2A2A2A] bg-[#161616] px-3 py-1.5 text-xs text-white transition-colors hover:border-[#3A3A3A] disabled:opacity-50"
+              className="rounded-lg border border-stroke bg-surface-1 px-3 py-1.5 text-xs text-fg transition-colors hover:border-stroke-strong disabled:opacity-50"
             >
               {username}
             </button>
@@ -314,7 +314,7 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-6">
-      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#71717A]">{title}</h4>
+      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">{title}</h4>
       {children}
     </section>
   )
@@ -324,7 +324,7 @@ function PanelButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButt
   return (
     <button
       {...props}
-      className="w-full rounded-lg border border-[#2A2A2A] bg-[#161616] px-3 py-2 text-sm text-white transition-colors hover:border-[#3A3A3A] disabled:opacity-50"
+      className="w-full rounded-lg border border-stroke bg-surface-1 px-3 py-2 text-sm text-fg transition-colors hover:border-stroke-strong disabled:opacity-50"
     >
       {children}
     </button>

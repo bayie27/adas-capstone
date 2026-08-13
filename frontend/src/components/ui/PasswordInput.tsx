@@ -35,7 +35,7 @@ export function PasswordInput({
 
   return (
     <div>
-      <label className={cn("mb-2 block text-[11px] font-semibold text-[#E4E4E7]", labelClassName)}>
+      <label className={cn("mb-2 block text-[11px] font-semibold text-fg-body", labelClassName)}>
         {label}
       </label>
       <div className="relative">
@@ -46,7 +46,7 @@ export function PasswordInput({
           autoComplete={autoComplete}
           placeholder={placeholder}
           className={cn(
-            "w-full rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-2 pr-10 text-sm text-white focus:border-[#555] focus:outline-none",
+            "w-full rounded-md border border-stroke bg-surface-1 px-3 py-2 pr-10 text-sm text-fg focus:border-stroke-strong focus:outline-none",
             inputClassName,
           )}
         />
@@ -54,7 +54,7 @@ export function PasswordInput({
           type="button"
           onClick={() => setVisible((current) => !current)}
           className={cn(
-            "absolute right-3 top-1/2 -translate-y-1/2 text-[#555] transition-colors hover:text-white",
+            "absolute right-3 top-1/2 -translate-y-1/2 text-fg-muted transition-colors hover:text-fg",
             toggleClassName,
           )}
         >

@@ -1,8 +1,111 @@
 @import "tailwindcss";
 
+/* The ADAM-UI design tokens, transcribed from the Figma variable collections.
+   FE_Implementation.md §2 is the written spec, including the three places
+   where Figma contradicted itself and the value chosen was recorded rather
+   than decided silently.
+
+   Tailwind v4 emits each of these as a real CSS custom property AND generates
+   utilities from it: `--color-surface-1` gives both `var(--color-surface-1)`
+   and `bg-surface-1` / `text-surface-1` / `border-surface-1`. Chart props
+   (Recharts `stroke`, `fill`) take the `var(...)` form because a utility class
+   cannot reach them; everything else takes the utility.
+
+   After this phase an arbitrary colour value in a className is a bug, and
+   eslint.config.js fails the build on one. The only permitted arbitrary values
+   are geometry that isn't on the spacing scale (`w-[272px]`). */
 @theme {
   /* Inter is self-hosted via @fontsource-variable/inter, which registers the
      family as "Inter Variable"; keep "Inter" as a fallback. */
   --font-sans: "Inter Variable", "Inter", sans-serif;
-  --font-logo: "League Spartan", sans-serif;
+
+  /* --- Surfaces (§2.2) --------------------------------------------------
+     Ten near-duplicate "slightly lighter than the background" greys in the
+     old code collapse onto three. */
+  --color-canvas: #09090b; /* Dark/background — the page behind everything */
+  --color-surface-1: #121212; /* Dark/Background-Secondary — card, table, modal, input */
+  --color-surface-2: #1f1f1f; /* Dark/Background-Tertiary — elevated / active */
+  --color-surface-3: #252529; /* Dark/Secondary — secondary button, icon tile, badge */
+
+  /* --- Borders and strokes (§2.2) --------------------------------------- */
+  --color-border: #27272a; /* Dark/border, Dark/input — input and button outlines */
+  --color-stroke: #2a2a2a; /* Dark/Stroke-Color — card borders, row dividers */
+  --color-stroke-strong: #3d3d3d; /* Dark/Stroke-Color-Secondary — hover/focus border */
+
+  /* --- Text (§2.2) ------------------------------------------------------
+     There is no fourth grey: #555 / #737373 / #71717A all collapse onto
+     --color-fg-muted. Dimmer than muted is `opacity-60`, not a new hex. */
+  --color-fg: #fafafa; /* Dark/foreground — titles, KPI values, active nav */
+  --color-fg-sidebar: #f4f4f5; /* Dark/sidebar-foreground — sidebar user name */
+  --color-fg-body: #e1e1e1; /* Text/Primary — body copy, form values */
+  --color-fg-muted: #a1a1aa; /* Text/Muted — subtitles, table headers, placeholders */
+  --color-fg-on-primary: #18181b; /* Dark/primary-foreground — text on a light fill */
+
+  /* --- Semantic (§2.2) -------------------------------------------------- */
+  --color-success: #48bb78; /* Connected, Active, Resolved, positive delta */
+  --color-warning: #ecc94b; /* Reconnecting, Paused, Ongoing */
+  --color-danger: #f56565; /* Disconnected, Inactive, destructive, ACCIDENT DETECTED */
+
+  /* The tinted-pill pattern (Online pill, delta badges, error banners),
+     defined explicitly rather than via `/10` opacity on an arbitrary value. */
+  --color-success-subtle: rgb(72 187 120 / 0.1);
+  --color-success-border: rgb(72 187 120 / 0.3);
+  --color-warning-subtle: rgb(236 201 75 / 0.1);
+  --color-warning-border: rgb(236 201 75 / 0.3);
+  --color-danger-subtle: rgb(245 101 101 / 0.1);
+  --color-danger-border: rgb(245 101 101 / 0.3);
+
+  /* --- Primary (light) action (§2.2) ------------------------------------
+     Figma exposes no Dark/primary variable; Login renders ~#E5E5E5 and Add
+     Camera ~#FAFAFA, neither bound. #FAFAFA is the rest state (it matches
+     Dark/foreground and the majority of screens) so hover has somewhere to go. */
+  --color-primary: #fafafa;
+  --color-primary-hover: #e5e5e5;
+
+  /* --- Charts (§2.2) ----------------------------------------------------
+     Utility classes cannot reach Recharts props, so these are consumed as
+     var(--color-chart-*). */
+  --color-chart-line: #fafafa;
+  --color-chart-fill-from: rgb(250 250 250 / 0.18);
+  --color-chart-fill-to: rgb(250 250 250 / 0);
+  --color-chart-grid: #1f1f1f; /* horizontal only; vertical grid is off */
+  --color-chart-axis: #a1a1aa; /* tick labels; axis lines and ticks are hidden */
+
+  /* --- Overlays (§2.6) --------------------------------------------------
+     The HITL accident dialog reads as more blocking than an ordinary modal. */
+  --color-backdrop: rgb(0 0 0 / 0.6);
+  --color-backdrop-alert: rgb(0 0 0 / 0.7);
+
+  /* --- Radii (§2.5) -----------------------------------------------------
+     Figma ships two contradictory collections; the Radius/* naming wins and
+     Corner-Rad's inverted S/M/L are re-labelled onto their correct rung. */
+  --radius-sm: 4px; /* badge, chip, sidebar active accent bar */
+  --radius-md: 6px; /* button, input, dropdown, nav item */
+  --radius-lg: 8px; /* icon tile inside a KPI card */
+  --radius-xl: 12px; /* card, table container, modal, side panel */
+  --radius-full: 9999px; /* status pill, tab chip, avatar */
+
+  /* --- Shadows (§2.6) ---------------------------------------------------
+     Figma defines only Shadow Small; the overlay shadow is specified here
+     because the frames render one but bind no effect style, and Tailwind's
+     shadow-2xl is tuned for light backgrounds. */
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+  --shadow-overlay: 0 20px 50px -12px rgb(0 0 0 / 0.65);
+
+  /* --- Type scale (§2.4) ------------------------------------------------
+     Figma sets lineHeight 28 on both `secondary/input` (14px) and `caption`
+     (12px) — a copy-paste from `p`. Both are 20px here, which is Figma's own
+     Leading/Leading Tight and reproduces the rendered frames. */
+  --text-h2: 30px; /* KPI value */
+  --text-h2--line-height: 36px;
+  --text-h2--letter-spacing: -0.75px;
+  --text-h3: 24px; /* page title, modal accident code */
+  --text-h3--line-height: 32px;
+  --text-h3--letter-spacing: -0.6px;
+  --text-body: 16px; /* body copy, page subtitle, form values */
+  --text-body--line-height: 28px;
+  --text-secondary: 14px; /* table cells, nav labels, input text, buttons */
+  --text-secondary--line-height: 20px;
+  --text-caption: 12px; /* table headers, metadata labels, badges, axis ticks */
+  --text-caption--line-height: 20px;
 }

@@ -100,8 +100,8 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#0A0A0A] p-8">
-      <div className="w-full max-w-[400px] rounded-xl border border-[#2A2A2A] bg-[#111111] p-8 shadow-2xl">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-canvas p-8">
+      <div className="w-full max-w-[400px] rounded-xl border border-stroke bg-surface-1 p-8 shadow-2xl">
         <div className="mb-8 flex flex-col items-center">
           <div className="mb-4 flex w-24 items-center justify-center">
             <img
@@ -110,17 +110,15 @@ export default function Login() {
               className="h-auto w-full object-contain drop-shadow-md"
             />
           </div>
-          <h1 className="font-logo text-xl font-bold uppercase tracking-[0.3em] text-white">
-            ADAS
-          </h1>
-          <p className="mt-1 text-center text-xs tracking-wide text-[#A1A1AA]">
+          <h1 className="text-xl font-bold uppercase tracking-[0.25em] text-fg">ADAS</h1>
+          <p className="mt-1 text-center text-xs tracking-wide text-fg-muted">
             Accident Detection and Alert System
           </p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="mb-1.5 block text-xs font-medium tracking-wide text-[#E4E4E7]">
+            <label className="mb-1.5 block text-xs font-medium tracking-wide text-fg-body">
               Username
             </label>
             <input
@@ -132,7 +130,7 @@ export default function Login() {
                 setUsername(e.target.value)
               }}
               autoComplete="username"
-              className="w-full rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-2.5 text-sm text-white transition-colors placeholder-[#52525B] focus:border-[#555] focus:outline-none"
+              className="w-full rounded-md border border-stroke bg-surface-1 px-3 py-2.5 text-sm text-fg transition-colors placeholder-fg-muted focus:border-stroke-strong focus:outline-none"
             />
           </div>
           <PasswordInput
@@ -145,21 +143,21 @@ export default function Login() {
             autoComplete="current-password"
             placeholder="password"
             labelClassName="mb-1.5 text-xs font-medium tracking-wide"
-            inputClassName="py-2.5 tracking-widest transition-colors placeholder-[#52525B]"
-            toggleClassName="text-[#A1A1AA]"
+            inputClassName="py-2.5 tracking-widest transition-colors placeholder-fg-muted"
+            toggleClassName="text-fg-muted"
             iconSize={18}
           />
           <button
             type="submit"
             disabled={loginMutation.isPending}
-            className="mt-2 w-full rounded-md bg-white py-2.5 text-sm font-semibold text-black transition-colors hover:bg-gray-100"
+            className="mt-2 w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover"
           >
             {loginMutation.isPending ? "Signing in..." : "Login"}
           </button>
           {statusMessage ? (
             <p
               className={`text-center text-xs ${
-                statusMessage.tone === "success" ? "text-emerald-400" : "text-[#F87171]"
+                statusMessage.tone === "success" ? "text-success" : "text-danger"
               }`}
             >
               {statusMessage.message}

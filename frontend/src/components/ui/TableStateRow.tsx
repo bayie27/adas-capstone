@@ -22,7 +22,7 @@ export function TableStateRow({
         colSpan={colSpan}
         className={cn(
           "px-6 py-8 text-center text-xs",
-          tone === "error" ? "text-[#F87171]" : "text-[#A1A1AA]",
+          tone === "error" ? "text-danger" : "text-fg-muted",
         )}
       >
         {children}

@@ -21,7 +21,7 @@ const Users = lazy(() => import("@/pages/Users"))
 
 function RouteFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0A0A0A] text-sm text-[#A1A1AA]">
+    <div className="flex min-h-screen items-center justify-center bg-canvas text-sm text-fg-muted">
       Loading...
     </div>
   )

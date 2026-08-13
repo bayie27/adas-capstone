@@ -51,7 +51,7 @@ describe("Modal", () => {
         <p>body</p>
       </Modal>,
     )
-    const backdrop = container.querySelector(".bg-black\\/60")
+    const backdrop = container.querySelector(".bg-backdrop")
     expect(backdrop).not.toBeNull()
     await user.click(backdrop as Element)
     expect(onClose).not.toHaveBeenCalled()

@@ -18,11 +18,11 @@ const EMPTY_FORM: CameraFormState = {
 }
 
 const INPUT_CLASS =
-  "w-full rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-2 text-sm text-white placeholder-[#555] focus:border-[#555] focus:outline-none"
+  "w-full rounded-md border border-stroke bg-surface-1 px-3 py-2 text-sm text-fg placeholder-fg-muted focus:border-stroke-strong focus:outline-none"
 const SECONDARY_BUTTON_CLASS =
-  "rounded-md border border-[#333] bg-transparent px-4 py-2 text-sm font-medium text-[#E4E4E7] transition-colors hover:text-white"
+  "rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-sm font-medium text-fg-body transition-colors hover:text-fg"
 const PRIMARY_BUTTON_CLASS =
-  "rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+  "rounded-md bg-primary px-4 py-2 text-sm font-medium text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
 
 function parseChannelId(value: string) {
   const parsed = Number.parseInt(value.trim(), 10)
@@ -50,7 +50,7 @@ function CameraFormFields({
   return (
     <>
       <div>
-        <label className="mb-2 block text-xs font-semibold text-white">Camera Name</label>
+        <label className="mb-2 block text-xs font-semibold text-fg">Camera Name</label>
         <input
           type="text"
           value={form.camera_name}
@@ -60,7 +60,7 @@ function CameraFormFields({
         />
       </div>
       <div>
-        <label className="mb-2 block text-xs font-semibold text-white">Channel No.</label>
+        <label className="mb-2 block text-xs font-semibold text-fg">Channel No.</label>
         <input
           type="text"
           value={form.channel_id}
@@ -129,8 +129,8 @@ export function AddCameraModal({ onClose, onSuccess }: AddCameraModalProps) {
       title="Add Camera"
       subtitle="Assign a name and channel number for the camera."
       icon={
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#333] bg-transparent">
-          <RiCameraLine size={20} className="text-white" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-strong bg-transparent">
+          <RiCameraLine size={20} className="text-fg" />
         </div>
       }
     >
@@ -141,7 +141,7 @@ export function AddCameraModal({ onClose, onSuccess }: AddCameraModalProps) {
           channelPlaceholder="1"
           onChange={updateField}
         />
-        {errorMessage ? <p className="text-xs text-[#F87171]">{errorMessage}</p> : null}
+        {errorMessage ? <p className="text-xs text-danger">{errorMessage}</p> : null}
         <div className="mt-8 flex items-center justify-end gap-3">
           <button type="button" onClick={onClose} className={SECONDARY_BUTTON_CLASS}>
             Cancel

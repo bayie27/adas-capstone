@@ -32,7 +32,7 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/60 transition-opacity"
+        className="absolute inset-0 bg-backdrop transition-opacity"
         onClick={closeOnBackdrop ? onClose : undefined}
       />
 
@@ -43,7 +43,7 @@ export function Modal({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          "relative bg-[#111111] border border-[#2A2A2A] rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200",
+          "relative bg-surface-1 border border-stroke rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200",
           className,
         )}
       >
@@ -52,19 +52,14 @@ export function Modal({
             <div className="flex items-start gap-4">
               {icon}
               <div>
-                {title && (
-                  <h3 className="text-lg font-semibold text-white leading-tight">{title}</h3>
-                )}
+                {title && <h3 className="text-lg font-semibold text-fg leading-tight">{title}</h3>}
                 {subtitle && (
-                  <p className="text-sm text-[#A1A1AA] mt-1 leading-relaxed">{subtitle}</p>
+                  <p className="text-sm text-fg-muted mt-1 leading-relaxed">{subtitle}</p>
                 )}
               </div>
             </div>
             {!hideClose && (
-              <button
-                onClick={onClose}
-                className="text-[#71717A] hover:text-white transition-colors"
-              >
+              <button onClick={onClose} className="text-fg-muted hover:text-fg transition-colors">
                 <RiCloseLine size={20} />
               </button>
             )}
@@ -74,7 +69,7 @@ export function Modal({
         {!title && !icon && !hideClose && (
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 text-[#71717A] hover:text-white transition-colors z-10"
+            className="absolute right-4 top-4 text-fg-muted hover:text-fg transition-colors z-10"
           >
             <RiCloseLine size={20} />
           </button>
