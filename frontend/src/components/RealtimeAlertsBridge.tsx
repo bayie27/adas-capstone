@@ -17,7 +17,7 @@ import {
   asReAlarmData,
   asSnoozeActivatedData,
   parseEventEnvelope,
-} from "@/utils/realtime"
+} from "@/api/events"
 
 // WS close codes that mean the session itself is gone — 01_CONTRACTS.md §9 —
 // mirror the REST 401 -> clearSession -> redirect flow exactly.
