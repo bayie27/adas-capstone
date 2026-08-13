@@ -19,7 +19,7 @@ import {
   CAMERA_CONNECTION_STATUS_OPTIONS,
   getCameraAiClass,
   getCameraConnectionClass,
-} from "@/utils/cameras"
+} from "@/utils/format"
 import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"

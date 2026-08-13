@@ -7,7 +7,7 @@ import { resetUserPassword } from "@/api/users"
 import type { UserRecord } from "@/api/users"
 import { getApiErrorMessage } from "@/api/client"
 import { formatShortDateTime } from "@/utils/datetime"
-import { getUserFullName } from "@/utils/users"
+import { getUserFullName } from "@/utils/format"
 import { RiLockLine } from "@remixicon/react"
 
 type ResetPasswordFormState = {

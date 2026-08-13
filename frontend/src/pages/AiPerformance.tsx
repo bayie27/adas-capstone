@@ -10,7 +10,7 @@ import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
-import { formatPercent } from "@/utils/analytics"
+import { formatPercent } from "@/utils/format"
 import {
   RiCalendarLine,
   RiCameraLine,

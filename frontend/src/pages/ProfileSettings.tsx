@@ -5,7 +5,7 @@ import type { NoticeState } from "@/components/ui/NoticeBanner"
 import { getMyProfile, updateMyProfile } from "@/api/users"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getApiErrorMessage } from "@/api/client"
-import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/users"
+import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/format"
 import { ChangePasswordModal } from "@/pages/profile/ChangePasswordModal"
 
 const PROFILE_QUERY_KEY = ["my-profile"] as const

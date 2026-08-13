@@ -30,7 +30,7 @@ import {
   getAlertLastHandledBy,
   getAlertLastUpdated,
   getAlertStatusTextClass,
-} from "@/utils/alerts"
+} from "@/utils/format"
 import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
 import { cn } from "@/utils/cn"

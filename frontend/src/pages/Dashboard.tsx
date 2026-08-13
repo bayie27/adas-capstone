@@ -17,7 +17,7 @@ import { exportDashboardAnalyticsCsv, getDashboardAnalytics } from "@/api/analyt
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
-import { formatHourLabel, truncateLabel } from "@/utils/analytics"
+import { formatHourLabel, truncateLabel } from "@/utils/format"
 import type { AnalyticsFilters } from "@/api/analytics"
 import {
   RiCalendarLine,
