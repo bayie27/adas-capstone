@@ -30,6 +30,11 @@ export default defineConfig({
     {
       name: "visual",
       testMatch: /visual\.spec\.ts/,
+      // No retries here, unlike the default project. A retry re-runs the whole
+      // serial block and passes a route whose baseline the failed attempt just
+      // wrote, which hides both a missing baseline and a genuine flake — and a
+      // flaky baseline is worse than no baseline (§6.5).
+      retries: 0,
       use: {
         ...devices["Desktop Chrome"],
         // The Figma artboard. deviceScaleFactor 1 keeps the baselines at CSS

@@ -24,18 +24,24 @@ test.describe("visual baselines", () => {
     test.skip(!ADMIN_PASSWORD, "DEFAULT_ADMIN_PASSWORD is not set — copy .env.example to .env")
 
     const context = await browser.newContext()
-    page = await context.newPage()
 
-    // Log in first: /api/dev/reseed is admin-gated. It wipes the database the
-    // session belongs to and re-mints the cookie on the same context, so the
-    // page stays authenticated across the reseed.
-    await page.goto("/login")
-    await page.getByPlaceholder("username").fill("admin")
-    await page.getByPlaceholder("password").fill(ADMIN_PASSWORD as string)
-    await page.getByRole("button", { name: "Login" }).click()
-    await expect(page).toHaveURL(/\/admin$/)
+    // Seed over HTTP only, BEFORE any page exists. /api/dev/reseed is
+    // admin-gated, so log in for the cookie first; both calls share the
+    // context's cookie jar, and the reseed re-mints the cookie in place.
+    //
+    // This ordering is load-bearing. Reseeding under a mounted app wipes the
+    // user table, the backend's session sweep closes the socket with 4001, and
+    // RealtimeAlertsBridge treats that as an expired session — clearSession()
+    // then redirect to /login. The dev panel suppresses that with sessionEpoch
+    // and suspendAuthRedirect; calling the API directly gets none of it, so
+    // every route screenshots the login page instead. With no page open there
+    // is no socket to close and no race to lose.
+    const login = await context.request.post(`${API}/auth/login`, {
+      form: { username: "admin", password: ADMIN_PASSWORD as string },
+    })
+    expect(login.ok(), `login failed: ${login.status()} ${await login.text()}`).toBe(true)
 
-    const reseed = await page.request.post(`${API}/dev/reseed`, {
+    const reseed = await context.request.post(`${API}/dev/reseed`, {
       data: { profile: "demo" },
     })
     expect(reseed.ok(), `dev reseed failed: ${reseed.status()} ${await reseed.text()}`).toBe(true)
@@ -45,12 +51,17 @@ test.describe("visual baselines", () => {
     // store's own "handled this session" set instead of dismissing the
     // incidents — that suppresses the dialog without mutating the dataset the
     // Detections tabs are meant to show.
-    const open = await page.request.get(`${API}/alerts/?status=Unverified&status=Ongoing&limit=100`)
+    const open = await context.request.get(
+      `${API}/alerts/?status=Unverified&status=Ongoing&limit=100`,
+    )
     expect(open.ok(), `alert prefetch failed: ${open.status()}`).toBe(true)
     const openIds = ((await open.json()).logs as { log_id: number }[]).map((l) => l.log_id)
-    await page.addInitScript((ids) => {
+    await context.addInitScript((ids) => {
       sessionStorage.setItem("adas-handled-alert-ids", JSON.stringify(ids))
     }, openIds)
+
+    // Only now open the page — it loads against an already-seeded database.
+    page = await context.newPage()
   })
 
   test.afterAll(async () => {
@@ -64,6 +75,13 @@ test.describe("visual baselines", () => {
 
   async function settle(route: string, { chart = false } = {}) {
     await page.goto(route)
+    if (route !== "/login") {
+      // A lost session redirects here, and every baseline silently becomes a
+      // picture of the login form. Fail loudly instead.
+      await expect(page, `${route} bounced to /login — the session was lost`).not.toHaveURL(
+        /\/login/,
+      )
+    }
     await expect(page.getByText(/Loading/i).first()).toBeHidden({ timeout: 15_000 })
     await page.waitForLoadState("networkidle")
     // Kill CSS transitions and the caret; neither is deterministic frame-to-frame.
