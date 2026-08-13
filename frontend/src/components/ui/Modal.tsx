@@ -1,6 +1,7 @@
 import { RiCloseLine } from "@remixicon/react"
 import { useOverlayBehavior } from "@/hooks/useOverlayBehavior"
 import { cn } from "@/utils/cn"
+import { focusRing } from "@/components/ui/Button"
 
 interface ModalProps {
   isOpen: boolean
@@ -59,7 +60,15 @@ export function Modal({
               </div>
             </div>
             {!hideClose && (
-              <button onClick={onClose} className="text-fg-muted hover:text-fg transition-colors">
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close dialog"
+                className={cn(
+                  "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+                  focusRing,
+                )}
+              >
                 <RiCloseLine size={20} />
               </button>
             )}
@@ -68,8 +77,13 @@ export function Modal({
 
         {!title && !icon && !hideClose && (
           <button
+            type="button"
             onClick={onClose}
-            className="absolute right-4 top-4 text-fg-muted hover:text-fg transition-colors z-10"
+            aria-label="Close dialog"
+            className={cn(
+              "absolute right-4 top-4 z-10 rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+              focusRing,
+            )}
           >
             <RiCloseLine size={20} />
           </button>

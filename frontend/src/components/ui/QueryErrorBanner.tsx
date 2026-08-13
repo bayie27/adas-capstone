@@ -1,4 +1,6 @@
 import { getApiErrorMessage } from "@/api/client"
+import { cn } from "@/utils/cn"
+import { focusRing } from "@/components/ui/Button"
 
 export function QueryErrorBanner({
   error,
@@ -16,7 +18,11 @@ export function QueryErrorBanner({
         <button
           type="button"
           onClick={onRetry}
-          className="rounded-md border border-stroke-strong px-3 py-1.5 text-xs font-medium text-fg transition-colors hover:bg-surface-1"
+          className={cn(
+            "rounded-md border border-stroke-strong px-3 py-1.5 text-xs font-medium text-fg",
+            "transition-colors duration-150 hover:bg-surface-2",
+            focusRing,
+          )}
         >
           Retry
         </button>

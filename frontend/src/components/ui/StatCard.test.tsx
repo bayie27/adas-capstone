@@ -33,4 +33,25 @@ describe("StatCard", () => {
 
     expect(screen.getByText("Last 24 hours")).toBeInTheDocument()
   })
+
+  it("renders a negative delta in the danger tone", () => {
+    render(<StatCard icon={DummyIcon} title="Uptime" value="98%" delta="-1.2%" />)
+
+    expect(screen.getByText("-1.2%")).toHaveClass("text-danger")
+  })
+
+  it("fills the elevated variant with the raised surface", () => {
+    const { container } = render(
+      <StatCard icon={DummyIcon} title="Total Cameras" value={7} elevated />,
+    )
+
+    expect(container.firstElementChild).toHaveClass("bg-surface-2")
+  })
+
+  it("shows the ellipsis loading treatment instead of the value", () => {
+    render(<StatCard icon={DummyIcon} title="Server Uptime" value={12} isLoading />)
+
+    expect(screen.getByText("…")).toBeInTheDocument()
+    expect(screen.queryByText("12")).not.toBeInTheDocument()
+  })
 })

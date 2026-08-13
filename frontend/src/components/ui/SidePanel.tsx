@@ -1,6 +1,7 @@
 import { RiCloseLine } from "@remixicon/react"
 import { useOverlayBehavior } from "@/hooks/useOverlayBehavior"
 import { cn } from "@/utils/cn"
+import { focusRing } from "@/components/ui/Button"
 
 interface SidePanelProps {
   isOpen: boolean
@@ -60,9 +61,13 @@ export function SidePanel({
             {subtitle && <p className="mt-1 text-xs leading-relaxed text-fg-muted">{subtitle}</p>}
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close panel"
-            className="text-fg-muted transition-colors hover:text-fg"
+            className={cn(
+              "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+              focusRing,
+            )}
           >
             <RiCloseLine size={20} />
           </button>

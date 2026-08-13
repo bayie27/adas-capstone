@@ -1,4 +1,6 @@
 import { RiArrowRightSLine } from "@remixicon/react"
+import { cn } from "@/utils/cn"
+import { focusRing } from "@/components/ui/Button"
 
 type FilterOption<T extends string> = {
   value: T
@@ -17,7 +19,12 @@ export function FilterSelect<T extends string>({ value, options, onChange }: Fil
       <select
         value={value}
         onChange={(event) => onChange(event.target.value as T)}
-        className="appearance-none rounded-md border border-stroke bg-surface-1 px-3 py-1.5 pr-8 text-xs text-fg-body focus:border-stroke-strong focus:outline-none"
+        className={cn(
+          "appearance-none rounded-md border border-stroke bg-surface-1 px-3 py-1.5 pr-8 text-xs text-fg-body",
+          "transition-colors duration-150 focus:border-stroke-strong",
+          "disabled:cursor-not-allowed disabled:opacity-60",
+          focusRing,
+        )}
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

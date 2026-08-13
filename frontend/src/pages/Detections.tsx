@@ -6,7 +6,7 @@ import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
-import { TableStateRow } from "@/components/ui/TableStateRow"
+import { TableStateRow } from "@/components/ui/Table"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import {
