@@ -10,7 +10,7 @@ export default function AppLayout() {
   return (
     <div className="flex h-screen overflow-hidden bg-canvas">
       <Sidebar />
-      <main className="ml-60 flex-1 overflow-y-auto">
+      <main className="ml-[272px] flex-1 overflow-y-auto">
         <Outlet />
       </main>
     </div>
