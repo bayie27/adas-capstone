@@ -1,4 +1,4 @@
-import type { ApiUserRole, AppUserRole } from "@/types/auth"
+import type { ApiUserRole, AppUserRole } from "@/api/auth"
 
 const ROLE_MAP: Record<ApiUserRole, AppUserRole> = {
   Admin: "Administrator",

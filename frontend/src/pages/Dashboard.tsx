@@ -13,12 +13,12 @@ import {
   AreaChart,
   Cell,
 } from "recharts"
-import { exportDashboardAnalyticsCsv, getDashboardAnalytics } from "@/services/analytics"
+import { exportDashboardAnalyticsCsv, getDashboardAnalytics } from "@/api/analytics"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { formatHourLabel, truncateLabel } from "@/utils/analytics"
-import type { AnalyticsFilters } from "@/types/analytics"
+import type { AnalyticsFilters } from "@/api/analytics"
 import {
   RiCalendarLine,
   RiCameraLine,

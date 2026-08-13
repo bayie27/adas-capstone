@@ -1,5 +1,5 @@
-import type { ApiUserRole } from "@/types/auth"
-import type { UserRecord } from "@/types/users"
+import type { ApiUserRole } from "@/api/auth"
+import type { UserRecord } from "@/api/users"
 import { mapApiRoleToAppRole } from "@/utils/auth"
 
 export function getUserFullName(user: Pick<UserRecord, "first_name" | "last_name">) {

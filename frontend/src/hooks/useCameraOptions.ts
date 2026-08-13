@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 
-import { getCameras } from "@/services/cameras"
+import { getCameras } from "@/api/cameras"
 
 /**
  * Shared source for the camera filter dropdowns on Dashboard, Detections and

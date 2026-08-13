@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
-import { exportPerformanceAnalyticsCsv, getPerformanceAnalytics } from "@/services/analytics"
+import { exportPerformanceAnalyticsCsv, getPerformanceAnalytics } from "@/api/analytics"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"

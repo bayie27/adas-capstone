@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react"
 import { Navigate, useLocation, useNavigate } from "react-router-dom"
 import { useMutation } from "@tanstack/react-query"
-import { loginUser } from "@/services/auth"
+import { loginUser } from "@/api/auth"
 import { useAuthStore } from "@/store/useAuthStore"
 import { mapApiRoleToAppRole, getDefaultRouteForRole } from "@/utils/auth"
 import { getApiErrorMessage } from "@/utils/api"

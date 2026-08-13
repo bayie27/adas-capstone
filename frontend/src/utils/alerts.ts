@@ -1,4 +1,4 @@
-import type { AlertLog, AlertStatus } from "@/types/alerts"
+import type { AlertLog, AlertStatus } from "@/api/alerts"
 import { formatFullDateTime } from "@/utils/datetime"
 
 export function formatAlertCode(logId: number) {

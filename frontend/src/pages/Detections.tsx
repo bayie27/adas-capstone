@@ -16,12 +16,12 @@ import {
   getAlertDetails,
   getAlerts,
   resolveAlert,
-} from "@/services/alerts"
+} from "@/api/alerts"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useUserOptions } from "@/hooks/useUserOptions"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
-import type { AlertLog, AlertStatus } from "@/types/alerts"
+import type { AlertLog, AlertStatus } from "@/api/alerts"
 import {
   formatAlertCode,
   formatAlertConfidence,

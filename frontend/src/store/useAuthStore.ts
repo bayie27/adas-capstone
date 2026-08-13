@@ -1,6 +1,6 @@
 import { create } from "zustand"
 
-import type { AppUserRole } from "@/types/auth"
+import type { AppUserRole } from "@/api/auth"
 
 const AUTH_STORAGE_KEY = "adas-auth-session"
 const VALID_ROLES = ["Administrator", "Operator"] as const

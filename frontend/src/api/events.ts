@@ -1,5 +1,5 @@
-import type { AlertStatus } from "@/types/alerts"
-import type { CameraAiStatus, CameraConnectionStatus } from "@/types/cameras"
+import type { AlertStatus } from "@/api/alerts"
+import type { CameraAiStatus, CameraConnectionStatus } from "@/api/cameras"
 
 export type RealtimeEventType =
   | "CONNECTION_READY"

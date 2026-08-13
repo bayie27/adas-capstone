@@ -1,5 +1,5 @@
-import type { AlertStatus } from "@/types/alerts"
-import type { CameraAiStatus, CameraConnectionStatus } from "@/types/cameras"
+import type { AlertStatus } from "@/api/alerts"
+import type { CameraAiStatus, CameraConnectionStatus } from "@/api/cameras"
 import type {
   AlertStatusUpdateData,
   CameraStatusUpdateData,
@@ -9,7 +9,7 @@ import type {
   ReAlarmData,
   RealtimeEventType,
   SnoozeActivatedData,
-} from "@/types/realtime"
+} from "@/api/events"
 
 const EVENT_TYPES: RealtimeEventType[] = [
   "CONNECTION_READY",
