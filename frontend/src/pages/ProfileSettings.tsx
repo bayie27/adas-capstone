@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { NoticeState } from "@/components/ui/NoticeBanner"
 import { getMyProfile, updateMyProfile } from "@/api/users"
 import { useAuthStore } from "@/store/useAuthStore"
-import { getApiErrorMessage } from "@/utils/api"
+import { getApiErrorMessage } from "@/api/client"
 import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/users"
 import { ChangePasswordModal } from "@/pages/profile/ChangePasswordModal"
 

@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query"
 import { Modal } from "@/components/ui/Modal"
 import { updateCamera } from "@/api/cameras"
 import type { CameraRecord, UpdateCameraInput } from "@/api/cameras"
-import { getApiErrorMessage } from "@/utils/api"
+import { getApiErrorMessage } from "@/api/client"
 import { formatShortDateTime } from "@/utils/datetime"
 import { RiPencilLine } from "@remixicon/react"
 

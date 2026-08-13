@@ -1,5 +1,5 @@
 import { Modal } from "@/components/ui/Modal"
-import { getApiErrorMessage } from "@/utils/api"
+import { getApiErrorMessage } from "@/api/client"
 import { RiAlertLine } from "@remixicon/react"
 
 interface ConfirmDeleteModalProps {

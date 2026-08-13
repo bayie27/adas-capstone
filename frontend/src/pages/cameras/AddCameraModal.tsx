@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query"
 import { Modal } from "@/components/ui/Modal"
 import { createCamera } from "@/api/cameras"
 import type { CameraRecord, CreateCameraInput } from "@/api/cameras"
-import { getApiErrorMessage } from "@/utils/api"
+import { getApiErrorMessage } from "@/api/client"
 import { RiCameraLine } from "@remixicon/react"
 
 type CameraFormState = {

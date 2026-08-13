@@ -31,7 +31,7 @@ import {
   getAlertLastUpdated,
   getAlertStatusTextClass,
 } from "@/utils/alerts"
-import { getApiErrorMessage } from "@/utils/api"
+import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
 import {

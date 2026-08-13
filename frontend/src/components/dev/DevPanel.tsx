@@ -18,7 +18,7 @@ import {
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
 import { mapApiRoleToAppRole } from "@/utils/auth"
-import { getApiErrorMessage } from "@/utils/api"
+import { getApiErrorMessage } from "@/api/client"
 
 const SLOW_PROFILE = "perf"
 const SEEDED_ACCOUNTS = ["admin", "dsahagun", "ealonzo", "smeer", "jtenorio"]

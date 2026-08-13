@@ -5,7 +5,7 @@ import { Modal } from "@/components/ui/Modal"
 import { PasswordInput } from "@/components/ui/PasswordInput"
 import { changeMyPassword } from "@/api/users"
 import type { NoticeState } from "@/components/ui/NoticeBanner"
-import { getApiErrorMessage } from "@/utils/api"
+import { getApiErrorMessage } from "@/api/client"
 import { RiLockLine } from "@remixicon/react"
 
 type PasswordFormState = {

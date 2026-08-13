@@ -5,7 +5,7 @@ import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
 import { confirmAlert, dismissAlert, resolveAlert } from "@/api/alerts"
 import { formatAlertConfidence } from "@/utils/alerts"
 import { formatFullDateTime } from "@/utils/datetime"
-import { getApiErrorMessage } from "@/utils/api"
+import { getApiErrorMessage } from "@/api/client"
 
 export function GlobalAlerts() {
   const queryClient = useQueryClient()

@@ -6,7 +6,7 @@ import { PasswordInput } from "@/components/ui/PasswordInput"
 import { createUser } from "@/api/users"
 import type { ApiUserRole } from "@/api/auth"
 import type { CreateUserInput, UserRecord } from "@/api/users"
-import { getApiErrorMessage } from "@/utils/api"
+import { getApiErrorMessage } from "@/api/client"
 import { RiUserAddLine } from "@remixicon/react"
 
 type CreateUserFormState = {
