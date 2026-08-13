@@ -1,8 +1,8 @@
 import { Link, useLocation, useNavigate } from "react-router-dom"
 
-import { logoutUser } from "@/services/auth"
+import { logoutUser } from "@/api/auth"
 import { useAuthStore } from "@/store/useAuthStore"
-import { getUserInitials } from "@/utils/users"
+import { getUserInitials } from "@/utils/format"
 import { cn } from "@/utils/cn"
 import {
   RiArrowUpSLine,

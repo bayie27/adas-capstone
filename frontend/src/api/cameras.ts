@@ -1,3 +1,5 @@
+import api from "@/api/client"
+
 export type CameraConnectionStatus = "Connected" | "Disconnected" | "Reconnecting" | "Unresponsive"
 
 export type CameraAiStatus = "Active" | "Inactive" | "Paused" | "Unresponsive"
@@ -74,4 +76,26 @@ export interface UpdateCameraInput {
   camera_name?: string
   channel_id?: number
   is_enabled?: boolean
+}
+
+export async function getCameras(params: GetCamerasParams) {
+  const { data } = await api.get<CameraListResponse>("/cameras/", {
+    params,
+  })
+
+  return data
+}
+
+export async function createCamera(input: CreateCameraInput) {
+  const { data } = await api.post<CameraRecord>("/cameras/", input)
+  return data
+}
+
+export async function updateCamera(cameraId: number, input: UpdateCameraInput) {
+  const { data } = await api.patch<CameraRecord>(`/cameras/${cameraId}`, input)
+  return data
+}
+
+export async function deleteCamera(cameraId: number) {
+  await api.delete(`/cameras/${cameraId}`)
 }

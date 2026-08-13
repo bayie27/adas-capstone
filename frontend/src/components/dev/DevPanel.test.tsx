@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { renderWithProviders } from "@/test/wrapper"
 import { DevPanelTrigger } from "./DevPanelTrigger"
 
-vi.mock("@/services/dev")
+vi.mock("@/api/dev")
 
-const { getDevStatus } = await import("@/services/dev")
+const { getDevStatus } = await import("@/api/dev")
 
 describe("DevPanelTrigger", () => {
   beforeEach(() => {

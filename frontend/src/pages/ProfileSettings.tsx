@@ -2,10 +2,10 @@ import { useMemo, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { NoticeState } from "@/components/ui/NoticeBanner"
-import { getMyProfile, updateMyProfile } from "@/services/users"
+import { getMyProfile, updateMyProfile } from "@/api/users"
 import { useAuthStore } from "@/store/useAuthStore"
-import { getApiErrorMessage } from "@/utils/api"
-import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/users"
+import { getApiErrorMessage } from "@/api/client"
+import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/format"
 import { ChangePasswordModal } from "@/pages/profile/ChangePasswordModal"
 
 const PROFILE_QUERY_KEY = ["my-profile"] as const

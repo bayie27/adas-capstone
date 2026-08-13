@@ -12,14 +12,14 @@ import { Switch } from "@/components/ui/Switch"
 import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
-import { deleteCamera, getCameras } from "@/services/cameras"
-import type { CameraAiStatus, CameraConnectionStatus, CameraRecord } from "@/types/cameras"
+import { deleteCamera, getCameras } from "@/api/cameras"
+import type { CameraAiStatus, CameraConnectionStatus, CameraRecord } from "@/api/cameras"
 import {
   CAMERA_AI_STATUS_OPTIONS,
   CAMERA_CONNECTION_STATUS_OPTIONS,
   getCameraAiClass,
   getCameraConnectionClass,
-} from "@/utils/cameras"
+} from "@/utils/format"
 import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"

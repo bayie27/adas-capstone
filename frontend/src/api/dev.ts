@@ -1,5 +1,5 @@
-import api from "@/services/api"
-import type { ApiUserRole } from "@/types/auth"
+import api from "@/api/client"
+import type { ApiUserRole } from "@/api/auth"
 
 /**
  * Thin wrappers over the /api/dev/* routes (dev_plan/02_PKG_dev_api.md §5).

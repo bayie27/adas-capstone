@@ -8,19 +8,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * and 404'd. The dev panel silently never appeared, because its gate is the
  * probe succeeding.
  *
- * The component tests could not catch it — they mock "@/services/dev"
+ * The component tests could not catch it — they mock "@/api/dev"
  * wholesale, so no real URL is ever constructed. These mock the axios
  * instance one level down instead.
  */
 
-vi.mock("@/services/api", () => ({
+vi.mock("@/api/client", () => ({
   default: {
     get: vi.fn().mockResolvedValue({ data: {} }),
     post: vi.fn().mockResolvedValue({ data: {} }),
   },
 }))
 
-const api = (await import("@/services/api")).default
+const api = (await import("@/api/client")).default
 const dev = await import("./dev")
 
 describe("dev service request paths", () => {

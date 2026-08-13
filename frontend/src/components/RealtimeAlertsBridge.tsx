@@ -2,13 +2,13 @@ import { useEffect, useRef } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 
 import { useAdasWebSocket } from "@/hooks/useAdasWebSocket"
-import { getAlerts } from "@/services/alerts"
-import { isAuthRedirectSuspended, redirectToLogin } from "@/services/api"
+import { getAlerts } from "@/api/alerts"
+import { isAuthRedirectSuspended, redirectToLogin } from "@/api/client"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
-import type { AlertLog } from "@/types/alerts"
-import type { CameraListResponse } from "@/types/cameras"
-import type { CameraStatusUpdateData, EventEnvelope, IncidentPayload } from "@/types/realtime"
+import type { AlertLog } from "@/api/alerts"
+import type { CameraListResponse } from "@/api/cameras"
+import type { CameraStatusUpdateData, EventEnvelope, IncidentPayload } from "@/api/events"
 import { shouldApplyCameraEvent } from "@/utils/merge"
 import {
   asAlertStatusUpdateData,
@@ -17,7 +17,7 @@ import {
   asReAlarmData,
   asSnoozeActivatedData,
   parseEventEnvelope,
-} from "@/utils/realtime"
+} from "@/api/events"
 
 // WS close codes that mean the session itself is gone — 01_CONTRACTS.md §9 —
 // mirror the REST 401 -> clearSession -> redirect flow exactly.

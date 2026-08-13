@@ -1,0 +1,179 @@
+import axios from "axios"
+
+import { API_BASE_URL } from "@/utils/env"
+import { useAuthStore } from "@/store/useAuthStore"
+
+const LOGIN_PATH = "/login"
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  // Send + receive the HttpOnly session cookie (P2, D-006) — there is no
+  // token to attach as an Authorization header anymore.
+  withCredentials: true,
+  // FastAPI expects repeated query params like `status=a&status=b`, not indexed arrays.
+  paramsSerializer: {
+    indexes: null,
+  },
+  headers: {
+    "Content-Type": "application/json",
+  },
+})
+
+export function redirectToLogin(message?: string) {
+  if (typeof window !== "undefined" && message) {
+    window.sessionStorage.setItem("auth-message", message)
+  }
+
+  if (window.location.pathname !== LOGIN_PATH) {
+    window.location.replace(LOGIN_PATH)
+  }
+}
+
+// A dev-tools reseed deletes every auth_session row and issues a
+// replacement cookie in the same response. Requests already in flight when
+// that happens come back 401 through no fault of the user, and the handler
+// below would clear the session and bounce them to /login — which is
+// exactly what DT-2 exists to prevent. Suspending is a counter, not a
+// boolean, so overlapping callers can't release each other's guard.
+let authRedirectSuspensions = 0
+
+export function suspendAuthRedirect(): () => void {
+  authRedirectSuspensions += 1
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    authRedirectSuspensions -= 1
+  }
+}
+
+// Exposed so other session-loss signals besides this axios interceptor —
+// notably the WebSocket's SESSION_LOST close codes in RealtimeAlertsBridge —
+// can honor the same guard instead of bouncing the operator mid-reseed.
+export function isAuthRedirectSuspended(): boolean {
+  return authRedirectSuspensions > 0
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && authRedirectSuspensions === 0) {
+      useAuthStore.getState().clearSession()
+      redirectToLogin("Your session expired. Please sign in again.")
+    }
+
+    return Promise.reject(error)
+  },
+)
+
+// 01_CONTRACTS.md §1.3 — the error envelope, parsed here rather than
+// re-derived at each call site.
+
+/**
+ * The stable error-code catalog. The first ten are the per-status defaults
+ * (`_DEFAULT_ERROR_CODES` in `app/schemas/common.py`); the rest are the codes
+ * routes raise explicitly when the status code's generic default is not
+ * specific enough — a duplicate 409 versus a lost-race 409, for instance.
+ *
+ * `(string & {})` keeps the union open: an unrecognised code from a newer
+ * backend still type-checks as a string rather than failing to compile, while
+ * the known members still autocomplete and still narrow.
+ */
+export type ApiErrorCode =
+  | "PRECONDITION_FAILED"
+  | "AUTH_REQUIRED"
+  | "FORBIDDEN"
+  | "NOT_FOUND"
+  | "CONFLICT_STATE"
+  | "PAYLOAD_TOO_LARGE"
+  | "VALIDATION_ERROR"
+  | "AUTH_RATE_LIMITED"
+  | "INTERNAL_SERVER_ERROR"
+  | "TEMPORARILY_UNAVAILABLE"
+  | "CONFLICT_DUPLICATE"
+  | "AUTH_INVALID_CREDENTIALS"
+  | "AUTH_EXPIRED"
+  | "AUTH_REVOKED"
+  | "ORIGIN_REJECTED"
+  | "CONFLICT_BUSY"
+  | (string & {})
+
+/** A 422 field-level validation failure, from the body's `errors[]`. */
+export interface ApiValidationError {
+  field?: string
+  message?: string
+  [key: string]: unknown
+}
+
+/**
+ * An `ApiError` response, parsed once. Callers branch on `code` — a 429
+ * rate-limit, a 409 lost race and a 503 SQLite-busy are three different
+ * situations that were previously indistinguishable from `detail` alone.
+ */
+export interface ParsedApiError {
+  status: number
+  code: ApiErrorCode
+  detail: string
+  /** Populated on 422 only. */
+  errors: ApiValidationError[]
+}
+
+/** Returns `null` when the failure is not an `ApiError` response at all. */
+export function getApiError(error: unknown): ParsedApiError | null {
+  if (!axios.isAxiosError<ApiErrorEnvelope>(error) || !error.response) {
+    return null
+  }
+
+  const body = error.response.data
+  if (!body || typeof body.code !== "string") {
+    return null
+  }
+
+  return {
+    status: error.response.status,
+    code: body.code,
+    detail: typeof body.detail === "string" ? body.detail : "",
+    errors: Array.isArray(body.errors) ? body.errors : [],
+  }
+}
+
+type ApiErrorEnvelope = {
+  detail?: string
+  code?: string
+  errors?: ApiValidationError[]
+}
+
+type ValidationIssue = {
+  msg?: string
+}
+
+type ApiErrorBody = {
+  detail?: string | ValidationIssue[]
+}
+
+export function getApiErrorMessage(error: unknown, fallback: string) {
+  if (!axios.isAxiosError<ApiErrorBody>(error)) {
+    return fallback
+  }
+
+  const detail = error.response?.data?.detail
+
+  if (typeof detail === "string" && detail.trim()) {
+    return detail
+  }
+
+  if (Array.isArray(detail)) {
+    const validationMessage = detail
+      .map((issue) => issue.msg?.trim())
+      .filter((message): message is string => Boolean(message))
+      .join(" ")
+
+    if (validationMessage) {
+      return validationMessage
+    }
+  }
+
+  return fallback
+}
+
+export default api

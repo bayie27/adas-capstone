@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 
-import { getDevStatus, type DevProfileInfo } from "@/services/dev"
+import { getDevStatus, type DevProfileInfo } from "@/api/dev"
 
 interface UseDevToolsResult {
   enabled: boolean

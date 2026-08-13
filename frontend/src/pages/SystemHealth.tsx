@@ -12,8 +12,8 @@ import {
 } from "recharts"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
-import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/services/health"
-import type { SystemHealthDataPoint, SystemHealthLiveResponse } from "@/types/health"
+import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/api/health"
+import type { SystemHealthDataPoint, SystemHealthLiveResponse } from "@/api/health"
 import { RiDashboard3Line, RiHardDrive2Line, RiServerLine, RiTimerLine } from "@remixicon/react"
 
 // ─── helpers ────────────────────────────────────────────────────────────────

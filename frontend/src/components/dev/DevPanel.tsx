@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { SidePanel } from "@/components/ui/SidePanel"
 import { DEV_STATUS_QUERY_KEY, useDevTools } from "@/hooks/useDevTools"
-import { suspendAuthRedirect } from "@/services/api"
+import { suspendAuthRedirect } from "@/api/client"
 import {
   generateHealthHistory,
   injectDetection,
@@ -14,11 +14,11 @@ import {
   setCameraState,
   type DevSeedResult,
   type DevSessionUser,
-} from "@/services/dev"
+} from "@/api/dev"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
 import { mapApiRoleToAppRole } from "@/utils/auth"
-import { getApiErrorMessage } from "@/utils/api"
+import { getApiErrorMessage } from "@/api/client"
 
 const SLOW_PROFILE = "perf"
 const SEEDED_ACCOUNTS = ["admin", "dsahagun", "ealonzo", "smeer", "jtenorio"]

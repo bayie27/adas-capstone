@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 
-import { getUsers } from "@/services/users"
+import { getUsers } from "@/api/users"
 
 /**
  * Shared source for the user filter dropdown on Detections. Centralizing the

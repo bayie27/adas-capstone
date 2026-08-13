@@ -2,9 +2,9 @@ import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
 
 import { Modal } from "@/components/ui/Modal"
-import { updateCamera } from "@/services/cameras"
-import type { CameraRecord, UpdateCameraInput } from "@/types/cameras"
-import { getApiErrorMessage } from "@/utils/api"
+import { updateCamera } from "@/api/cameras"
+import type { CameraRecord, UpdateCameraInput } from "@/api/cameras"
+import { getApiErrorMessage } from "@/api/client"
 import { formatShortDateTime } from "@/utils/datetime"
 import { RiPencilLine } from "@remixicon/react"
 

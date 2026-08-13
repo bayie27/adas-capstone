@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
-import { exportPerformanceAnalyticsCsv, getPerformanceAnalytics } from "@/services/analytics"
+import { exportPerformanceAnalyticsCsv, getPerformanceAnalytics } from "@/api/analytics"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"
@@ -10,7 +10,7 @@ import { TableStateRow } from "@/components/ui/TableStateRow"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
-import { formatPercent } from "@/utils/analytics"
+import { formatPercent } from "@/utils/format"
 import {
   RiCalendarLine,
   RiCameraLine,

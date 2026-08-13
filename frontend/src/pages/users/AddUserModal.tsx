@@ -3,10 +3,10 @@ import { useMutation } from "@tanstack/react-query"
 
 import { Modal } from "@/components/ui/Modal"
 import { PasswordInput } from "@/components/ui/PasswordInput"
-import { createUser } from "@/services/users"
-import type { ApiUserRole } from "@/types/auth"
-import type { CreateUserInput, UserRecord } from "@/types/users"
-import { getApiErrorMessage } from "@/utils/api"
+import { createUser } from "@/api/users"
+import type { ApiUserRole } from "@/api/auth"
+import type { CreateUserInput, UserRecord } from "@/api/users"
+import { getApiErrorMessage } from "@/api/client"
 import { RiUserAddLine } from "@remixicon/react"
 
 type CreateUserFormState = {

@@ -1,6 +1,6 @@
 import { create } from "zustand"
 
-import type { AlertLog } from "@/types/alerts"
+import type { AlertLog } from "@/api/alerts"
 import { playDetectionSound, stopDetectionSound } from "@/utils/detectionSound"
 import { shouldApplyIncidentEvent } from "@/utils/merge"
 

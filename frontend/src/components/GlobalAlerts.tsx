@@ -2,10 +2,10 @@ import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
-import { confirmAlert, dismissAlert, resolveAlert } from "@/services/alerts"
-import { formatAlertConfidence } from "@/utils/alerts"
+import { confirmAlert, dismissAlert, resolveAlert } from "@/api/alerts"
+import { formatAlertConfidence } from "@/utils/format"
 import { formatFullDateTime } from "@/utils/datetime"
-import { getApiErrorMessage } from "@/utils/api"
+import { getApiErrorMessage } from "@/api/client"
 
 export function GlobalAlerts() {
   const queryClient = useQueryClient()

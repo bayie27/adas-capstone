@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { Navigate } from "react-router-dom"
 import { useAuthStore } from "@/store/useAuthStore"
-import type { AppUserRole } from "@/types/auth"
+import type { AppUserRole } from "@/api/auth"
 import { getDefaultRouteForRole } from "@/utils/auth"
 
 interface ProtectedRouteProps {
