@@ -95,7 +95,7 @@ export default function ProfileSettings() {
     })
   }, [profile, profileForm.first_name, profileForm.last_name])
 
-  const displayRole = profile ? formatUserRole(profile.role) : (role ?? "Unknown Role")
+  const displayRole = formatUserRole(profile?.role ?? role)
   const initials = getUserInitials(
     profileForm.first_name,
     profileForm.last_name,

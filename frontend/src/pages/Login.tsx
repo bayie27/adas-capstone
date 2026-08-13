@@ -3,7 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom"
 import { useMutation } from "@tanstack/react-query"
 import { loginUser } from "@/api/auth"
 import { useAuthStore } from "@/store/useAuthStore"
-import { mapApiRoleToAppRole, getDefaultRouteForRole } from "@/utils/auth"
+import { toApiRole, getDefaultRouteForRole } from "@/utils/auth"
 import { getApiErrorMessage } from "@/api/client"
 import type { NoticeState } from "@/components/ui/NoticeBanner"
 import { PasswordInput } from "@/components/ui/PasswordInput"
@@ -45,7 +45,7 @@ export default function Login() {
   const loginMutation = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
       const { user: currentUser } = await loginUser(credentials)
-      const mappedRole = mapApiRoleToAppRole(currentUser.role)
+      const mappedRole = toApiRole(currentUser.role)
 
       if (!mappedRole) {
         throw new Error("Your account role is not supported in this client.")

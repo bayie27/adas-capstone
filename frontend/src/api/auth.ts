@@ -3,7 +3,6 @@ import { API_BASE_URL } from "@/utils/env"
 import api from "@/api/client"
 
 export type ApiUserRole = "Admin" | "Operator"
-export type AppUserRole = "Administrator" | "Operator"
 
 export interface LoginCredentials {
   username: string

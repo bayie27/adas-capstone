@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom"
 
 import { logoutUser } from "@/api/auth"
 import { useAuthStore } from "@/store/useAuthStore"
-import { getUserInitials } from "@/utils/format"
+import { formatUserRole, getUserInitials } from "@/utils/format"
 import { cn } from "@/utils/cn"
 import { focusRing } from "@/components/ui/Button"
 import {
@@ -30,7 +30,7 @@ export function Sidebar() {
   const username = useAuthStore((state) => state.username)
   const clearSession = useAuthStore((state) => state.clearSession)
 
-  const basePath = role === "Administrator" ? "/admin" : "/user"
+  const basePath = role === "Admin" ? "/admin" : "/user"
 
   /**
    * Design gate D-1, settled: `Administration` is three flat nav items —
@@ -57,13 +57,12 @@ export function Sidebar() {
     },
     {
       title: "ADMINISTRATION",
-      links:
-        role === "Administrator" ? [{ name: "Users", to: "/admin/users", icon: RiUserLine }] : [],
+      links: role === "Admin" ? [{ name: "Users", to: "/admin/users", icon: RiUserLine }] : [],
     },
   ]
 
   const displayName = username || "guest"
-  const displayRole = role ?? "Unknown Role"
+  const displayRole = formatUserRole(role)
 
   const initials = getUserInitials("", "", displayName)
 

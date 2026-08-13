@@ -66,7 +66,7 @@ export default function Detections() {
 
   const camerasQuery = useCameraOptions()
 
-  const usersQuery = useUserOptions({ enabled: role === "Administrator" })
+  const usersQuery = useUserOptions({ enabled: role === "Admin" })
   const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null)
   const [selectedAlertPreview, setSelectedAlertPreview] = useState<AlertLog | null>(null)
 
@@ -299,7 +299,7 @@ export default function Detections() {
               <RiArrowRightSLine size={13} className="text-fg-muted" />
               Dismissed & Resolved
             </div>
-            {role === "Administrator" ? (
+            {role === "Admin" ? (
               <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
                 <RiUserLine size={13} className="text-fg-muted" />
                 <select

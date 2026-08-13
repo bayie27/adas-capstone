@@ -8,7 +8,6 @@ import { formatFullDateTime } from "@/utils/datetime"
 import type { CameraAiStatus, CameraConnectionStatus, CameraRecord } from "@/api/cameras"
 import type { ApiUserRole } from "@/api/auth"
 import type { UserRecord } from "@/api/users"
-import { mapApiRoleToAppRole } from "@/utils/auth"
 
 // ---- alerts ----
 export function formatAlertCode(logId: number) {
@@ -185,6 +184,7 @@ export function truncateLabel(label: string, maxLength = 18) {
 }
 
 // ---- users ----
+
 export function getUserFullName(user: Pick<UserRecord, "first_name" | "last_name">) {
   return [user.first_name, user.last_name].filter(Boolean).join(" ").trim()
 }
@@ -213,6 +213,14 @@ export function getUserInitials(firstName: string, lastName: string, username?: 
   return "US"
 }
 
-export function formatUserRole(role: ApiUserRole) {
-  return mapApiRoleToAppRole(role) ?? role
+/**
+ * The backend enum is `Admin | Operator`; Figma renders the first as
+ * "Administrator" in the Users table and the sidebar footer. That is a
+ * formatting concern, which is why it is a formatter here rather than a
+ * second role type threaded through the store and the route guard.
+ */
+export function formatUserRole(role: ApiUserRole | null | undefined) {
+  if (role === "Admin") return "Administrator"
+  if (role === "Operator") return "Operator"
+  return "Unknown Role"
 }

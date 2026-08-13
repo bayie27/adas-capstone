@@ -17,7 +17,7 @@ import {
 } from "@/api/dev"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
-import { mapApiRoleToAppRole } from "@/utils/auth"
+import { toApiRole } from "@/utils/auth"
 import { getApiErrorMessage } from "@/api/client"
 
 const SLOW_PROFILE = "perf"
@@ -78,7 +78,7 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
       void queryClient.invalidateQueries()
     }
 
-    const appRole = mapApiRoleToAppRole(session.role)
+    const appRole = toApiRole(session.role)
     if (!appRole) return
     setSession(appRole, session.username, session.user_id)
     // Both callers of applyNewSession (reseed, login-as) mint a brand new
@@ -91,7 +91,7 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
     // /admin and /user are separate route trees behind ProtectedRoute, so
     // an admin -> operator switch that stayed on /admin/users would bounce.
     if (appRole !== currentRole) {
-      navigate(appRole === "Administrator" ? "/admin" : "/user")
+      navigate(appRole === "Admin" ? "/admin" : "/user")
     }
   }
 

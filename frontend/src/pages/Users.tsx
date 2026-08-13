@@ -12,7 +12,7 @@ import { usePagination } from "@/hooks/usePagination"
 import { deleteUser, getUsers } from "@/api/users"
 import { useAuthStore } from "@/store/useAuthStore"
 import type { UserRecord } from "@/api/users"
-import { getDefaultRouteForRole, mapApiRoleToAppRole } from "@/utils/auth"
+import { getDefaultRouteForRole, toApiRole } from "@/utils/auth"
 import { getApiErrorMessage } from "@/api/client"
 import { formatRelativeDateTime } from "@/utils/datetime"
 import { formatUserRole, getUserFullName } from "@/utils/format"
@@ -251,7 +251,7 @@ export default function Users() {
               return
             }
 
-            const mappedRole = mapApiRoleToAppRole(updatedUser.role)
+            const mappedRole = toApiRole(updatedUser.role)
 
             if (mappedRole) {
               setSession(mappedRole, updatedUser.username, currentUserId ?? updatedUser.user_id)
