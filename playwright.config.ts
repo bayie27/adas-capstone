@@ -13,10 +13,38 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:5173",
     trace: "on-first-retry",
   },
-  // Antialiasing differs enough between machines to trip a byte-exact compare;
-  // 1% absorbs that without hiding a real palette change.
+  // The comment this replaces claimed 1% "absorbs antialiasing without hiding a
+  // real palette change". It did the opposite, and Phase 2 proved it: a
+  // complete re-palette of all nine routes passed green.
+  //
+  // The reason is `threshold`, which was left at Playwright's default of 0.2.
+  // It is a PER-PIXEL YIQ distance, and a pixel only counts as different once
+  // that distance exceeds 35215 x 0.2^2 = 1409. A design-token swap moves
+  // colours a tiny fraction of that:
+  //
+  //     #0A0A0A -> #09090B (canvas)       delta    0.5
+  //     #141414 -> #121212 (card)         delta    2
+  //     #737373 -> #A1A1AA (muted text)   delta 1069
+  //
+  // All under the cut-off, so ~99% of a changed page counted as unchanged and
+  // maxDiffPixelRatio never came into play. Measured at threshold 0, 70-99.6%
+  // of every route actually differs.
+  //
+  // Antialiasing was never what `threshold` was absorbing — AA jitter swings a
+  // pixel between dark and light, which scores far ABOVE 1409 and is caught by
+  // maxDiffPixelRatio instead. So tightening the threshold costs almost no
+  // noise tolerance and buys back the entire point of the harness.
+  //
+  // Measured on this suite: at threshold 0.02 the token change registers
+  // 1.1-22% of pixels on eight of the nine routes, while run-to-run noise
+  // against a baseline from identical code peaks at ~0.39% (glyph-edge jitter
+  // on the two busiest tables). 0.5% sits between them.
+  //
+  // Known blind spot: /login is 0.11% — almost all of that page is flat canvas
+  // whose #0A0A0A -> #09090B shift is genuinely sub-perceptual — so its
+  // baseline is refreshed without a diff to review.
   expect: {
-    toHaveScreenshot: { maxDiffPixelRatio: 0.01 },
+    toHaveScreenshot: { threshold: 0.02, maxDiffPixelRatio: 0.005 },
   },
   projects: [
     {
