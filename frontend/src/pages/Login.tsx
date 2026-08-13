@@ -110,7 +110,7 @@ export default function Login() {
               className="h-auto w-full object-contain drop-shadow-md"
             />
           </div>
-          <h1 className="font-logo text-xl font-bold uppercase tracking-[0.3em] text-fg">ADAS</h1>
+          <h1 className="text-xl font-bold uppercase tracking-[0.25em] text-fg">ADAS</h1>
           <p className="mt-1 text-center text-xs tracking-wide text-fg-muted">
             Accident Detection and Alert System
           </p>

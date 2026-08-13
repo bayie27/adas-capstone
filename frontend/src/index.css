@@ -18,7 +18,6 @@
   /* Inter is self-hosted via @fontsource-variable/inter, which registers the
      family as "Inter Variable"; keep "Inter" as a fallback. */
   --font-sans: "Inter Variable", "Inter", sans-serif;
-  --font-logo: "League Spartan", sans-serif;
 
   /* --- Surfaces (§2.2) --------------------------------------------------
      Ten near-duplicate "slightly lighter than the background" greys in the

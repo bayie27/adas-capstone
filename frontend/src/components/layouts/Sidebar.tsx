@@ -72,7 +72,7 @@ export function Sidebar() {
       <div className="flex h-16 items-center px-5 border-b border-stroke">
         <div className="flex items-center gap-2.5">
           <img src="/adas-logo.png" alt="ADAS Logo" className="h-auto w-7 object-contain" />
-          <span className="font-logo text-base font-semibold tracking-[0.25em] text-fg">ADAS</span>
+          <span className="text-base font-bold tracking-[0.25em] text-fg">ADAS</span>
         </div>
       </div>
 
