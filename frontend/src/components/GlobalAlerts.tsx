@@ -79,12 +79,12 @@ export function GlobalAlerts() {
       aria-label="Accident Detected"
     >
       {/* backdrop */}
-      <div className="absolute inset-0 bg-black/70" />
+      <div className="absolute inset-0 bg-backdrop-alert" />
 
       {/* modal card */}
       <div className="relative w-full max-w-md overflow-hidden rounded-xl shadow-2xl">
         {/* header banner — red for Unverified, amber for Ongoing */}
-        <div className={`px-6 py-4 text-center ${isOngoing ? "bg-amber-500" : "bg-danger"}`}>
+        <div className={`px-6 py-4 text-center ${isOngoing ? "bg-warning" : "bg-danger"}`}>
           <p className="text-xl font-black uppercase tracking-widest text-fg-on-primary">
             {isOngoing ? "Ongoing Accident" : "Accident Detected"}
           </p>
@@ -111,7 +111,7 @@ export function GlobalAlerts() {
             <span className="text-xs font-semibold uppercase tracking-widest text-fg-muted">
               Timestamp
             </span>
-            <span className="tabular-nums text-sm font-semibold text-white">
+            <span className="tabular-nums text-sm font-semibold text-fg">
               {formatFullDateTime(alert.detected_at)}
             </span>
           </div>
@@ -119,7 +119,7 @@ export function GlobalAlerts() {
             <span className="text-xs font-semibold uppercase tracking-widest text-fg-muted">
               Camera Name
             </span>
-            <span className="text-sm font-bold uppercase text-white">
+            <span className="text-sm font-bold uppercase text-fg">
               {alert.camera_name ?? `Camera ${alert.camera_id}`}
             </span>
           </div>
@@ -148,7 +148,7 @@ export function GlobalAlerts() {
             type="button"
             onClick={handleDismiss}
             disabled={busy}
-            className="border-r border-stroke-strong bg-surface-3 py-4 text-xs font-black uppercase tracking-widest text-white transition-colors hover:bg-stroke-strong disabled:opacity-50"
+            className="border-r border-stroke-strong bg-surface-3 py-4 text-xs font-black uppercase tracking-widest text-fg transition-colors hover:bg-stroke-strong disabled:opacity-50"
           >
             {busy && loadingId === alert.log_id ? "..." : "Dismiss Accident"}
           </button>
@@ -157,7 +157,7 @@ export function GlobalAlerts() {
               type="button"
               onClick={handleConfirm}
               disabled={busy}
-              className="bg-primary py-4 text-xs font-black uppercase tracking-widest text-fg-on-primary transition-colors hover:bg-white disabled:opacity-50"
+              className="bg-primary py-4 text-xs font-black uppercase tracking-widest text-fg-on-primary transition-colors hover:bg-primary-hover disabled:opacity-50"
             >
               {busy ? "..." : "Confirm Accident"}
             </button>
@@ -166,7 +166,7 @@ export function GlobalAlerts() {
               type="button"
               onClick={handleResolve}
               disabled={busy}
-              className="bg-emerald-500 py-4 text-xs font-black uppercase tracking-widest text-fg-on-primary transition-colors hover:bg-emerald-400 disabled:opacity-50"
+              className="bg-primary py-4 text-xs font-black uppercase tracking-widest text-fg-on-primary transition-colors hover:bg-primary-hover disabled:opacity-50"
             >
               {busy ? "..." : "Resolve Accident"}
             </button>

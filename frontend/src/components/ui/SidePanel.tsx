@@ -37,7 +37,7 @@ export function SidePanel({
     <div className="fixed inset-0 z-[9000]">
       <div
         data-testid="side-panel-backdrop"
-        className="absolute inset-0 bg-black/60 transition-opacity"
+        className="absolute inset-0 bg-backdrop transition-opacity"
         onClick={onClose}
       />
 
@@ -56,13 +56,13 @@ export function SidePanel({
       >
         <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-stroke bg-surface-1 px-5 py-4">
           <div>
-            {title && <h3 className="text-base font-semibold leading-tight text-white">{title}</h3>}
+            {title && <h3 className="text-base font-semibold leading-tight text-fg">{title}</h3>}
             {subtitle && <p className="mt-1 text-xs leading-relaxed text-fg-muted">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
             aria-label="Close panel"
-            className="text-fg-muted transition-colors hover:text-white"
+            className="text-fg-muted transition-colors hover:text-fg"
           >
             <RiCloseLine size={20} />
           </button>

@@ -72,9 +72,7 @@ export function Sidebar() {
       <div className="flex h-16 items-center px-5 border-b border-stroke">
         <div className="flex items-center gap-2.5">
           <img src="/adas-logo.png" alt="ADAS Logo" className="h-auto w-7 object-contain" />
-          <span className="font-logo text-base font-semibold tracking-[0.25em] text-white">
-            ADAS
-          </span>
+          <span className="font-logo text-base font-semibold tracking-[0.25em] text-fg">ADAS</span>
         </div>
       </div>
 
@@ -99,18 +97,15 @@ export function Sidebar() {
                         className={cn(
                           "relative flex items-center gap-3 rounded-md px-3 py-2 transition-all duration-150",
                           isActive
-                            ? "bg-surface-2 text-white"
+                            ? "bg-surface-2 text-fg"
                             : "text-fg-muted hover:bg-surface-1 hover:text-fg-body",
                         )}
                       >
                         {/* Active left accent bar */}
                         {isActive && (
-                          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[3px] rounded-r-full bg-white" />
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[3px] rounded-r-full bg-primary" />
                         )}
-                        <link.icon
-                          size={16}
-                          className={isActive ? "text-white" : "text-fg-muted"}
-                        />
+                        <link.icon size={16} className={isActive ? "text-fg" : "text-fg-muted"} />
                         <span className="text-[13px] font-medium">{link.name}</span>
                       </Link>
                     </li>
@@ -128,13 +123,13 @@ export function Sidebar() {
           className={cn(
             "flex w-full items-center gap-3 rounded-md px-3 py-2 transition-colors",
             location.pathname === `${basePath}/help`
-              ? "bg-surface-2 text-white"
+              ? "bg-surface-2 text-fg"
               : "text-fg-muted hover:bg-surface-1 hover:text-fg-body",
           )}
         >
           <RiQuestionLine
             size={16}
-            className={location.pathname === `${basePath}/help` ? "text-white" : "text-fg-muted"}
+            className={location.pathname === `${basePath}/help` ? "text-fg" : "text-fg-muted"}
           />
           <span className="text-[13px] font-medium">Help Center</span>
         </button>
@@ -145,7 +140,7 @@ export function Sidebar() {
               {initials || <RiUserLine size={14} className="text-fg-muted" />}
             </div>
             <div className="flex flex-col">
-              <span className="text-[13px] font-medium leading-tight text-fg-body group-hover:text-white">
+              <span className="text-[13px] font-medium leading-tight text-fg-body group-hover:text-fg">
                 {displayName}
               </span>
               <span className="text-[11px] text-fg-muted">{displayRole}</span>

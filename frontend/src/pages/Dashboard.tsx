@@ -82,7 +82,7 @@ export default function Dashboard() {
       <div className="mx-auto max-w-[1400px]">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="mb-0.5 text-xl font-semibold text-white">Dashboard</h1>
+          <h1 className="mb-0.5 text-xl font-semibold text-fg">Dashboard</h1>
           <p className="text-xs text-fg-muted">
             View analytical summaries &amp; peak accident trends
           </p>
@@ -143,7 +143,7 @@ export default function Dashboard() {
                   setEndDate("")
                   setCameraId("")
                 }}
-                className="flex items-center gap-1 rounded-md border border-stroke bg-surface-1 px-2 py-1.5 text-xs text-fg-muted transition-colors hover:text-white"
+                className="flex items-center gap-1 rounded-md border border-stroke bg-surface-1 px-2 py-1.5 text-xs text-fg-muted transition-colors hover:text-fg"
               >
                 <RiCloseLine size={12} />
                 Clear
@@ -154,7 +154,7 @@ export default function Dashboard() {
             type="button"
             disabled={exportMutation.isPending}
             onClick={() => exportMutation.mutate()}
-            className="flex items-center gap-2 rounded-md border border-stroke-strong bg-surface-1 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex items-center gap-2 rounded-md border border-stroke-strong bg-surface-1 px-4 py-1.5 text-xs font-semibold text-fg transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RiDownloadLine size={13} />
             {exportMutation.isPending ? "Exporting..." : "Export"}

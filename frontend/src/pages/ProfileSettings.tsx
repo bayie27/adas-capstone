@@ -150,7 +150,7 @@ export default function ProfileSettings() {
   return (
     <div className="mx-auto max-w-3xl p-8">
       <div className="mb-8">
-        <h1 className="mb-1 text-2xl font-semibold text-white">My Profile</h1>
+        <h1 className="mb-1 text-2xl font-semibold text-fg">My Profile</h1>
         <p className="text-sm text-fg-muted">Manage your personal information and preferences.</p>
       </div>
 
@@ -165,7 +165,7 @@ export default function ProfileSettings() {
             <button
               type="button"
               onClick={() => profileQuery.refetch()}
-              className="rounded-md border border-stroke-strong px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-surface-1"
+              className="rounded-md border border-stroke-strong px-4 py-2 text-sm font-medium text-fg transition-colors hover:bg-surface-1"
             >
               Retry
             </button>
@@ -173,13 +173,11 @@ export default function ProfileSettings() {
         ) : (
           <>
             <div className="mb-8 flex items-center gap-6">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border border-border bg-surface-2 text-3xl font-bold text-white">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full border border-border bg-surface-2 text-3xl font-bold text-fg">
                 {initials}
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-white">
-                  {displayName || "Unnamed User"}
-                </h2>
+                <h2 className="text-xl font-semibold text-fg">{displayName || "Unnamed User"}</h2>
                 <p className="text-fg-muted">
                   {profileForm.username || "username"} ({displayRole})
                 </p>
@@ -196,7 +194,7 @@ export default function ProfileSettings() {
                     setProfileNotice(null)
                     setProfileForm((current) => ({ ...current, first_name: event.target.value }))
                   }}
-                  className="w-full rounded-md border border-stroke-strong bg-surface-1 px-3 py-2 text-sm text-white focus:border-stroke-strong focus:outline-none"
+                  className="w-full rounded-md border border-stroke-strong bg-surface-1 px-3 py-2 text-sm text-fg focus:border-stroke-strong focus:outline-none"
                 />
               </div>
               <div>
@@ -208,7 +206,7 @@ export default function ProfileSettings() {
                     setProfileNotice(null)
                     setProfileForm((current) => ({ ...current, last_name: event.target.value }))
                   }}
-                  className="w-full rounded-md border border-stroke-strong bg-surface-1 px-3 py-2 text-sm text-white focus:border-stroke-strong focus:outline-none"
+                  className="w-full rounded-md border border-stroke-strong bg-surface-1 px-3 py-2 text-sm text-fg focus:border-stroke-strong focus:outline-none"
                 />
               </div>
               <div>
@@ -220,14 +218,14 @@ export default function ProfileSettings() {
                     setProfileNotice(null)
                     setProfileForm((current) => ({ ...current, username: event.target.value }))
                   }}
-                  className="w-full rounded-md border border-stroke-strong bg-surface-1 px-3 py-2 text-sm text-white focus:border-stroke-strong focus:outline-none"
+                  className="w-full rounded-md border border-stroke-strong bg-surface-1 px-3 py-2 text-sm text-fg focus:border-stroke-strong focus:outline-none"
                 />
               </div>
 
               {profileNotice ? (
                 <p
                   className={`text-xs ${
-                    profileNotice.tone === "success" ? "text-emerald-400" : "text-danger"
+                    profileNotice.tone === "success" ? "text-success" : "text-danger"
                   }`}
                 >
                   {profileNotice.message}
@@ -247,14 +245,14 @@ export default function ProfileSettings() {
                 <button
                   type="submit"
                   disabled={!isProfileDirty || updateProfileMutation.isPending}
-                  className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {updateProfileMutation.isPending ? "Saving..." : "Save Profile"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setModal({ kind: "password" })}
-                  className="rounded-md border border-stroke-strong px-4 py-2 text-sm font-medium text-fg-body transition-colors hover:bg-surface-1 hover:text-white"
+                  className="rounded-md border border-stroke-strong px-4 py-2 text-sm font-medium text-fg-body transition-colors hover:bg-surface-1 hover:text-fg"
                 >
                   Change Password
                 </button>

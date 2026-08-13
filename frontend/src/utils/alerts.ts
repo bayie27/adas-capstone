@@ -35,15 +35,15 @@ export function getAlertLastUpdated(alert: AlertLog) {
 
 export function getAlertStatusTextClass(status: AlertStatus) {
   if (status === "Ongoing") {
-    return "text-amber-500"
+    return "text-warning"
   }
 
   if (status === "Resolved") {
-    return "text-emerald-500"
+    return "text-success"
   }
 
   if (status === "Unverified") {
-    return "text-white"
+    return "text-fg"
   }
 
   return "text-fg-muted"
@@ -51,18 +51,18 @@ export function getAlertStatusTextClass(status: AlertStatus) {
 
 export function getAlertBadgeClass(status: AlertStatus) {
   if (status === "Ongoing") {
-    return "bg-amber-500 text-black"
+    return "bg-warning text-fg-on-primary"
   }
 
   if (status === "Resolved") {
-    return "bg-emerald-500 text-black"
+    return "bg-success text-fg-on-primary"
   }
 
   if (status === "Unverified") {
-    return "bg-white text-black"
+    return "bg-primary text-fg-on-primary"
   }
 
-  return "bg-surface-3 text-white"
+  return "bg-surface-3 text-fg"
 }
 
 export function getAlertBorderClass(status: AlertStatus) {

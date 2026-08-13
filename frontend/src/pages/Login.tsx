@@ -110,9 +110,7 @@ export default function Login() {
               className="h-auto w-full object-contain drop-shadow-md"
             />
           </div>
-          <h1 className="font-logo text-xl font-bold uppercase tracking-[0.3em] text-white">
-            ADAS
-          </h1>
+          <h1 className="font-logo text-xl font-bold uppercase tracking-[0.3em] text-fg">ADAS</h1>
           <p className="mt-1 text-center text-xs tracking-wide text-fg-muted">
             Accident Detection and Alert System
           </p>
@@ -132,7 +130,7 @@ export default function Login() {
                 setUsername(e.target.value)
               }}
               autoComplete="username"
-              className="w-full rounded-md border border-stroke bg-surface-1 px-3 py-2.5 text-sm text-white transition-colors placeholder-fg-muted focus:border-stroke-strong focus:outline-none"
+              className="w-full rounded-md border border-stroke bg-surface-1 px-3 py-2.5 text-sm text-fg transition-colors placeholder-fg-muted focus:border-stroke-strong focus:outline-none"
             />
           </div>
           <PasswordInput
@@ -152,14 +150,14 @@ export default function Login() {
           <button
             type="submit"
             disabled={loginMutation.isPending}
-            className="mt-2 w-full rounded-md bg-white py-2.5 text-sm font-semibold text-black transition-colors hover:bg-gray-100"
+            className="mt-2 w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover"
           >
             {loginMutation.isPending ? "Signing in..." : "Login"}
           </button>
           {statusMessage ? (
             <p
               className={`text-center text-xs ${
-                statusMessage.tone === "success" ? "text-emerald-400" : "text-danger"
+                statusMessage.tone === "success" ? "text-success" : "text-danger"
               }`}
             >
               {statusMessage.message}

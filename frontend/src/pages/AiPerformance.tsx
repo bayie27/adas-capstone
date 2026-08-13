@@ -77,7 +77,7 @@ export default function AiPerformance() {
   return (
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6">
-        <h1 className="mb-0.5 text-xl font-semibold text-white">AI Performance</h1>
+        <h1 className="mb-0.5 text-xl font-semibold text-fg">AI Performance</h1>
         <p className="text-xs text-fg-muted">
           Analyze confidence levels and track overall detection accuracy of cameras
         </p>
@@ -190,7 +190,7 @@ export default function AiPerformance() {
                 setCameraId("")
                 reset()
               }}
-              className="flex items-center gap-1 rounded-md border border-stroke bg-surface-1 px-2 py-1.5 text-xs text-fg-muted transition-colors hover:text-white"
+              className="flex items-center gap-1 rounded-md border border-stroke bg-surface-1 px-2 py-1.5 text-xs text-fg-muted transition-colors hover:text-fg"
             >
               <RiCloseLine size={12} />
               Clear
@@ -201,7 +201,7 @@ export default function AiPerformance() {
           type="button"
           disabled={exportMutation.isPending}
           onClick={() => exportMutation.mutate()}
-          className="flex items-center gap-2 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           <RiDownloadLine size={13} />
           {exportMutation.isPending ? "Exporting..." : "Export"}
@@ -249,7 +249,7 @@ export default function AiPerformance() {
                     </td>
                     <td
                       className={`px-6 py-4 text-center text-xs font-medium ${
-                        item.avg_accident_confidence === null ? "text-fg-muted" : "text-emerald-500"
+                        item.avg_accident_confidence === null ? "text-fg-muted" : "text-success"
                       }`}
                     >
                       {formatPercent(item.avg_accident_confidence)}

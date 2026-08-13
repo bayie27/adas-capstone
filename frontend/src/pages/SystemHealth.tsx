@@ -202,7 +202,7 @@ export default function SystemHealth() {
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="mb-0.5 text-xl font-semibold text-white">System Health</h1>
+          <h1 className="mb-0.5 text-xl font-semibold text-fg">System Health</h1>
           <p className="text-xs text-fg-muted">
             Oversee system diagnostics and hardware performance
           </p>
@@ -211,8 +211,8 @@ export default function SystemHealth() {
           {isOnline === null ? (
             <span className="text-xs text-fg-muted">Checking status...</span>
           ) : isOnline ? (
-            <div className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <div className="flex items-center gap-2 rounded-full border border-success-border bg-success-subtle px-3 py-1 text-xs font-medium text-success">
+              <span className="h-2 w-2 rounded-full bg-success" />
               Online
             </div>
           ) : (
@@ -264,7 +264,7 @@ export default function SystemHealth() {
           onClick={() => setActiveTab("48h")}
           className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
             activeTab === "48h"
-              ? "border border-stroke-strong bg-surface-2 text-white"
+              ? "border border-stroke-strong bg-surface-2 text-fg"
               : "text-fg-muted hover:text-fg-body"
           }`}
         >
@@ -275,7 +275,7 @@ export default function SystemHealth() {
           onClick={() => setActiveTab("30d")}
           className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
             activeTab === "30d"
-              ? "border border-stroke-strong bg-surface-2 text-white"
+              ? "border border-stroke-strong bg-surface-2 text-fg"
               : "text-fg-muted hover:text-fg-body"
           }`}
         >

@@ -93,7 +93,7 @@ export default function Users() {
   return (
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6">
-        <h1 className="mb-0.5 text-xl font-semibold text-white">User Management</h1>
+        <h1 className="mb-0.5 text-xl font-semibold text-fg">User Management</h1>
         <p className="text-xs text-fg-muted">Manage user accounts & system access roles</p>
       </div>
 
@@ -115,7 +115,7 @@ export default function Users() {
             setNotice(null)
             setModal({ kind: "add" })
           }}
-          className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-gray-100"
+          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover"
         >
           <RiAddLine size={14} />
           Add User
@@ -161,7 +161,7 @@ export default function Users() {
                             setNotice(null)
                             setModal({ kind: "edit", user })
                           }}
-                          className="rounded p-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-white"
+                          className="rounded p-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
                         >
                           <RiPencilLine size={14} />
                         </button>
@@ -171,7 +171,7 @@ export default function Users() {
                             setNotice(null)
                             setModal({ kind: "password", user })
                           }}
-                          className="rounded p-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-white"
+                          className="rounded p-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
                         >
                           <RiKey2Line size={14} />
                         </button>
@@ -181,7 +181,7 @@ export default function Users() {
                             setNotice(null)
                             setModal({ kind: "delete", user })
                           }}
-                          className="rounded p-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-white"
+                          className="rounded p-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
                         >
                           <RiDeleteBinLine size={14} />
                         </button>

@@ -6,7 +6,7 @@ export function NoticeBanner({ notice }: { notice: NoticeState }) {
     <div
       className={`mb-4 rounded-md border px-4 py-3 text-xs ${
         notice.tone === "success"
-          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+          ? "border-success-border bg-success-subtle text-success"
           : "border-danger-border bg-danger-subtle text-danger"
       }`}
     >

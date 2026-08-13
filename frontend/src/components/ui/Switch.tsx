@@ -17,7 +17,7 @@ export function Switch({
       aria-pressed={checked}
       className={cn(
         "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-        checked ? "bg-white" : "bg-surface-3",
+        checked ? "bg-primary" : "bg-surface-3",
         disabled ? "cursor-not-allowed opacity-60" : "",
       )}
     >

@@ -16,7 +16,7 @@ export function QueryErrorBanner({
         <button
           type="button"
           onClick={onRetry}
-          className="rounded-md border border-stroke-strong px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-surface-1"
+          className="rounded-md border border-stroke-strong px-3 py-1.5 text-xs font-medium text-fg transition-colors hover:bg-surface-1"
         >
           Retry
         </button>

@@ -76,7 +76,7 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
       subtitle="Update your account password."
       icon={
         <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-strong bg-transparent">
-          <RiLockLine size={20} className="text-white" />
+          <RiLockLine size={20} className="text-fg" />
         </div>
       }
     >
@@ -108,7 +108,7 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
 
         {currentNotice ? (
           <p
-            className={`text-xs ${currentNotice.tone === "success" ? "text-emerald-400" : "text-danger"}`}
+            className={`text-xs ${currentNotice.tone === "success" ? "text-success" : "text-danger"}`}
           >
             {currentNotice.message}
           </p>
@@ -118,14 +118,14 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-xs font-medium text-fg-body transition-colors hover:text-white"
+            className="rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-xs font-medium text-fg-body transition-colors hover:text-fg"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={mutation.isPending}
-            className="rounded-md bg-white px-4 py-2 text-xs font-medium text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md bg-primary px-4 py-2 text-xs font-medium text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {mutation.isPending ? "Saving..." : "Save Changes"}
           </button>

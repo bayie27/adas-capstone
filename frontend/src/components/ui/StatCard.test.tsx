@@ -25,7 +25,7 @@ describe("StatCard", () => {
     render(<StatCard icon={DummyIcon} title="Uptime" value="99.9%" delta="+0.4%" deltaPositive />)
 
     const delta = screen.getByText("+0.4%")
-    expect(delta).toHaveClass("text-emerald-400")
+    expect(delta).toHaveClass("text-success")
   })
 
   it("renders subtext when provided", () => {

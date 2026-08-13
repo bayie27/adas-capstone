@@ -178,7 +178,7 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
               onClick={() => handleReseed(profile.name)}
               className="rounded-lg border border-stroke bg-surface-1 px-3 py-2 text-left transition-colors hover:border-stroke-strong disabled:opacity-50"
             >
-              <span className="text-sm font-medium text-white">
+              <span className="text-sm font-medium text-fg">
                 {profile.name}
                 {profile.name === SLOW_PROFILE && (
                   <span className="ml-2 text-[10px] uppercase tracking-wide text-warning">
@@ -206,7 +206,7 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
           step={1}
           inputMode="numeric"
           placeholder="auto"
-          className="mb-3 w-full rounded-lg border border-stroke bg-canvas px-3 py-2 text-sm text-white"
+          className="mb-3 w-full rounded-lg border border-stroke bg-canvas px-3 py-2 text-sm text-fg"
         />
         {cameraIdIsInvalid && (
           <p className="-mt-2 mb-3 text-xs text-danger">
@@ -300,7 +300,7 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
                   return `Signed in as ${session.username} (${session.role}).`
                 })
               }
-              className="rounded-lg border border-stroke bg-surface-1 px-3 py-1.5 text-xs text-white transition-colors hover:border-stroke-strong disabled:opacity-50"
+              className="rounded-lg border border-stroke bg-surface-1 px-3 py-1.5 text-xs text-fg transition-colors hover:border-stroke-strong disabled:opacity-50"
             >
               {username}
             </button>
@@ -324,7 +324,7 @@ function PanelButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButt
   return (
     <button
       {...props}
-      className="w-full rounded-lg border border-stroke bg-surface-1 px-3 py-2 text-sm text-white transition-colors hover:border-stroke-strong disabled:opacity-50"
+      className="w-full rounded-lg border border-stroke bg-surface-1 px-3 py-2 text-sm text-fg transition-colors hover:border-stroke-strong disabled:opacity-50"
     >
       {children}
     </button>

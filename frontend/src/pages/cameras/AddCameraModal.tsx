@@ -18,11 +18,11 @@ const EMPTY_FORM: CameraFormState = {
 }
 
 const INPUT_CLASS =
-  "w-full rounded-md border border-stroke bg-surface-1 px-3 py-2 text-sm text-white placeholder-fg-muted focus:border-stroke-strong focus:outline-none"
+  "w-full rounded-md border border-stroke bg-surface-1 px-3 py-2 text-sm text-fg placeholder-fg-muted focus:border-stroke-strong focus:outline-none"
 const SECONDARY_BUTTON_CLASS =
-  "rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-sm font-medium text-fg-body transition-colors hover:text-white"
+  "rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-sm font-medium text-fg-body transition-colors hover:text-fg"
 const PRIMARY_BUTTON_CLASS =
-  "rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+  "rounded-md bg-primary px-4 py-2 text-sm font-medium text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
 
 function parseChannelId(value: string) {
   const parsed = Number.parseInt(value.trim(), 10)
@@ -50,7 +50,7 @@ function CameraFormFields({
   return (
     <>
       <div>
-        <label className="mb-2 block text-xs font-semibold text-white">Camera Name</label>
+        <label className="mb-2 block text-xs font-semibold text-fg">Camera Name</label>
         <input
           type="text"
           value={form.camera_name}
@@ -60,7 +60,7 @@ function CameraFormFields({
         />
       </div>
       <div>
-        <label className="mb-2 block text-xs font-semibold text-white">Channel No.</label>
+        <label className="mb-2 block text-xs font-semibold text-fg">Channel No.</label>
         <input
           type="text"
           value={form.channel_id}
@@ -130,7 +130,7 @@ export function AddCameraModal({ onClose, onSuccess }: AddCameraModalProps) {
       subtitle="Assign a name and channel number for the camera."
       icon={
         <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-strong bg-transparent">
-          <RiCameraLine size={20} className="text-white" />
+          <RiCameraLine size={20} className="text-fg" />
         </div>
       }
     >

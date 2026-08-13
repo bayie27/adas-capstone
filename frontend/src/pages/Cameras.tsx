@@ -113,7 +113,7 @@ export default function Cameras() {
   return (
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6">
-        <h1 className="mb-0.5 text-xl font-semibold text-white">Camera Management</h1>
+        <h1 className="mb-0.5 text-xl font-semibold text-fg">Camera Management</h1>
         <p className="text-xs text-fg-muted">
           Add, configure, and monitor the connection and AI detection status of cameras
         </p>
@@ -199,7 +199,7 @@ export default function Cameras() {
             setNotice(null)
             setModal({ kind: "add" })
           }}
-          className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-gray-100"
+          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover"
         >
           <RiAddLine size={14} />
           Add Camera
@@ -257,7 +257,7 @@ export default function Cameras() {
                             setNotice(null)
                             setModal({ kind: "edit", camera })
                           }}
-                          className="text-fg-muted transition-colors hover:text-white"
+                          className="text-fg-muted transition-colors hover:text-fg"
                         >
                           <RiPencilLine size={14} />
                         </button>
@@ -267,7 +267,7 @@ export default function Cameras() {
                             setNotice(null)
                             setModal({ kind: "delete", camera })
                           }}
-                          className="text-fg-muted transition-colors hover:text-white"
+                          className="text-fg-muted transition-colors hover:text-fg"
                         >
                           <RiDeleteBinLine size={14} />
                         </button>

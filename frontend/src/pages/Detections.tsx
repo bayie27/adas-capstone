@@ -208,7 +208,7 @@ export default function Detections() {
   return (
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6">
-        <h1 className="mb-0.5 text-xl font-semibold text-white">Detections</h1>
+        <h1 className="mb-0.5 text-xl font-semibold text-fg">Detections</h1>
         <p className="text-xs text-fg-muted">
           Monitor ongoing AI detections and review historical logs to verify reported incidents
         </p>
@@ -221,7 +221,7 @@ export default function Detections() {
           className={cn(
             "rounded px-5 py-1.5 text-xs font-medium transition-all duration-200",
             activeTab === "ongoing"
-              ? "border border-stroke-strong bg-surface-1 text-white shadow-sm"
+              ? "border border-stroke-strong bg-surface-1 text-fg shadow-sm"
               : "text-fg-muted hover:text-fg-body",
           )}
         >
@@ -233,7 +233,7 @@ export default function Detections() {
           className={cn(
             "rounded px-5 py-1.5 text-xs font-medium transition-all duration-200",
             activeTab === "logs"
-              ? "border border-stroke-strong bg-surface-1 text-white shadow-sm"
+              ? "border border-stroke-strong bg-surface-1 text-fg shadow-sm"
               : "text-fg-muted hover:text-fg-body",
           )}
         >
@@ -329,7 +329,7 @@ export default function Detections() {
                   setUserId("")
                   logsPagination.reset()
                 }}
-                className="flex items-center gap-1 rounded-md border border-stroke bg-surface-1 px-2 py-1.5 text-xs text-fg-muted transition-colors hover:text-white"
+                className="flex items-center gap-1 rounded-md border border-stroke bg-surface-1 px-2 py-1.5 text-xs text-fg-muted transition-colors hover:text-fg"
               >
                 <RiCloseLine size={12} />
                 Clear
@@ -340,7 +340,7 @@ export default function Detections() {
             type="button"
             disabled={exportMutation.isPending}
             onClick={() => exportMutation.mutate()}
-            className="flex items-center gap-2 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RiDownloadLine size={13} />
             {exportMutation.isPending ? "Exporting..." : "Export"}
@@ -434,7 +434,7 @@ export default function Detections() {
                           onClick={() => openAlertModal(item)}
                           className="flex h-7 w-7 items-center justify-center rounded border border-stroke-strong bg-surface-1 transition-colors hover:bg-surface-2"
                         >
-                          <RiEyeLine size={14} className="text-white" />
+                          <RiEyeLine size={14} className="text-fg" />
                         </button>
                       </div>
                     </td>
@@ -469,13 +469,13 @@ export default function Detections() {
       >
         <div className="flex flex-col bg-surface-2">
           <div className="flex items-center justify-between border-b border-border px-6 py-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-white">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-fg">
               ACCIDENT DETAILS
             </h2>
             <button
               type="button"
               onClick={closeModal}
-              className="text-fg-muted transition-colors hover:text-white"
+              className="text-fg-muted transition-colors hover:text-fg"
             >
               <RiCloseLine size={18} />
             </button>
@@ -498,7 +498,7 @@ export default function Detections() {
             {selectedAlert ? (
               <>
                 <div className="mb-5 flex items-center gap-3">
-                  <span className="text-xl font-semibold text-white">
+                  <span className="text-xl font-semibold text-fg">
                     {formatAlertCode(selectedAlert.log_id)}
                   </span>
                   <span
@@ -598,7 +598,7 @@ export default function Detections() {
                       type="button"
                       disabled={isTransitionPending}
                       onClick={() => dismissMutation.mutate(selectedAlert.log_id)}
-                      className="flex-1 rounded-md border border-stroke-strong bg-surface-1 py-2.5 text-xs font-medium uppercase tracking-wider text-white transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="flex-1 rounded-md border border-stroke-strong bg-surface-1 py-2.5 text-xs font-medium uppercase tracking-wider text-fg transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {dismissMutation.isPending ? "Dismissing..." : "Dismiss Alert"}
                     </button>
@@ -606,7 +606,7 @@ export default function Detections() {
                       type="button"
                       disabled={isTransitionPending}
                       onClick={() => confirmMutation.mutate(selectedAlert.log_id)}
-                      className="flex-1 rounded-md bg-white py-2.5 text-xs font-semibold uppercase tracking-wider text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="flex-1 rounded-md bg-primary py-2.5 text-xs font-semibold uppercase tracking-wider text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {confirmMutation.isPending ? "Confirming..." : "Confirm Alert"}
                     </button>
@@ -619,7 +619,7 @@ export default function Detections() {
                       type="button"
                       disabled={isTransitionPending}
                       onClick={() => dismissMutation.mutate(selectedAlert.log_id)}
-                      className="flex-1 rounded-md border border-stroke-strong bg-surface-1 py-2.5 text-xs font-medium uppercase tracking-wider text-white transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="flex-1 rounded-md border border-stroke-strong bg-surface-1 py-2.5 text-xs font-medium uppercase tracking-wider text-fg transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {dismissMutation.isPending ? "Dismissing..." : "Dismiss Accident"}
                     </button>
@@ -627,7 +627,7 @@ export default function Detections() {
                       type="button"
                       disabled={isTransitionPending}
                       onClick={() => resolveMutation.mutate(selectedAlert.log_id)}
-                      className="flex-1 rounded-md bg-white py-2.5 text-xs font-semibold uppercase tracking-wider text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="flex-1 rounded-md bg-primary py-2.5 text-xs font-semibold uppercase tracking-wider text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {resolveMutation.isPending ? "Resolving..." : "Resolve Accident"}
                     </button>
