@@ -68,6 +68,81 @@ api.interceptors.response.use(
 
 // 01_CONTRACTS.md §1.3 — the error envelope, parsed here rather than
 // re-derived at each call site.
+
+/**
+ * The stable error-code catalog. The first ten are the per-status defaults
+ * (`_DEFAULT_ERROR_CODES` in `app/schemas/common.py`); the rest are the codes
+ * routes raise explicitly when the status code's generic default is not
+ * specific enough — a duplicate 409 versus a lost-race 409, for instance.
+ *
+ * `(string & {})` keeps the union open: an unrecognised code from a newer
+ * backend still type-checks as a string rather than failing to compile, while
+ * the known members still autocomplete and still narrow.
+ */
+export type ApiErrorCode =
+  | "PRECONDITION_FAILED"
+  | "AUTH_REQUIRED"
+  | "FORBIDDEN"
+  | "NOT_FOUND"
+  | "CONFLICT_STATE"
+  | "PAYLOAD_TOO_LARGE"
+  | "VALIDATION_ERROR"
+  | "AUTH_RATE_LIMITED"
+  | "INTERNAL_SERVER_ERROR"
+  | "TEMPORARILY_UNAVAILABLE"
+  | "CONFLICT_DUPLICATE"
+  | "AUTH_INVALID_CREDENTIALS"
+  | "AUTH_EXPIRED"
+  | "AUTH_REVOKED"
+  | "ORIGIN_REJECTED"
+  | "CONFLICT_BUSY"
+  | (string & {})
+
+/** A 422 field-level validation failure, from the body's `errors[]`. */
+export interface ApiValidationError {
+  field?: string
+  message?: string
+  [key: string]: unknown
+}
+
+/**
+ * An `ApiError` response, parsed once. Callers branch on `code` — a 429
+ * rate-limit, a 409 lost race and a 503 SQLite-busy are three different
+ * situations that were previously indistinguishable from `detail` alone.
+ */
+export interface ParsedApiError {
+  status: number
+  code: ApiErrorCode
+  detail: string
+  /** Populated on 422 only. */
+  errors: ApiValidationError[]
+}
+
+/** Returns `null` when the failure is not an `ApiError` response at all. */
+export function getApiError(error: unknown): ParsedApiError | null {
+  if (!axios.isAxiosError<ApiErrorEnvelope>(error) || !error.response) {
+    return null
+  }
+
+  const body = error.response.data
+  if (!body || typeof body.code !== "string") {
+    return null
+  }
+
+  return {
+    status: error.response.status,
+    code: body.code,
+    detail: typeof body.detail === "string" ? body.detail : "",
+    errors: Array.isArray(body.errors) ? body.errors : [],
+  }
+}
+
+type ApiErrorEnvelope = {
+  detail?: string
+  code?: string
+  errors?: ApiValidationError[]
+}
+
 type ValidationIssue = {
   msg?: string
 }
