@@ -7,6 +7,8 @@ import { toApiRole, getDefaultRouteForRole } from "@/utils/auth"
 import { getApiErrorMessage } from "@/api/client"
 import type { NoticeState } from "@/components/ui/NoticeBanner"
 import { PasswordInput } from "@/components/ui/PasswordInput"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 
 function getNavigationMessage(locationState: unknown): string | undefined {
   return (locationState as { message?: string } | null)?.message
@@ -101,7 +103,7 @@ export default function Login() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-canvas p-8">
-      <div className="w-full max-w-[400px] rounded-xl border border-stroke bg-surface-1 p-8 shadow-2xl">
+      <div className="w-full max-w-[400px] rounded-xl border border-stroke bg-surface-1 p-8 shadow-overlay">
         <div className="mb-8 flex flex-col items-center">
           <div className="mb-4 flex w-24 items-center justify-center">
             <img
@@ -117,22 +119,17 @@ export default function Login() {
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium tracking-wide text-fg-body">
-              Username
-            </label>
-            <input
-              type="text"
-              placeholder="username"
-              value={username}
-              onChange={(e) => {
-                setStatusMessage(null)
-                setUsername(e.target.value)
-              }}
-              autoComplete="username"
-              className="w-full rounded-md border border-stroke bg-surface-1 px-3 py-2.5 text-sm text-fg transition-colors placeholder-fg-muted focus:border-stroke-strong focus:outline-none"
-            />
-          </div>
+          <Input
+            label="Username"
+            type="text"
+            placeholder="username"
+            value={username}
+            onChange={(event) => {
+              setStatusMessage(null)
+              setUsername(event.target.value)
+            }}
+            autoComplete="username"
+          />
           <PasswordInput
             label="Password"
             value={password}
@@ -142,21 +139,24 @@ export default function Login() {
             }}
             autoComplete="current-password"
             placeholder="password"
-            labelClassName="mb-1.5 text-xs font-medium tracking-wide"
-            inputClassName="py-2.5 tracking-widest transition-colors placeholder-fg-muted"
-            toggleClassName="text-fg-muted"
             iconSize={18}
+            // PasswordInput still carries the pre-Phase-4 geometry so the three
+            // password modals do not move; the login card is rebuilt to the
+            // frame, so it opts back into Input's 40px §2.3 control height and
+            // matches the username field above it.
+            inputClassName="h-10 px-4 py-0 text-secondary"
           />
-          <button
+          <Button
             type="submit"
-            disabled={loginMutation.isPending}
-            className="mt-2 w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover"
+            className="mt-2 w-full"
+            isLoading={loginMutation.isPending}
+            loadingLabel="Signing in…"
           >
-            {loginMutation.isPending ? "Signing in..." : "Login"}
-          </button>
+            Login
+          </Button>
           {statusMessage ? (
             <p
-              className={`text-center text-xs ${
+              className={`text-center text-caption ${
                 statusMessage.tone === "success" ? "text-success" : "text-danger"
               }`}
             >

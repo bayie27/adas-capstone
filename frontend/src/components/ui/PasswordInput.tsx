@@ -12,10 +12,13 @@ import { RiEyeLine, RiEyeOffLine } from "@remixicon/react"
  * "new-password" so browsers don't autofill an admin's own password into
  * "reset user password" forms.
  *
- * The className overrides below reproduce this component's existing geometry
- * exactly, so rebuilding it on `Input` changes no pixel on Login or the
- * password modals. They are the seam: the screen phases drop them and the
- * field inherits `Input`'s 40px §2.3 control height.
+ * The className override below reproduces this component's existing field
+ * geometry, so the three password modals do not move; it is the seam a screen
+ * phase drops to inherit `Input`'s 40px §2.3 control height, as Login now
+ * does. The label carries no override at all — it takes `Input`'s caption
+ * treatment, because a hardcoded 11px here did not collapse against the
+ * caption token in tailwind-merge and rendered the two labels on the login
+ * card at different sizes.
  */
 export function PasswordInput({
   label,
@@ -54,7 +57,7 @@ export function PasswordInput({
       placeholder={placeholder}
       disabled={disabled}
       error={error}
-      labelClassName={cn("text-[11px]", labelClassName)}
+      labelClassName={labelClassName}
       className={cn(
         "h-auto border-stroke px-3 py-2 text-sm",
         error && "border-danger",
