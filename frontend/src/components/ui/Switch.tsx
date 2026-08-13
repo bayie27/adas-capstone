@@ -1,4 +1,5 @@
 import { cn } from "@/utils/cn"
+import { focusRing } from "@/components/ui/Button"
 
 export function Switch({
   checked,
@@ -16,7 +17,8 @@ export function Switch({
       disabled={disabled}
       aria-pressed={checked}
       className={cn(
-        "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+        "relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-150",
+        focusRing,
         checked ? "bg-primary" : "bg-surface-3",
         disabled ? "cursor-not-allowed opacity-60" : "",
       )}

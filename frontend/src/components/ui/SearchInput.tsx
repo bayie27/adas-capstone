@@ -1,4 +1,6 @@
 import { RiSearchLine } from "@remixicon/react"
+import { cn } from "@/utils/cn"
+import { focusRing } from "@/components/ui/Button"
 
 export function SearchInput({
   value,
@@ -17,7 +19,12 @@ export function SearchInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-60 rounded-md border border-stroke bg-surface-1 py-1.5 pl-8 pr-4 text-xs text-fg focus:border-stroke-strong focus:outline-none"
+        className={cn(
+          "w-60 rounded-md border border-stroke bg-surface-1 py-1.5 pl-8 pr-4 text-xs text-fg",
+          "transition-colors duration-150 placeholder:text-fg-muted focus:border-stroke-strong",
+          "disabled:cursor-not-allowed disabled:opacity-60",
+          focusRing,
+        )}
       />
     </div>
   )
