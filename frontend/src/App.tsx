@@ -1,7 +1,6 @@
 import { Suspense, lazy } from "react"
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
-import AdminLayout from "@/components/layouts/AdminLayout"
-import UserLayout from "@/components/layouts/UserLayout"
+import AppLayout from "@/components/layouts/AppLayout"
 import AuthLayout from "@/components/layouts/AuthLayout"
 import { GlobalAlerts } from "@/components/GlobalAlerts"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
@@ -49,7 +48,7 @@ function App() {
               path="/admin"
               element={
                 <ProtectedRoute requiredRole="Administrator">
-                  <AdminLayout />
+                  <AppLayout />
                 </ProtectedRoute>
               }
             >
@@ -67,7 +66,7 @@ function App() {
               path="/user"
               element={
                 <ProtectedRoute requiredRole="Operator">
-                  <UserLayout />
+                  <AppLayout />
                 </ProtectedRoute>
               }
             >
