@@ -1,7 +1,11 @@
 import { useMemo, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import type { NoticeState } from "@/components/ui/NoticeBanner"
+import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
+import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
+import { Input } from "@/components/ui/Input"
+import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { getMyProfile, updateMyProfile } from "@/api/users"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getApiErrorMessage } from "@/api/client"
@@ -95,7 +99,7 @@ export default function ProfileSettings() {
     })
   }, [profile, profileForm.first_name, profileForm.last_name])
 
-  const displayRole = profile ? formatUserRole(profile.role) : (role ?? "Unknown Role")
+  const displayRole = formatUserRole(profile?.role ?? role)
   const initials = getUserInitials(
     profileForm.first_name,
     profileForm.last_name,
@@ -150,117 +154,95 @@ export default function ProfileSettings() {
   return (
     <div className="mx-auto max-w-3xl p-8">
       <div className="mb-8">
-        <h1 className="mb-1 text-2xl font-semibold text-fg">My Profile</h1>
-        <p className="text-sm text-fg-muted">Manage your personal information and preferences.</p>
+        <h1 className="mb-1 text-h3 font-semibold text-fg">My Profile</h1>
+        <p className="text-secondary text-fg-muted">
+          Manage your personal information and preferences.
+        </p>
       </div>
 
-      <div className="rounded-xl border border-stroke bg-surface-1 p-8">
+      <Card className="p-8">
         {profileQuery.isLoading ? (
-          <div className="py-16 text-center text-sm text-fg-muted">Loading profile...</div>
+          <div className="py-16 text-center text-secondary text-fg-muted">Loading profile...</div>
         ) : profileQuery.isError ? (
-          <div className="space-y-4 py-12 text-center">
-            <p className="text-sm text-danger">
-              {getApiErrorMessage(profileQuery.error, "Unable to load your profile.")}
-            </p>
-            <button
-              type="button"
-              onClick={() => profileQuery.refetch()}
-              className="rounded-md border border-stroke-strong px-4 py-2 text-sm font-medium text-fg transition-colors hover:bg-surface-1"
-            >
-              Retry
-            </button>
-          </div>
+          <QueryErrorBanner
+            error={profileQuery.error}
+            fallback="Unable to load your profile."
+            onRetry={() => profileQuery.refetch()}
+          />
         ) : (
           <>
             <div className="mb-8 flex items-center gap-6">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border border-border bg-surface-2 text-3xl font-bold text-fg">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-h2 font-bold text-fg">
                 {initials}
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-fg">{displayName || "Unnamed User"}</h2>
-                <p className="text-fg-muted">
+                <h2 className="text-h3 font-semibold text-fg">{displayName || "Unnamed User"}</h2>
+                <p className="text-body text-fg-muted">
                   {profileForm.username || "username"} ({displayRole})
                 </p>
               </div>
             </div>
 
             <form onSubmit={handleProfileSubmit} className="max-w-sm space-y-6">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-fg-body">First Name</label>
-                <input
-                  type="text"
-                  value={profileForm.first_name}
-                  onChange={(event) => {
-                    setProfileNotice(null)
-                    setProfileForm((current) => ({ ...current, first_name: event.target.value }))
-                  }}
-                  className="w-full rounded-md border border-stroke-strong bg-surface-1 px-3 py-2 text-sm text-fg focus:border-stroke-strong focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-fg-body">Last Name</label>
-                <input
-                  type="text"
-                  value={profileForm.last_name}
-                  onChange={(event) => {
-                    setProfileNotice(null)
-                    setProfileForm((current) => ({ ...current, last_name: event.target.value }))
-                  }}
-                  className="w-full rounded-md border border-stroke-strong bg-surface-1 px-3 py-2 text-sm text-fg focus:border-stroke-strong focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-fg-body">Username</label>
-                <input
-                  type="text"
-                  value={profileForm.username}
-                  onChange={(event) => {
-                    setProfileNotice(null)
-                    setProfileForm((current) => ({ ...current, username: event.target.value }))
-                  }}
-                  className="w-full rounded-md border border-stroke-strong bg-surface-1 px-3 py-2 text-sm text-fg focus:border-stroke-strong focus:outline-none"
-                />
-              </div>
+              <Input
+                label="First Name"
+                type="text"
+                value={profileForm.first_name}
+                onChange={(event) => {
+                  setProfileNotice(null)
+                  setProfileForm((current) => ({ ...current, first_name: event.target.value }))
+                }}
+              />
+              <Input
+                label="Last Name"
+                type="text"
+                value={profileForm.last_name}
+                onChange={(event) => {
+                  setProfileNotice(null)
+                  setProfileForm((current) => ({ ...current, last_name: event.target.value }))
+                }}
+              />
+              <Input
+                label="Username"
+                type="text"
+                value={profileForm.username}
+                onChange={(event) => {
+                  setProfileNotice(null)
+                  setProfileForm((current) => ({ ...current, username: event.target.value }))
+                }}
+              />
 
-              {profileNotice ? (
-                <p
-                  className={`text-xs ${
-                    profileNotice.tone === "success" ? "text-success" : "text-danger"
-                  }`}
-                >
-                  {profileNotice.message}
-                </p>
-              ) : null}
+              {profileNotice ? <NoticeBanner notice={profileNotice} /> : null}
 
               {updateProfileMutation.isError ? (
-                <p className="text-xs text-danger">
-                  {getApiErrorMessage(
-                    updateProfileMutation.error,
-                    "Unable to update your profile.",
-                  )}
-                </p>
+                <NoticeBanner
+                  notice={{
+                    tone: "error",
+                    message: getApiErrorMessage(
+                      updateProfileMutation.error,
+                      "Unable to update your profile.",
+                    ),
+                  }}
+                />
               ) : null}
 
               <div className="flex flex-wrap gap-3">
-                <button
+                <Button
                   type="submit"
-                  disabled={!isProfileDirty || updateProfileMutation.isPending}
-                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!isProfileDirty}
+                  isLoading={updateProfileMutation.isPending}
+                  loadingLabel="Saving..."
                 >
-                  {updateProfileMutation.isPending ? "Saving..." : "Save Profile"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModal({ kind: "password" })}
-                  className="rounded-md border border-stroke-strong px-4 py-2 text-sm font-medium text-fg-body transition-colors hover:bg-surface-1 hover:text-fg"
-                >
+                  Save Profile
+                </Button>
+                <Button variant="outline" onClick={() => setModal({ kind: "password" })}>
                   Change Password
-                </button>
+                </Button>
               </div>
             </form>
           </>
         )}
-      </div>
+      </Card>
 
       {modal.kind === "password" && (
         <ChangePasswordModal

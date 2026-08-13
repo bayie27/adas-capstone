@@ -1,22 +1,26 @@
 import { create } from "zustand"
 
-import type { AppUserRole } from "@/api/auth"
+import type { ApiUserRole } from "@/api/auth"
 
 const AUTH_STORAGE_KEY = "adas-auth-session"
-const VALID_ROLES = ["Administrator", "Operator"] as const
+// The backend enum, stored verbatim. Changing this from the old invented
+// "Administrator" value invalidates any existing adas-auth-session entry;
+// isValidRole below already treats an unrecognised role as logged out, so a
+// stale entry degrades to a login prompt rather than a crash.
+const VALID_ROLES = ["Admin", "Operator"] as const
 
 type StoredAuthSession = {
-  role: AppUserRole | null
+  role: ApiUserRole | null
   username: string | null
   userId: number | null
 }
 
-function isValidRole(value: unknown): value is AppUserRole {
-  return typeof value === "string" && VALID_ROLES.includes(value as AppUserRole)
+function isValidRole(value: unknown): value is ApiUserRole {
+  return typeof value === "string" && VALID_ROLES.includes(value as ApiUserRole)
 }
 
 interface AuthState {
-  role: AppUserRole | null
+  role: ApiUserRole | null
   username: string | null
   userId: number | null
   /**
@@ -33,7 +37,7 @@ interface AuthState {
    * socket never outlives the session it was opened under.
    */
   sessionEpoch: number
-  setSession: (role: AppUserRole, username: string, userId: number) => void
+  setSession: (role: ApiUserRole, username: string, userId: number) => void
   bumpSessionEpoch: () => void
   clearSession: () => void
 }

@@ -1,12 +1,12 @@
 import type { ReactNode } from "react"
 import { Navigate } from "react-router-dom"
 import { useAuthStore } from "@/store/useAuthStore"
-import type { AppUserRole } from "@/api/auth"
+import type { ApiUserRole } from "@/api/auth"
 import { getDefaultRouteForRole } from "@/utils/auth"
 
 interface ProtectedRouteProps {
   children: ReactNode
-  requiredRole: AppUserRole
+  requiredRole: ApiUserRole
 }
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {

@@ -2,10 +2,10 @@ import { Link, useLocation, useNavigate } from "react-router-dom"
 
 import { logoutUser } from "@/api/auth"
 import { useAuthStore } from "@/store/useAuthStore"
-import { getUserInitials } from "@/utils/format"
+import { formatUserRole, getUserInitials } from "@/utils/format"
 import { cn } from "@/utils/cn"
+import { focusRing } from "@/components/ui/Button"
 import {
-  RiArrowUpSLine,
   RiCameraLine,
   RiDashboardLine,
   RiLayoutGridLine,
@@ -29,8 +29,15 @@ export function Sidebar() {
   const username = useAuthStore((state) => state.username)
   const clearSession = useAuthStore((state) => state.clearSession)
 
-  const basePath = role === "Administrator" ? "/admin" : "/user"
+  const basePath = role === "Admin" ? "/admin" : "/user"
 
+  /**
+   * Design gate D-1, settled: `Administration` is three flat nav items —
+   * Users, Audit Log, Maintenance — with the same treatment as every other
+   * row, no sub-group and no fourth eyebrow. The last two ship with their
+   * screens in Phases 16 and 18; adding them is one entry each rather than a
+   * sidebar rebuild, which is what the gate existed to prevent.
+   */
   const navGroups: Array<{ title: string; links: NavLinkItem[] }> = [
     {
       title: "OPERATIONS",
@@ -49,13 +56,12 @@ export function Sidebar() {
     },
     {
       title: "ADMINISTRATION",
-      links:
-        role === "Administrator" ? [{ name: "Users", to: "/admin/users", icon: RiUserLine }] : [],
+      links: role === "Admin" ? [{ name: "Users", to: "/admin/users", icon: RiUserLine }] : [],
     },
   ]
 
   const displayName = username || "guest"
-  const displayRole = role ?? "Unknown Role"
+  const displayRole = formatUserRole(role)
 
   const initials = getUserInitials("", "", displayName)
 
@@ -67,16 +73,24 @@ export function Sidebar() {
     navigate("/login", { replace: true })
   }
 
+  const isHelpActive = location.pathname === `${basePath}/help`
+
+  // §2.8 — nav rest / hover / active, shared by the links and the two footer
+  // buttons so the Help Center row cannot drift from the rows above it.
+  const navRow = "flex items-center gap-3 rounded-md px-3 py-2 transition-colors duration-150"
+  const navInactive = "text-fg-muted hover:bg-surface-1 hover:text-fg-body"
+  const navActive = "bg-surface-2 text-fg"
+
   return (
-    <aside className="fixed left-0 top-0 flex h-screen w-60 flex-col border-r border-stroke bg-surface-1 text-sm">
-      <div className="flex h-16 items-center px-5 border-b border-stroke">
+    <aside className="fixed left-0 top-0 flex h-screen w-[272px] flex-col border-r border-stroke bg-surface-1 text-sm">
+      <div className="flex h-16 items-center border-b border-stroke px-5">
         <div className="flex items-center gap-2.5">
           <img src="/adas-logo.png" alt="ADAS Logo" className="h-auto w-7 object-contain" />
           <span className="text-base font-bold tracking-[0.25em] text-fg">ADAS</span>
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
+      <nav aria-label="Main" className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
         {navGroups
           .filter((group) => group.links.length > 0)
           .map((group) => (
@@ -94,16 +108,18 @@ export function Sidebar() {
                     <li key={link.name}>
                       <Link
                         to={link.to}
+                        aria-current={isActive ? "page" : undefined}
                         className={cn(
-                          "relative flex items-center gap-3 rounded-md px-3 py-2 transition-all duration-150",
-                          isActive
-                            ? "bg-surface-2 text-fg"
-                            : "text-fg-muted hover:bg-surface-1 hover:text-fg-body",
+                          "relative",
+                          navRow,
+                          isActive ? navActive : navInactive,
+                          focusRing,
                         )}
                       >
-                        {/* Active left accent bar */}
+                        {/* Active left accent bar — in the code, not the Figma
+                            symbol; a small, good addition kept deliberately. */}
                         {isActive && (
-                          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[3px] rounded-r-full bg-primary" />
+                          <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
                         )}
                         <link.icon size={16} className={isActive ? "text-fg" : "text-fg-muted"} />
                         <span className="text-[13px] font-medium">{link.name}</span>
@@ -114,45 +130,42 @@ export function Sidebar() {
               </ul>
             </div>
           ))}
-      </div>
+      </nav>
 
-      <div className="border-t border-stroke p-3 space-y-0.5">
+      <div className="space-y-0.5 border-t border-stroke p-3">
         <button
           type="button"
           onClick={() => navigate(`${basePath}/help`)}
-          className={cn(
-            "flex w-full items-center gap-3 rounded-md px-3 py-2 transition-colors",
-            location.pathname === `${basePath}/help`
-              ? "bg-surface-2 text-fg"
-              : "text-fg-muted hover:bg-surface-1 hover:text-fg-body",
-          )}
+          aria-current={isHelpActive ? "page" : undefined}
+          className={cn("w-full", navRow, isHelpActive ? navActive : navInactive, focusRing)}
         >
-          <RiQuestionLine
-            size={16}
-            className={location.pathname === `${basePath}/help` ? "text-fg" : "text-fg-muted"}
-          />
+          <RiQuestionLine size={16} className={isHelpActive ? "text-fg" : "text-fg-muted"} />
           <span className="text-[13px] font-medium">Help Center</span>
         </button>
 
-        <div className="group flex cursor-pointer items-center justify-between rounded-md px-3 py-2 transition-colors hover:bg-surface-1">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-[10px] font-bold text-fg-muted">
-              {initials || <RiUserLine size={14} className="text-fg-muted" />}
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[13px] font-medium leading-tight text-fg-body group-hover:text-fg">
-                {displayName}
-              </span>
-              <span className="text-[11px] text-fg-muted">{displayRole}</span>
-            </div>
+        {/* Identity label, not a control. This carried `cursor-pointer`, a
+            hover fill and a disclosure chevron while having no handler at all,
+            so it advertised a menu that was never built — and the one screen
+            such a menu would lead to, /profile, has no inbound link anywhere
+            in the app. Whether the chip becomes a link or a real dropdown is
+            a design question (D-3); until it is answered the honest render is
+            a static label that does not claim to be clickable. */}
+        <div className="flex items-center gap-2.5 px-3 py-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-[10px] font-bold text-fg-muted">
+            {initials || <RiUserLine size={14} className="text-fg-muted" />}
           </div>
-          <RiArrowUpSLine size={16} className="text-fg-muted" />
+          <div className="flex flex-col">
+            <span className="text-[13px] font-medium leading-tight text-fg-sidebar">
+              {displayName}
+            </span>
+            <span className="text-[11px] text-fg-muted">{displayRole}</span>
+          </div>
         </div>
 
         <button
           type="button"
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-fg-muted transition-colors hover:bg-surface-1 hover:text-fg-body"
+          className={cn("w-full", navRow, navInactive, focusRing)}
         >
           <RiLogoutBoxRLine size={16} className="text-fg-muted" />
           <span className="text-[13px] font-medium">Log Out</span>
