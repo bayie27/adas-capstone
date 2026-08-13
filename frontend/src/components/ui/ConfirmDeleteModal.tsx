@@ -26,19 +26,17 @@ export function ConfirmDeleteModal({
   return (
     <Modal isOpen onClose={onClose} hideClose>
       <div className="flex flex-col items-center pt-6 text-center">
-        <RiAlertLine size={36} className="mb-4 text-[#ef4444]" />
+        <RiAlertLine size={36} className="mb-4 text-danger" />
         <h3 className="mb-2 text-[15px] font-bold text-white">{title}</h3>
-        <p className="mb-6 px-4 text-[11px] leading-relaxed text-[#A1A1AA]">{description}</p>
+        <p className="mb-6 px-4 text-[11px] leading-relaxed text-fg-muted">{description}</p>
         {error ? (
-          <p className="mb-4 text-xs text-[#F87171]">
-            {getApiErrorMessage(error, "Action failed.")}
-          </p>
+          <p className="mb-4 text-xs text-danger">{getApiErrorMessage(error, "Action failed.")}</p>
         ) : null}
         <div className="flex w-full items-center justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-[#333] bg-transparent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1A1A1A]"
+            className="rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-surface-1"
           >
             Cancel
           </button>

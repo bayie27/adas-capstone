@@ -17,7 +17,7 @@ export function FilterSelect<T extends string>({ value, options, onChange }: Fil
       <select
         value={value}
         onChange={(event) => onChange(event.target.value as T)}
-        className="appearance-none rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-1.5 pr-8 text-xs text-[#D4D4D4] focus:border-[#52525B] focus:outline-none"
+        className="appearance-none rounded-md border border-stroke bg-surface-1 px-3 py-1.5 pr-8 text-xs text-fg-body focus:border-stroke-strong focus:outline-none"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -27,7 +27,7 @@ export function FilterSelect<T extends string>({ value, options, onChange }: Fil
       </select>
       <RiArrowRightSLine
         size={13}
-        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[#737373]"
+        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-fg-muted"
       />
     </div>
   )

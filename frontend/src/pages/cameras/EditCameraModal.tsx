@@ -14,9 +14,9 @@ type CameraFormState = {
 }
 
 const INPUT_CLASS =
-  "w-full rounded-md border border-[#2A2A2A] bg-[#141414] px-3 py-2 text-sm text-white placeholder-[#555] focus:border-[#555] focus:outline-none"
+  "w-full rounded-md border border-stroke bg-surface-1 px-3 py-2 text-sm text-white placeholder-fg-muted focus:border-stroke-strong focus:outline-none"
 const SECONDARY_BUTTON_CLASS =
-  "rounded-md border border-[#333] bg-transparent px-4 py-2 text-sm font-medium text-[#E4E4E7] transition-colors hover:text-white"
+  "rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-sm font-medium text-fg-body transition-colors hover:text-white"
 const PRIMARY_BUTTON_CLASS =
   "rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
 
@@ -138,7 +138,7 @@ export function EditCameraModal({ camera, onClose, onSuccess }: EditCameraModalP
       title="Edit Camera"
       subtitle="Update the camera name and channel number."
       icon={
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#333] bg-transparent">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-strong bg-transparent">
           <RiPencilLine size={20} className="text-white" />
         </div>
       }
@@ -146,10 +146,10 @@ export function EditCameraModal({ camera, onClose, onSuccess }: EditCameraModalP
       <form onSubmit={handleSubmit} className="mt-2 space-y-4">
         <CameraFormFields form={form} onChange={updateField} />
 
-        {errorMessage ? <p className="text-xs text-[#F87171]">{errorMessage}</p> : null}
+        {errorMessage ? <p className="text-xs text-danger">{errorMessage}</p> : null}
 
         <div className="mt-8 flex items-end justify-between">
-          <div className="space-y-1 text-[10px] text-[#71717A]">
+          <div className="space-y-1 text-[10px] text-fg-muted">
             <div>Date Added: {formatShortDateTime(camera.created_at)}</div>
             <div>Last Changes: {formatShortDateTime(camera.updated_at)}</div>
           </div>

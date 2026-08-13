@@ -18,12 +18,12 @@ export function StatCard({
   deltaPositive,
 }: StatCardProps) {
   return (
-    <div className="flex h-full min-h-[160px] flex-col justify-between rounded-xl border border-[#2A2A2A] bg-[#111111] p-5">
+    <div className="flex h-full min-h-[160px] flex-col justify-between rounded-xl border border-stroke bg-surface-1 p-5">
       <div>
-        <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-lg border border-[#2A2A2A] bg-[#1E1E1E]">
-          <Icon size={17} className="text-[#A1A1AA]" />
+        <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-lg border border-stroke bg-surface-2">
+          <Icon size={17} className="text-fg-muted" />
         </div>
-        <h4 className="mb-2 min-h-[32px] text-[11px] font-medium uppercase tracking-wider text-[#737373]">
+        <h4 className="mb-2 min-h-[32px] text-[11px] font-medium uppercase tracking-wider text-fg-muted">
           {title}
         </h4>
         <div className="flex items-end gap-2.5">
@@ -39,7 +39,7 @@ export function StatCard({
           ) : null}
         </div>
       </div>
-      {subtext ? <div className="mt-4 text-xs text-[#555]">{subtext}</div> : null}
+      {subtext ? <div className="mt-4 text-xs text-fg-muted">{subtext}</div> : null}
     </div>
   )
 }

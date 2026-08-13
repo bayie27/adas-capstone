@@ -49,20 +49,20 @@ export function SidePanel({
         tabIndex={-1}
         className={cn(
           "absolute right-0 top-0 h-full w-[420px] max-w-full overflow-y-auto",
-          "bg-[#111111] border-l border-[#2A2A2A] shadow-2xl",
+          "bg-surface-1 border-l border-stroke shadow-2xl",
           "animate-in slide-in-from-right duration-200",
           className,
         )}
       >
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#2A2A2A] bg-[#111111] px-5 py-4">
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-stroke bg-surface-1 px-5 py-4">
           <div>
             {title && <h3 className="text-base font-semibold leading-tight text-white">{title}</h3>}
-            {subtitle && <p className="mt-1 text-xs leading-relaxed text-[#A1A1AA]">{subtitle}</p>}
+            {subtitle && <p className="mt-1 text-xs leading-relaxed text-fg-muted">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
             aria-label="Close panel"
-            className="text-[#71717A] transition-colors hover:text-white"
+            className="text-fg-muted transition-colors hover:text-white"
           >
             <RiCloseLine size={20} />
           </button>

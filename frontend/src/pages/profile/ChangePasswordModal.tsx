@@ -75,7 +75,7 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
       title="Change Password"
       subtitle="Update your account password."
       icon={
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#333] bg-transparent">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-strong bg-transparent">
           <RiLockLine size={20} className="text-white" />
         </div>
       }
@@ -101,14 +101,14 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
             onChange={(value) => updateField("confirm_password", value)}
           />
 
-          <p className="text-[10px] text-[#737373]">
+          <p className="text-[10px] text-fg-muted">
             Must be at least 8 characters long and contain at least 1 number.
           </p>
         </div>
 
         {currentNotice ? (
           <p
-            className={`text-xs ${currentNotice.tone === "success" ? "text-emerald-400" : "text-[#F87171]"}`}
+            className={`text-xs ${currentNotice.tone === "success" ? "text-emerald-400" : "text-danger"}`}
           >
             {currentNotice.message}
           </p>
@@ -118,7 +118,7 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-[#333] bg-transparent px-4 py-2 text-xs font-medium text-[#E4E4E7] transition-colors hover:text-white"
+            className="rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-xs font-medium text-fg-body transition-colors hover:text-white"
           >
             Cancel
           </button>

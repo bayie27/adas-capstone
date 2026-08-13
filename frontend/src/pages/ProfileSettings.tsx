@@ -151,21 +151,21 @@ export default function ProfileSettings() {
     <div className="mx-auto max-w-3xl p-8">
       <div className="mb-8">
         <h1 className="mb-1 text-2xl font-semibold text-white">My Profile</h1>
-        <p className="text-sm text-[#A1A1AA]">Manage your personal information and preferences.</p>
+        <p className="text-sm text-fg-muted">Manage your personal information and preferences.</p>
       </div>
 
-      <div className="rounded-xl border border-[#2A2A2A] bg-[#111111] p-8">
+      <div className="rounded-xl border border-stroke bg-surface-1 p-8">
         {profileQuery.isLoading ? (
-          <div className="py-16 text-center text-sm text-[#A1A1AA]">Loading profile...</div>
+          <div className="py-16 text-center text-sm text-fg-muted">Loading profile...</div>
         ) : profileQuery.isError ? (
           <div className="space-y-4 py-12 text-center">
-            <p className="text-sm text-[#F87171]">
+            <p className="text-sm text-danger">
               {getApiErrorMessage(profileQuery.error, "Unable to load your profile.")}
             </p>
             <button
               type="button"
               onClick={() => profileQuery.refetch()}
-              className="rounded-md border border-[#333] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1A1A1A]"
+              className="rounded-md border border-stroke-strong px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-surface-1"
             >
               Retry
             </button>
@@ -173,14 +173,14 @@ export default function ProfileSettings() {
         ) : (
           <>
             <div className="mb-8 flex items-center gap-6">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border border-[#27272A] bg-[#18181B] text-3xl font-bold text-white">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full border border-border bg-surface-2 text-3xl font-bold text-white">
                 {initials}
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-white">
                   {displayName || "Unnamed User"}
                 </h2>
-                <p className="text-[#A1A1AA]">
+                <p className="text-fg-muted">
                   {profileForm.username || "username"} ({displayRole})
                 </p>
               </div>
@@ -188,9 +188,7 @@ export default function ProfileSettings() {
 
             <form onSubmit={handleProfileSubmit} className="max-w-sm space-y-6">
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-[#E4E4E7]">
-                  First Name
-                </label>
+                <label className="mb-1.5 block text-sm font-medium text-fg-body">First Name</label>
                 <input
                   type="text"
                   value={profileForm.first_name}
@@ -198,11 +196,11 @@ export default function ProfileSettings() {
                     setProfileNotice(null)
                     setProfileForm((current) => ({ ...current, first_name: event.target.value }))
                   }}
-                  className="w-full rounded-md border border-[#333] bg-[#141414] px-3 py-2 text-sm text-white focus:border-[#555] focus:outline-none"
+                  className="w-full rounded-md border border-stroke-strong bg-surface-1 px-3 py-2 text-sm text-white focus:border-stroke-strong focus:outline-none"
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-[#E4E4E7]">Last Name</label>
+                <label className="mb-1.5 block text-sm font-medium text-fg-body">Last Name</label>
                 <input
                   type="text"
                   value={profileForm.last_name}
@@ -210,11 +208,11 @@ export default function ProfileSettings() {
                     setProfileNotice(null)
                     setProfileForm((current) => ({ ...current, last_name: event.target.value }))
                   }}
-                  className="w-full rounded-md border border-[#333] bg-[#141414] px-3 py-2 text-sm text-white focus:border-[#555] focus:outline-none"
+                  className="w-full rounded-md border border-stroke-strong bg-surface-1 px-3 py-2 text-sm text-white focus:border-stroke-strong focus:outline-none"
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-[#E4E4E7]">Username</label>
+                <label className="mb-1.5 block text-sm font-medium text-fg-body">Username</label>
                 <input
                   type="text"
                   value={profileForm.username}
@@ -222,14 +220,14 @@ export default function ProfileSettings() {
                     setProfileNotice(null)
                     setProfileForm((current) => ({ ...current, username: event.target.value }))
                   }}
-                  className="w-full rounded-md border border-[#333] bg-[#141414] px-3 py-2 text-sm text-white focus:border-[#555] focus:outline-none"
+                  className="w-full rounded-md border border-stroke-strong bg-surface-1 px-3 py-2 text-sm text-white focus:border-stroke-strong focus:outline-none"
                 />
               </div>
 
               {profileNotice ? (
                 <p
                   className={`text-xs ${
-                    profileNotice.tone === "success" ? "text-emerald-400" : "text-[#F87171]"
+                    profileNotice.tone === "success" ? "text-emerald-400" : "text-danger"
                   }`}
                 >
                   {profileNotice.message}
@@ -237,7 +235,7 @@ export default function ProfileSettings() {
               ) : null}
 
               {updateProfileMutation.isError ? (
-                <p className="text-xs text-[#F87171]">
+                <p className="text-xs text-danger">
                   {getApiErrorMessage(
                     updateProfileMutation.error,
                     "Unable to update your profile.",
@@ -256,7 +254,7 @@ export default function ProfileSettings() {
                 <button
                   type="button"
                   onClick={() => setModal({ kind: "password" })}
-                  className="rounded-md border border-[#333] px-4 py-2 text-sm font-medium text-[#E4E4E7] transition-colors hover:bg-[#1A1A1A] hover:text-white"
+                  className="rounded-md border border-stroke-strong px-4 py-2 text-sm font-medium text-fg-body transition-colors hover:bg-surface-1 hover:text-white"
                 >
                   Change Password
                 </button>

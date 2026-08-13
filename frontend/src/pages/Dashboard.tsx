@@ -78,12 +78,12 @@ export default function Dashboard() {
   const maxBarValue = barData.length > 0 ? Math.max(...barData.map((d) => d.value)) : 1
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] p-8">
+    <div className="min-h-screen bg-canvas p-8">
       <div className="mx-auto max-w-[1400px]">
         {/* Header */}
         <div className="mb-6">
           <h1 className="mb-0.5 text-xl font-semibold text-white">Dashboard</h1>
-          <p className="text-xs text-[#555]">
+          <p className="text-xs text-fg-muted">
             View analytical summaries &amp; peak accident trends
           </p>
         </div>
@@ -99,33 +99,33 @@ export default function Dashboard() {
         {/* Toolbar */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-              <RiCalendarLine size={13} className="text-[#737373]" />
+            <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
+              <RiCalendarLine size={13} className="text-fg-muted" />
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
+                className="bg-transparent text-xs text-fg-body focus:outline-none [color-scheme:dark]"
                 placeholder="Start date"
               />
             </div>
-            <span className="text-xs text-[#555]">to</span>
-            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-              <RiCalendarLine size={13} className="text-[#737373]" />
+            <span className="text-xs text-fg-muted">to</span>
+            <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
+              <RiCalendarLine size={13} className="text-fg-muted" />
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none [color-scheme:dark]"
+                className="bg-transparent text-xs text-fg-body focus:outline-none [color-scheme:dark]"
                 placeholder="End date"
               />
             </div>
-            <div className="flex items-center gap-2 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1">
-              <RiCameraLine size={13} className="text-[#737373]" />
+            <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
+              <RiCameraLine size={13} className="text-fg-muted" />
               <select
                 value={cameraId}
                 onChange={(e) => setCameraId(e.target.value)}
-                className="bg-transparent text-xs text-[#D4D4D4] focus:outline-none"
+                className="bg-transparent text-xs text-fg-body focus:outline-none"
               >
                 <option value="">All cameras</option>
                 {camerasQuery.data?.cameras.map((c) => (
@@ -143,7 +143,7 @@ export default function Dashboard() {
                   setEndDate("")
                   setCameraId("")
                 }}
-                className="flex items-center gap-1 rounded-md border border-[#2A2A2A] bg-[#141414] px-2 py-1.5 text-xs text-[#737373] transition-colors hover:text-white"
+                className="flex items-center gap-1 rounded-md border border-stroke bg-surface-1 px-2 py-1.5 text-xs text-fg-muted transition-colors hover:text-white"
               >
                 <RiCloseLine size={12} />
                 Clear
@@ -154,7 +154,7 @@ export default function Dashboard() {
             type="button"
             disabled={exportMutation.isPending}
             onClick={() => exportMutation.mutate()}
-            className="flex items-center gap-2 rounded-md border border-[#333] bg-[#1A1A1A] px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex items-center gap-2 rounded-md border border-stroke-strong bg-surface-1 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RiDownloadLine size={13} />
             {exportMutation.isPending ? "Exporting..." : "Export"}
@@ -173,10 +173,10 @@ export default function Dashboard() {
           {/* Charts column */}
           <div className="flex flex-col gap-5 lg:col-span-3">
             {/* Peak Accident Hours — Area chart with gradient fill */}
-            <div className="flex h-[270px] flex-col rounded-xl border border-[#222] bg-linear-to-b from-[#161616] to-[#0f0f0f] p-5 shadow-lg">
-              <h3 className="mb-4 text-xs font-medium text-[#D4D4D4]">Peak Accident Hours (24H)</h3>
+            <div className="flex h-[270px] flex-col rounded-xl border border-stroke bg-linear-to-b from-surface-1 to-canvas p-5 shadow-lg">
+              <h3 className="mb-4 text-xs font-medium text-fg-body">Peak Accident Hours (24H)</h3>
               {dashboardQuery.isLoading ? (
-                <div className="flex flex-1 items-center justify-center text-sm text-[#555]">
+                <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
                   Loading chart...
                 </div>
               ) : (
@@ -185,67 +185,75 @@ export default function Dashboard() {
                     <AreaChart data={lineData}>
                       <defs>
                         <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#ffffff" stopOpacity={0.18} />
-                          <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                          <stop offset="0%" stopColor="var(--color-chart-fill-from)" />
+                          <stop offset="100%" stopColor="var(--color-chart-fill-to)" />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1E1E1E" vertical={false} />
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="var(--color-chart-grid)"
+                        vertical={false}
+                      />
                       <XAxis
                         dataKey="time"
-                        stroke="#222"
-                        tick={{ fill: "#555", fontSize: 11 }}
+                        stroke="var(--color-chart-grid)"
+                        tick={{ fill: "var(--color-chart-axis)", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                         dy={8}
                       />
                       <YAxis
                         allowDecimals={false}
-                        stroke="#222"
-                        tick={{ fill: "#555", fontSize: 11 }}
+                        stroke="var(--color-chart-grid)"
+                        tick={{ fill: "var(--color-chart-axis)", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                         width={28}
                       />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: "#1A1A1A",
-                          border: "1px solid #2A2A2A",
+                          backgroundColor: "var(--color-surface-1)",
+                          border: "1px solid var(--color-stroke)",
                           borderRadius: "6px",
                           fontSize: 12,
                         }}
-                        itemStyle={{ color: "#E4E4E7" }}
-                        labelStyle={{ color: "#737373" }}
-                        cursor={{ stroke: "#333", strokeWidth: 1 }}
+                        itemStyle={{ color: "var(--color-fg-body)" }}
+                        labelStyle={{ color: "var(--color-fg-muted)" }}
+                        cursor={{ stroke: "var(--color-stroke-strong)", strokeWidth: 1 }}
                         formatter={(value) => [`${value} accidents`, "Volume"]}
                         labelFormatter={(label) => `${label}:00`}
                       />
                       <Area
                         type="monotone"
                         dataKey="value"
-                        stroke="#ffffff"
+                        stroke="var(--color-chart-line)"
                         strokeWidth={1.5}
                         fill="url(#areaGradient)"
                         dot={false}
-                        activeDot={{ r: 4, fill: "#fff", stroke: "#fff" }}
+                        activeDot={{
+                          r: 4,
+                          fill: "var(--color-chart-line)",
+                          stroke: "var(--color-chart-line)",
+                        }}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
               )}
               {!dashboardQuery.isLoading && !chartHasData ? (
-                <p className="mt-2 text-xs text-[#555]">
+                <p className="mt-2 text-xs text-fg-muted">
                   No confirmed accidents found for the current view.
                 </p>
               ) : null}
             </div>
 
             {/* Accident Frequency by Location — gradient bars */}
-            <div className="flex h-[340px] flex-col rounded-xl border border-[#222] bg-linear-to-b from-[#161616] to-[#0f0f0f] p-5 shadow-lg">
-              <h3 className="mb-4 text-xs font-medium text-[#D4D4D4]">
+            <div className="flex h-[340px] flex-col rounded-xl border border-stroke bg-linear-to-b from-surface-1 to-canvas p-5 shadow-lg">
+              <h3 className="mb-4 text-xs font-medium text-fg-body">
                 Accident Frequency by Location
               </h3>
               {dashboardQuery.isLoading ? (
-                <div className="flex flex-1 items-center justify-center text-sm text-[#555]">
+                <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
                   Loading chart...
                 </div>
               ) : locationHasData ? (
@@ -286,8 +294,8 @@ export default function Dashboard() {
                       <XAxis
                         type="number"
                         allowDecimals={false}
-                        stroke="#222"
-                        tick={{ fill: "#555", fontSize: 11 }}
+                        stroke="var(--color-chart-grid)"
+                        tick={{ fill: "var(--color-chart-axis)", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                         dy={8}
@@ -295,22 +303,22 @@ export default function Dashboard() {
                       <YAxis
                         type="category"
                         dataKey="name"
-                        stroke="#222"
-                        tick={{ fill: "#737373", fontSize: 10 }}
+                        stroke="var(--color-chart-grid)"
+                        tick={{ fill: "var(--color-chart-axis)", fontSize: 10 }}
                         axisLine={false}
                         tickLine={false}
                         width={110}
                       />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: "#1A1A1A",
-                          border: "1px solid #2A2A2A",
+                          backgroundColor: "var(--color-surface-1)",
+                          border: "1px solid var(--color-stroke)",
                           borderRadius: "6px",
                           fontSize: 12,
                         }}
-                        itemStyle={{ color: "#E4E4E7" }}
-                        labelStyle={{ color: "#737373" }}
-                        cursor={{ fill: "rgba(255,255,255,0.03)" }}
+                        itemStyle={{ color: "var(--color-fg-body)" }}
+                        labelStyle={{ color: "var(--color-fg-muted)" }}
+                        cursor={{ fill: "var(--color-chart-line)", fillOpacity: 0.03 }}
                         formatter={(value) => [`${value} accidents`, "Volume"]}
                         labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName ?? ""}
                       />
@@ -323,7 +331,7 @@ export default function Dashboard() {
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="flex flex-1 items-center justify-center text-sm text-[#555]">
+                <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
                   No location data available yet.
                 </div>
               )}

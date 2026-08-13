@@ -94,7 +94,7 @@ export default function Users() {
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6">
         <h1 className="mb-0.5 text-xl font-semibold text-white">User Management</h1>
-        <p className="text-xs text-[#737373]">Manage user accounts & system access roles</p>
+        <p className="text-xs text-fg-muted">Manage user accounts & system access roles</p>
       </div>
 
       {notice ? <NoticeBanner notice={notice} /> : null}
@@ -122,11 +122,11 @@ export default function Users() {
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#111111]">
+      <div className="overflow-hidden rounded-xl border border-stroke bg-surface-1">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-[#2A2A2A] bg-[#141414] text-[#737373]">
+              <tr className="border-b border-stroke bg-surface-1 text-fg-muted">
                 <th className="px-6 py-4 text-xs font-medium">Full Name</th>
                 <th className="px-6 py-4 text-xs font-medium">Username</th>
                 <th className="px-6 py-4 text-xs font-medium">Role</th>
@@ -134,7 +134,7 @@ export default function Users() {
                 <th className="px-6 py-4 text-right text-xs font-medium">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#2A2A2A]">
+            <tbody className="divide-y divide-stroke">
               {usersQuery.isLoading ? (
                 <TableStateRow colSpan={5}>Loading users...</TableStateRow>
               ) : usersQuery.isError ? (
@@ -147,7 +147,7 @@ export default function Users() {
                 users.map((user) => (
                   <tr
                     key={user.user_id}
-                    className="text-[#D4D4D4] transition-colors hover:bg-[#1A1A1A]"
+                    className="text-fg-body transition-colors hover:bg-surface-1"
                   >
                     <td className="px-6 py-4 text-xs font-medium">{getUserFullName(user)}</td>
                     <td className="px-6 py-4 text-xs">{user.username}</td>
@@ -161,7 +161,7 @@ export default function Users() {
                             setNotice(null)
                             setModal({ kind: "edit", user })
                           }}
-                          className="rounded p-1.5 text-[#737373] transition-colors hover:bg-[#252525] hover:text-white"
+                          className="rounded p-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-white"
                         >
                           <RiPencilLine size={14} />
                         </button>
@@ -171,7 +171,7 @@ export default function Users() {
                             setNotice(null)
                             setModal({ kind: "password", user })
                           }}
-                          className="rounded p-1.5 text-[#737373] transition-colors hover:bg-[#252525] hover:text-white"
+                          className="rounded p-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-white"
                         >
                           <RiKey2Line size={14} />
                         </button>
@@ -181,7 +181,7 @@ export default function Users() {
                             setNotice(null)
                             setModal({ kind: "delete", user })
                           }}
-                          className="rounded p-1.5 text-[#737373] transition-colors hover:bg-[#252525] hover:text-white"
+                          className="rounded p-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-white"
                         >
                           <RiDeleteBinLine size={14} />
                         </button>

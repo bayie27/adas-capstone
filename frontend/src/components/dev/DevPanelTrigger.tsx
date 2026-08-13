@@ -34,7 +34,7 @@ export function DevPanelTrigger() {
         onClick={() => setIsOpen(true)}
         aria-label="Open dev tools"
         title="Dev tools (Ctrl+Shift+D)"
-        className="fixed bottom-4 right-4 z-[9000] rounded-full border border-[#2A2A2A] bg-[#161616] p-3 text-[#A1A1AA] shadow-lg transition-colors hover:border-[#3A3A3A] hover:text-white"
+        className="fixed bottom-4 right-4 z-[9000] rounded-full border border-stroke bg-surface-1 p-3 text-fg-muted shadow-lg transition-colors hover:border-stroke-strong hover:text-white"
       >
         <RiTerminalBoxLine size={18} />
       </button>

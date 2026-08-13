@@ -31,7 +31,7 @@ export function getCameraConnectionClass(status: CameraConnectionStatus) {
     return "text-amber-500"
   }
 
-  return "text-[#ef4444]"
+  return "text-danger"
 }
 
 export function getCameraAiClass(status: CameraAiStatus) {
@@ -43,7 +43,7 @@ export function getCameraAiClass(status: CameraAiStatus) {
     return "text-amber-500"
   }
 
-  return "text-[#ef4444]"
+  return "text-danger"
 }
 
 export function buildCameraUpdatePayload(

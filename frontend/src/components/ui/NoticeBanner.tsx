@@ -7,7 +7,7 @@ export function NoticeBanner({ notice }: { notice: NoticeState }) {
       className={`mb-4 rounded-md border px-4 py-3 text-xs ${
         notice.tone === "success"
           ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-          : "border-[#F87171]/30 bg-[#F87171]/10 text-[#FCA5A5]"
+          : "border-danger-border bg-danger-subtle text-danger"
       }`}
     >
       {notice.message}

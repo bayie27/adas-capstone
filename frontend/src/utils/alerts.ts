@@ -46,7 +46,7 @@ export function getAlertStatusTextClass(status: AlertStatus) {
     return "text-white"
   }
 
-  return "text-[#A1A1AA]"
+  return "text-fg-muted"
 }
 
 export function getAlertBadgeClass(status: AlertStatus) {
@@ -62,7 +62,7 @@ export function getAlertBadgeClass(status: AlertStatus) {
     return "bg-white text-black"
   }
 
-  return "bg-[#3F3F46] text-white"
+  return "bg-surface-3 text-white"
 }
 
 export function getAlertBorderClass(status: AlertStatus) {
@@ -78,5 +78,5 @@ export function getAlertBorderClass(status: AlertStatus) {
     return "border-t-white"
   }
 
-  return "border-t-[#71717A]"
+  return "border-t-fg-muted"
 }
