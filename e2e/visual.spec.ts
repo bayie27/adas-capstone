@@ -89,6 +89,10 @@ test("visual baselines for the nine routes", async ({ browser }) => {
     return locators
   }
 
+  // Timestamp (2) and Last Updated (6) on both Detections tabs.
+  const DETECTION_DATE_COLUMNS = (p: Page) =>
+    p.locator("tbody td:nth-child(2), tbody td:nth-child(6)")
+
   try {
     const page = await context.newPage()
 
@@ -115,16 +119,18 @@ test("visual baselines for the nine routes", async ({ browser }) => {
         mask: masks(page.locator(".recharts-wrapper")),
       })
 
+    // Cameras: name / channel / connection / AI status / actions — no date
+    // column, so nothing here drifts with the clock.
     await settle(page, "/admin/cameras")
-    await expect.soft(page).toHaveScreenshot("cameras.png", {
-      fullPage: true,
-      mask: masks(page.locator("tbody td:nth-child(6)")),
-    })
+    await expect.soft(page).toHaveScreenshot("cameras.png", { fullPage: true })
 
+    // Detections: no. / TIMESTAMP / camera / status / handled by / LAST
+    // UPDATED / actions. The demo profile seeds detected_at relative to now, so
+    // both date columns roll over daily even though the row set is fixed.
     await settle(page, "/admin/detections")
     await expect.soft(page).toHaveScreenshot("detections-ongoing.png", {
       fullPage: true,
-      mask: masks(page.locator("tbody td:nth-child(3)")),
+      mask: masks(DETECTION_DATE_COLUMNS(page)),
     })
 
     await page.getByRole("button", { name: /Logs/i }).click()
@@ -132,7 +138,7 @@ test("visual baselines for the nine routes", async ({ browser }) => {
     await page.waitForLoadState("networkidle")
     await expect.soft(page).toHaveScreenshot("detections-logs.png", {
       fullPage: true,
-      mask: masks(page.locator("tbody td:nth-child(3)"), page.locator("tbody td:nth-child(6)")),
+      mask: masks(DETECTION_DATE_COLUMNS(page)),
     })
 
     await settle(page, "/admin/health", { chart: true })
@@ -154,11 +160,11 @@ test("visual baselines for the nine routes", async ({ browser }) => {
       mask: masks(page.locator(".recharts-wrapper")),
     })
 
+    // Users: name / username / role / LAST LOGIN / actions.
     await settle(page, "/admin/users")
     await expect.soft(page).toHaveScreenshot("users.png", {
       fullPage: true,
-      // Last Login renders as a relative string.
-      mask: masks(page.locator("tbody td:nth-child(5)")),
+      mask: masks(page.locator("tbody td:nth-child(4)")),
     })
 
     await settle(page, "/admin/profile")
