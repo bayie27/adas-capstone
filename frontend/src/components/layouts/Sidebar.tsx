@@ -6,7 +6,6 @@ import { formatUserRole, getUserInitials } from "@/utils/format"
 import { cn } from "@/utils/cn"
 import { focusRing } from "@/components/ui/Button"
 import {
-  RiArrowUpSLine,
   RiCameraLine,
   RiDashboardLine,
   RiLayoutGridLine,
@@ -144,19 +143,23 @@ export function Sidebar() {
           <span className="text-[13px] font-medium">Help Center</span>
         </button>
 
-        <div className="group flex cursor-pointer items-center justify-between rounded-md px-3 py-2 transition-colors duration-150 hover:bg-surface-1">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-[10px] font-bold text-fg-muted">
-              {initials || <RiUserLine size={14} className="text-fg-muted" />}
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[13px] font-medium leading-tight text-fg-sidebar group-hover:text-fg">
-                {displayName}
-              </span>
-              <span className="text-[11px] text-fg-muted">{displayRole}</span>
-            </div>
+        {/* Identity label, not a control. This carried `cursor-pointer`, a
+            hover fill and a disclosure chevron while having no handler at all,
+            so it advertised a menu that was never built — and the one screen
+            such a menu would lead to, /profile, has no inbound link anywhere
+            in the app. Whether the chip becomes a link or a real dropdown is
+            a design question (D-3); until it is answered the honest render is
+            a static label that does not claim to be clickable. */}
+        <div className="flex items-center gap-2.5 px-3 py-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-[10px] font-bold text-fg-muted">
+            {initials || <RiUserLine size={14} className="text-fg-muted" />}
           </div>
-          <RiArrowUpSLine size={16} className="text-fg-muted" />
+          <div className="flex flex-col">
+            <span className="text-[13px] font-medium leading-tight text-fg-sidebar">
+              {displayName}
+            </span>
+            <span className="text-[11px] text-fg-muted">{displayRole}</span>
+          </div>
         </div>
 
         <button
