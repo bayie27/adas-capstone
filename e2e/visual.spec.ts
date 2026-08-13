@@ -15,133 +15,128 @@ const API = "http://127.0.0.1:8000/api"
 // not enough — the charts need long enough to land on their final frame.
 const CHART_SETTLE_MS = 2000
 
-test.describe.configure({ mode: "serial" })
+const VIEWPORT = { width: 1440, height: 1024 } // the Figma artboard
+const NO_MOTION = `*, *::before, *::after {
+  transition: none !important; animation: none !important; caret-color: transparent !important;
+}`
 
-test.describe("visual baselines", () => {
-  let page: Page
+// One test, not nine. These routes share a single authenticated page, and any
+// mechanism that splits them across tests has to keep that session alive
+// between them; `test.describe.serial` does, but then the first failing route
+// skips the other eight — which on Phase 2, where every route legitimately
+// changes, would report one diff and hide the rest. A single test walking the
+// list with soft assertions compares all nine and reports all nine, every run.
+test("visual baselines for the nine routes", async ({ browser }) => {
+  test.skip(!ADMIN_PASSWORD, "DEFAULT_ADMIN_PASSWORD is not set — copy .env.example to .env")
+  test.setTimeout(240_000)
 
-  test.beforeAll(async ({ browser }) => {
-    test.skip(!ADMIN_PASSWORD, "DEFAULT_ADMIN_PASSWORD is not set — copy .env.example to .env")
-
-    const context = await browser.newContext()
-
-    // Seed over HTTP only, BEFORE any page exists. /api/dev/reseed is
-    // admin-gated, so log in for the cookie first; both calls share the
-    // context's cookie jar, and the reseed re-mints the cookie in place.
-    //
-    // This ordering is load-bearing. Reseeding under a mounted app wipes the
-    // user table, the backend's session sweep closes the socket with 4001, and
-    // RealtimeAlertsBridge treats that as an expired session — clearSession()
-    // then redirect to /login. The dev panel suppresses that with sessionEpoch
-    // and suspendAuthRedirect; calling the API directly gets none of it, so
-    // every route screenshots the login page instead. With no page open there
-    // is no socket to close and no race to lose.
-    const login = await context.request.post(`${API}/auth/login`, {
+  // Seed from a throwaway context that is discarded before any page opens.
+  //
+  // This separation is load-bearing. Reseeding under a mounted app wipes the
+  // user table, the backend's session sweep closes the socket with 4001, and
+  // RealtimeAlertsBridge treats that as an expired session — clearSession()
+  // then redirect to /login. The dev panel suppresses that with sessionEpoch
+  // and suspendAuthRedirect; calling the API directly gets none of it. Doing
+  // the reseed in a context that never renders the app sidesteps it entirely.
+  const seeder = await browser.newContext()
+  let openIds: number[]
+  try {
+    const login = await seeder.request.post(`${API}/auth/login`, {
       form: { username: "admin", password: ADMIN_PASSWORD as string },
     })
     expect(login.ok(), `login failed: ${login.status()} ${await login.text()}`).toBe(true)
 
-    const reseed = await context.request.post(`${API}/dev/reseed`, {
-      data: { profile: "demo" },
-    })
+    const reseed = await seeder.request.post(`${API}/dev/reseed`, { data: { profile: "demo" } })
     expect(reseed.ok(), `dev reseed failed: ${reseed.status()} ${await reseed.text()}`).toBe(true)
 
     // The demo profile seeds an Unverified incident, so GlobalAlerts opens its
     // accident dialog over every route (and starts the alarm). Pre-seed the
     // store's own "handled this session" set instead of dismissing the
-    // incidents — that suppresses the dialog without mutating the dataset the
+    // incidents — that suppresses the dialog without mutating the data the
     // Detections tabs are meant to show.
-    const open = await context.request.get(
+    const res = await seeder.request.get(
       `${API}/alerts/?status=Unverified&status=Ongoing&limit=100`,
     )
-    expect(open.ok(), `alert prefetch failed: ${open.status()}`).toBe(true)
-    const openIds = ((await open.json()).logs as { log_id: number }[]).map((l) => l.log_id)
-    await context.addInitScript((ids) => {
-      sessionStorage.setItem("adas-handled-alert-ids", JSON.stringify(ids))
-    }, openIds)
-
-    // Only now open the page — it loads against an already-seeded database.
-    page = await context.newPage()
-  })
-
-  test.afterAll(async () => {
-    await page?.context().close()
-  })
-
-  /** Everything clock-derived on a page, masked rather than frozen (§6.5). */
-  function masks(...locators: Locator[]) {
-    return locators
+    expect(res.ok(), `alert prefetch failed: ${res.status()}`).toBe(true)
+    openIds = ((await res.json()).logs as { log_id: number }[]).map((l) => l.log_id)
+  } finally {
+    await seeder.close()
   }
 
-  async function settle(route: string, { chart = false } = {}) {
+  const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 })
+  await context.addInitScript((ids) => {
+    sessionStorage.setItem("adas-handled-alert-ids", JSON.stringify(ids))
+  }, openIds)
+
+  async function settle(page: Page, route: string, { chart = false } = {}) {
     await page.goto(route)
     if (route !== "/login") {
       // A lost session redirects here, and every baseline silently becomes a
-      // picture of the login form. Fail loudly instead.
+      // picture of the login form. Fail loudly instead — this is a hard
+      // assertion, not a soft one: nothing below it is meaningful.
       await expect(page, `${route} bounced to /login — the session was lost`).not.toHaveURL(
         /\/login/,
       )
     }
     await expect(page.getByText(/Loading/i).first()).toBeHidden({ timeout: 15_000 })
     await page.waitForLoadState("networkidle")
-    // Kill CSS transitions and the caret; neither is deterministic frame-to-frame.
-    await page.addStyleTag({
-      content: `*, *::before, *::after { transition: none !important; animation: none !important; caret-color: transparent !important; }`,
-    })
+    await page.addStyleTag({ content: NO_MOTION })
     if (chart) await page.waitForTimeout(CHART_SETTLE_MS)
   }
 
-  test("login", async () => {
-    await page.context().clearCookies()
-    await settle("/login")
-    await expect(page).toHaveScreenshot("login.png", { fullPage: true })
+  /** Everything clock-derived on a page, masked rather than frozen (§6.5). */
+  function masks(...locators: Locator[]) {
+    return locators
+  }
 
-    // Restore the session for the remaining routes.
+  try {
+    const page = await context.newPage()
+
+    // --- /login, captured before signing in ---------------------------------
+    await settle(page, "/login")
+    await expect.soft(page).toHaveScreenshot("login.png", { fullPage: true })
+
+    // Sign in through the form, not by planting a cookie. ProtectedRoute gates
+    // on the Zustand auth store — the localStorage display cache of role and
+    // username — so a valid session cookie alone still redirects to /login.
+    // The soft assertion above cannot abort this.
     await page.getByPlaceholder("username").fill("admin")
     await page.getByPlaceholder("password").fill(ADMIN_PASSWORD as string)
     await page.getByRole("button", { name: "Login" }).click()
     await expect(page).toHaveURL(/\/admin$/)
-  })
 
-  test("dashboard", async () => {
-    await settle("/admin", { chart: true })
-    await expect(page).toHaveScreenshot("dashboard.png", {
-      fullPage: true,
+    // --- the eight authenticated routes -------------------------------------
+    await settle(page, "/admin", { chart: true })
+    await expect
+      .soft(page)
       // Every dashboard series is bucketed relative to now.
-      mask: masks(page.locator(".recharts-wrapper")),
-    })
-  })
+      .toHaveScreenshot("dashboard.png", {
+        fullPage: true,
+        mask: masks(page.locator(".recharts-wrapper")),
+      })
 
-  test("cameras", async () => {
-    await settle("/admin/cameras")
-    await expect(page).toHaveScreenshot("cameras.png", {
+    await settle(page, "/admin/cameras")
+    await expect.soft(page).toHaveScreenshot("cameras.png", {
       fullPage: true,
       mask: masks(page.locator("tbody td:nth-child(6)")),
     })
-  })
 
-  test("detections-ongoing", async () => {
-    await settle("/admin/detections")
-    await expect(page).toHaveScreenshot("detections-ongoing.png", {
+    await settle(page, "/admin/detections")
+    await expect.soft(page).toHaveScreenshot("detections-ongoing.png", {
       fullPage: true,
       mask: masks(page.locator("tbody td:nth-child(3)")),
     })
-  })
 
-  test("detections-logs", async () => {
-    await settle("/admin/detections")
     await page.getByRole("button", { name: /Logs/i }).click()
     await expect(page.getByText(/Loading/i).first()).toBeHidden({ timeout: 15_000 })
     await page.waitForLoadState("networkidle")
-    await expect(page).toHaveScreenshot("detections-logs.png", {
+    await expect.soft(page).toHaveScreenshot("detections-logs.png", {
       fullPage: true,
       mask: masks(page.locator("tbody td:nth-child(3)"), page.locator("tbody td:nth-child(6)")),
     })
-  })
 
-  test("system-health", async () => {
-    await settle("/admin/health", { chart: true })
-    await expect(page).toHaveScreenshot("system-health.png", {
+    await settle(page, "/admin/health", { chart: true })
+    await expect.soft(page).toHaveScreenshot("system-health.png", {
       fullPage: true,
       // All four KPIs are live host telemetry (uptime, latency, fps, disk) and
       // the charts are time-bucketed. The card chrome around them is not, so
@@ -152,27 +147,23 @@ test.describe("visual baselines", () => {
         page.locator(".mt-4.text-xs"),
       ),
     })
-  })
 
-  test("ai-performance", async () => {
-    await settle("/admin/ai", { chart: true })
-    await expect(page).toHaveScreenshot("ai-performance.png", {
+    await settle(page, "/admin/ai", { chart: true })
+    await expect.soft(page).toHaveScreenshot("ai-performance.png", {
       fullPage: true,
       mask: masks(page.locator(".recharts-wrapper")),
     })
-  })
 
-  test("users", async () => {
-    await settle("/admin/users")
-    await expect(page).toHaveScreenshot("users.png", {
+    await settle(page, "/admin/users")
+    await expect.soft(page).toHaveScreenshot("users.png", {
       fullPage: true,
       // Last Login renders as a relative string.
       mask: masks(page.locator("tbody td:nth-child(5)")),
     })
-  })
 
-  test("profile-settings", async () => {
-    await settle("/admin/profile")
-    await expect(page).toHaveScreenshot("profile-settings.png", { fullPage: true })
-  })
+    await settle(page, "/admin/profile")
+    await expect.soft(page).toHaveScreenshot("profile-settings.png", { fullPage: true })
+  } finally {
+    await context.close()
+  }
 })

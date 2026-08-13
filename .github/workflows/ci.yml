@@ -156,13 +156,13 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: cp .env.example .env
       - run: uv run python backend/scripts/reset_db.py
-      # Run in compare mode, not --update-snapshots: once baselines exist this
-      # produces an expected/actual/diff triple per changed route in the report,
-      # which is the artefact worth having. On the first run — or any route
-      # whose baseline is missing — Playwright writes the PNG and reports the
-      # test as failed; continue-on-error above keeps that from blocking, and
-      # the snapshots artifact below is what gets committed.
-      - run: pnpm exec playwright test --project=visual
+      # `-u missing` is the mode that does both jobs: a route with no baseline
+      # gets one written and passes (so a first capture produces all nine, not
+      # just the first), while a route whose baseline CHANGED is left alone and
+      # fails with an expected/actual/diff triple in the report — which is the
+      # artefact Phase 2 depends on. Plain compare mode fails on missing
+      # baselines too, and `-u all` would silently overwrite real diffs.
+      - run: pnpm exec playwright test --project=visual -u missing
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -35,6 +35,8 @@ export default defineConfig({
       // wrote, which hides both a missing baseline and a genuine flake — and a
       // flaky baseline is worse than no baseline (§6.5).
       retries: 0,
+      // One worker, in order: the tests share a single authenticated page.
+      fullyParallel: false,
       use: {
         ...devices["Desktop Chrome"],
         // The Figma artboard. deviceScaleFactor 1 keeps the baselines at CSS
