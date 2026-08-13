@@ -1,4 +1,4 @@
-﻿import { RiArrowLeftSLine, RiArrowRightSLine } from "@remixicon/react"
+import { RiArrowLeftSLine, RiArrowRightSLine } from "@remixicon/react"
 
 interface PaginationFooterProps {
   page: number

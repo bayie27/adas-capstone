@@ -1,4 +1,4 @@
-﻿import { useState } from "react"
+import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
@@ -83,7 +83,7 @@ export function GlobalAlerts() {
 
       {/* modal card */}
       <div className="relative w-full max-w-md overflow-hidden rounded-xl shadow-2xl">
-        {/* header banner â€” red for Unverified, amber for Ongoing */}
+        {/* header banner — red for Unverified, amber for Ongoing */}
         <div className={`px-6 py-4 text-center ${isOngoing ? "bg-amber-500" : "bg-[#F05252]"}`}>
           <p className="text-xl font-black uppercase tracking-widest text-[#1a1a1a]">
             {isOngoing ? "Ongoing Accident" : "Accident Detected"}
@@ -142,7 +142,7 @@ export function GlobalAlerts() {
           </div>
         ) : null}
 
-        {/* action buttons â€” vary by status */}
+        {/* action buttons — vary by status */}
         <div className="grid grid-cols-2 border-t border-[#2a2a2a] bg-[#1a1a1a]">
           <button
             type="button"

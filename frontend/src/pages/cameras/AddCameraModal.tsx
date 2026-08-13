@@ -1,4 +1,4 @@
-﻿import { useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
 
 import { Modal } from "@/components/ui/Modal"

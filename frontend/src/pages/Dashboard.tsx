@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
 import {
@@ -172,7 +172,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-4">
           {/* Charts column */}
           <div className="flex flex-col gap-5 lg:col-span-3">
-            {/* Peak Accident Hours â€” Area chart with gradient fill */}
+            {/* Peak Accident Hours — Area chart with gradient fill */}
             <div className="flex h-[270px] flex-col rounded-xl border border-[#222] bg-linear-to-b from-[#161616] to-[#0f0f0f] p-5 shadow-lg">
               <h3 className="mb-4 text-xs font-medium text-[#D4D4D4]">Peak Accident Hours (24H)</h3>
               {dashboardQuery.isLoading ? (
@@ -239,7 +239,7 @@ export default function Dashboard() {
               ) : null}
             </div>
 
-            {/* Accident Frequency by Location â€” gradient bars */}
+            {/* Accident Frequency by Location — gradient bars */}
             <div className="flex h-[340px] flex-col rounded-xl border border-[#222] bg-linear-to-b from-[#161616] to-[#0f0f0f] p-5 shadow-lg">
               <h3 className="mb-4 text-xs font-medium text-[#D4D4D4]">
                 Accident Frequency by Location

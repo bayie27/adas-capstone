@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
 import { exportPerformanceAnalyticsCsv, getPerformanceAnalytics } from "@/services/analytics"

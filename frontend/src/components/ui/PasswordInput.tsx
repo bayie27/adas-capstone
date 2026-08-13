@@ -1,11 +1,11 @@
-﻿import { useState } from "react"
+import { useState } from "react"
 
 import { cn } from "@/utils/cn"
 import { RiEyeLine, RiEyeOffLine } from "@remixicon/react"
 
 /**
  * Label + password field + eye-toggle. Owns its own visibility state (pure
- * presentation â€” no parent needs to read it), which deletes the per-field
+ * presentation — no parent needs to read it), which deletes the per-field
  * `useState(false)` toggles the pages used to carry. Defaults `autoComplete`
  * to "new-password" so browsers don't autofill an admin's own password into
  * "reset user password" forms.

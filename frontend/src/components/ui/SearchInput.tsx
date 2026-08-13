@@ -1,4 +1,4 @@
-﻿import { RiSearchLine } from "@remixicon/react"
+import { RiSearchLine } from "@remixicon/react"
 
 export function SearchInput({
   value,

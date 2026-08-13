@@ -269,6 +269,9 @@ Thumbs.db
 # Playwright
 test-results/
 playwright-report/
+# ...but the visual baselines are a committed artefact, and the global *.png
+# rule above would otherwise swallow them (FE_Implementation.md §6.5).
+!e2e/visual.spec.ts-snapshots/*.png
 .playwright/
 
 # Written by ai_engine/capacity.py. Machine-specific, like a TensorRT engine.

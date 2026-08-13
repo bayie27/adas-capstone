@@ -1,4 +1,4 @@
-﻿import { Modal } from "@/components/ui/Modal"
+import { Modal } from "@/components/ui/Modal"
 import { getApiErrorMessage } from "@/utils/api"
 import { RiAlertLine } from "@remixicon/react"
 

@@ -1,10 +1,10 @@
-﻿import type { ReactNode } from "react"
+import type { ReactNode } from "react"
 
 import { cn } from "@/utils/cn"
 
 /**
  * The loading / error / empty `<td colSpan>` row shared by the data tables.
- * Targets only the part that is identical across tables â€” columns, row actions
+ * Targets only the part that is identical across tables — columns, row actions
  * and cell styling stay page-specific.
  */
 export function TableStateRow({

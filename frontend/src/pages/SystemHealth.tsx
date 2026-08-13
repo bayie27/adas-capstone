@@ -1,4 +1,4 @@
-﻿import { useState } from "react"
+import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 
 import {
@@ -16,7 +16,7 @@ import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/
 import type { SystemHealthDataPoint, SystemHealthLiveResponse } from "@/types/health"
 import { RiDashboard3Line, RiHardDrive2Line, RiServerLine, RiTimerLine } from "@remixicon/react"
 
-// â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── helpers ────────────────────────────────────────────────────────────────
 
 function formatUptime(seconds: number | null | undefined): string {
   // Nullable like every other measurement: the collector reports null until
@@ -64,7 +64,7 @@ function formatTimestamp(value: string, range: "48h" | "30d"): string {
   return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
 }
 
-// â”€â”€â”€ sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── sub-components ──────────────────────────────────────────────────────────
 
 interface HealthChartProps {
   title: string
@@ -164,7 +164,7 @@ function HealthChart({
   )
 }
 
-// â”€â”€â”€ page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── page ────────────────────────────────────────────────────────────────────
 
 export default function SystemHealth() {
   const [activeTab, setActiveTab] = useState<"48h" | "30d">("48h")
@@ -310,7 +310,7 @@ export default function SystemHealth() {
           dataKey="gpu_temp_peak"
           color="#ef4444"
           range={activeTab}
-          unit="Â°C"
+          unit="°C"
           isLoading={historyQuery.isLoading}
         />
         <HealthChart
