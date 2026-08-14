@@ -22,6 +22,7 @@ import {
   TableStateRow,
 } from "@/components/ui/Table"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
+import { useNow } from "@/hooks/useNow"
 import { usePagination } from "@/hooks/usePagination"
 import { deleteCamera, getCameras, updateCamera } from "@/api/cameras"
 import type {
@@ -32,7 +33,12 @@ import type {
 } from "@/api/cameras"
 import { getApiErrorMessage } from "@/api/client"
 import { shouldApplyCameraEvent } from "@/utils/merge"
-import { CAMERA_AI_STATUS_OPTIONS, CAMERA_CONNECTION_STATUS_OPTIONS } from "@/utils/format"
+import {
+  CAMERA_AI_STATUS_OPTIONS,
+  CAMERA_CONNECTION_STATUS_OPTIONS,
+  describeCameraDesiredState,
+  isCameraInCooldown,
+} from "@/utils/format"
 import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"
@@ -212,6 +218,8 @@ export default function Cameras() {
     setSeenTotal(totalFiltered)
   }
   const rangeEndValue = rangeEnd(cameras.length)
+  // Only the cooldown reason counts down; the clock stays still otherwise.
+  const now = useNow(cameras.some(isCameraInCooldown))
 
   return (
     <div className="mx-auto max-w-[1400px] p-8">
@@ -354,7 +362,10 @@ export default function Cameras() {
                     <CameraConnectionText status={camera.connection_status} />
                   </TableCell>
                   <TableCell>
-                    <CameraAiText status={camera.ai_status} />
+                    <CameraAiText
+                      status={camera.ai_status}
+                      description={describeCameraDesiredState(camera, now)}
+                    />
                   </TableCell>
                   <TableCell className="w-[133px]">
                     <div className="flex items-center gap-3">
