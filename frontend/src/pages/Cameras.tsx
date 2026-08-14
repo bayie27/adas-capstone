@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
 
 import { Button, focusRing } from "@/components/ui/Button"
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
@@ -23,8 +23,15 @@ import {
 } from "@/components/ui/Table"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
-import { deleteCamera, getCameras } from "@/api/cameras"
-import type { CameraAiStatus, CameraConnectionStatus, CameraRecord } from "@/api/cameras"
+import { deleteCamera, getCameras, updateCamera } from "@/api/cameras"
+import type {
+  CameraAiStatus,
+  CameraConnectionStatus,
+  CameraListResponse,
+  CameraRecord,
+} from "@/api/cameras"
+import { getApiErrorMessage } from "@/api/client"
+import { shouldApplyCameraEvent } from "@/utils/merge"
 import { CAMERA_AI_STATUS_OPTIONS, CAMERA_CONNECTION_STATUS_OPTIONS } from "@/utils/format"
 import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
@@ -41,6 +48,29 @@ import {
 const CAMERAS_PAGE_SIZE = 8
 const CAMERAS_QUERY_KEY = ["cameras"] as const
 const TABLE_COLUMN_COUNT = 5
+
+/**
+ * Rewrites one camera across every cached `["cameras", ...]` page — the list
+ * is keyed by filters, page and search, so the same row can be held by
+ * several queries at once and patching only the active one leaves the others
+ * to snap back on the next render.
+ */
+function patchCachedCamera(
+  queryClient: QueryClient,
+  cameraId: number,
+  patch: (cached: CameraRecord) => CameraRecord,
+) {
+  queryClient.setQueriesData<CameraListResponse>({ queryKey: CAMERAS_QUERY_KEY }, (existing) =>
+    existing
+      ? {
+          ...existing,
+          cameras: existing.cameras.map((camera) =>
+            camera.camera_id === cameraId ? patch(camera) : camera,
+          ),
+        }
+      : existing,
+  )
+}
 
 type ModalState =
   | { kind: "closed" }
@@ -89,6 +119,69 @@ export default function Cameras() {
 
   const invalidateCameraQueries = () =>
     queryClient.invalidateQueries({ queryKey: CAMERAS_QUERY_KEY })
+
+  /**
+   * The per-row enable/disable toggle. `PATCH /api/cameras/{id}` has always
+   * accepted `is_enabled` and audits it as CAMERA_ENABLE / CAMERA_DISABLE;
+   * the switch was simply rendered `disabled`.
+   *
+   * It is optimistic because the operator needs the row to answer instantly,
+   * and optimism here races the CAMERA_STATUS_UPDATE broadcast that the same
+   * PATCH triggers. `config_version` arbitrates: the optimistic patch flips
+   * `is_enabled` and nothing else — bumping the version locally would make
+   * the broadcast confirming this very change look stale and be dropped by
+   * RealtimeAlertsBridge.
+   */
+  const toggleEnabledMutation = useMutation({
+    mutationFn: ({ camera, nextEnabled }: { camera: CameraRecord; nextEnabled: boolean }) =>
+      updateCamera(camera.camera_id, { is_enabled: nextEnabled }),
+    onMutate: async ({ camera, nextEnabled }) => {
+      await queryClient.cancelQueries({ queryKey: CAMERAS_QUERY_KEY })
+      const previous = queryClient.getQueriesData<CameraListResponse>({
+        queryKey: CAMERAS_QUERY_KEY,
+      })
+
+      patchCachedCamera(queryClient, camera.camera_id, (cached) => ({
+        ...cached,
+        is_enabled: nextEnabled,
+      }))
+
+      return { previous }
+    },
+    onError: (error, { camera, nextEnabled }, context) => {
+      for (const [queryKey, data] of context?.previous ?? []) {
+        queryClient.setQueryData(queryKey, data)
+      }
+
+      setNotice({
+        tone: "error",
+        message: getApiErrorMessage(
+          error,
+          `Unable to ${nextEnabled ? "enable" : "disable"} ${camera.camera_name}.`,
+        ),
+      })
+    },
+    onSuccess: (updated) => {
+      // The response is the authoritative row — new config_version, new
+      // desired state. Apply it under the same merge rule as a broadcast, in
+      // case a newer CAMERA_STATUS_UPDATE landed while this was in flight.
+      patchCachedCamera(queryClient, updated.camera_id, (cached) =>
+        shouldApplyCameraEvent(updated.config_version, cached.config_version) ? updated : cached,
+      )
+
+      setNotice({
+        tone: "success",
+        message: `${updated.camera_name} is now ${updated.is_enabled ? "enabled" : "disabled"}.`,
+      })
+    },
+    // The kpis object is server-computed over the whole active population, so
+    // `enabled` / `active_detection` cannot be derived locally from one row.
+    onSettled: invalidateCameraQueries,
+  })
+
+  const pendingToggleCameraId = toggleEnabledMutation.isPending
+    ? toggleEnabledMutation.variables.camera.camera_id
+    : null
 
   const deleteCameraMutation = useMutation({
     mutationFn: deleteCamera,
@@ -265,7 +358,18 @@ export default function Cameras() {
                   </TableCell>
                   <TableCell className="w-[133px]">
                     <div className="flex items-center gap-3">
-                      <Switch checked={camera.is_enabled} disabled />
+                      <Switch
+                        checked={camera.is_enabled}
+                        label={`${camera.is_enabled ? "Disable" : "Enable"} ${camera.camera_name}`}
+                        disabled={pendingToggleCameraId === camera.camera_id}
+                        onChange={() => {
+                          setNotice(null)
+                          toggleEnabledMutation.mutate({
+                            camera,
+                            nextEnabled: !camera.is_enabled,
+                          })
+                        }}
+                      />
                       <button
                         type="button"
                         aria-label={`Edit ${camera.camera_name}`}
