@@ -31,7 +31,7 @@ import type {
   CameraListResponse,
   CameraRecord,
 } from "@/api/cameras"
-import { getApiErrorMessage } from "@/api/client"
+import { getApiError, getApiErrorMessage } from "@/api/client"
 import { shouldApplyCameraEvent } from "@/utils/merge"
 import {
   CAMERA_AI_STATUS_OPTIONS,
@@ -458,6 +458,11 @@ export default function Cameras() {
         }
         isPending={deleteCameraMutation.isPending}
         error={deleteCameraMutation.error}
+        errorMessage={
+          getApiError(deleteCameraMutation.error)?.code === "PRECONDITION_FAILED"
+            ? "This camera has an open incident. Resolve or dismiss it under Detections first — deleting it now would strand the incident on a camera that no longer exists."
+            : null
+        }
         onClose={() => setModal({ kind: "closed" })}
         onConfirm={() => {
           if (modal.kind === "delete") {

@@ -10,6 +10,12 @@ interface ConfirmDeleteModalProps {
   description: string
   isPending: boolean
   error: unknown
+  /**
+   * Overrides what `error` would render. For a failure the caller can explain
+   * better than the envelope can — a 400 that means "something else has to
+   * happen first" rather than "that didn't work".
+   */
+  errorMessage?: string | null
   onClose: () => void
   onConfirm: () => void
 }
@@ -20,6 +26,7 @@ export function ConfirmDeleteModal({
   description,
   isPending,
   error,
+  errorMessage,
   onClose,
   onConfirm,
 }: ConfirmDeleteModalProps) {
@@ -32,7 +39,9 @@ export function ConfirmDeleteModal({
         <h3 className="mb-2 text-[15px] font-bold text-fg">{title}</h3>
         <p className="mb-6 px-4 text-[11px] leading-relaxed text-fg-muted">{description}</p>
         {error ? (
-          <p className="mb-4 text-xs text-danger">{getApiErrorMessage(error, "Action failed.")}</p>
+          <p className="mb-4 text-xs text-danger">
+            {errorMessage ?? getApiErrorMessage(error, "Action failed.")}
+          </p>
         ) : null}
         <div className="flex w-full items-center justify-end gap-3">
           <button

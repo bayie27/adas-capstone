@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { updateCamera } from "@/api/cameras"
 import type { CameraRecord } from "@/api/cameras"
-import { getApiErrorMessage } from "@/api/client"
 import { buildCameraUpdatePayload } from "@/utils/format"
 import { formatShortDateTime } from "@/utils/datetime"
 import { CameraFormFields } from "@/pages/cameras/CameraFormFields"
 import {
+  describeCameraWriteError,
   validateCameraForm,
   type CameraFieldErrors,
   type CameraFormState,
@@ -67,7 +67,16 @@ export function EditCameraModal({
   }
 
   const requestError = mutation.isError
-    ? getApiErrorMessage(mutation.error, "Unable to update camera.")
+    ? describeCameraWriteError(
+        mutation.error,
+        {
+          // Whichever field was sent is the one that can collide; an unsent
+          // field is unchanged and still holds the camera's current value.
+          camera_name: mutation.variables?.camera_name ?? camera.camera_name,
+          channel_id: mutation.variables?.channel_id ?? camera.channel_id,
+        },
+        "Unable to update camera.",
+      )
     : null
 
   return (

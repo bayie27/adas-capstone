@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { createCamera } from "@/api/cameras"
 import type { CameraRecord } from "@/api/cameras"
-import { getApiErrorMessage } from "@/api/client"
 import { CameraFormFields } from "@/pages/cameras/CameraFormFields"
 import {
+  describeCameraWriteError,
   EMPTY_CAMERA_FORM,
   validateCameraForm,
   type CameraFieldErrors,
@@ -47,9 +47,10 @@ export function AddCameraModal({
     mutation.mutate(values)
   }
 
-  const formError = mutation.isError
-    ? getApiErrorMessage(mutation.error, "Unable to create camera.")
-    : null
+  const formError =
+    mutation.isError && mutation.variables
+      ? describeCameraWriteError(mutation.error, mutation.variables, "Unable to create camera.")
+      : null
 
   return (
     <Modal
