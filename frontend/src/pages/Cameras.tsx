@@ -41,6 +41,7 @@ import {
 } from "@/utils/format"
 import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
+import { CameraBreakdownBar } from "@/pages/cameras/CameraBreakdownBar"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"
 import {
   RiAddLine,
@@ -239,7 +240,10 @@ export default function Cameras() {
           title="Total Cameras"
           value={kpis?.total ?? 0}
           isLoading={camerasQuery.isLoading}
-          subtext="All active camera records"
+          // `kpis.enabled` was fetched and never shown. It is the only place
+          // the population's enabled/disabled split appears, and it belongs
+          // next to the total it is a share of.
+          subtext={kpis ? `${kpis.enabled} of ${kpis.total} enabled` : "All active camera records"}
         />
         <StatCard
           icon={RiOrganizationChart}
@@ -256,6 +260,8 @@ export default function Cameras() {
           subtext="AI detection running"
         />
       </div>
+
+      <CameraBreakdownBar breakdowns={camerasQuery.data?.breakdowns} />
 
       {camerasQuery.isError ? (
         <QueryErrorBanner
