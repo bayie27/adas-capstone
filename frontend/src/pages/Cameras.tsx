@@ -33,9 +33,9 @@ import {
   RiAddLine,
   RiCameraLine,
   RiDeleteBinLine,
-  RiGlobalLine,
+  RiOrganizationChart,
   RiPencilLine,
-  RiRobotLine,
+  RiRobot2Line,
 } from "@remixicon/react"
 
 const CAMERAS_PAGE_SIZE = 8
@@ -110,6 +110,10 @@ export default function Cameras() {
   })
 
   const cameras = camerasQuery.data?.cameras ?? []
+  // §5.9 — kpis describe the whole active population, not the filtered page,
+  // so they are read straight off the response and never derived from
+  // `cameras`. Deriving them is what made all three cards read 0.
+  const kpis = camerasQuery.data?.kpis
   const totalFiltered = camerasQuery.data?.total_filtered ?? 0
   if (totalFiltered !== seenTotal) {
     setSeenTotal(totalFiltered)
@@ -129,21 +133,25 @@ export default function Cameras() {
 
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
         <StatCard
+          elevated
           icon={RiCameraLine}
           title="Total Cameras"
-          value={camerasQuery.isLoading ? "..." : (camerasQuery.data?.kpis.total ?? 0)}
+          value={kpis?.total ?? 0}
+          isLoading={camerasQuery.isLoading}
           subtext="All active camera records"
         />
         <StatCard
-          icon={RiGlobalLine}
+          icon={RiOrganizationChart}
           title="Network Connected Cameras"
-          value={camerasQuery.isLoading ? "..." : (camerasQuery.data?.kpis.network_connected ?? 0)}
+          value={kpis?.network_connected ?? 0}
+          isLoading={camerasQuery.isLoading}
           subtext="Currently connected to the network"
         />
         <StatCard
-          icon={RiRobotLine}
+          icon={RiRobot2Line}
           title="Active Detection Cameras"
-          value={camerasQuery.isLoading ? "..." : (camerasQuery.data?.kpis.active_detection ?? 0)}
+          value={kpis?.active_detection ?? 0}
+          isLoading={camerasQuery.isLoading}
           subtext="AI detection running"
         />
       </div>
