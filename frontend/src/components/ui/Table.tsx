@@ -14,14 +14,22 @@ import { cn } from "@/utils/cn"
  */
 export function TableContainer({
   className,
+  footer,
   children,
 }: {
   className?: string
+  /**
+   * Rendered inside the card but *outside* the horizontal scroll area — the
+   * pagination footer the frames draw stays put while a wide table scrolls
+   * under it.
+   */
+  footer?: ReactNode
   children: ReactNode
 }) {
   return (
     <div className={cn("overflow-hidden rounded-xl border border-stroke bg-surface-1", className)}>
       <div className="overflow-x-auto">{children}</div>
+      {footer}
     </div>
   )
 }

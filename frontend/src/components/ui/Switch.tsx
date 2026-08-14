@@ -4,10 +4,13 @@ import { focusRing } from "@/components/ui/Button"
 export function Switch({
   checked,
   disabled,
+  label,
   onChange,
 }: {
   checked: boolean
   disabled?: boolean
+  /** Accessible name. A bare toggle in a table row has no visible label. */
+  label?: string
   onChange?: () => void
 }) {
   return (
@@ -15,6 +18,7 @@ export function Switch({
       type="button"
       onClick={onChange}
       disabled={disabled}
+      aria-label={label}
       aria-pressed={checked}
       className={cn(
         "relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-150",

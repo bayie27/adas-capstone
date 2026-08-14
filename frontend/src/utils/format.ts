@@ -113,28 +113,57 @@ export const CAMERA_AI_STATUS_OPTIONS: Array<{
   { label: "Unresponsive", value: "Unresponsive" },
 ]
 
-export function getCameraConnectionClass(status: CameraConnectionStatus) {
-  if (status === "Connected") {
-    return "text-success"
+/**
+ * Why a camera is not detecting, in words.
+ *
+ * `ai_status` alone cannot say. The AI engine reports `Paused` for a camera
+ * halted by an open incident and for one serving a dismiss cooldown, and a
+ * disabled camera reads `Inactive` exactly like a broken one — three
+ * different situations that used to render as the same word, only one of
+ * which is waiting on an operator.
+ *
+ * The distinction is backend-owned (`desired_state_reason`, D-003), so this
+ * is a lookup, not a derivation. Figma draws no second line here; the
+ * treatment is StatusText's `description`, which is the app's existing idiom
+ * for qualifying a status.
+ *
+ * Returns `null` when the camera is in its normal state, or when the backend
+ * sends a reason this build doesn't know — an unrecognised value says
+ * nothing rather than guessing.
+ */
+export function describeCameraDesiredState(
+  camera: Pick<CameraRecord, "desired_state_reason" | "cooldown_until">,
+  now: number,
+): string | null {
+  switch (camera.desired_state_reason) {
+    case "disabled":
+      return "Detection turned off for this camera"
+    case "incident":
+      return "Held for an open incident — resumes when an operator closes it"
+    case "cooldown": {
+      const remaining = secondsUntil(camera.cooldown_until, now)
+      return remaining === null
+        ? "Dismissal cooldown"
+        : remaining > 0
+          ? `Dismissal cooldown — resumes in ${remaining}s`
+          : "Dismissal cooldown — resuming"
+    }
+    default:
+      return null
   }
-
-  if (status === "Reconnecting") {
-    return "text-warning"
-  }
-
-  return "text-danger"
 }
 
-export function getCameraAiClass(status: CameraAiStatus) {
-  if (status === "Active") {
-    return "text-success"
-  }
+/** Whole seconds from `now` until an ISO deadline; `null` if unparsable. */
+function secondsUntil(deadline: string | null, now: number): number | null {
+  if (!deadline) return null
+  const target = new Date(deadline).getTime()
+  if (Number.isNaN(target)) return null
+  return Math.max(0, Math.ceil((target - now) / 1000))
+}
 
-  if (status === "Paused") {
-    return "text-warning"
-  }
-
-  return "text-danger"
+/** Is this camera counting down a cooldown that a clock needs to tick for? */
+export function isCameraInCooldown(camera: Pick<CameraRecord, "desired_state_reason">) {
+  return camera.desired_state_reason === "cooldown"
 }
 
 export function buildCameraUpdatePayload(

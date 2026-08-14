@@ -113,6 +113,12 @@ export function RealtimeAlertsBridge() {
   }
 
   function handleCameraStatus(cameraStatus: CameraStatusUpdateData) {
+    // The KPI cards are server-computed over the whole active population, so
+    // they cannot be recomputed from one row — the camera the event names may
+    // not even be on the page being held. Track whether this event actually
+    // moved a counted field, and refetch only then.
+    let kpisAreStale = false
+
     queryClient.setQueriesData<CameraListResponse>(
       { queryKey: ["cameras"] },
       (existingResponse) => {
@@ -132,6 +138,14 @@ export function RealtimeAlertsBridge() {
               return camera
             }
 
+            if (
+              camera.is_enabled !== cameraStatus.is_enabled ||
+              camera.connection_status !== cameraStatus.connection_status ||
+              camera.ai_status !== cameraStatus.ai_status
+            ) {
+              kpisAreStale = true
+            }
+
             return {
               ...camera,
               is_enabled: cameraStatus.is_enabled,
@@ -146,10 +160,14 @@ export function RealtimeAlertsBridge() {
         }
       },
     )
-    // No invalidate: the WS payload carries the complete new camera status,
-    // so patching every cameras query in place is sufficient. Invalidating
-    // here would refetch the list plus the dropdown copies on other pages on
-    // every status flap of any camera.
+    // The rows themselves need no invalidate — the WS payload carries the
+    // complete new camera status, and refetching on every heartbeat-driven
+    // status flap would pull the list plus the dropdown copies on other pages
+    // for nothing. The kpis object is the exception: it is the one part of the
+    // response the event cannot reconstruct.
+    if (kpisAreStale) {
+      queryClient.invalidateQueries({ queryKey: ["cameras"] })
+    }
   }
 
   async function runRecoverySequence() {
