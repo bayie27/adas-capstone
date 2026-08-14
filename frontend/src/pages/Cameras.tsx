@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
+import { Button, focusRing } from "@/components/ui/Button"
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
@@ -8,18 +9,23 @@ import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"
 import { StatCard } from "@/components/ui/StatCard"
+import { CameraAiText, CameraConnectionText } from "@/components/ui/StatusText"
 import { Switch } from "@/components/ui/Switch"
-import { TableStateRow } from "@/components/ui/Table"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  TableStateRow,
+} from "@/components/ui/Table"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { deleteCamera, getCameras } from "@/api/cameras"
 import type { CameraAiStatus, CameraConnectionStatus, CameraRecord } from "@/api/cameras"
-import {
-  CAMERA_AI_STATUS_OPTIONS,
-  CAMERA_CONNECTION_STATUS_OPTIONS,
-  getCameraAiClass,
-  getCameraConnectionClass,
-} from "@/utils/format"
+import { CAMERA_AI_STATUS_OPTIONS, CAMERA_CONNECTION_STATUS_OPTIONS } from "@/utils/format"
 import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"
@@ -55,7 +61,7 @@ export default function Cameras() {
   // See Users.tsx: mirror the query total into state so usePagination can clamp
   // the page at read time without an effect.
   const [seenTotal, setSeenTotal] = useState(0)
-  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
+  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, goTo, reset } = usePagination(
     seenTotal,
     CAMERAS_PAGE_SIZE,
   )
@@ -158,7 +164,7 @@ export default function Cameras() {
               reset()
               setSearchTerm(value)
             }}
-            placeholder="Search camera..."
+            placeholder="Search..."
           />
 
           <FilterSelect
@@ -193,105 +199,101 @@ export default function Cameras() {
           />
         </div>
 
-        <button
-          type="button"
+        <Button
+          size="sm"
           onClick={() => {
             setNotice(null)
             setModal({ kind: "add" })
           }}
-          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover"
         >
           <RiAddLine size={14} />
           Add Camera
-        </button>
+        </Button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-stroke bg-surface-1">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-stroke bg-surface-1 text-fg-muted">
-                <th className="px-6 py-4 text-xs font-medium">Camera Name</th>
-                <th className="px-6 py-4 text-xs font-medium">Channel No.</th>
-                <th className="px-6 py-4 text-xs font-medium">Connection Status</th>
-                <th className="px-6 py-4 text-xs font-medium">AI Detection Status</th>
-                <th className="px-6 py-4 text-right text-xs font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stroke">
-              {camerasQuery.isLoading ? (
-                <TableStateRow colSpan={TABLE_COLUMN_COUNT}>Loading cameras...</TableStateRow>
-              ) : cameras.length === 0 ? (
-                <TableStateRow colSpan={TABLE_COLUMN_COUNT}>
-                  No cameras found for the current filters.
-                </TableStateRow>
-              ) : (
-                cameras.map((camera) => (
-                  <tr
-                    key={camera.camera_id}
-                    className="text-fg-body transition-colors hover:bg-surface-1"
-                  >
-                    <td className="px-6 py-4 text-xs font-medium">{camera.camera_name}</td>
-                    <td className="px-6 py-4 text-xs text-fg-muted">{camera.channel_id}</td>
-                    <td className="px-6 py-4 text-xs">
-                      <span
+      <TableContainer
+        footer={
+          <PaginationFooter
+            page={page}
+            totalPages={totalPages}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEndValue}
+            totalFiltered={totalFiltered}
+            pageSize={CAMERAS_PAGE_SIZE}
+            isFetching={camerasQuery.isFetching}
+            onPrev={prev}
+            onNext={next}
+            onPageChange={goTo}
+          />
+        }
+      >
+        <Table>
+          <TableHead>
+            <TableHeaderCell>Camera Name</TableHeaderCell>
+            <TableHeaderCell>Channel No.</TableHeaderCell>
+            <TableHeaderCell>Connection Status</TableHeaderCell>
+            <TableHeaderCell>AI Detection Status</TableHeaderCell>
+            {/* `37:74` fixes the actions column at 133px and left-aligns it, so
+                the toggle sits on a stable x across every row. */}
+            <TableHeaderCell className="w-[133px]">Actions</TableHeaderCell>
+          </TableHead>
+          <TableBody>
+            {camerasQuery.isLoading ? (
+              <TableStateRow colSpan={TABLE_COLUMN_COUNT}>Loading cameras...</TableStateRow>
+            ) : cameras.length === 0 ? (
+              <TableStateRow colSpan={TABLE_COLUMN_COUNT}>
+                No cameras found for the current filters.
+              </TableStateRow>
+            ) : (
+              cameras.map((camera) => (
+                <TableRow key={camera.camera_id}>
+                  <TableCell className="font-medium text-fg">{camera.camera_name}</TableCell>
+                  <TableCell className="text-fg-muted">{camera.channel_id}</TableCell>
+                  <TableCell>
+                    <CameraConnectionText status={camera.connection_status} />
+                  </TableCell>
+                  <TableCell>
+                    <CameraAiText status={camera.ai_status} />
+                  </TableCell>
+                  <TableCell className="w-[133px]">
+                    <div className="flex items-center gap-3">
+                      <Switch checked={camera.is_enabled} disabled />
+                      <button
+                        type="button"
+                        aria-label={`Edit ${camera.camera_name}`}
+                        onClick={() => {
+                          setNotice(null)
+                          setModal({ kind: "edit", camera })
+                        }}
                         className={cn(
-                          "font-medium",
-                          getCameraConnectionClass(camera.connection_status),
+                          "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+                          focusRing,
                         )}
                       >
-                        {camera.connection_status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-xs">
-                      <span className={cn("font-medium", getCameraAiClass(camera.ai_status))}>
-                        {camera.ai_status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-3">
-                        <Switch checked={camera.is_enabled} disabled />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNotice(null)
-                            setModal({ kind: "edit", camera })
-                          }}
-                          className="text-fg-muted transition-colors hover:text-fg"
-                        >
-                          <RiPencilLine size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNotice(null)
-                            setModal({ kind: "delete", camera })
-                          }}
-                          className="text-fg-muted transition-colors hover:text-fg"
-                        >
-                          <RiDeleteBinLine size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <PaginationFooter
-          page={page}
-          totalPages={totalPages}
-          rangeStart={rangeStart}
-          rangeEnd={rangeEndValue}
-          totalFiltered={totalFiltered}
-          pageSize={CAMERAS_PAGE_SIZE}
-          isFetching={camerasQuery.isFetching}
-          onPrev={prev}
-          onNext={next}
-        />
-      </div>
+                        <RiPencilLine size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${camera.camera_name}`}
+                        onClick={() => {
+                          setNotice(null)
+                          setModal({ kind: "delete", camera })
+                        }}
+                        className={cn(
+                          "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+                          focusRing,
+                        )}
+                      >
+                        <RiDeleteBinLine size={16} />
+                      </button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       {modal.kind === "add" && (
         <AddCameraModal

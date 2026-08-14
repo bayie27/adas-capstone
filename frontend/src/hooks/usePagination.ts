@@ -21,6 +21,8 @@ export function usePagination(totalFiltered: number, pageSize: number) {
     rangeEnd: (visibleCount: number) => (totalFiltered === 0 ? 0 : offset + visibleCount),
     next: () => setRawPage(Math.min(totalPages, page + 1)),
     prev: () => setRawPage(Math.max(1, page - 1)),
+    /** Jump to a page, for PaginationFooter's numbered chips. Clamped like the rest. */
+    goTo: (target: number) => setRawPage(Math.min(totalPages, Math.max(1, target))),
     reset: () => setRawPage(1),
   }
 }

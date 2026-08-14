@@ -113,30 +113,6 @@ export const CAMERA_AI_STATUS_OPTIONS: Array<{
   { label: "Unresponsive", value: "Unresponsive" },
 ]
 
-export function getCameraConnectionClass(status: CameraConnectionStatus) {
-  if (status === "Connected") {
-    return "text-success"
-  }
-
-  if (status === "Reconnecting") {
-    return "text-warning"
-  }
-
-  return "text-danger"
-}
-
-export function getCameraAiClass(status: CameraAiStatus) {
-  if (status === "Active") {
-    return "text-success"
-  }
-
-  if (status === "Paused") {
-    return "text-warning"
-  }
-
-  return "text-danger"
-}
-
 export function buildCameraUpdatePayload(
   current: CameraRecord,
   next: { camera_name: string; channel_id: number; is_enabled?: boolean },
