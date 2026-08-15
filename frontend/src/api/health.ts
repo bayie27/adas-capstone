@@ -91,18 +91,24 @@ export interface SystemHealthHistoryResponse {
   points: SystemHealthDataPoint[]
 }
 
-// `api`'s baseURL is `http://host:8000/api`, but the backend's health route is
-// served at the origin root (`GET /`), not under `/api`. Strip the `/api`
-// suffix so the ping targets the URL the docstring actually claims.
+// `api`'s baseURL is `http://host:8000/api`, but the probes are served at
+// the origin root (`GET /healthz/*`), not under `/api`. Strip the `/api`
+// suffix so the ping targets the URL the docstrings actually claim.
 const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api$/, "")
 
 /**
- * Pings the backend root URL to verify server connectivity.
- * Resolves `true` when the server responds, `false` on any error.
+ * Verifies the backend is actually serving requests, not merely that the
+ * process is alive. This was pinging `GET /` and treating any response as
+ * healthy — weaker than either real probe. `/healthz/live` returns 200 with
+ * no DB touch at all, so it can read "online" from a backend whose database
+ * is unreachable; `/healthz/ready` genuinely verifies DB access and 503s
+ * otherwise, which is what an operator-facing "backend online" dot should
+ * mean. Resolves `true` on a 2xx, `false` on any error (including the 503
+ * `/healthz/ready` returns while not ready).
  */
 export async function getSystemHealth(): Promise<boolean> {
   try {
-    await api.get("/", { baseURL: BACKEND_ORIGIN })
+    await api.get("/healthz/ready", { baseURL: BACKEND_ORIGIN })
     return true
   } catch {
     return false
