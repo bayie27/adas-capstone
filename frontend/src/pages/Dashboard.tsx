@@ -15,13 +15,14 @@ import {
 } from "recharts"
 import { exportDashboardAnalyticsCsv, getDashboardAnalytics } from "@/api/analytics"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
+import { Button } from "@/components/ui/Button"
+import { DateRangePicker } from "@/components/ui/DateRangePicker"
+import { FilterSelect } from "@/components/ui/FilterSelect"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { formatHourLabel, truncateLabel } from "@/utils/format"
 import type { AnalyticsFilters } from "@/api/analytics"
 import {
-  RiCalendarLine,
-  RiCameraLine,
   RiCarLine,
   RiCheckboxLine,
   RiCloseLine,
@@ -43,6 +44,14 @@ export default function Dashboard() {
   const hasFilters = Boolean(startDate || endDate || cameraId)
 
   const camerasQuery = useCameraOptions()
+
+  const cameraOptions = [
+    { value: "", label: "All cameras" },
+    ...(camerasQuery.data?.cameras ?? []).map((c) => ({
+      value: String(c.camera_id),
+      label: c.camera_name,
+    })),
+  ]
 
   const dashboardQuery = useQuery({
     queryKey: ["dashboard-analytics", filters],
@@ -99,55 +108,27 @@ export default function Dashboard() {
         {/* Toolbar */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
-              <RiCalendarLine size={13} className="text-fg-muted" />
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-transparent text-xs text-fg-body focus:outline-none [color-scheme:dark]"
-                placeholder="Start date"
-              />
-            </div>
-            <span className="text-xs text-fg-muted">to</span>
-            <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
-              <RiCalendarLine size={13} className="text-fg-muted" />
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="bg-transparent text-xs text-fg-body focus:outline-none [color-scheme:dark]"
-                placeholder="End date"
-              />
-            </div>
-            <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
-              <RiCameraLine size={13} className="text-fg-muted" />
-              <select
-                value={cameraId}
-                onChange={(e) => setCameraId(e.target.value)}
-                className="bg-transparent text-xs text-fg-body focus:outline-none"
-              >
-                <option value="">All cameras</option>
-                {camerasQuery.data?.cameras.map((c) => (
-                  <option key={c.camera_id} value={c.camera_id}>
-                    {c.camera_name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <DateRangePicker
+              start={startDate}
+              end={endDate}
+              onStartChange={setStartDate}
+              onEndChange={setEndDate}
+              label="Filter analytics by date"
+            />
+            <FilterSelect value={cameraId} options={cameraOptions} onChange={setCameraId} />
             {hasFilters ? (
-              <button
-                type="button"
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => {
                   setStartDate("")
                   setEndDate("")
                   setCameraId("")
                 }}
-                className="flex items-center gap-1 rounded-md border border-stroke bg-surface-1 px-2 py-1.5 text-xs text-fg-muted transition-colors hover:text-fg"
               >
-                <RiCloseLine size={12} />
+                <RiCloseLine size={13} />
                 Clear
-              </button>
+              </Button>
             ) : null}
           </div>
           <button
@@ -342,9 +323,11 @@ export default function Dashboard() {
           <div className="flex flex-col gap-5">
             <div className="h-[195px]">
               <StatCard
+                elevated
                 icon={RiRefreshLine}
                 title="Ongoing Accidents"
-                value={dashboardQuery.isLoading ? "..." : (kpis?.ongoing ?? 0)}
+                value={kpis?.ongoing ?? 0}
+                isLoading={dashboardQuery.isLoading}
                 subtext="Live incident queue"
               />
             </div>
@@ -352,7 +335,8 @@ export default function Dashboard() {
               <StatCard
                 icon={RiCarLine}
                 title="Total Accidents"
-                value={dashboardQuery.isLoading ? "..." : (kpis?.total_accidents ?? 0)}
+                value={kpis?.total_accidents ?? 0}
+                isLoading={dashboardQuery.isLoading}
                 subtext="Compared to last month"
               />
             </div>
@@ -360,7 +344,8 @@ export default function Dashboard() {
               <StatCard
                 icon={RiCheckboxLine}
                 title="Total Resolved"
-                value={dashboardQuery.isLoading ? "..." : (kpis?.total_resolved ?? 0)}
+                value={kpis?.total_resolved ?? 0}
+                isLoading={dashboardQuery.isLoading}
                 subtext="Compared to last month"
               />
             </div>
