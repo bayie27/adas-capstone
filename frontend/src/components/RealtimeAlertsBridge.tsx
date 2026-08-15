@@ -6,6 +6,7 @@ import { getAlerts } from "@/api/alerts"
 import { isAuthRedirectSuspended, redirectToLogin } from "@/api/client"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
+import { useMaintenanceStore } from "@/store/useMaintenanceStore"
 import type { AlertLog } from "@/api/alerts"
 import type { CameraListResponse } from "@/api/cameras"
 import type {
@@ -19,6 +20,7 @@ import {
   asAlertStatusUpdateData,
   asCameraStatusUpdateData,
   asIncidentPayload,
+  asMaintenanceNoticeData,
   asReAlarmData,
   asSnoozeActivatedData,
   parseEventEnvelope,
@@ -62,6 +64,7 @@ export function RealtimeAlertsBridge() {
   const recordHandledByOther = useAlertStore((state) => state.recordHandledByOther)
   const currentUserId = useAuthStore((state) => state.userId)
   const clearSnooze = useAlertStore((state) => state.clearSnooze)
+  const showMaintenanceNotice = useMaintenanceStore((state) => state.showNotice)
 
   // The recovery sequence (01_CONTRACTS.md §9.5) must run on every accepted
   // connection, not just the first one — CONNECTION_READY is the signal for
@@ -105,6 +108,11 @@ export function RealtimeAlertsBridge() {
       case "RE_ALARM": {
         const reAlarm = asReAlarmData(envelope.data)
         if (reAlarm) clearSnooze(reAlarm.log_id)
+        return
+      }
+      case "MAINTENANCE_NOTICE": {
+        const notice = asMaintenanceNoticeData(envelope.data)
+        if (notice) showMaintenanceNotice(notice)
         return
       }
       case "CONNECTION_READY":
