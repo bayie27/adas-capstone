@@ -2,11 +2,13 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { RiAddLine, RiPencilLine, RiKey2Line, RiDeleteBinLine } from "@remixicon/react"
+import { Button, focusRing } from "@/components/ui/Button"
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { SearchInput } from "@/components/ui/SearchInput"
 import { TableStateRow } from "@/components/ui/Table"
+import { cn } from "@/utils/cn"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { deleteUser, getUsers } from "@/api/users"
@@ -109,17 +111,16 @@ export default function Users() {
           }}
           placeholder="Search..."
         />
-        <button
-          type="button"
+        <Button
+          size="sm"
           onClick={() => {
             setNotice(null)
             setModal({ kind: "add" })
           }}
-          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover"
         >
           <RiAddLine size={14} />
           Add User
-        </button>
+        </Button>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-stroke bg-surface-1">
@@ -144,51 +145,74 @@ export default function Users() {
               ) : users.length === 0 ? (
                 <TableStateRow colSpan={5}>No users found.</TableStateRow>
               ) : (
-                users.map((user) => (
-                  <tr
-                    key={user.user_id}
-                    className="text-fg-body transition-colors hover:bg-surface-1"
-                  >
-                    <td className="px-6 py-4 text-xs font-medium">{getUserFullName(user)}</td>
-                    <td className="px-6 py-4 text-xs">{user.username}</td>
-                    <td className="px-6 py-4 text-xs">{formatUserRole(user.role)}</td>
-                    <td className="px-6 py-4 text-xs">{formatRelativeDateTime(user.last_login)}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNotice(null)
-                            setModal({ kind: "edit", user })
-                          }}
-                          className="rounded p-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-                        >
-                          <RiPencilLine size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNotice(null)
-                            setModal({ kind: "password", user })
-                          }}
-                          className="rounded p-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-                        >
-                          <RiKey2Line size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNotice(null)
-                            setModal({ kind: "delete", user })
-                          }}
-                          className="rounded p-1.5 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-                        >
-                          <RiDeleteBinLine size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                users.map((user) => {
+                  // A row mid-delete shouldn't accept a second action against
+                  // the same account while its removal is still in flight —
+                  // other rows are unaffected.
+                  const rowBusy =
+                    deleteUserMutation.isPending &&
+                    modal.kind === "delete" &&
+                    modal.user.user_id === user.user_id
+                  const iconButtonClass = cn(
+                    "rounded p-1.5 text-fg-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg",
+                    "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:text-fg-muted",
+                    focusRing,
+                  )
+
+                  return (
+                    <tr
+                      key={user.user_id}
+                      className="text-fg-body transition-colors hover:bg-surface-1"
+                    >
+                      <td className="px-6 py-4 text-xs font-medium">{getUserFullName(user)}</td>
+                      <td className="px-6 py-4 text-xs">{user.username}</td>
+                      <td className="px-6 py-4 text-xs">{formatUserRole(user.role)}</td>
+                      <td className="px-6 py-4 text-xs">
+                        {formatRelativeDateTime(user.last_login)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            disabled={rowBusy}
+                            aria-label={`Edit ${getUserFullName(user)}`}
+                            onClick={() => {
+                              setNotice(null)
+                              setModal({ kind: "edit", user })
+                            }}
+                            className={iconButtonClass}
+                          >
+                            <RiPencilLine size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={rowBusy}
+                            aria-label={`Reset password for ${getUserFullName(user)}`}
+                            onClick={() => {
+                              setNotice(null)
+                              setModal({ kind: "password", user })
+                            }}
+                            className={iconButtonClass}
+                          >
+                            <RiKey2Line size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={rowBusy}
+                            aria-label={`Delete ${getUserFullName(user)}`}
+                            onClick={() => {
+                              setNotice(null)
+                              setModal({ kind: "delete", user })
+                            }}
+                            className={iconButtonClass}
+                          >
+                            <RiDeleteBinLine size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
