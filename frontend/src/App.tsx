@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import AppLayout from "@/components/layouts/AppLayout"
 import AuthLayout from "@/components/layouts/AuthLayout"
 import { GlobalAlerts } from "@/components/GlobalAlerts"
+import { MaintenanceNotice } from "@/components/MaintenanceNotice"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { RealtimeAlertsBridge } from "@/components/RealtimeAlertsBridge"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
@@ -35,6 +36,7 @@ function App() {
           QueryClientProvider (useQueryClient), but outside ErrorBoundary and
           Suspense so it survives a page crash and lazy-route loading — and
           so it is available on /login too. */}
+      <MaintenanceNotice />
       <DevPanelTrigger />
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>

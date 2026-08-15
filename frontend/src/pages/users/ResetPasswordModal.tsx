@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
 
+import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { PasswordInput } from "@/components/ui/PasswordInput"
 import { resetUserPassword } from "@/api/users"
@@ -90,17 +91,29 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
           <PasswordInput
             label="New Password"
             value={form.new_password}
+            disabled={mutation.isPending}
             onChange={(value) => updateField("new_password", value)}
           />
           <PasswordInput
             label="Confirm New Password"
             value={form.confirm_password}
+            disabled={mutation.isPending}
             onChange={(value) => updateField("confirm_password", value)}
           />
           <div className="mt-2 mb-2 text-[10px] text-fg-muted">
             Must be at least 8 characters long and contain at least 1 number.
           </div>
         </div>
+
+        {/*
+          POST /api/users/{id}/reset-password revokes every session the
+          target holds unconditionally — there is no reset that keeps them
+          signed in. Shown before the click, not discovered after it.
+        */}
+        <p className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-caption text-warning">
+          Resetting this password will sign {getUserFullName(user)} out of every active session
+          immediately.
+        </p>
 
         {errorMessage ? <p className="text-xs text-danger">{errorMessage}</p> : null}
 
@@ -111,20 +124,12 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
             <div>Last Changes: {formatShortDateTime(user.password_changed_at ?? null)}</div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-xs font-medium text-fg-body transition-colors hover:text-fg"
-            >
+            <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={mutation.isPending}
-              className="rounded-md bg-primary px-4 py-2 text-xs font-medium text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {mutation.isPending ? "Saving..." : "Save Changes"}
-            </button>
+            </Button>
+            <Button type="submit" isLoading={mutation.isPending} loadingLabel="Saving…">
+              Save Changes
+            </Button>
           </div>
         </div>
       </form>
