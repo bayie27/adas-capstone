@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/Button"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
+import { ExportButton } from "@/components/ui/ExportButton"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
@@ -36,7 +37,7 @@ import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useUserOptions } from "@/hooks/useUserOptions"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
-import type { AlertLog, AlertSortField, AlertStatus, SortOrder } from "@/api/alerts"
+import type { AlertLog, AlertSortField, AlertStatus, ExportFormat, SortOrder } from "@/api/alerts"
 import {
   formatAlertCode,
   formatAlertConfidence,
@@ -45,7 +46,7 @@ import {
 } from "@/utils/format"
 import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
-import { RiCloseLine, RiDownloadLine, RiEyeLine } from "@remixicon/react"
+import { RiCloseLine, RiEyeLine } from "@remixicon/react"
 
 // Starting page size. PAGE_SIZE_OPTIONS in PaginationFooter is
 // [10, 25, 50, 100], so the default must be one of them or the selector
@@ -185,20 +186,23 @@ export default function Detections() {
   })
 
   const exportMutation = useMutation({
-    mutationFn: () =>
-      exportAlerts({
-        status: LOG_ALERT_STATUSES,
-        search: debouncedLogSearch || undefined,
-        // Same order as the screen. Without this a CSV of a
-        // confidence-sorted view arrives in detected_at order and quietly is
-        // not the thing the operator was looking at.
-        sort_by: logsSort.key,
-        sort_order: logsSort.order,
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-        camera_id: cameraId ? [Number(cameraId)] : undefined,
-        user_id: userId ? [Number(userId)] : undefined,
-      }),
+    mutationFn: (format: ExportFormat) =>
+      exportAlerts(
+        {
+          status: LOG_ALERT_STATUSES,
+          search: debouncedLogSearch || undefined,
+          // Same order as the screen. Without this a CSV of a
+          // confidence-sorted view arrives in detected_at order and quietly is
+          // not the thing the operator was looking at.
+          sort_by: logsSort.key,
+          sort_order: logsSort.order,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          camera_id: cameraId ? [Number(cameraId)] : undefined,
+          user_id: userId ? [Number(userId)] : undefined,
+        },
+        format,
+      ),
   })
 
   const handleMutationSuccess = (updatedAlert: AlertLog) => {
@@ -422,16 +426,10 @@ export default function Detections() {
               </Button>
             ) : null}
           </div>
-          <Button
-            variant="primary"
-            size="sm"
-            isLoading={exportMutation.isPending}
-            loadingLabel="Exporting…"
-            onClick={() => exportMutation.mutate()}
-          >
-            <RiDownloadLine size={13} />
-            Export
-          </Button>
+          <ExportButton
+            isExporting={exportMutation.isPending}
+            onExport={(format) => exportMutation.mutate(format)}
+          />
         </div>
       ) : (
         <div className="mb-6 flex flex-wrap items-center gap-2.5">
