@@ -1,24 +1,19 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
-import { exportDashboardAnalyticsCsv, getDashboardAnalytics } from "@/api/analytics"
+import { exportDashboardAnalytics, getDashboardAnalytics } from "@/api/analytics"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { AreaChartCard } from "@/components/charts/AreaChartCard"
 import { BarChartCard } from "@/components/charts/BarChartCard"
 import { Button } from "@/components/ui/Button"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
+import { ExportButton, type ExportFormat } from "@/components/ui/ExportButton"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { formatHourLabel, truncateLabel } from "@/utils/format"
 import type { AnalyticsFilters } from "@/api/analytics"
-import {
-  RiCarLine,
-  RiCheckboxLine,
-  RiCloseLine,
-  RiDownloadLine,
-  RiRefreshLine,
-} from "@remixicon/react"
+import { RiCarLine, RiCheckboxLine, RiCloseLine, RiRefreshLine } from "@remixicon/react"
 
 export default function Dashboard() {
   const [startDate, setStartDate] = useState("")
@@ -49,7 +44,7 @@ export default function Dashboard() {
   })
 
   const exportMutation = useMutation({
-    mutationFn: () => exportDashboardAnalyticsCsv(filters),
+    mutationFn: (format: ExportFormat) => exportDashboardAnalytics(filters, format),
   })
 
   const lineData = useMemo(
@@ -118,21 +113,24 @@ export default function Dashboard() {
               </Button>
             ) : null}
           </div>
-          <button
-            type="button"
-            disabled={exportMutation.isPending}
-            onClick={() => exportMutation.mutate()}
-            className="flex items-center gap-2 rounded-md border border-stroke-strong bg-surface-1 px-4 py-1.5 text-xs font-semibold text-fg transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RiDownloadLine size={13} />
-            {exportMutation.isPending ? "Exporting..." : "Export"}
-          </button>
+          {/*
+            This screen cannot supply a pre-flight row count — the dashboard
+            endpoint returns aggregates, not a filtered row count — so
+            `rowCount` is left undefined and ExportButton renders no
+            pre-flight. An unknown count must never render as an all-clear;
+            the 413 handler below still applies, since the export route
+            counts the underlying rows regardless.
+          */}
+          <ExportButton
+            isExporting={exportMutation.isPending}
+            onExport={(format) => exportMutation.mutate(format)}
+          />
         </div>
 
         {exportMutation.isError ? (
           <QueryErrorBanner
             error={exportMutation.error}
-            fallback="Unable to export dashboard CSV."
+            fallback="Unable to export the dashboard report."
           />
         ) : null}
 
