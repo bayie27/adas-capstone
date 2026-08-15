@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
-import { exportPerformanceAnalyticsCsv, getPerformanceAnalytics } from "@/api/analytics"
+import { exportPerformanceAnalytics, getPerformanceAnalytics } from "@/api/analytics"
 import { Button } from "@/components/ui/Button"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
+import { ExportButton, type ExportFormat } from "@/components/ui/ExportButton"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
@@ -19,7 +20,6 @@ import {
   RiCloseCircleLine,
   RiCloseLine,
   RiDashboard3Line,
-  RiDownloadLine,
   RiFocus3Line,
 } from "@remixicon/react"
 
@@ -58,13 +58,16 @@ export default function AiPerformance() {
   })
 
   const exportMutation = useMutation({
-    mutationFn: () =>
-      exportPerformanceAnalyticsCsv({
-        search: debouncedSearchTerm || undefined,
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-        camera_id: cameraId ? [Number(cameraId)] : undefined,
-      }),
+    mutationFn: (format: ExportFormat) =>
+      exportPerformanceAnalytics(
+        {
+          search: debouncedSearchTerm || undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          camera_id: cameraId ? [Number(cameraId)] : undefined,
+        },
+        format,
+      ),
   })
 
   const globalKpis = performanceQuery.data?.global_kpis
@@ -194,21 +197,23 @@ export default function AiPerformance() {
             </Button>
           ) : null}
         </div>
-        <button
-          type="button"
-          disabled={exportMutation.isPending}
-          onClick={() => exportMutation.mutate()}
-          className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <RiDownloadLine size={13} />
-          {exportMutation.isPending ? "Exporting..." : "Export"}
-        </button>
+        {/*
+          Unlike Dashboard, this screen knows its row count up front —
+          per_camera[] arrives in full (the same property that forces the
+          client-side pagination below), so a real rowCount gets the
+          pre-flight for free instead of rendering rowCount: undefined.
+        */}
+        <ExportButton
+          rowCount={perCamera.length}
+          isExporting={exportMutation.isPending}
+          onExport={(format) => exportMutation.mutate(format)}
+        />
       </div>
 
       {exportMutation.isError ? (
         <QueryErrorBanner
           error={exportMutation.error}
-          fallback="Unable to export AI performance CSV."
+          fallback="Unable to export the AI performance report."
         />
       ) : null}
 
