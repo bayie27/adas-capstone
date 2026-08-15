@@ -1,20 +1,10 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
-import {
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  Tooltip,
-  Area,
-  AreaChart,
-  Cell,
-} from "recharts"
 import { exportDashboardAnalyticsCsv, getDashboardAnalytics } from "@/api/analytics"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
+import { AreaChartCard } from "@/components/charts/AreaChartCard"
+import { BarChartCard } from "@/components/charts/BarChartCard"
 import { Button } from "@/components/ui/Button"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
 import { FilterSelect } from "@/components/ui/FilterSelect"
@@ -82,9 +72,6 @@ export default function Dashboard() {
   )
 
   const kpis = dashboardQuery.data?.kpis
-  const chartHasData = lineData.some((item) => item.value > 0)
-  const locationHasData = barData.length > 0
-  const maxBarValue = barData.length > 0 ? Math.max(...barData.map((d) => d.value)) : 1
 
   return (
     <div className="min-h-screen bg-canvas p-8">
@@ -153,170 +140,37 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-4">
           {/* Charts column */}
           <div className="flex flex-col gap-5 lg:col-span-3">
-            {/* Peak Accident Hours — Area chart with gradient fill */}
-            <div className="flex h-[270px] flex-col rounded-xl border border-stroke bg-linear-to-b from-surface-1 to-canvas p-5 shadow-lg">
-              <h3 className="mb-4 text-xs font-medium text-fg-body">Peak Accident Hours (24H)</h3>
-              {dashboardQuery.isLoading ? (
-                <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
-                  Loading chart...
-                </div>
-              ) : (
-                <div className="flex-1 -ml-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={lineData}>
-                      <defs>
-                        <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="var(--color-chart-fill-from)" />
-                          <stop offset="100%" stopColor="var(--color-chart-fill-to)" />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="var(--color-chart-grid)"
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="time"
-                        stroke="var(--color-chart-grid)"
-                        tick={{ fill: "var(--color-chart-axis)", fontSize: 11 }}
-                        axisLine={false}
-                        tickLine={false}
-                        dy={8}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        stroke="var(--color-chart-grid)"
-                        tick={{ fill: "var(--color-chart-axis)", fontSize: 11 }}
-                        axisLine={false}
-                        tickLine={false}
-                        width={28}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "var(--color-surface-1)",
-                          border: "1px solid var(--color-stroke)",
-                          borderRadius: "6px",
-                          fontSize: 12,
-                        }}
-                        itemStyle={{ color: "var(--color-fg-body)" }}
-                        labelStyle={{ color: "var(--color-fg-muted)" }}
-                        cursor={{ stroke: "var(--color-stroke-strong)", strokeWidth: 1 }}
-                        formatter={(value) => [`${value} accidents`, "Volume"]}
-                        labelFormatter={(label) => `${label}:00`}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke="var(--color-chart-line)"
-                        strokeWidth={1.5}
-                        fill="url(#areaGradient)"
-                        dot={false}
-                        activeDot={{
-                          r: 4,
-                          fill: "var(--color-chart-line)",
-                          stroke: "var(--color-chart-line)",
-                        }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-              {!dashboardQuery.isLoading && !chartHasData ? (
-                <p className="mt-2 text-xs text-fg-muted">
-                  No confirmed accidents found for the current view.
-                </p>
-              ) : null}
-            </div>
+            <AreaChartCard
+              title="Peak Accident Hours (24H)"
+              data={lineData}
+              dataKey="value"
+              xKey="time"
+              height={270}
+              isLoading={dashboardQuery.isLoading}
+              emptyMessage="No confirmed accidents found for the current view."
+              tooltipFormatter={(value) => [`${value} accidents`, "Volume"]}
+              tooltipLabelFormatter={(label) => `${label}:00`}
+            />
 
-            {/* Accident Frequency by Location — gradient bars */}
-            <div className="flex h-[340px] flex-col rounded-xl border border-stroke bg-linear-to-b from-surface-1 to-canvas p-5 shadow-lg">
-              <h3 className="mb-4 text-xs font-medium text-fg-body">
-                Accident Frequency by Location
-              </h3>
-              {dashboardQuery.isLoading ? (
-                <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
-                  Loading chart...
-                </div>
-              ) : locationHasData ? (
-                <div className="flex-1 -ml-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={barData}
-                      layout="vertical"
-                      margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
-                    >
-                      <defs>
-                        {barData.map((entry, index) => {
-                          const ratio = entry.value / maxBarValue
-                          const lightness = Math.round(30 + ratio * 45)
-                          return (
-                            <linearGradient
-                              key={`grad-${index}`}
-                              id={`barGrad-${index}`}
-                              x1="0"
-                              y1="0"
-                              x2="1"
-                              y2="0"
-                            >
-                              <stop
-                                offset="0%"
-                                stopColor={`hsl(0,0%,${lightness}%)`}
-                                stopOpacity={1}
-                              />
-                              <stop
-                                offset="100%"
-                                stopColor={`hsl(0,0%,${Math.max(lightness - 15, 15)}%)`}
-                                stopOpacity={1}
-                              />
-                            </linearGradient>
-                          )
-                        })}
-                      </defs>
-                      <XAxis
-                        type="number"
-                        allowDecimals={false}
-                        stroke="var(--color-chart-grid)"
-                        tick={{ fill: "var(--color-chart-axis)", fontSize: 11 }}
-                        axisLine={false}
-                        tickLine={false}
-                        dy={8}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        stroke="var(--color-chart-grid)"
-                        tick={{ fill: "var(--color-chart-axis)", fontSize: 10 }}
-                        axisLine={false}
-                        tickLine={false}
-                        width={110}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "var(--color-surface-1)",
-                          border: "1px solid var(--color-stroke)",
-                          borderRadius: "6px",
-                          fontSize: 12,
-                        }}
-                        itemStyle={{ color: "var(--color-fg-body)" }}
-                        labelStyle={{ color: "var(--color-fg-muted)" }}
-                        cursor={{ fill: "var(--color-chart-line)", fillOpacity: 0.03 }}
-                        formatter={(value) => [`${value} accidents`, "Volume"]}
-                        labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName ?? ""}
-                      />
-                      <Bar dataKey="value" radius={[0, 3, 3, 0]} barSize={13}>
-                        {barData.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={`url(#barGrad-${index})`} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
-                  No location data available yet.
-                </div>
-              )}
-            </div>
+            {/*
+              Accident Frequency by Location. The ramp itself (§2.2) lives in
+              BarChartCard — this page only supplies the data and the
+              full-name tooltip, since the Y-axis category is truncated for
+              width but the hover target should not be.
+            */}
+            <BarChartCard
+              title="Accident Frequency by Location"
+              data={barData}
+              dataKey="value"
+              labelKey="name"
+              height={340}
+              isLoading={dashboardQuery.isLoading}
+              emptyMessage="No location data available yet."
+              tooltipFormatter={(value, _name, entry) => [
+                `${value} accidents`,
+                entry.payload?.fullName ?? entry.payload?.name,
+              ]}
+            />
           </div>
 
           {/* KPI cards column */}
