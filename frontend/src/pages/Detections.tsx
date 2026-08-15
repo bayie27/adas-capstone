@@ -47,6 +47,10 @@ import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
 import { RiCloseLine, RiDownloadLine, RiEyeLine } from "@remixicon/react"
 
+// Starting page size. PAGE_SIZE_OPTIONS in PaginationFooter is
+// [10, 25, 50, 100], so the default must be one of them or the selector
+// cannot display its own current value (see M14, which is Cameras' version of
+// this problem at a page size of 8).
 const ALERTS_PAGE_SIZE = 10
 const ACTIVE_ALERT_STATUSES: AlertStatus[] = ["Unverified", "Ongoing"]
 const LOG_ALERT_STATUSES: AlertStatus[] = ["Dismissed", "Resolved"]
@@ -125,13 +129,20 @@ export default function Detections() {
   const [logsSort, setLogsSort] = useState<SortState>(DEFAULT_SORT)
 
   const activeAlertsQuery = useQuery({
-    queryKey: ["alerts", "active", activePagination.offset, activeSort.key, activeSort.order],
+    queryKey: [
+      "alerts",
+      "active",
+      activePagination.offset,
+      activePagination.pageSize,
+      activeSort.key,
+      activeSort.order,
+    ],
     queryFn: () =>
       getAlerts({
         status: ACTIVE_ALERT_STATUSES,
         sort_by: activeSort.key,
         sort_order: activeSort.order,
-        limit: ALERTS_PAGE_SIZE,
+        limit: activePagination.pageSize,
         offset: activePagination.offset,
       }),
     placeholderData: (previousData) => previousData,
@@ -143,6 +154,7 @@ export default function Detections() {
       "logs",
       debouncedLogSearch,
       logsPagination.offset,
+      logsPagination.pageSize,
       startDate,
       endDate,
       cameraId,
@@ -156,7 +168,7 @@ export default function Detections() {
         search: debouncedLogSearch || undefined,
         sort_by: logsSort.key,
         sort_order: logsSort.order,
-        limit: ALERTS_PAGE_SIZE,
+        limit: logsPagination.pageSize,
         offset: logsPagination.offset,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
@@ -456,11 +468,12 @@ export default function Detections() {
             rangeStart={rangeStart}
             rangeEnd={rangeEndValue}
             totalFiltered={currentTotalFiltered}
-            pageSize={ALERTS_PAGE_SIZE}
+            pageSize={currentPagination.pageSize}
             isFetching={currentQuery.isFetching}
             onPrev={currentPagination.prev}
             onNext={currentPagination.next}
             onPageChange={currentPagination.goTo}
+            onPageSizeChange={currentPagination.setPageSize}
           />
         }
       >
