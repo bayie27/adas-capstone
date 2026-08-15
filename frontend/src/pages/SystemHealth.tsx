@@ -1,8 +1,17 @@
 import { useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
 
-import { AreaChartCard } from "@/components/charts/AreaChartCard"
-import { CHART } from "@/components/charts/chartTheme"
+import { AreaChartCard, ChartMessage } from "@/components/charts/AreaChartCard"
+import { AXIS_PROPS, CHART, TOOLTIP_PROPS } from "@/components/charts/chartTheme"
 import { Badge } from "@/components/ui/Badge"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
@@ -279,6 +288,105 @@ function GpuSection({ live }: { live: SystemHealthLiveResponse | undefined }) {
   )
 }
 
+/**
+ * The history points carry avg/peak *pairs* for two metrics — cpu_temp and
+ * gpu_mem_pct — that nothing plotted at all before this, on top of the four
+ * single-series charts Figma draws. AreaChartCard is a single-series
+ * primitive, and adding a second dataKey to it would change it for every
+ * page that already uses it (Dashboard, AI Performance's siblings); this is
+ * a page-local dual-line chart instead, built on the same chartTheme tokens
+ * and the same loading/empty states rather than a third styling system.
+ * Peak is the solid line — it's the number that matters for a threshold
+ * breach — and avg is the same colour at reduced opacity, dashed, rather
+ * than a second arbitrary colour.
+ */
+function DualHealthChart({
+  title,
+  data,
+  avgKey,
+  peakKey,
+  unit,
+  isLoading,
+  action,
+}: {
+  title: string
+  data: SystemHealthDataPoint[]
+  avgKey: keyof SystemHealthDataPoint
+  peakKey: keyof SystemHealthDataPoint
+  unit: string
+  isLoading: boolean
+  action?: ReactNode
+}) {
+  const chartData = data.map((point) => ({
+    time: point.timestamp,
+    avg: point[avgKey] as number | null,
+    peak: point[peakKey] as number | null,
+  }))
+  const isEmpty = !isLoading && chartData.length === 0
+
+  return (
+    <div
+      className="flex flex-col rounded-xl border border-stroke bg-surface-1 p-5 shadow-sm"
+      style={{ height: 260 }}
+    >
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <h3 className="text-caption font-medium text-fg-body">{title}</h3>
+          <span className="flex items-center gap-1 text-[10px] text-fg-muted">
+            <span className="inline-block h-0.5 w-3 bg-[var(--color-chart-line)]" /> Peak
+          </span>
+          <span className="flex items-center gap-1 text-[10px] text-fg-muted">
+            <span className="inline-block h-0.5 w-3 bg-[var(--color-chart-line)] opacity-40" /> Avg
+          </span>
+        </div>
+        {action}
+      </div>
+
+      {isLoading ? (
+        <ChartMessage>…</ChartMessage>
+      ) : isEmpty ? (
+        <ChartMessage>No data for this range.</ChartMessage>
+      ) : (
+        <div className="-ml-4 flex-1">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
+              <XAxis dataKey="time" {...AXIS_PROPS} dy={8} tick={false} />
+              <YAxis {...AXIS_PROPS} width={32} tickFormatter={(v) => `${v}${unit}`} />
+              <Tooltip
+                {...TOOLTIP_PROPS}
+                cursor={{ stroke: "var(--color-stroke-strong)", strokeWidth: 1 }}
+                formatter={(value, name) => [
+                  value === null ? "N/A" : `${Number(value).toFixed(1)}${unit}`,
+                  name === "peak" ? "Peak" : "Avg",
+                ]}
+              />
+              <Area
+                type="monotone"
+                dataKey="peak"
+                stroke={CHART.line}
+                strokeWidth={1.5}
+                fill="none"
+                dot={false}
+              />
+              <Area
+                type="monotone"
+                dataKey="avg"
+                stroke={CHART.line}
+                strokeOpacity={0.4}
+                strokeDasharray="4 3"
+                strokeWidth={1.5}
+                fill="none"
+                dot={false}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── page ────────────────────────────────────────────────────────────────────
 
 export default function SystemHealth() {
@@ -467,6 +575,34 @@ export default function SystemHealth() {
               <LiveReading value={live.ram_usage} available={live.ram_usage_available} unit="%" />
             ) : null
           }
+        />
+        {/*
+          cpu_temp_avg/peak — null on Windows for CPU, per the plan's own
+          note — and gpu_mem_pct_avg/peak were both carried by the history
+          endpoint and plotted nowhere. Two more chart cards than Figma
+          draws; no frame for these, so genuinely unavailable (Windows CPU
+          temp) renders as an honest gap rather than a fabricated flat line.
+        */}
+        <DualHealthChart
+          title="CPU Temperature"
+          data={historyData}
+          avgKey="cpu_temp_avg"
+          peakKey="cpu_temp_peak"
+          unit="°C"
+          isLoading={historyQuery.isLoading}
+          action={
+            live ? (
+              <LiveReading value={live.cpu_temp} available={live.cpu_temp_available} unit="°C" />
+            ) : null
+          }
+        />
+        <DualHealthChart
+          title="GPU Memory"
+          data={historyData}
+          avgKey="gpu_mem_pct_avg"
+          peakKey="gpu_mem_pct_peak"
+          unit="%"
+          isLoading={historyQuery.isLoading}
         />
       </div>
     </div>
