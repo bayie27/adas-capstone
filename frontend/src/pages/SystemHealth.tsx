@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 
 import { AreaChartCard } from "@/components/charts/AreaChartCard"
@@ -9,6 +9,7 @@ import { Tabs } from "@/components/ui/Tabs"
 import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/api/health"
 import type { HealthWarning, SystemHealthDataPoint, SystemHealthLiveResponse } from "@/api/health"
 import { describeWarning } from "@/utils/healthWarnings"
+import { formatRelativeDateTime } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
 import {
   RiAlertLine,
@@ -56,6 +57,59 @@ function formatMs(value: number | null | undefined): string {
 function formatFps(value: number | null | undefined): string {
   if (value == null) return "N/A"
   return `${value.toFixed(1)} fps`
+}
+
+/**
+ * Three distinct states the backend reports and nothing distinguished
+ * before this: `collected_at: null` (the collector hasn't finished its
+ * first sample — not an error, the page has only just started), `stale:
+ * true` (the collector is behind its interval — the numbers below are old),
+ * and neither (a normal, current sample). Collapsing these to one dash was
+ * the same failure class that took this page down before PR #83: an
+ * operator cannot tell "nothing to show yet" from "this is wrong" from
+ * "this is fine but a minute old."
+ */
+function formatSampleStatus(live: SystemHealthLiveResponse | undefined): ReactNode {
+  if (!live) return null
+  if (live.collected_at === null) {
+    return <span className="text-fg-muted">Collecting the first sample…</span>
+  }
+  if (live.stale) {
+    return (
+      <span className="text-warning">
+        Stale — last sample {formatRelativeDateTime(live.collected_at)}
+      </span>
+    )
+  }
+  return (
+    <span className="text-fg-muted">Last sample {formatRelativeDateTime(live.collected_at)}</span>
+  )
+}
+
+/**
+ * The live counterpart to a history chart, in the chart header's `action`
+ * slot. `*_available: false` is a legitimate state — that sensor failed on
+ * an otherwise-good sample, distinct from a null value on a working sensor
+ * (which can't happen here — nullability and the flag move together) and
+ * distinct from no sample having been collected at all yet.
+ */
+function LiveReading({
+  value,
+  available,
+  unit,
+}: {
+  value: number | null
+  available: boolean
+  unit: string
+}) {
+  if (!available) {
+    return <span className="text-caption text-fg-muted">Live: unavailable</span>
+  }
+  return (
+    <span className="text-caption text-fg-muted">
+      Live: {value !== null ? `${value.toFixed(1)}${unit}` : "N/A"}
+    </span>
+  )
 }
 
 function formatTimestamp(value: string, range: "48h" | "30d"): string {
@@ -155,6 +209,7 @@ export default function SystemHealth() {
           <p className="text-xs text-fg-muted">
             Oversee system diagnostics and hardware performance
           </p>
+          <p className="mt-1 text-caption">{formatSampleStatus(live)}</p>
         </div>
         <div className="flex items-center gap-2">
           {isOnline === null ? (
@@ -243,6 +298,11 @@ export default function SystemHealth() {
           yDomain={[0, 100]}
           unit="%"
           tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "CPU Utilization"]}
+          action={
+            live ? (
+              <LiveReading value={live.cpu_usage} available={live.cpu_usage_available} unit="%" />
+            ) : null
+          }
         />
         <AreaChartCard
           title="GPU Utilization"
@@ -285,6 +345,11 @@ export default function SystemHealth() {
           yDomain={[0, 100]}
           unit="%"
           tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "RAM Utilization"]}
+          action={
+            live ? (
+              <LiveReading value={live.ram_usage} available={live.ram_usage_available} unit="%" />
+            ) : null
+          }
         />
       </div>
     </div>
