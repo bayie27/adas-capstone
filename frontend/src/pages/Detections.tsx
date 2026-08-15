@@ -19,6 +19,7 @@ import {
   TableStateRow,
 } from "@/components/ui/Table"
 import { Tabs } from "@/components/ui/Tabs"
+import { IncidentHandledNotice } from "@/components/ui/IncidentHandledNotice"
 import { IncidentDetailModal } from "@/pages/detections/IncidentDetailModal"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
@@ -28,6 +29,7 @@ import {
   exportAlerts,
   getAlertDetails,
   getAlerts,
+  getIncidentConflict,
   resolveAlert,
 } from "@/api/alerts"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
@@ -180,12 +182,19 @@ export default function Detections() {
   const isTransitionPending =
     confirmMutation.isPending || dismissMutation.isPending || resolveMutation.isPending
 
-  const transitionError = useMemo(() => {
-    const firstError =
-      confirmMutation.error ?? dismissMutation.error ?? resolveMutation.error ?? null
+  const transitionFailure = confirmMutation.error ?? dismissMutation.error ?? resolveMutation.error
 
-    return firstError ? getApiErrorMessage(firstError, "Unable to update alert status.") : null
-  }, [confirmMutation.error, dismissMutation.error, resolveMutation.error])
+  // A lost race is not a failure to report as one — it is news about what a
+  // colleague did. It gets the named notice; everything else gets a banner.
+  const transitionConflict = useMemo(
+    () => (transitionFailure ? getIncidentConflict(transitionFailure) : null),
+    [transitionFailure],
+  )
+
+  const transitionError = useMemo(() => {
+    if (!transitionFailure || transitionConflict) return null
+    return getApiErrorMessage(transitionFailure, "Unable to update alert status.")
+  }, [transitionFailure, transitionConflict])
 
   const closeModal = () => {
     setSelectedAlertId(null)
@@ -438,6 +447,7 @@ export default function Detections() {
                 {getApiErrorMessage(alertDetailsQuery.error, "Unable to refresh alert details.")}
               </div>
             ) : null}
+            {transitionConflict ? <IncidentHandledNotice info={transitionConflict} /> : null}
             {transitionError ? (
               <div className="mb-4 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
                 {transitionError}

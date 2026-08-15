@@ -1,7 +1,57 @@
-import api from "@/api/client"
+import api, { getApiError } from "@/api/client"
 import { downloadBlobResponse } from "@/utils/download"
 
 export type AlertStatus = "Unverified" | "Ongoing" | "Dismissed" | "Resolved"
+
+const ALERT_STATUSES: AlertStatus[] = ["Unverified", "Ongoing", "Dismissed", "Resolved"]
+
+function asAlertStatus(value: unknown): AlertStatus | null {
+  return typeof value === "string" && (ALERT_STATUSES as string[]).includes(value)
+    ? (value as AlertStatus)
+    : null
+}
+
+function asNullableString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null
+}
+
+/**
+ * Who resolved a race for this incident, and how.
+ *
+ * The same four facts reach the client by **two different paths**, which is
+ * why this is one shape rather than two:
+ *
+ * - The **409 CONFLICT_STATE** body, when this operator lost the race. Only
+ *   the loser gets it — it is a response to their own failed request.
+ * - The **`ALERT_STATUS_UPDATE` broadcast**, which reaches *every* connected
+ *   dashboard including ones that never made a request. A colleague watching
+ *   the same incident should see who handled it without having clicked
+ *   anything.
+ */
+export interface IncidentHandledInfo {
+  currentStatus: AlertStatus | null
+  handledAction: string | null
+  handledBy: string | null
+  handledAt: string | null
+}
+
+/**
+ * Reads the four `extra` fields off a 409 CONFLICT_STATE, or `null` for any
+ * other failure. `_conflict_response` (`routes/alerts.py:92`) attaches them
+ * specifically so this dialog can name the colleague who got there first; the
+ * client used to render the fallback sentence and drop all four.
+ */
+export function getIncidentConflict(error: unknown): IncidentHandledInfo | null {
+  const parsed = getApiError(error)
+  if (!parsed || parsed.code !== "CONFLICT_STATE") return null
+
+  return {
+    currentStatus: asAlertStatus(parsed.extra.current_status),
+    handledAction: asNullableString(parsed.extra.handled_action),
+    handledBy: asNullableString(parsed.extra.handled_by),
+    handledAt: asNullableString(parsed.extra.handled_at),
+  }
+}
 
 export interface AlertLog {
   log_id: number

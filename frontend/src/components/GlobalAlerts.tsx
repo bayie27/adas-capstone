@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
-import { confirmAlert, dismissAlert, resolveAlert } from "@/api/alerts"
+import { confirmAlert, dismissAlert, getIncidentConflict, resolveAlert } from "@/api/alerts"
+import { IncidentHandledNotice } from "@/components/ui/IncidentHandledNotice"
+import type { IncidentHandledInfo } from "@/api/alerts"
 import { formatAlertConfidence } from "@/utils/format"
 import { formatFullDateTime } from "@/utils/datetime"
 import { getApiErrorMessage } from "@/api/client"
@@ -31,6 +33,7 @@ export function GlobalAlerts() {
   const removeAlert = useAlertStore((state) => state.removeAlert)
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [conflict, setConflict] = useState<IncidentHandledInfo | null>(null)
 
   // Snoozed incidents (FR-07) mute the alarm modal for that incident until
   // the shared deadline expires or a RE_ALARM event reactivates it.
@@ -53,12 +56,23 @@ export function GlobalAlerts() {
     const logId = alert.log_id
     setLoadingId(logId)
     setError(null)
+    setConflict(null)
     try {
       await action(logId)
       removeAlert(logId)
       invalidateAlerts()
     } catch (err) {
-      setError(getApiErrorMessage(err, failure))
+      // A lost race is not a failure to retry — a colleague already decided.
+      // Name them, drop the incident from this queue, and let the operator
+      // move to the next alert rather than re-clicking a button that cannot
+      // succeed.
+      const raceLost = getIncidentConflict(err)
+      if (raceLost) {
+        setConflict(raceLost)
+        invalidateAlerts()
+      } else {
+        setError(getApiErrorMessage(err, failure))
+      }
     } finally {
       setLoadingId(null)
     }
@@ -126,6 +140,23 @@ export function GlobalAlerts() {
             </span>
           </div>
         </div>
+
+        {conflict ? (
+          <div className="bg-surface-1 px-6 pb-1 pt-1">
+            <IncidentHandledNotice info={conflict} />
+            <Button
+              variant="outline"
+              size="sm"
+              className="mb-3 w-full"
+              onClick={() => {
+                setConflict(null)
+                removeAlert(alert.log_id)
+              }}
+            >
+              Dismiss this notice
+            </Button>
+          </div>
+        ) : null}
 
         {error ? (
           <div className="bg-surface-1 px-6 pb-3">
