@@ -4,11 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/Button"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
 import { FilterSelect } from "@/components/ui/FilterSelect"
-import { Modal } from "@/components/ui/Modal"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"
-import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { AlertStatusText } from "@/components/ui/StatusText"
 import {
   Table,
@@ -21,6 +19,7 @@ import {
   TableStateRow,
 } from "@/components/ui/Table"
 import { Tabs } from "@/components/ui/Tabs"
+import { IncidentDetailModal } from "@/pages/detections/IncidentDetailModal"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import {
@@ -36,17 +35,9 @@ import { useUserOptions } from "@/hooks/useUserOptions"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
 import type { AlertLog, AlertStatus } from "@/api/alerts"
-import {
-  formatAlertCode,
-  formatAlertConfidence,
-  getAlertBadgeClass,
-  getAlertBorderClass,
-  getAlertLastHandledBy,
-  getAlertLastUpdated,
-} from "@/utils/format"
+import { formatAlertCode, getAlertLastHandledBy, getAlertLastUpdated } from "@/utils/format"
 import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
-import { cn } from "@/utils/cn"
 import { RiCloseLine, RiDownloadLine, RiEyeLine } from "@remixicon/react"
 
 const ALERTS_PAGE_SIZE = 10
@@ -211,9 +202,6 @@ export default function Detections() {
     dismissMutation.reset()
     resolveMutation.reset()
   }
-
-  const closedTimeLabel =
-    selectedAlert?.detection_status === "Resolved" ? "TIME RESOLVED" : "TIME CLOSED"
 
   const cameraOptions = [
     { value: "", label: "All cameras" },
@@ -432,198 +420,32 @@ export default function Detections() {
         </Table>
       </TableContainer>
 
-      <Modal
+      <IncidentDetailModal
+        alert={selectedAlert}
         isOpen={selectedAlertId !== null}
         onClose={closeModal}
-        hideClose
-        className={cn(
-          "max-w-lg overflow-hidden border-t-4 p-0",
-          selectedAlert ? getAlertBorderClass(selectedAlert.detection_status) : "border-t-fg",
-        )}
-      >
-        <div className="flex flex-col bg-surface-2">
-          <div className="flex items-center justify-between border-b border-border px-6 py-4">
-            <h2 className="text-caption font-semibold uppercase tracking-[0.08em] text-fg">
-              ACCIDENT DETAILS
-            </h2>
-            <button
-              type="button"
-              onClick={closeModal}
-              className="text-fg-muted transition-colors hover:text-fg"
-            >
-              <RiCloseLine size={18} />
-            </button>
-          </div>
-
-          <div className="flex aspect-video w-full items-center justify-center border-b border-stroke bg-surface-1">
-            {selectedAlert ? (
-              <SnapshotImage
-                snapshotUrl={selectedAlert.snapshot_url}
-                alt={`${formatAlertCode(selectedAlert.log_id)} snapshot`}
-                className="h-full w-full object-contain"
-                fallbackClassName="h-32 w-48 border border-stroke-strong bg-surface-1 text-fg-muted"
-              />
-            ) : (
-              <div className="text-caption text-fg-muted">Loading preview…</div>
-            )}
-          </div>
-
-          <div className="p-6">
-            {selectedAlert ? (
-              <>
-                <div className="mb-5 flex items-center gap-3">
-                  <span className="text-xl font-semibold text-fg">
-                    {formatAlertCode(selectedAlert.log_id)}
-                  </span>
-                  <span
-                    className={cn(
-                      "rounded-sm px-2 py-0.5 text-caption font-bold uppercase tracking-[0.08em]",
-                      getAlertBadgeClass(selectedAlert.detection_status),
-                    )}
-                  >
-                    {selectedAlert.detection_status}
-                  </span>
-                </div>
-
-                <div className="mb-6 space-y-3.5">
-                  <div className="flex items-center justify-between text-caption">
-                    <span className="font-medium tracking-[0.08em] text-fg-muted">TIMESTAMP</span>
-                    <span className="font-medium text-fg-body">
-                      {formatFullDateTime(selectedAlert.detected_at)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-caption">
-                    <span className="font-medium tracking-[0.08em] text-fg-muted">CAMERA NAME</span>
-                    <span className="font-medium text-fg-body">
-                      {selectedAlert.camera_name ?? "Unknown Camera"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-caption">
-                    <span className="font-medium tracking-[0.08em] text-fg-muted">
-                      AI-CONFIDENCE SCORE
-                    </span>
-                    <span className="rounded bg-danger-subtle px-1.5 py-0.5 font-bold text-danger">
-                      {formatAlertConfidence(selectedAlert.confidence_score)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mb-6 border-t border-border pt-5">
-                  <div className="mb-4 flex items-start justify-between">
-                    <div>
-                      <div className="mb-1.5 text-caption font-bold uppercase tracking-[0.08em] text-fg-muted">
-                        VERIFIED BY
-                      </div>
-                      <div className="text-caption font-medium text-fg-body">
-                        {selectedAlert.verified_by_name ?? "-"}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="mb-1.5 text-caption font-bold uppercase tracking-[0.08em] text-fg-muted">
-                        TIME VERIFIED
-                      </div>
-                      <div className="text-caption text-fg-body">
-                        {formatFullDateTime(selectedAlert.verified_at)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {selectedAlert.detection_status === "Dismissed" ||
-                  selectedAlert.detection_status === "Resolved" ? (
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="mb-1.5 text-caption font-bold uppercase tracking-[0.08em] text-fg-muted">
-                          CLOSED BY
-                        </div>
-                        <div className="text-caption font-medium text-fg-body">
-                          {selectedAlert.closed_by_name ?? "-"}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="mb-1.5 text-caption font-bold uppercase tracking-[0.08em] text-fg-muted">
-                          {closedTimeLabel}
-                        </div>
-                        <div className="text-caption text-fg-body">
-                          {formatFullDateTime(selectedAlert.closed_at)}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-
-                {alertDetailsQuery.isError ? (
-                  <div className="mb-4 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-caption text-danger">
-                    {getApiErrorMessage(
-                      alertDetailsQuery.error,
-                      "Unable to refresh alert details.",
-                    )}
-                  </div>
-                ) : null}
-
-                {transitionError ? (
-                  <div className="mb-4 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-caption text-danger">
-                    {transitionError}
-                  </div>
-                ) : null}
-
-                {selectedAlert.detection_status === "Unverified" ? (
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline"
-                      className="flex-1 uppercase tracking-[0.08em]"
-                      disabled={isTransitionPending}
-                      isLoading={dismissMutation.isPending}
-                      loadingLabel="Dismissing…"
-                      onClick={() => dismissMutation.mutate(selectedAlert.log_id)}
-                    >
-                      Dismiss Alert
-                    </Button>
-                    <Button
-                      variant="primary"
-                      className="flex-1 uppercase tracking-[0.08em]"
-                      disabled={isTransitionPending}
-                      isLoading={confirmMutation.isPending}
-                      loadingLabel="Confirming…"
-                      onClick={() => confirmMutation.mutate(selectedAlert.log_id)}
-                    >
-                      Confirm Alert
-                    </Button>
-                  </div>
-                ) : null}
-
-                {selectedAlert.detection_status === "Ongoing" ? (
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline"
-                      className="flex-1 uppercase tracking-[0.08em]"
-                      disabled={isTransitionPending}
-                      isLoading={dismissMutation.isPending}
-                      loadingLabel="Dismissing…"
-                      onClick={() => dismissMutation.mutate(selectedAlert.log_id)}
-                    >
-                      Dismiss Accident
-                    </Button>
-                    <Button
-                      variant="primary"
-                      className="flex-1 uppercase tracking-[0.08em]"
-                      disabled={isTransitionPending}
-                      isLoading={resolveMutation.isPending}
-                      loadingLabel="Resolving…"
-                      onClick={() => resolveMutation.mutate(selectedAlert.log_id)}
-                    >
-                      Resolve Accident
-                    </Button>
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <div className="py-12 text-center text-secondary text-fg-muted">
-                Loading alert details…
+        isTransitionPending={isTransitionPending}
+        isDismissing={dismissMutation.isPending}
+        isConfirming={confirmMutation.isPending}
+        isResolving={resolveMutation.isPending}
+        onDismiss={(logId) => dismissMutation.mutate(logId)}
+        onConfirm={(logId) => confirmMutation.mutate(logId)}
+        onResolve={(logId) => resolveMutation.mutate(logId)}
+        notice={
+          <>
+            {alertDetailsQuery.isError ? (
+              <div className="mb-4 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
+                {getApiErrorMessage(alertDetailsQuery.error, "Unable to refresh alert details.")}
               </div>
-            )}
-          </div>
-        </div>
-      </Modal>
+            ) : null}
+            {transitionError ? (
+              <div className="mb-4 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
+                {transitionError}
+              </div>
+            ) : null}
+          </>
+        }
+      />
     </div>
   )
 }
