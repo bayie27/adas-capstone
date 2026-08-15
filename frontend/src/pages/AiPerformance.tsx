@@ -241,7 +241,20 @@ export default function AiPerformance() {
                     <td className="px-6 py-4 text-xs font-medium">{item.camera_name}</td>
                     <td className="px-6 py-4 text-right text-xs">{item.total_accidents}</td>
                     <td className="px-6 py-4 text-right text-xs">{item.total_dismissed}</td>
-                    <td className="px-6 py-4 text-right text-xs font-medium text-danger">
+                    {/*
+                      Same null-vs-value pattern as the two columns below:
+                      `precision_score` is null (unmeasured), not 0, when
+                      nothing has been acted on in the window. Rendering it as
+                      a hardcoded danger colour regardless of null read as
+                      "confirmed bad" rather than "nothing to measure yet" —
+                      exactly the wrong claim to make silently on a capstone
+                      metric.
+                    */}
+                    <td
+                      className={`px-6 py-4 text-right text-xs font-medium ${
+                        item.precision_score === null ? "text-fg-muted" : "text-danger"
+                      }`}
+                    >
                       {formatPercent(item.precision_score)}
                     </td>
                     <td
