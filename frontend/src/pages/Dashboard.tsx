@@ -189,7 +189,6 @@ export default function Dashboard() {
                 title="Total Accidents"
                 value={kpis?.total_accidents ?? 0}
                 isLoading={dashboardQuery.isLoading}
-                subtext="Compared to last month"
               />
             </div>
             <div className="h-[195px]">
@@ -198,7 +197,6 @@ export default function Dashboard() {
                 title="Total Resolved"
                 value={kpis?.total_resolved ?? 0}
                 isLoading={dashboardQuery.isLoading}
-                subtext="Compared to last month"
               />
             </div>
           </div>
