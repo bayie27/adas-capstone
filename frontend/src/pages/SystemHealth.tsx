@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 
 import { AreaChartCard } from "@/components/charts/AreaChartCard"
 import { CHART } from "@/components/charts/chartTheme"
+import { Badge } from "@/components/ui/Badge"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { Tabs } from "@/components/ui/Tabs"
@@ -137,6 +138,21 @@ const RANGE_TABS = [
 ]
 
 /**
+ * `state` is `_compute_state(warnings)` on the backend — derivable from
+ * `warnings[]` alone — but it's rendered anyway, beside the title, as the
+ * one fact a passing operator needs and the four KPI cards can't give: a
+ * single verdict rather than four numbers to individually judge.
+ */
+const STATE_BADGE: Record<
+  SystemHealthLiveResponse["state"],
+  { label: string; tone: "success" | "warning" | "danger" }
+> = {
+  healthy: { label: "Healthy", tone: "success" },
+  degraded: { label: "Degraded", tone: "warning" },
+  critical: { label: "Critical", tone: "danger" },
+}
+
+/**
  * `warnings[]` carries no presentation strings by design — see
  * utils/healthWarnings.ts for the copy table and its open fallback. This is
  * the strip Figma doesn't draw at all: the backend computes threshold
@@ -205,7 +221,14 @@ export default function SystemHealth() {
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="mb-0.5 text-xl font-semibold text-fg">System Health</h1>
+          <div className="mb-0.5 flex items-center gap-2.5">
+            <h1 className="text-xl font-semibold text-fg">System Health</h1>
+            {live ? (
+              <Badge variant="subtle" tone={STATE_BADGE[live.state].tone}>
+                {STATE_BADGE[live.state].label}
+              </Badge>
+            ) : null}
+          </div>
           <p className="text-xs text-fg-muted">
             Oversee system diagnostics and hardware performance
           </p>
