@@ -96,11 +96,20 @@ export async function exportDashboardAnalytics(
   downloadBlobResponse(response, `adas_dashboard_export.${format}`)
 }
 
-export async function exportPerformanceAnalyticsCsv(params: PerformanceAnalyticsFilters = {}) {
+/**
+ * `GET /api/analytics/export/performance` accepts `?format=csv|pdf`, the
+ * same as every other export route. This was `exportPerformanceAnalyticsCsv`
+ * — a name and signature that both forbade PDF on a route that always
+ * accepted it.
+ */
+export async function exportPerformanceAnalytics(
+  params: PerformanceAnalyticsFilters = {},
+  format: ExportFormat = "csv",
+) {
   const response = await api.get<Blob>("/analytics/export/performance", {
-    params,
+    params: { ...params, format },
     responseType: "blob",
   })
 
-  downloadBlobResponse(response, "adas_performance_export.csv")
+  downloadBlobResponse(response, `adas_performance_export.${format}`)
 }
