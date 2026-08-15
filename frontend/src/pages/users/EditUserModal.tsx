@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Modal } from "@/components/ui/Modal"
+import { Switch } from "@/components/ui/Switch"
 import { updateUser } from "@/api/users"
 import type { ApiUserRole } from "@/api/auth"
 import type { UpdateUserInput, UserRecord } from "@/api/users"
@@ -17,6 +18,7 @@ type EditUserFormState = {
   last_name: string
   username: string
   role: ApiUserRole
+  is_active: boolean
 }
 
 interface EditUserModalProps {
@@ -31,6 +33,7 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
     last_name: user.last_name,
     username: user.username,
     role: user.role,
+    is_active: user.is_active,
   })
   const [validationError, setValidationError] = useState<string | null>(null)
 
@@ -55,6 +58,7 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
       last_name: form.last_name.trim(),
       username: form.username.trim(),
       role: form.role,
+      is_active: form.is_active,
     }
 
     if (!payload.first_name || !payload.last_name || !payload.username) {
@@ -66,7 +70,8 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
       payload.first_name === user.first_name &&
       payload.last_name === user.last_name &&
       payload.username === user.username &&
-      payload.role === user.role
+      payload.role === user.role &&
+      payload.is_active === user.is_active
     ) {
       setValidationError("No user changes to save.")
       return
@@ -134,6 +139,28 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
                   Operator
                 </label>
               </div>
+            </div>
+
+            {/*
+              PATCH /api/users/{id} accepts is_active as a first-class field,
+              guarded the same way role is (the last active admin cannot be
+              deactivated) — but nothing in the UI could ever send it, so that
+              guard was unreachable. This makes it reachable. Note the switch
+              is effectively one-way from here: GET /api/users/ only ever
+              lists is_active=true rows, so a deactivated account's row
+              disappears from this table on the next refetch and there is no
+              screen left to flip it back — reactivation is a real backend
+              capability (see `being_enabled` in routes/users.py) with no
+              frontend path to it. Recorded as a follow-up, not fixed here.
+            */}
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-fg-body">Active</span>
+              <Switch
+                checked={form.is_active}
+                disabled={mutation.isPending}
+                label={form.is_active ? "Deactivate account" : "Activate account"}
+                onChange={() => updateField("is_active", !form.is_active)}
+              />
             </div>
 
             <Input
