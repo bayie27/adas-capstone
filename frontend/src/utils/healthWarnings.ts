@@ -35,6 +35,22 @@ const WARNING_COPY: Record<
   },
 }
 
+/**
+ * Three more codes are proposed against the backend and not yet emitted:
+ * OUTBOX_QUARANTINED (Q15), CAPACITY_EXCEEDED (Q16), ENGINE_CLOCK_SKEW
+ * (Q17). This is deliberately not a switch over the five known codes — a
+ * switch means every new code needs a frontend change to appear at all.
+ * The fallback below is what makes those three (and anything else the
+ * backend ever adds) cost zero frontend work the day it starts emitting.
+ */
+export function humanizeWarningCode(code: string): string {
+  return code
+    .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+}
+
 export interface DescribedWarning {
   label: string
   message: string
@@ -58,5 +74,14 @@ export function describeWarning(warning: HealthWarning): DescribedWarning {
     }
   }
 
-  return { label: warning.code, message: warning.code, tone }
+  // The open fallback: a code the client has never seen still gets a
+  // humanised label and its numbers, rather than being dropped or shown as
+  // its own raw SCREAMING_SNAKE_CASE.
+  const label = humanizeWarningCode(warning.code)
+  const message =
+    warning.measurement !== null && warning.threshold !== null
+      ? `${label}: ${warning.measurement} (limit ${warning.threshold})`
+      : label
+
+  return { label, message, tone }
 }
