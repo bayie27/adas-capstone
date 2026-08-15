@@ -1,17 +1,11 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts"
+import { AreaChartCard } from "@/components/charts/AreaChartCard"
+import { CHART } from "@/components/charts/chartTheme"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
+import { Tabs } from "@/components/ui/Tabs"
 import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/api/health"
 import type { SystemHealthDataPoint, SystemHealthLiveResponse } from "@/api/health"
 import { RiDashboard3Line, RiHardDrive2Line, RiServerLine, RiTimerLine } from "@remixicon/react"
@@ -64,109 +58,21 @@ function formatTimestamp(value: string, range: "48h" | "30d"): string {
   return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
 }
 
-// ─── sub-components ──────────────────────────────────────────────────────────
-
-interface HealthChartProps {
-  title: string
-  data: SystemHealthDataPoint[]
-  dataKey: keyof SystemHealthDataPoint
-  color: string
-  range: "48h" | "30d"
-  unit?: string
-  isLoading: boolean
-}
-
-function HealthChart({
-  title,
-  data,
-  dataKey,
-  color,
-  range,
-  unit = "%",
-  isLoading,
-}: HealthChartProps) {
-  const chartData = data.map((point) => ({
+function toChartData(
+  data: SystemHealthDataPoint[],
+  dataKey: keyof SystemHealthDataPoint,
+  range: "48h" | "30d",
+) {
+  return data.map((point) => ({
     time: formatTimestamp(point.timestamp, range),
-    value: point[dataKey] as number,
+    value: point[dataKey] as number | null,
   }))
-
-  return (
-    <div className="flex h-[260px] flex-col rounded-xl border border-stroke bg-surface-1 p-5">
-      <h3 className="mb-4 text-xs font-medium text-fg-body">{title}</h3>
-      {isLoading ? (
-        <div className="flex flex-1 items-center justify-center text-xs text-fg-muted">
-          Loading...
-        </div>
-      ) : data.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center text-xs text-fg-muted">
-          No data available
-        </div>
-      ) : (
-        <div className="flex-1 -ml-4">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient
-                  id={`grad-${title.replace(/\s+/g, "")}`}
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop offset="5%" stopColor={color} stopOpacity={0.15} />
-                  <stop offset="95%" stopColor={color} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="var(--color-chart-grid)"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="time"
-                stroke="var(--color-chart-grid)"
-                tick={{ fill: "var(--color-chart-axis)", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                dy={8}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                domain={[0, 100]}
-                stroke="var(--color-chart-grid)"
-                tick={{ fill: "var(--color-chart-axis)", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                width={32}
-                tickFormatter={(v) => `${v}${unit}`}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "var(--color-surface-1)",
-                  border: "1px solid var(--color-stroke)",
-                  borderRadius: "6px",
-                  fontSize: 12,
-                }}
-                itemStyle={{ color: "var(--color-fg-body)" }}
-                labelStyle={{ color: "var(--color-fg-muted)" }}
-                formatter={(v) => [`${Number(v).toFixed(1)}${unit}`, title]}
-              />
-              <Area
-                type="monotone"
-                dataKey="value"
-                stroke={color}
-                strokeWidth={1.5}
-                fillOpacity={1}
-                fill={`url(#grad-${title.replace(/\s+/g, "")})`}
-                dot={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-    </div>
-  )
 }
+
+const RANGE_TABS = [
+  { value: "48h" as const, label: "Last 48 Hours" },
+  { value: "30d" as const, label: "30-Day Trend" },
+]
 
 // ─── page ────────────────────────────────────────────────────────────────────
 
@@ -236,51 +142,40 @@ export default function SystemHealth() {
         <StatCard
           icon={RiServerLine}
           title="Server Uptime"
-          value={liveQuery.isLoading ? "..." : formatUptime(live?.host_uptime_seconds)}
+          value={formatUptime(live?.host_uptime_seconds)}
+          isLoading={liveQuery.isLoading}
         />
         <StatCard
           icon={RiTimerLine}
           title="Inference Latency"
-          value={liveQuery.isLoading ? "..." : formatMs(live?.avg_inference_latency_ms)}
+          value={formatMs(live?.avg_inference_latency_ms)}
+          isLoading={liveQuery.isLoading}
           subtext="Average AI inference time"
         />
         <StatCard
           icon={RiDashboard3Line}
           title="Processing Speed"
-          value={liveQuery.isLoading ? "..." : formatFps(live?.avg_fps)}
+          value={formatFps(live?.avg_fps)}
+          isLoading={liveQuery.isLoading}
           subtext="Average frames per second"
         />
         <StatCard
           icon={RiHardDrive2Line}
           title="Disk Storage Usage"
-          value={liveQuery.isLoading ? "..." : formatPercent(live?.disk_percent)}
+          value={formatPercent(live?.disk_percent)}
+          isLoading={liveQuery.isLoading}
           subtext={formatDiskSubtext(live)}
         />
       </div>
 
-      <div className="mb-5 flex items-center gap-4">
-        <button
-          type="button"
-          onClick={() => setActiveTab("48h")}
-          className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-            activeTab === "48h"
-              ? "border border-stroke-strong bg-surface-2 text-fg"
-              : "text-fg-muted hover:text-fg-body"
-          }`}
-        >
-          Last 48 Hours
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("30d")}
-          className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-            activeTab === "30d"
-              ? "border border-stroke-strong bg-surface-2 text-fg"
-              : "text-fg-muted hover:text-fg-body"
-          }`}
-        >
-          30-Day Trend
-        </button>
+      <div className="mb-5">
+        <Tabs
+          items={RANGE_TABS}
+          value={activeTab}
+          onChange={setActiveTab}
+          variant="pill"
+          label="History range"
+        />
       </div>
 
       {historyQuery.isError ? (
@@ -292,38 +187,59 @@ export default function SystemHealth() {
       ) : null}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <HealthChart
+        <AreaChartCard
           title="CPU Utilization"
-          data={historyData}
-          dataKey="cpu_usage"
-          color="var(--color-chart-line)"
-          range={activeTab}
+          data={toChartData(historyData, "cpu_usage", activeTab)}
+          dataKey="value"
+          xKey="time"
+          height={260}
           isLoading={historyQuery.isLoading}
+          allowDecimals={false}
+          yDomain={[0, 100]}
+          unit="%"
+          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "CPU Utilization"]}
         />
-        <HealthChart
+        <AreaChartCard
           title="GPU Utilization"
-          data={historyData}
-          dataKey="gpu_usage"
-          color="var(--color-chart-line)"
-          range={activeTab}
+          data={toChartData(historyData, "gpu_usage", activeTab)}
+          dataKey="value"
+          xKey="time"
+          height={260}
           isLoading={historyQuery.isLoading}
+          allowDecimals={false}
+          yDomain={[0, 100]}
+          unit="%"
+          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "GPU Utilization"]}
         />
-        <HealthChart
+        {/*
+          Figma's fourth chart is "Core Temperature". The history points carry
+          cpu_temp_avg/peak and gpu_temp_peak — all null on Windows for CPU.
+          Wired to gpu_temp_peak and labelled GPU Temperature; recorded as a
+          design/backend mismatch rather than silently relabelled.
+        */}
+        <AreaChartCard
           title="GPU Temperature"
-          data={historyData}
-          dataKey="gpu_temp_peak"
-          color="var(--color-danger)"
-          range={activeTab}
+          data={toChartData(historyData, "gpu_temp_peak", activeTab)}
+          dataKey="value"
+          xKey="time"
+          height={260}
+          isLoading={historyQuery.isLoading}
+          allowDecimals={false}
           unit="°C"
-          isLoading={historyQuery.isLoading}
+          stroke={CHART.danger}
+          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}°C`, "GPU Temperature"]}
         />
-        <HealthChart
+        <AreaChartCard
           title="RAM Utilization"
-          data={historyData}
-          dataKey="ram_usage"
-          color="var(--color-chart-line)"
-          range={activeTab}
+          data={toChartData(historyData, "ram_usage", activeTab)}
+          dataKey="value"
+          xKey="time"
+          height={260}
           isLoading={historyQuery.isLoading}
+          allowDecimals={false}
+          yDomain={[0, 100]}
+          unit="%"
+          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "RAM Utilization"]}
         />
       </div>
     </div>
