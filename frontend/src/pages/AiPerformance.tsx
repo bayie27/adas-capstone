@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
-import { exportPerformanceAnalyticsCsv, getPerformanceAnalytics } from "@/api/analytics"
+import { exportPerformanceAnalytics, getPerformanceAnalytics } from "@/api/analytics"
+import { Button } from "@/components/ui/Button"
+import { DateRangePicker } from "@/components/ui/DateRangePicker"
+import { ExportButton, type ExportFormat } from "@/components/ui/ExportButton"
+import { FilterSelect } from "@/components/ui/FilterSelect"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"
@@ -12,13 +16,10 @@ import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { formatPercent } from "@/utils/format"
 import {
-  RiCalendarLine,
-  RiCameraLine,
   RiCarLine,
   RiCloseCircleLine,
   RiCloseLine,
   RiDashboard3Line,
-  RiDownloadLine,
   RiFocus3Line,
 } from "@remixicon/react"
 
@@ -36,6 +37,14 @@ export default function AiPerformance() {
 
   const camerasQuery = useCameraOptions()
 
+  const cameraOptions = [
+    { value: "", label: "All cameras" },
+    ...(camerasQuery.data?.cameras ?? []).map((c) => ({
+      value: String(c.camera_id),
+      label: c.camera_name,
+    })),
+  ]
+
   const performanceQuery = useQuery({
     queryKey: [...PERFORMANCE_QUERY_KEY, debouncedSearchTerm, startDate, endDate, cameraId],
     queryFn: () =>
@@ -49,13 +58,16 @@ export default function AiPerformance() {
   })
 
   const exportMutation = useMutation({
-    mutationFn: () =>
-      exportPerformanceAnalyticsCsv({
-        search: debouncedSearchTerm || undefined,
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-        camera_id: cameraId ? [Number(cameraId)] : undefined,
-      }),
+    mutationFn: (format: ExportFormat) =>
+      exportPerformanceAnalytics(
+        {
+          search: debouncedSearchTerm || undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          camera_id: cameraId ? [Number(cameraId)] : undefined,
+        },
+        format,
+      ),
   })
 
   const globalKpis = performanceQuery.data?.global_kpis
@@ -93,37 +105,47 @@ export default function AiPerformance() {
 
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-5">
         <StatCard
+          elevated
           icon={RiCarLine}
           title="Total Accidents"
-          value={performanceQuery.isLoading ? "..." : (globalKpis?.total_accidents ?? 0)}
+          value={globalKpis?.total_accidents ?? 0}
+          isLoading={performanceQuery.isLoading}
           subtext="Confirmed accidents"
         />
         <StatCard
           icon={RiCloseCircleLine}
           title="Total Dismissed"
-          value={performanceQuery.isLoading ? "..." : (globalKpis?.total_dismissed ?? 0)}
+          value={globalKpis?.total_dismissed ?? 0}
+          isLoading={performanceQuery.isLoading}
           subtext="False positives"
         />
         <StatCard
           icon={RiFocus3Line}
           title="Avg Precision Score"
-          value={performanceQuery.isLoading ? "..." : formatPercent(globalKpis?.precision_score)}
+          value={formatPercent(globalKpis?.precision_score)}
+          isLoading={performanceQuery.isLoading}
           subtext="Confirmed / total acted alerts"
         />
+        {/*
+          The frame's fourth KPI is "Avg Confidence Score", but
+          PerformanceGlobalKpis has no combined average — only a separate
+          accident-confidence and dismissed-confidence figure. Rendered as
+          accident confidence and labelled accordingly rather than averaging
+          the two client-side, which would be a number the backend never
+          computed.
+        */}
         <StatCard
           icon={RiDashboard3Line}
-          title="Avg Confidence Score"
-          value={
-            performanceQuery.isLoading ? "..." : formatPercent(globalKpis?.avg_accident_confidence)
-          }
+          title="Avg Accident Confidence"
+          value={formatPercent(globalKpis?.avg_accident_confidence)}
+          isLoading={performanceQuery.isLoading}
           subtext="Average accident confidence"
         />
         <StatCard
           icon={RiCloseCircleLine}
           title="Avg Dismissed Score"
-          value={
-            performanceQuery.isLoading ? "..." : formatPercent(globalKpis?.avg_dismissed_confidence)
-          }
+          value={formatPercent(globalKpis?.avg_dismissed_confidence)}
+          isLoading={performanceQuery.isLoading}
           subtext="Average dismissed confidence"
         />
       </div>
@@ -138,80 +160,60 @@ export default function AiPerformance() {
             }}
             placeholder="Search..."
           />
-          <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
-            <RiCalendarLine size={13} className="text-fg-muted" />
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                reset()
-                setStartDate(e.target.value)
-              }}
-              className="bg-transparent text-xs text-fg-body focus:outline-none [color-scheme:dark]"
-            />
-          </div>
-          <span className="text-xs text-fg-muted">to</span>
-          <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
-            <RiCalendarLine size={13} className="text-fg-muted" />
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => {
-                reset()
-                setEndDate(e.target.value)
-              }}
-              className="bg-transparent text-xs text-fg-body focus:outline-none [color-scheme:dark]"
-            />
-          </div>
-          <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
-            <RiCameraLine size={13} className="text-fg-muted" />
-            <select
-              value={cameraId}
-              onChange={(e) => {
-                reset()
-                setCameraId(e.target.value)
-              }}
-              className="bg-transparent text-xs text-fg-body focus:outline-none"
-            >
-              <option value="">All cameras</option>
-              {camerasQuery.data?.cameras.map((c) => (
-                <option key={c.camera_id} value={c.camera_id}>
-                  {c.camera_name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <DateRangePicker
+            start={startDate}
+            end={endDate}
+            onStartChange={(value) => {
+              reset()
+              setStartDate(value)
+            }}
+            onEndChange={(value) => {
+              reset()
+              setEndDate(value)
+            }}
+            label="Filter performance by date"
+          />
+          <FilterSelect
+            value={cameraId}
+            options={cameraOptions}
+            onChange={(value) => {
+              reset()
+              setCameraId(value)
+            }}
+          />
           {hasDateFilter ? (
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 setStartDate("")
                 setEndDate("")
                 setCameraId("")
                 reset()
               }}
-              className="flex items-center gap-1 rounded-md border border-stroke bg-surface-1 px-2 py-1.5 text-xs text-fg-muted transition-colors hover:text-fg"
             >
-              <RiCloseLine size={12} />
+              <RiCloseLine size={13} />
               Clear
-            </button>
+            </Button>
           ) : null}
         </div>
-        <button
-          type="button"
-          disabled={exportMutation.isPending}
-          onClick={() => exportMutation.mutate()}
-          className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <RiDownloadLine size={13} />
-          {exportMutation.isPending ? "Exporting..." : "Export"}
-        </button>
+        {/*
+          Unlike Dashboard, this screen knows its row count up front —
+          per_camera[] arrives in full (the same property that forces the
+          client-side pagination below), so a real rowCount gets the
+          pre-flight for free instead of rendering rowCount: undefined.
+        */}
+        <ExportButton
+          rowCount={perCamera.length}
+          isExporting={exportMutation.isPending}
+          onExport={(format) => exportMutation.mutate(format)}
+        />
       </div>
 
       {exportMutation.isError ? (
         <QueryErrorBanner
           error={exportMutation.error}
-          fallback="Unable to export AI performance CSV."
+          fallback="Unable to export the AI performance report."
         />
       ) : null}
 
@@ -221,11 +223,11 @@ export default function AiPerformance() {
             <thead>
               <tr className="border-b border-stroke bg-surface-1 text-fg-muted">
                 <th className="px-6 py-4 text-xs font-medium">Camera Name</th>
-                <th className="px-6 py-4 text-center text-xs font-medium">Accidents</th>
-                <th className="px-6 py-4 text-center text-xs font-medium">Dismissed</th>
-                <th className="px-6 py-4 text-center text-xs font-medium">Precision Score</th>
-                <th className="px-6 py-4 text-center text-xs font-medium">Confidence Score</th>
-                <th className="px-6 py-4 text-center text-xs font-medium">Dismissed Score</th>
+                <th className="px-6 py-4 text-right text-xs font-medium">Accidents</th>
+                <th className="px-6 py-4 text-right text-xs font-medium">Dismissed</th>
+                <th className="px-6 py-4 text-right text-xs font-medium">Precision Score</th>
+                <th className="px-6 py-4 text-right text-xs font-medium">Confidence Score</th>
+                <th className="px-6 py-4 text-right text-xs font-medium">Dismissed Score</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stroke">
@@ -242,20 +244,33 @@ export default function AiPerformance() {
                     className="text-fg-body transition-colors hover:bg-surface-1"
                   >
                     <td className="px-6 py-4 text-xs font-medium">{item.camera_name}</td>
-                    <td className="px-6 py-4 text-center text-xs">{item.total_accidents}</td>
-                    <td className="px-6 py-4 text-center text-xs">{item.total_dismissed}</td>
-                    <td className="px-6 py-4 text-center text-xs font-medium text-danger">
+                    <td className="px-6 py-4 text-right text-xs">{item.total_accidents}</td>
+                    <td className="px-6 py-4 text-right text-xs">{item.total_dismissed}</td>
+                    {/*
+                      Same null-vs-value pattern as the two columns below:
+                      `precision_score` is null (unmeasured), not 0, when
+                      nothing has been acted on in the window. Rendering it as
+                      a hardcoded danger colour regardless of null read as
+                      "confirmed bad" rather than "nothing to measure yet" —
+                      exactly the wrong claim to make silently on a capstone
+                      metric.
+                    */}
+                    <td
+                      className={`px-6 py-4 text-right text-xs font-medium ${
+                        item.precision_score === null ? "text-fg-muted" : "text-danger"
+                      }`}
+                    >
                       {formatPercent(item.precision_score)}
                     </td>
                     <td
-                      className={`px-6 py-4 text-center text-xs font-medium ${
+                      className={`px-6 py-4 text-right text-xs font-medium ${
                         item.avg_accident_confidence === null ? "text-fg-muted" : "text-success"
                       }`}
                     >
                       {formatPercent(item.avg_accident_confidence)}
                     </td>
                     <td
-                      className={`px-6 py-4 text-center text-xs font-medium ${
+                      className={`px-6 py-4 text-right text-xs font-medium ${
                         item.avg_dismissed_confidence === null ? "text-fg-muted" : "text-danger"
                       }`}
                     >
