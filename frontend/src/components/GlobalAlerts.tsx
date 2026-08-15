@@ -1,5 +1,8 @@
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+
+import { Button } from "@/components/ui/Button"
+import { Modal } from "@/components/ui/Modal"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
 import { confirmAlert, dismissAlert, resolveAlert } from "@/api/alerts"
@@ -7,6 +10,20 @@ import { formatAlertConfidence } from "@/utils/format"
 import { formatFullDateTime } from "@/utils/datetime"
 import { getApiErrorMessage } from "@/api/client"
 
+/**
+ * The alarm dialog — the product's reason for existing.
+ *
+ * Rebuilt on `Modal` so it inherits body-scroll lock and focus-on-open from
+ * `useOverlayBehavior`, which it previously had neither of: it hand-rolled its
+ * own fixed overlay, on the single most important dialog in the app.
+ *
+ * **Escape is deliberately inert here**, which is the one thing it does not
+ * take from `Modal`. There is no "close" for an accident alarm — the only ways
+ * out are Dismiss, Confirm or Resolve, each a real HITL decision the backend
+ * records. `onClose` is a no-op and the backdrop is not clickable, so a stray
+ * keypress cannot silence a live alert. (Closing it would not even work: the
+ * incident stays in the store, so the dialog would immediately re-render.)
+ */
 export function GlobalAlerts() {
   const queryClient = useQueryClient()
   const alerts = useAlertStore((state) => state.alerts)
@@ -19,6 +36,9 @@ export function GlobalAlerts() {
   // the shared deadline expires or a RE_ALARM event reactivates it.
   const activeAlerts = alerts.filter((a) => !isSnoozedNow(a.log_id, snoozedUntil))
   const alert = activeAlerts[0]
+
+  const noop = useCallback(() => {}, [])
+
   if (!alert) return null
 
   const busy = loadingId === alert.log_id
@@ -29,63 +49,39 @@ export function GlobalAlerts() {
     queryClient.invalidateQueries({ queryKey: ["alerts"] })
   }
 
-  async function handleDismiss() {
-    setLoadingId(alert.log_id)
+  async function runAction(action: (logId: number) => Promise<unknown>, failure: string) {
+    const logId = alert.log_id
+    setLoadingId(logId)
     setError(null)
     try {
-      await dismissAlert(alert.log_id)
-      removeAlert(alert.log_id)
+      await action(logId)
+      removeAlert(logId)
       invalidateAlerts()
     } catch (err) {
-      setError(getApiErrorMessage(err, "Failed to dismiss alert."))
-    } finally {
-      setLoadingId(null)
-    }
-  }
-
-  async function handleConfirm() {
-    setLoadingId(alert.log_id)
-    setError(null)
-    try {
-      await confirmAlert(alert.log_id)
-      removeAlert(alert.log_id)
-      invalidateAlerts()
-    } catch (err) {
-      setError(getApiErrorMessage(err, "Failed to confirm alert."))
-    } finally {
-      setLoadingId(null)
-    }
-  }
-
-  async function handleResolve() {
-    setLoadingId(alert.log_id)
-    setError(null)
-    try {
-      await resolveAlert(alert.log_id)
-      removeAlert(alert.log_id)
-      invalidateAlerts()
-    } catch (err) {
-      setError(getApiErrorMessage(err, "Failed to resolve alert."))
+      setError(getApiErrorMessage(err, failure))
     } finally {
       setLoadingId(null)
     }
   }
 
   return (
-    <div
-      className="fixed inset-0 z-9999 flex items-center justify-center p-4"
-      aria-modal="true"
+    <Modal
+      isOpen
+      onClose={noop}
+      hideClose
+      closeOnBackdrop={false}
       role="alertdialog"
-      aria-label="Accident Detected"
+      ariaLabel={isOngoing ? "Ongoing accident" : "Accident detected"}
+      // Above every other overlay: an alert firing while an operator has an
+      // incident modal open must land on top of it, not behind it.
+      overlayClassName="z-9999"
+      backdropClassName="bg-backdrop-alert"
+      className="max-w-md overflow-hidden p-0"
     >
-      {/* backdrop */}
-      <div className="absolute inset-0 bg-backdrop-alert" />
-
-      {/* modal card */}
-      <div className="relative w-full max-w-md overflow-hidden rounded-xl shadow-2xl">
-        {/* header banner — red for Unverified, amber for Ongoing */}
+      <div className="-mx-6 -mb-6">
+        {/* header banner — danger for Unverified, warning for Ongoing */}
         <div className={`px-6 py-4 text-center ${isOngoing ? "bg-warning" : "bg-danger"}`}>
-          <p className="text-xl font-black uppercase tracking-widest text-fg-on-primary">
+          <p className="text-xl font-black uppercase tracking-[0.08em] text-fg-on-primary">
             {isOngoing ? "Ongoing Accident" : "Accident Detected"}
           </p>
           {activeAlerts.length > 1 && (
@@ -95,7 +91,6 @@ export function GlobalAlerts() {
           )}
         </div>
 
-        {/* snapshot area */}
         <div className="flex min-h-[220px] items-center justify-center bg-surface-3 p-6">
           <SnapshotImage
             snapshotUrl={alert.snapshot_url}
@@ -105,18 +100,17 @@ export function GlobalAlerts() {
           />
         </div>
 
-        {/* metadata rows */}
         <div className="space-y-3 bg-surface-1 px-6 py-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-widest text-fg-muted">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
               Timestamp
             </span>
-            <span className="tabular-nums text-sm font-semibold text-fg">
+            <span className="text-sm font-semibold tabular-nums text-fg">
               {formatFullDateTime(alert.detected_at)}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-widest text-fg-muted">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
               Camera Name
             </span>
             <span className="text-sm font-bold uppercase text-fg">
@@ -124,7 +118,7 @@ export function GlobalAlerts() {
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-widest text-fg-muted">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
               AI-Confidence Score
             </span>
             <span className="text-sm font-bold text-danger">
@@ -133,7 +127,6 @@ export function GlobalAlerts() {
           </div>
         </div>
 
-        {/* error message */}
         {error ? (
           <div className="bg-surface-1 px-6 pb-3">
             <p className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
@@ -142,37 +135,29 @@ export function GlobalAlerts() {
           </div>
         ) : null}
 
-        {/* action buttons — vary by status */}
-        <div className="grid grid-cols-2 border-t border-stroke bg-surface-1">
-          <button
-            type="button"
-            onClick={handleDismiss}
+        <div className="grid grid-cols-2 gap-px border-t border-stroke bg-stroke">
+          <Button
+            variant="secondary"
+            className="rounded-none py-4 text-xs font-black uppercase tracking-[0.08em]"
             disabled={busy}
-            className="border-r border-stroke-strong bg-surface-3 py-4 text-xs font-black uppercase tracking-widest text-fg transition-colors hover:bg-stroke-strong disabled:opacity-50"
+            onClick={() => runAction(dismissAlert, "Failed to dismiss alert.")}
           >
-            {busy && loadingId === alert.log_id ? "..." : "Dismiss Accident"}
-          </button>
-          {isUnverified ? (
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={busy}
-              className="bg-primary py-4 text-xs font-black uppercase tracking-widest text-fg-on-primary transition-colors hover:bg-primary-hover disabled:opacity-50"
-            >
-              {busy ? "..." : "Confirm Accident"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleResolve}
-              disabled={busy}
-              className="bg-primary py-4 text-xs font-black uppercase tracking-widest text-fg-on-primary transition-colors hover:bg-primary-hover disabled:opacity-50"
-            >
-              {busy ? "..." : "Resolve Accident"}
-            </button>
-          )}
+            {busy ? "…" : "Dismiss Accident"}
+          </Button>
+          <Button
+            variant="primary"
+            className="rounded-none py-4 text-xs font-black uppercase tracking-[0.08em]"
+            disabled={busy}
+            onClick={() =>
+              isUnverified
+                ? runAction(confirmAlert, "Failed to confirm alert.")
+                : runAction(resolveAlert, "Failed to resolve alert.")
+            }
+          >
+            {busy ? "…" : isUnverified ? "Confirm Accident" : "Resolve Accident"}
+          </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

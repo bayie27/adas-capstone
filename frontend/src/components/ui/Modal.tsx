@@ -13,6 +13,22 @@ interface ModalProps {
   className?: string
   hideClose?: boolean
   closeOnBackdrop?: boolean
+  /**
+   * Overrides the fixed positioning layer, for the one overlay that must
+   * outrank every other: the HITL accident alarm. An alert firing while an
+   * operator has an incident open has to land on top of it, not behind it.
+   */
+  overlayClassName?: string
+  /**
+   * Overrides the backdrop. §2.6 gives the HITL alert a heavier scrim
+   * (`--color-backdrop-alert`, 0.70) than an ordinary modal (0.60) so it
+   * reads as more blocking.
+   */
+  backdropClassName?: string
+  /** `alertdialog` for anything demanding a decision before the user proceeds. */
+  role?: "dialog" | "alertdialog"
+  /** Used when there is no `title` to name the dialog from. */
+  ariaLabel?: string
 }
 
 export function Modal({
@@ -25,23 +41,29 @@ export function Modal({
   className,
   hideClose,
   closeOnBackdrop = true,
+  overlayClassName,
+  backdropClassName,
+  role = "dialog",
+  ariaLabel,
 }: ModalProps) {
   const dialogRef = useOverlayBehavior(isOpen, onClose)
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className={cn("fixed inset-0 z-50 flex items-center justify-center p-4", overlayClassName)}
+    >
       <div
-        className="absolute inset-0 bg-backdrop transition-opacity"
+        className={cn("absolute inset-0 bg-backdrop transition-opacity", backdropClassName)}
         onClick={closeOnBackdrop ? onClose : undefined}
       />
 
       <div
         ref={dialogRef}
-        role="dialog"
+        role={role}
         aria-modal="true"
-        aria-label={title}
+        aria-label={title ?? ariaLabel}
         tabIndex={-1}
         className={cn(
           "relative bg-surface-1 border border-stroke rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200",
