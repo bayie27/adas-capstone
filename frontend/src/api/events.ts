@@ -8,6 +8,7 @@ export type RealtimeEventType =
   | "CAMERA_STATUS_UPDATE"
   | "SNOOZE_ACTIVATED"
   | "RE_ALARM"
+  | "MAINTENANCE_NOTICE"
 
 // 01_CONTRACTS.md §9.1 — every server message is wrapped in this envelope.
 export interface EventEnvelope {
@@ -79,6 +80,16 @@ export interface ReAlarmData {
   camera_id: number
 }
 
+// Broadcast just before `POST /api/system/restores` takes the backend
+// offline (best-effort — a broadcast failure never fails that request, so
+// this may legitimately never arrive), and by a dev-tools reseed, which has
+// no backup to name — hence `backup_id` being nullable rather than every
+// producer inventing a placeholder.
+export interface MaintenanceNoticeData {
+  message: string
+  backup_id: string | null
+}
+
 const EVENT_TYPES: RealtimeEventType[] = [
   "CONNECTION_READY",
   "NEW_DETECTION",
@@ -86,6 +97,7 @@ const EVENT_TYPES: RealtimeEventType[] = [
   "CAMERA_STATUS_UPDATE",
   "SNOOZE_ACTIVATED",
   "RE_ALARM",
+  "MAINTENANCE_NOTICE",
 ]
 const ALERT_STATUS_VALUES: AlertStatus[] = ["Unverified", "Ongoing", "Dismissed", "Resolved"]
 const CAMERA_CONNECTION_STATUS_VALUES: CameraConnectionStatus[] = [
@@ -294,5 +306,18 @@ export function asReAlarmData(data: Record<string, unknown>): ReAlarmData | null
   return {
     log_id: data.log_id,
     camera_id: data.camera_id,
+  }
+}
+
+export function asMaintenanceNoticeData(
+  data: Record<string, unknown>,
+): MaintenanceNoticeData | null {
+  if (typeof data.message !== "string" || !isNullableString(data.backup_id)) {
+    return null
+  }
+
+  return {
+    message: data.message,
+    backup_id: data.backup_id,
   }
 }
