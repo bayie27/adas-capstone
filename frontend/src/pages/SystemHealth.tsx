@@ -7,8 +7,16 @@ import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { Tabs } from "@/components/ui/Tabs"
 import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/api/health"
-import type { SystemHealthDataPoint, SystemHealthLiveResponse } from "@/api/health"
-import { RiDashboard3Line, RiHardDrive2Line, RiServerLine, RiTimerLine } from "@remixicon/react"
+import type { HealthWarning, SystemHealthDataPoint, SystemHealthLiveResponse } from "@/api/health"
+import { describeWarning } from "@/utils/healthWarnings"
+import { cn } from "@/utils/cn"
+import {
+  RiAlertLine,
+  RiDashboard3Line,
+  RiHardDrive2Line,
+  RiServerLine,
+  RiTimerLine,
+} from "@remixicon/react"
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -74,6 +82,41 @@ const RANGE_TABS = [
   { value: "30d" as const, label: "30-Day Trend" },
 ]
 
+/**
+ * `warnings[]` carries no presentation strings by design — see
+ * utils/healthWarnings.ts for the copy table and its open fallback. This is
+ * the strip Figma doesn't draw at all: the backend computes threshold
+ * breaches and, before this, nothing showed them — including
+ * AI_HEARTBEAT_STALE, arguably the single most important signal on this page.
+ */
+function WarningsStrip({ warnings }: { warnings: HealthWarning[] }) {
+  if (warnings.length === 0) return null
+
+  return (
+    <div className="mb-6 flex flex-col gap-2">
+      {warnings.map((warning, index) => {
+        const described = describeWarning(warning)
+        return (
+          <div
+            key={`${warning.code}-${index}`}
+            className={cn(
+              "flex items-center gap-2 rounded-md border px-4 py-2.5 text-caption",
+              described.tone === "danger"
+                ? "border-danger-border bg-danger-subtle text-danger"
+                : described.tone === "warning"
+                  ? "border-warning-border bg-warning-subtle text-warning"
+                  : "border-stroke bg-surface-1 text-fg-muted",
+            )}
+          >
+            <RiAlertLine size={15} className="shrink-0" aria-hidden="true" />
+            {described.message}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── page ────────────────────────────────────────────────────────────────────
 
 export default function SystemHealth() {
@@ -137,6 +180,8 @@ export default function SystemHealth() {
           onRetry={() => liveQuery.refetch()}
         />
       ) : null}
+
+      <WarningsStrip warnings={live?.warnings ?? []} />
 
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
