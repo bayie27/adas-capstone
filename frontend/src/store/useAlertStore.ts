@@ -1,6 +1,6 @@
 import { create } from "zustand"
 
-import type { AlertLog } from "@/api/alerts"
+import type { AlertLog, IncidentHandledInfo } from "@/api/alerts"
 import { playDetectionSound, stopDetectionSound } from "@/utils/detectionSound"
 import { shouldApplyIncidentEvent } from "@/utils/merge"
 
@@ -57,6 +57,18 @@ interface AlertState {
   handledIds: Set<number>
   /** log_id -> snoozed_until (ISO). Shared incident state, mirrored from SNOOZE_ACTIVATED/RE_ALARM. */
   snoozedUntil: Record<number, string>
+  /**
+   * log_id -> who handled it, when a *different* operator did.
+   *
+   * Fed by the `ALERT_STATUS_UPDATE` broadcast, which reaches every connected
+   * dashboard — including ones that never made a request. It is the passive
+   * half of the same fact the 409 CONFLICT_STATE delivers to the operator who
+   * lost a race.
+   *
+   * Session-scoped and small: one entry per incident whose status changed
+   * under someone else's hand while this tab was open.
+   */
+  handledByOther: Record<number, IncidentHandledInfo>
   /** event_ids applied this connection — 01_CONTRACTS.md §9.1 reconnect-race dedup */
   seenEventIds: string[]
   addAlert: (alert: AlertLog) => void
@@ -64,6 +76,7 @@ interface AlertState {
   clearAlerts: () => void
   activateSnooze: (logId: number, snoozedUntil: string) => void
   clearSnooze: (logId: number) => void
+  recordHandledByOther: (logId: number, info: IncidentHandledInfo) => void
   isEventSeen: (eventId: string) => boolean
   markEventSeen: (eventId: string) => void
 }
@@ -86,6 +99,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
   alerts: [],
   handledIds: readHandledIds(),
   snoozedUntil: {},
+  handledByOther: {},
   seenEventIds: [],
   addAlert: (alert) => {
     const before = activeCount(get().alerts, get().snoozedUntil)
@@ -146,7 +160,13 @@ export const useAlertStore = create<AlertState>((set, get) => ({
   clearAlerts: () => {
     stopDetectionSound()
     clearHandledIds()
-    set({ alerts: [], handledIds: new Set(), snoozedUntil: {}, seenEventIds: [] })
+    set({
+      alerts: [],
+      handledIds: new Set(),
+      snoozedUntil: {},
+      handledByOther: {},
+      seenEventIds: [],
+    })
   },
   activateSnooze: (logId, snoozedUntil) => {
     const before = activeCount(get().alerts, get().snoozedUntil)
@@ -157,6 +177,13 @@ export const useAlertStore = create<AlertState>((set, get) => ({
     const before = activeCount(get().alerts, get().snoozedUntil)
     set((state) => ({ snoozedUntil: withoutSnooze(state.snoozedUntil, logId) }))
     syncSound(before, activeCount(get().alerts, get().snoozedUntil))
+  },
+  // Deliberately does NOT call syncSound. It writes metadata only — `alerts`
+  // and `snoozedUntil` are untouched, so the non-snoozed queue's count cannot
+  // move and the 0<->non-0 alarm edge cannot fire. Anything added here that
+  // *does* touch either must go through the before/after pattern above.
+  recordHandledByOther: (logId, info) => {
+    set((state) => ({ handledByOther: { ...state.handledByOther, [logId]: info } }))
   },
   isEventSeen: (eventId) => get().seenEventIds.includes(eventId),
   markEventSeen: (eventId) => {

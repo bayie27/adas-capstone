@@ -1,58 +1,105 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { Modal } from "@/components/ui/Modal"
+import { Button } from "@/components/ui/Button"
+import { DateRangePicker } from "@/components/ui/DateRangePicker"
+import { ExportButton } from "@/components/ui/ExportButton"
+import { FilterSelect } from "@/components/ui/FilterSelect"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"
-import { SnapshotImage } from "@/components/ui/SnapshotImage"
-import { TableStateRow } from "@/components/ui/Table"
+import { AlertStatusText } from "@/components/ui/StatusText"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  TableStateRow,
+} from "@/components/ui/Table"
+import { Tabs } from "@/components/ui/Tabs"
+import { IncidentHandledNotice } from "@/components/ui/IncidentHandledNotice"
+import { IncidentDetailModal } from "@/pages/detections/IncidentDetailModal"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import {
   confirmAlert,
   dismissAlert,
-  exportAlertsCsv,
+  exportAlerts,
   getAlertDetails,
   getAlerts,
+  getIncidentConflict,
   resolveAlert,
 } from "@/api/alerts"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useUserOptions } from "@/hooks/useUserOptions"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
-import type { AlertLog, AlertStatus } from "@/api/alerts"
+import type { AlertLog, AlertSortField, AlertStatus, ExportFormat, SortOrder } from "@/api/alerts"
 import {
   formatAlertCode,
   formatAlertConfidence,
-  getAlertBadgeClass,
-  getAlertBorderClass,
   getAlertLastHandledBy,
   getAlertLastUpdated,
-  getAlertStatusTextClass,
 } from "@/utils/format"
 import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
-import { cn } from "@/utils/cn"
-import {
-  RiArrowRightSLine,
-  RiCalendarLine,
-  RiCameraLine,
-  RiCloseLine,
-  RiDownloadLine,
-  RiEyeLine,
-  RiUserLine,
-} from "@remixicon/react"
+import { RiCloseLine, RiEyeLine } from "@remixicon/react"
 
+// Starting page size. PAGE_SIZE_OPTIONS in PaginationFooter is
+// [10, 25, 50, 100], so the default must be one of them or the selector
+// cannot display its own current value (see M14, which is Cameras' version of
+// this problem at a page size of 8).
 const ALERTS_PAGE_SIZE = 10
 const ACTIVE_ALERT_STATUSES: AlertStatus[] = ["Unverified", "Ongoing"]
 const LOG_ALERT_STATUSES: AlertStatus[] = ["Dismissed", "Resolved"]
 
 type TabKey = "ongoing" | "logs"
 
+const TAB_ITEMS = [
+  { value: "ongoing" as const, label: "Ongoing" },
+  { value: "logs" as const, label: "Logs" },
+]
+
+interface SortState {
+  key: AlertSortField
+  order: SortOrder
+}
+
+/**
+ * `detected_at desc` is the backend's own default and the only sane resting
+ * order for an incident queue — newest first.
+ */
+const DEFAULT_SORT: SortState = { key: "detected_at", order: "desc" }
+
+/**
+ * Column label -> allowlisted sort key. Every value here is a member of
+ * `ALERT_SORT_FIELDS`; an unlisted key is a 422, so this table is the only
+ * place a key is chosen and it is chosen from the exported allowlist.
+ *
+ * `Camera Name` sorts by `camera_id`, not by name — the backend allowlist has
+ * no `camera_name`. Grouping by camera is what the sort delivers, alphabetical
+ * order is not.
+ *
+ * `Last Handled By` has no allowlisted key (neither `verified_by` nor
+ * `closed_by` is sortable) and is deliberately not sortable rather than
+ * silently sorting by something else.
+ */
+const SORTABLE: Record<string, AlertSortField> = {
+  "Accident No.": "log_id",
+  Timestamp: "detected_at",
+  "Camera Name": "camera_id",
+  Confidence: "confidence_score",
+  Status: "detection_status",
+  "Last Updated": "updated_at",
+}
+
 export default function Detections() {
   const queryClient = useQueryClient()
   const removeAlert = useAlertStore((state) => state.removeAlert)
+  const handledByOther = useAlertStore((state) => state.handledByOther)
   const [activeTab, setActiveTab] = useState<TabKey>("ongoing")
   const [logSearch, setLogSearch] = useState("")
   const debouncedLogSearch = useDebouncedValue(logSearch.trim(), 300)
@@ -77,12 +124,26 @@ export default function Detections() {
   const [seenLogsTotal, setSeenLogsTotal] = useState(0)
   const logsPagination = usePagination(seenLogsTotal, ALERTS_PAGE_SIZE)
 
+  // One sort per tab, mirroring the two paginations: the live queue and the
+  // archive are different questions and should not share an ordering.
+  const [activeSort, setActiveSort] = useState<SortState>(DEFAULT_SORT)
+  const [logsSort, setLogsSort] = useState<SortState>(DEFAULT_SORT)
+
   const activeAlertsQuery = useQuery({
-    queryKey: ["alerts", "active", activePagination.offset],
+    queryKey: [
+      "alerts",
+      "active",
+      activePagination.offset,
+      activePagination.pageSize,
+      activeSort.key,
+      activeSort.order,
+    ],
     queryFn: () =>
       getAlerts({
         status: ACTIVE_ALERT_STATUSES,
-        limit: ALERTS_PAGE_SIZE,
+        sort_by: activeSort.key,
+        sort_order: activeSort.order,
+        limit: activePagination.pageSize,
         offset: activePagination.offset,
       }),
     placeholderData: (previousData) => previousData,
@@ -94,16 +155,21 @@ export default function Detections() {
       "logs",
       debouncedLogSearch,
       logsPagination.offset,
+      logsPagination.pageSize,
       startDate,
       endDate,
       cameraId,
       userId,
+      logsSort.key,
+      logsSort.order,
     ],
     queryFn: () =>
       getAlerts({
         status: LOG_ALERT_STATUSES,
         search: debouncedLogSearch || undefined,
-        limit: ALERTS_PAGE_SIZE,
+        sort_by: logsSort.key,
+        sort_order: logsSort.order,
+        limit: logsPagination.pageSize,
         offset: logsPagination.offset,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
@@ -120,15 +186,23 @@ export default function Detections() {
   })
 
   const exportMutation = useMutation({
-    mutationFn: () =>
-      exportAlertsCsv({
-        status: LOG_ALERT_STATUSES,
-        search: debouncedLogSearch || undefined,
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-        camera_id: cameraId ? [Number(cameraId)] : undefined,
-        user_id: userId ? [Number(userId)] : undefined,
-      }),
+    mutationFn: (format: ExportFormat) =>
+      exportAlerts(
+        {
+          status: LOG_ALERT_STATUSES,
+          search: debouncedLogSearch || undefined,
+          // Same order as the screen. Without this a CSV of a
+          // confidence-sorted view arrives in detected_at order and quietly is
+          // not the thing the operator was looking at.
+          sort_by: logsSort.key,
+          sort_order: logsSort.order,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          camera_id: cameraId ? [Number(cameraId)] : undefined,
+          user_id: userId ? [Number(userId)] : undefined,
+        },
+        format,
+      ),
   })
 
   const handleMutationSuccess = (updatedAlert: AlertLog) => {
@@ -164,6 +238,39 @@ export default function Detections() {
 
   const currentQuery = activeTab === "ongoing" ? activeAlertsQuery : logsQuery
   const currentPagination = activeTab === "ongoing" ? activePagination : logsPagination
+  const currentSort = activeTab === "ongoing" ? activeSort : logsSort
+  const setCurrentSort = activeTab === "ongoing" ? setActiveSort : setLogsSort
+
+  /**
+   * D-8(a) — two states. Clicking the active column flips the direction;
+   * clicking any other column takes over the sort at `desc`, which is the
+   * useful default for every key on this table (newest, highest confidence,
+   * most recently updated). There is no third click that clears.
+   *
+   * Re-sorting changes the query key, so TanStack refetches rather than
+   * re-ordering the page in place — a client-side re-sort would reorder one
+   * page and lie about the rest, which is why Phase 1 of the earlier
+   * remediation removed one.
+   */
+  const handleSort = (key: string) => {
+    const sortKey = key as AlertSortField
+    currentPagination.reset()
+    setCurrentSort((prev) =>
+      prev.key === sortKey
+        ? { key: sortKey, order: prev.order === "asc" ? "desc" : "asc" }
+        : { key: sortKey, order: "desc" },
+    )
+  }
+
+  const sortFor = (label: string) => {
+    const key = SORTABLE[label]
+    if (!key) return undefined
+    return {
+      key,
+      active: currentSort.key === key ? currentSort.order : null,
+      onSort: handleSort,
+    }
+  }
 
   // Render rows in the server's order. The server paginates (limit/offset), so
   // it defines the total order; re-sorting a single page by a different key
@@ -179,12 +286,19 @@ export default function Detections() {
   const isTransitionPending =
     confirmMutation.isPending || dismissMutation.isPending || resolveMutation.isPending
 
-  const transitionError = useMemo(() => {
-    const firstError =
-      confirmMutation.error ?? dismissMutation.error ?? resolveMutation.error ?? null
+  const transitionFailure = confirmMutation.error ?? dismissMutation.error ?? resolveMutation.error
 
-    return firstError ? getApiErrorMessage(firstError, "Unable to update alert status.") : null
-  }, [confirmMutation.error, dismissMutation.error, resolveMutation.error])
+  // A lost race is not a failure to report as one — it is news about what a
+  // colleague did. It gets the named notice; everything else gets a banner.
+  const transitionConflict = useMemo(
+    () => (transitionFailure ? getIncidentConflict(transitionFailure) : null),
+    [transitionFailure],
+  )
+
+  const transitionError = useMemo(() => {
+    if (!transitionFailure || transitionConflict) return null
+    return getApiErrorMessage(transitionFailure, "Unable to update alert status.")
+  }, [transitionFailure, transitionConflict])
 
   const closeModal = () => {
     setSelectedAlertId(null)
@@ -202,48 +316,60 @@ export default function Detections() {
     resolveMutation.reset()
   }
 
-  const closedTimeLabel =
-    selectedAlert?.detection_status === "Resolved" ? "TIME RESOLVED" : "TIME CLOSED"
+  const broadcastHandled =
+    selectedAlertId !== null ? (handledByOther[selectedAlertId] ?? null) : null
+
+  const cameraOptions = [
+    { value: "", label: "All cameras" },
+    ...(camerasQuery.data?.cameras ?? []).map((c) => ({
+      value: String(c.camera_id),
+      label: c.camera_name,
+    })),
+  ]
+
+  const userOptions = [
+    { value: "", label: "All operators" },
+    ...(usersQuery.data?.users ?? []).map((u) => ({
+      value: String(u.user_id),
+      label: u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.username,
+    })),
+  ]
 
   return (
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6">
+        {/*
+          text-xl / text-xs matches Cameras and Users as shipped, not §2.4's
+          H3 (24px). Phase 6 set that precedent and it is merged; a Detections
+          title two sizes larger than the screen beside it reads as a bug, so
+          the deviation is carried rather than half-corrected here. Fixing all
+          nine page titles at once is a separate, mechanical change.
+        */}
         <h1 className="mb-0.5 text-xl font-semibold text-fg">Detections</h1>
         <p className="text-xs text-fg-muted">
           Monitor ongoing AI detections and review historical logs to verify reported incidents
         </p>
       </div>
 
-      <div className="mb-6 flex w-fit items-center gap-2 rounded-md border border-stroke bg-surface-1 p-1">
-        <button
-          type="button"
-          onClick={() => setActiveTab("ongoing")}
-          className={cn(
-            "rounded px-5 py-1.5 text-xs font-medium transition-all duration-200",
-            activeTab === "ongoing"
-              ? "border border-stroke-strong bg-surface-1 text-fg shadow-sm"
-              : "text-fg-muted hover:text-fg-body",
-          )}
-        >
-          Ongoing
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("logs")}
-          className={cn(
-            "rounded px-5 py-1.5 text-xs font-medium transition-all duration-200",
-            activeTab === "logs"
-              ? "border border-stroke-strong bg-surface-1 text-fg shadow-sm"
-              : "text-fg-muted hover:text-fg-body",
-          )}
-        >
-          Logs
-        </button>
+      <div className="mb-6">
+        <Tabs
+          items={TAB_ITEMS}
+          value={activeTab}
+          onChange={setActiveTab}
+          variant="chip"
+          label="Detections view"
+        />
       </div>
 
+      {/*
+        The Ongoing tab draws no toolbar (37:76) — it is a live queue, not a
+        filterable archive, and the two chips below are read-only statements of
+        what the tab contains. Only the Logs tab (112:8438) gets search, a date
+        range, the dropdowns and Export.
+      */}
       {activeTab === "logs" ? (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-3">
             <SearchInput
               value={logSearch}
               onChange={(value) => {
@@ -252,76 +378,41 @@ export default function Detections() {
               }}
               placeholder="Search accident no. or camera..."
             />
-            <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
-              <RiCalendarLine size={13} className="text-fg-muted" />
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => {
-                  logsPagination.reset()
-                  setStartDate(e.target.value)
-                }}
-                className="bg-transparent text-xs text-fg-body focus:outline-none [color-scheme:dark]"
-              />
-            </div>
-            <span className="text-xs text-fg-muted">to</span>
-            <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
-              <RiCalendarLine size={13} className="text-fg-muted" />
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => {
-                  logsPagination.reset()
-                  setEndDate(e.target.value)
-                }}
-                className="bg-transparent text-xs text-fg-body focus:outline-none [color-scheme:dark]"
-              />
-            </div>
-            <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
-              <RiCameraLine size={13} className="text-fg-muted" />
-              <select
-                value={cameraId}
-                onChange={(e) => {
-                  logsPagination.reset()
-                  setCameraId(e.target.value)
-                }}
-                className="bg-transparent text-xs text-fg-body focus:outline-none"
-              >
-                <option value="">All cameras</option>
-                {camerasQuery.data?.cameras.map((c) => (
-                  <option key={c.camera_id} value={c.camera_id}>
-                    {c.camera_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-3 py-1.5 text-xs text-fg-body">
-              <RiArrowRightSLine size={13} className="text-fg-muted" />
-              Dismissed & Resolved
-            </div>
+            <DateRangePicker
+              start={startDate}
+              end={endDate}
+              onStartChange={(value) => {
+                logsPagination.reset()
+                setStartDate(value)
+              }}
+              onEndChange={(value) => {
+                logsPagination.reset()
+                setEndDate(value)
+              }}
+              label="Filter incidents by date"
+            />
+            <FilterSelect
+              value={cameraId}
+              options={cameraOptions}
+              onChange={(value) => {
+                logsPagination.reset()
+                setCameraId(value)
+              }}
+            />
             {role === "Admin" ? (
-              <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-2 py-1">
-                <RiUserLine size={13} className="text-fg-muted" />
-                <select
-                  value={userId}
-                  onChange={(e) => {
-                    logsPagination.reset()
-                    setUserId(e.target.value)
-                  }}
-                  className="bg-transparent text-xs text-fg-body focus:outline-none"
-                >
-                  <option value="">All operators</option>
-                  {usersQuery.data?.users.map((u) => (
-                    <option key={u.user_id} value={u.user_id}>
-                      {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.username}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <FilterSelect
+                value={userId}
+                options={userOptions}
+                onChange={(value) => {
+                  logsPagination.reset()
+                  setUserId(value)
+                }}
+              />
             ) : null}
             {hasFilters ? (
-              <button
-                type="button"
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => {
                   setStartDate("")
                   setEndDate("")
@@ -329,38 +420,43 @@ export default function Detections() {
                   setUserId("")
                   logsPagination.reset()
                 }}
-                className="flex items-center gap-1 rounded-md border border-stroke bg-surface-1 px-2 py-1.5 text-xs text-fg-muted transition-colors hover:text-fg"
               >
-                <RiCloseLine size={12} />
+                <RiCloseLine size={13} />
                 Clear
-              </button>
+              </Button>
             ) : null}
           </div>
-          <button
-            type="button"
-            disabled={exportMutation.isPending}
-            onClick={() => exportMutation.mutate()}
-            className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RiDownloadLine size={13} />
-            {exportMutation.isPending ? "Exporting..." : "Export"}
-          </button>
+          {/*
+            `total_filtered` is already on the list response, so the count is
+            free and needs no extra request. It is the count for the SAME
+            filter set the export sends.
+          */}
+          <ExportButton
+            rowCount={logsQuery.data?.total_filtered}
+            isExporting={exportMutation.isPending}
+            onExport={(format) => exportMutation.mutate(format)}
+          />
         </div>
       ) : (
         <div className="mb-6 flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-3 py-1.5 text-xs text-fg-body">
-            <RiArrowRightSLine size={13} className="text-fg-muted" />
-            Unverified & Ongoing
-          </div>
-          <div className="flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-3 py-1.5 text-xs text-fg-body">
-            <RiCalendarLine size={13} className="text-fg-muted" />
+          <span className="rounded-md border border-stroke bg-surface-1 px-3 py-1.5 text-caption text-fg-body">
+            Unverified &amp; Ongoing
+          </span>
+          <span className="rounded-md border border-stroke bg-surface-1 px-3 py-1.5 text-caption text-fg-body">
             Live queue
-          </div>
+          </span>
         </div>
       )}
 
+      {/*
+        A 413 can still arrive despite the pre-flight — the row count is read
+        when the page loads and the filter set can grow before the click. The
+        backend's own `detail` names the count, the limit and the async jobs
+        endpoint, so it is rendered verbatim rather than replaced with a second
+        sentence that can drift out of step with it.
+      */}
       {activeTab === "logs" && exportMutation.isError ? (
-        <QueryErrorBanner error={exportMutation.error} fallback="Unable to export logs CSV." />
+        <QueryErrorBanner error={exportMutation.error} fallback="Unable to export logs." />
       ) : null}
 
       {currentQuery.isError ? (
@@ -375,273 +471,120 @@ export default function Detections() {
         />
       ) : null}
 
-      <div className="overflow-hidden rounded-xl border border-stroke bg-surface-1">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-stroke bg-surface-1 text-fg-muted">
-                <th className="px-6 py-4 text-xs font-medium">Accident No.</th>
-                <th className="px-6 py-4 text-xs font-medium">Timestamp</th>
-                <th className="px-6 py-4 text-xs font-medium">Camera Name</th>
-                <th className="px-6 py-4 text-xs font-medium">Status</th>
-                <th className="px-6 py-4 text-xs font-medium">Last Handled By</th>
-                <th className="px-6 py-4 text-xs font-medium">Last Updated</th>
-                <th className="px-6 py-4 text-right text-xs font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stroke">
-              {currentQuery.isLoading ? (
-                <TableStateRow colSpan={7}>
-                  {activeTab === "ongoing" ? "Loading active alerts..." : "Loading logs..."}
-                </TableStateRow>
-              ) : currentRows.length === 0 ? (
-                <TableStateRow colSpan={7}>
-                  {activeTab === "ongoing"
-                    ? "No active alerts in the queue."
-                    : "No historical logs found for the current filters."}
-                </TableStateRow>
-              ) : (
-                currentRows.map((item) => (
-                  <tr
-                    key={item.log_id}
-                    className="text-fg-body transition-colors hover:bg-surface-1"
-                  >
-                    <td className="px-6 py-4 text-xs font-medium">
-                      {formatAlertCode(item.log_id)}
-                    </td>
-                    <td className="px-6 py-4 text-xs text-fg-muted">
-                      {formatFullDateTime(item.detected_at)}
-                    </td>
-                    <td className="px-6 py-4 text-xs">{item.camera_name ?? "Unknown Camera"}</td>
-                    <td className="px-6 py-4 text-xs">
-                      <span
-                        className={cn(
-                          "font-medium",
-                          getAlertStatusTextClass(item.detection_status),
-                        )}
+      <TableContainer
+        footer={
+          <PaginationFooter
+            page={currentPagination.page}
+            totalPages={currentPagination.totalPages}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEndValue}
+            totalFiltered={currentTotalFiltered}
+            pageSize={currentPagination.pageSize}
+            isFetching={currentQuery.isFetching}
+            onPrev={currentPagination.prev}
+            onNext={currentPagination.next}
+            onPageChange={currentPagination.goTo}
+            onPageSizeChange={currentPagination.setPageSize}
+          />
+        }
+      >
+        <Table>
+          <TableHead>
+            <TableHeaderCell sort={sortFor("Accident No.")}>Accident No.</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Timestamp")}>Timestamp</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Camera Name")}>Camera Name</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Confidence")}>Confidence</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Status")}>Status</TableHeaderCell>
+            <TableHeaderCell>Last Handled By</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Last Updated")}>Last Updated</TableHeaderCell>
+            <TableHeaderCell className="text-right">Actions</TableHeaderCell>
+          </TableHead>
+          <TableBody>
+            {currentQuery.isLoading ? (
+              <TableStateRow colSpan={8}>
+                {activeTab === "ongoing" ? "Loading active alerts…" : "Loading logs…"}
+              </TableStateRow>
+            ) : currentRows.length === 0 ? (
+              <TableStateRow colSpan={8}>
+                {activeTab === "ongoing"
+                  ? "No active alerts in the queue."
+                  : "No historical logs found for the current filters."}
+              </TableStateRow>
+            ) : (
+              currentRows.map((item) => (
+                <TableRow key={item.log_id}>
+                  <TableCell className="font-medium text-fg">
+                    {formatAlertCode(item.log_id)}
+                  </TableCell>
+                  <TableCell className="text-fg-muted">
+                    {formatFullDateTime(item.detected_at)}
+                  </TableCell>
+                  <TableCell>{item.camera_name ?? "Unknown Camera"}</TableCell>
+                  <TableCell className="tabular-nums">
+                    {formatAlertConfidence(item.confidence_score)}
+                  </TableCell>
+                  <TableCell>
+                    <AlertStatusText status={item.detection_status} />
+                  </TableCell>
+                  <TableCell className="text-fg-muted">{getAlertLastHandledBy(item)}</TableCell>
+                  <TableCell className="text-fg-muted">{getAlertLastUpdated(item)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 w-7 px-0"
+                        aria-label={`View ${formatAlertCode(item.log_id)}`}
+                        onClick={() => openAlertModal(item)}
                       >
-                        {item.detection_status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-xs text-fg-muted">
-                      {getAlertLastHandledBy(item)}
-                    </td>
-                    <td className="px-6 py-4 text-xs text-fg-muted">{getAlertLastUpdated(item)}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end">
-                        <button
-                          type="button"
-                          onClick={() => openAlertModal(item)}
-                          className="flex h-7 w-7 items-center justify-center rounded border border-stroke-strong bg-surface-1 transition-colors hover:bg-surface-2"
-                        >
-                          <RiEyeLine size={14} className="text-fg" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                        <RiEyeLine size={14} />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
-        <PaginationFooter
-          page={currentPagination.page}
-          totalPages={currentPagination.totalPages}
-          rangeStart={rangeStart}
-          rangeEnd={rangeEndValue}
-          totalFiltered={currentTotalFiltered}
-          pageSize={ALERTS_PAGE_SIZE}
-          isFetching={currentQuery.isFetching}
-          onPrev={currentPagination.prev}
-          onNext={currentPagination.next}
-        />
-      </div>
-
-      <Modal
+      <IncidentDetailModal
+        alert={selectedAlert}
         isOpen={selectedAlertId !== null}
         onClose={closeModal}
-        hideClose
-        className={cn(
-          "max-w-lg overflow-hidden border-t-4 p-0",
-          selectedAlert ? getAlertBorderClass(selectedAlert.detection_status) : "border-t-white",
-        )}
-      >
-        <div className="flex flex-col bg-surface-2">
-          <div className="flex items-center justify-between border-b border-border px-6 py-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-fg">
-              ACCIDENT DETAILS
-            </h2>
-            <button
-              type="button"
-              onClick={closeModal}
-              className="text-fg-muted transition-colors hover:text-fg"
-            >
-              <RiCloseLine size={18} />
-            </button>
-          </div>
-
-          <div className="flex aspect-video w-full items-center justify-center border-b border-stroke bg-surface-1">
-            {selectedAlert ? (
-              <SnapshotImage
-                snapshotUrl={selectedAlert.snapshot_url}
-                alt={`${formatAlertCode(selectedAlert.log_id)} snapshot`}
-                className="h-full w-full object-contain"
-                fallbackClassName="h-32 w-48 border border-stroke-strong bg-surface-1 text-fg-muted"
-              />
-            ) : (
-              <div className="text-xs text-fg-muted">Loading preview...</div>
-            )}
-          </div>
-
-          <div className="p-6">
-            {selectedAlert ? (
-              <>
-                <div className="mb-5 flex items-center gap-3">
-                  <span className="text-xl font-semibold text-fg">
-                    {formatAlertCode(selectedAlert.log_id)}
-                  </span>
-                  <span
-                    className={cn(
-                      "rounded-sm px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                      getAlertBadgeClass(selectedAlert.detection_status),
-                    )}
-                  >
-                    {selectedAlert.detection_status}
-                  </span>
-                </div>
-
-                <div className="mb-6 space-y-3.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium tracking-wider text-fg-muted">TIMESTAMP</span>
-                    <span className="font-medium text-fg-body">
-                      {formatFullDateTime(selectedAlert.detected_at)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium tracking-wider text-fg-muted">CAMERA NAME</span>
-                    <span className="font-medium text-fg-body">
-                      {selectedAlert.camera_name ?? "Unknown Camera"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium tracking-wider text-fg-muted">
-                      AI-CONFIDENCE SCORE
-                    </span>
-                    <span className="rounded bg-danger-subtle px-1.5 py-0.5 font-bold text-danger">
-                      {formatAlertConfidence(selectedAlert.confidence_score)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mb-6 border-t border-border pt-5">
-                  <div className="mb-4 flex items-start justify-between">
-                    <div>
-                      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-fg-muted">
-                        VERIFIED BY
-                      </div>
-                      <div className="text-xs font-medium text-fg-body">
-                        {selectedAlert.verified_by_name ?? "-"}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-fg-muted">
-                        TIME VERIFIED
-                      </div>
-                      <div className="text-xs text-fg-body">
-                        {formatFullDateTime(selectedAlert.verified_at)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {selectedAlert.detection_status === "Dismissed" ||
-                  selectedAlert.detection_status === "Resolved" ? (
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-fg-muted">
-                          CLOSED BY
-                        </div>
-                        <div className="text-xs font-medium text-fg-body">
-                          {selectedAlert.closed_by_name ?? "-"}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-fg-muted">
-                          {closedTimeLabel}
-                        </div>
-                        <div className="text-xs text-fg-body">
-                          {formatFullDateTime(selectedAlert.closed_at)}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-
-                {alertDetailsQuery.isError ? (
-                  <div className="mb-4 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
-                    {getApiErrorMessage(
-                      alertDetailsQuery.error,
-                      "Unable to refresh alert details.",
-                    )}
-                  </div>
-                ) : null}
-
-                {transitionError ? (
-                  <div className="mb-4 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
-                    {transitionError}
-                  </div>
-                ) : null}
-
-                {selectedAlert.detection_status === "Unverified" ? (
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={isTransitionPending}
-                      onClick={() => dismissMutation.mutate(selectedAlert.log_id)}
-                      className="flex-1 rounded-md border border-stroke-strong bg-surface-1 py-2.5 text-xs font-medium uppercase tracking-wider text-fg transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {dismissMutation.isPending ? "Dismissing..." : "Dismiss Alert"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isTransitionPending}
-                      onClick={() => confirmMutation.mutate(selectedAlert.log_id)}
-                      className="flex-1 rounded-md bg-primary py-2.5 text-xs font-semibold uppercase tracking-wider text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {confirmMutation.isPending ? "Confirming..." : "Confirm Alert"}
-                    </button>
-                  </div>
-                ) : null}
-
-                {selectedAlert.detection_status === "Ongoing" ? (
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={isTransitionPending}
-                      onClick={() => dismissMutation.mutate(selectedAlert.log_id)}
-                      className="flex-1 rounded-md border border-stroke-strong bg-surface-1 py-2.5 text-xs font-medium uppercase tracking-wider text-fg transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {dismissMutation.isPending ? "Dismissing..." : "Dismiss Accident"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isTransitionPending}
-                      onClick={() => resolveMutation.mutate(selectedAlert.log_id)}
-                      className="flex-1 rounded-md bg-primary py-2.5 text-xs font-semibold uppercase tracking-wider text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {resolveMutation.isPending ? "Resolving..." : "Resolve Accident"}
-                    </button>
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <div className="py-12 text-center text-sm text-fg-muted">
-                Loading alert details...
+        isTransitionPending={isTransitionPending}
+        isDismissing={dismissMutation.isPending}
+        isConfirming={confirmMutation.isPending}
+        isResolving={resolveMutation.isPending}
+        onDismiss={(logId) => dismissMutation.mutate(logId)}
+        onConfirm={(logId) => confirmMutation.mutate(logId)}
+        onResolve={(logId) => resolveMutation.mutate(logId)}
+        notice={
+          <>
+            {alertDetailsQuery.isError ? (
+              <div className="mb-4 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
+                {getApiErrorMessage(alertDetailsQuery.error, "Unable to refresh alert details.")}
               </div>
-            )}
-          </div>
-        </div>
-      </Modal>
+            ) : null}
+            {/*
+              Two sources, one presentation. `transitionConflict` is this
+              operator losing a race — a 409 answering their own request.
+              `broadcastHandled` is a colleague acting on the incident this
+              operator merely has open, which arrives over the socket and
+              reaches every tab. The first is a warning; the second is news.
+            */}
+            {transitionConflict ? <IncidentHandledNotice info={transitionConflict} /> : null}
+            {!transitionConflict && broadcastHandled ? (
+              <IncidentHandledNotice info={broadcastHandled} tone="neutral" />
+            ) : null}
+            {transitionError ? (
+              <div className="mb-4 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
+                {transitionError}
+              </div>
+            ) : null}
+          </>
+        }
+      />
     </div>
   )
 }

@@ -8,7 +8,12 @@ import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
 import type { AlertLog } from "@/api/alerts"
 import type { CameraListResponse } from "@/api/cameras"
-import type { CameraStatusUpdateData, EventEnvelope, IncidentPayload } from "@/api/events"
+import type {
+  AlertStatusUpdateData,
+  CameraStatusUpdateData,
+  EventEnvelope,
+  IncidentPayload,
+} from "@/api/events"
 import { shouldApplyCameraEvent } from "@/utils/merge"
 import {
   asAlertStatusUpdateData,
@@ -54,6 +59,8 @@ export function RealtimeAlertsBridge() {
   const addAlert = useAlertStore((state) => state.addAlert)
   const clearAlerts = useAlertStore((state) => state.clearAlerts)
   const activateSnooze = useAlertStore((state) => state.activateSnooze)
+  const recordHandledByOther = useAlertStore((state) => state.recordHandledByOther)
+  const currentUserId = useAuthStore((state) => state.userId)
   const clearSnooze = useAlertStore((state) => state.clearSnooze)
 
   // The recovery sequence (01_CONTRACTS.md §9.5) must run on every accepted
@@ -79,7 +86,10 @@ export function RealtimeAlertsBridge() {
       }
       case "ALERT_STATUS_UPDATE": {
         const update = asAlertStatusUpdateData(envelope.data)
-        if (update) handleIncident(update)
+        if (update) {
+          handleIncident(update)
+          noteIfHandledByOther(update)
+        }
         return
       }
       case "CAMERA_STATUS_UPDATE": {
@@ -101,6 +111,32 @@ export function RealtimeAlertsBridge() {
         // handled directly in handleEnvelope, never buffered
         return
     }
+  }
+
+  /**
+   * `handled_by` / `handled_at` ride every ALERT_STATUS_UPDATE and were parsed
+   * and discarded. They are how an operator who made no request learns that a
+   * colleague just acted on the incident they are looking at — the 409 only
+   * reaches whoever lost a race, but the broadcast reaches everyone.
+   *
+   * The actor is identified by **id**, not by name: `handled_by` is
+   * `format_user_name(user)` ("First Last", falling back to username), and the
+   * auth store holds only `username`, so a name comparison would misfire for
+   * anyone with a first and last name. `verified_by_id` / `closed_by_id` are on
+   * the same payload and are exact.
+   */
+  function noteIfHandledByOther(update: AlertStatusUpdateData) {
+    if (!update.handled_by && !update.handled_at) return
+
+    const actorId = update.action === "confirm" ? update.verified_by_id : update.closed_by_id
+    if (actorId !== null && actorId === currentUserId) return
+
+    recordHandledByOther(update.log_id, {
+      currentStatus: update.detection_status,
+      handledAction: update.action ?? null,
+      handledBy: update.handled_by,
+      handledAt: update.handled_at,
+    })
   }
 
   function handleIncident(payload: IncidentPayload) {

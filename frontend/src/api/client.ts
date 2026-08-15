@@ -116,7 +116,25 @@ export interface ParsedApiError {
   detail: string
   /** Populated on 422 only. */
   errors: ApiValidationError[]
+  /**
+   * Everything the route merged into the body beyond the three envelope keys.
+   *
+   * `AppHTTPException(..., extra={...})` (`app/core/errors.py`) merges its
+   * `extra` dict into the JSON body at the **top level**, alongside `detail`
+   * and `code` — it is not nested. The 409 CONFLICT_STATE from a lost HITL
+   * race is the case that matters: `_conflict_response` in `routes/alerts.py`
+   * attaches `current_status` / `handled_action` / `handled_by` / `handled_at`
+   * and its own docstring calls this "the exact 409 body the frontend's
+   * already-handled modal depends on".
+   *
+   * Parsing stopped at the three known keys, so all four were discarded before
+   * any call site could reach them — the same class of defect as the response
+   * types in C2, and invisible to `tsc` for the same reason.
+   */
+  extra: Record<string, unknown>
 }
+
+const ENVELOPE_KEYS = new Set(["detail", "code", "errors"])
 
 /** Returns `null` when the failure is not an `ApiError` response at all. */
 export function getApiError(error: unknown): ParsedApiError | null {
@@ -129,11 +147,17 @@ export function getApiError(error: unknown): ParsedApiError | null {
     return null
   }
 
+  const extra: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(body)) {
+    if (!ENVELOPE_KEYS.has(key)) extra[key] = value
+  }
+
   return {
     status: error.response.status,
     code: body.code,
     detail: typeof body.detail === "string" ? body.detail : "",
     errors: Array.isArray(body.errors) ? body.errors : [],
+    extra,
   }
 }
 
@@ -141,6 +165,7 @@ type ApiErrorEnvelope = {
   detail?: string
   code?: string
   errors?: ApiValidationError[]
+  [key: string]: unknown
 }
 
 type ValidationIssue = {
