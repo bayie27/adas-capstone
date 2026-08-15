@@ -5,12 +5,20 @@ import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
+import { useNow } from "@/hooks/useNow"
 import { confirmAlert, dismissAlert, getIncidentConflict, resolveAlert } from "@/api/alerts"
 import { IncidentHandledNotice } from "@/components/ui/IncidentHandledNotice"
 import type { IncidentHandledInfo } from "@/api/alerts"
 import { formatAlertConfidence } from "@/utils/format"
-import { formatFullDateTime } from "@/utils/datetime"
+import { formatDuration, formatFullDateTime, secondsSince } from "@/utils/datetime"
 import { getApiErrorMessage } from "@/api/client"
+
+/**
+ * Above this age, a detection is presented as delayed rather than current.
+ * 90s comfortably clears the sub-second happy path and the outbox's first
+ * two retries (2s, 4s), so it only fires on a genuine delivery delay.
+ */
+const STALE_DETECTION_SECONDS = 90
 
 /**
  * The alarm dialog — the product's reason for existing.
@@ -35,6 +43,11 @@ export function GlobalAlerts() {
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<IncidentHandledInfo | null>(null)
 
+  // Ticked at 30s because the only thing it drives is a minutes-resolution
+  // age line. A per-second interval on a dialog an operator stares at during
+  // an incident buys nothing and re-renders the snapshot.
+  const now = useNow(true, 30_000)
+
   // Snoozed incidents (FR-07) mute the alarm modal for that incident until
   // the shared deadline expires or a RE_ALARM event reactivates it.
   const activeAlerts = alerts.filter((a) => !isSnoozedNow(a.log_id, snoozedUntil))
@@ -44,6 +57,7 @@ export function GlobalAlerts() {
 
   if (!alert) return null
 
+  const detectionAgeSeconds = secondsSince(alert.detected_at, now)
   const busy = loadingId === alert.log_id
   const isUnverified = alert.detection_status === "Unverified"
   const isOngoing = alert.detection_status === "Ongoing"
@@ -115,12 +129,28 @@ export function GlobalAlerts() {
         </div>
 
         <div className="space-y-3 bg-surface-1 px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between">
             <span className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
               Timestamp
             </span>
-            <span className="text-sm font-semibold tabular-nums text-fg">
-              {formatFullDateTime(alert.detected_at)}
+            <span className="text-right">
+              <span className="block text-sm font-semibold tabular-nums text-fg">
+                {formatFullDateTime(alert.detected_at)}
+              </span>
+              {/*
+                An alarm that fires now is not necessarily an accident that
+                happened now. The AI engine's durable outbox retries with capped
+                exponential backoff (2s, doubling to 300s + jitter), so a
+                detection made while the backend was down is delivered late
+                carrying its ORIGINAL detected_at. Without this line the
+                operator reads "ACCIDENT DETECTED" and a wall-clock time and
+                reasonably assumes both are current.
+              */}
+              {detectionAgeSeconds !== null && detectionAgeSeconds >= STALE_DETECTION_SECONDS ? (
+                <span className="mt-0.5 block text-[10px] font-medium text-warning">
+                  Detected {formatDuration(detectionAgeSeconds)} ago — delivered late
+                </span>
+              ) : null}
             </span>
           </div>
           <div className="flex items-center justify-between">

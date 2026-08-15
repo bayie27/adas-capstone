@@ -37,6 +37,39 @@ export function formatShortDateTime(value: string | null | undefined) {
   return date ? SHORT.format(date) : "-"
 }
 
+/**
+ * How far in the past `value` is, in seconds, or `null` if it is unparseable
+ * or in the future. `nowMs` is passed in rather than read from `Date.now()`
+ * so a caller driving it from `useNow` re-renders on the same tick it
+ * measures against.
+ */
+export function secondsSince(value: string | null | undefined, nowMs: number): number | null {
+  const date = parse(value)
+  if (!date) return null
+  const seconds = Math.floor((nowMs - date.getTime()) / 1000)
+  return seconds < 0 ? null : seconds
+}
+
+/** "12 minutes", "3 hours", "45 seconds" — a bare duration, no direction. */
+export function formatDuration(totalSeconds: number): string {
+  if (totalSeconds < 60) {
+    return `${totalSeconds} second${totalSeconds === 1 ? "" : "s"}`
+  }
+
+  const minutes = Math.floor(totalSeconds / 60)
+  if (minutes < 60) {
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    return `${hours} hour${hours === 1 ? "" : "s"}`
+  }
+
+  const days = Math.floor(hours / 24)
+  return `${days} day${days === 1 ? "" : "s"}`
+}
+
 export function formatRelativeDateTime(value: string | null | undefined) {
   if (!value) {
     return "Never"

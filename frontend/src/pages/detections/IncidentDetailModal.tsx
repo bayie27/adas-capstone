@@ -5,9 +5,13 @@ import { Modal } from "@/components/ui/Modal"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import type { AlertLog, AlertStatus } from "@/api/alerts"
 import { formatAlertCode, formatAlertConfidence } from "@/utils/format"
-import { formatFullDateTime } from "@/utils/datetime"
+import { formatDuration, formatFullDateTime, secondsSince } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
 import { RiCloseLine } from "@remixicon/react"
+import { useNow } from "@/hooks/useNow"
+
+/** See GlobalAlerts — an outbox-delayed detection carries its original time. */
+const STALE_DETECTION_SECONDS = 90
 
 /**
  * The incident detail modal, in the three variants Figma draws.
@@ -125,6 +129,12 @@ export function IncidentDetailModal({
   onResolve,
   snoozeAction,
 }: IncidentDetailModalProps) {
+  // Only ticks while an Unverified incident is open — the only case where the
+  // gap between "detected" and "now" is a live decision input.
+  const now = useNow(isOpen && alert?.detection_status === "Unverified", 30_000)
+  const ageSeconds = alert ? secondsSince(alert.detected_at, now) : null
+  const isDelayed = ageSeconds !== null && ageSeconds >= STALE_DETECTION_SECONDS
+
   const accent: Accent = alert ? accentFor(alert.detection_status) : "neutral"
   const isTerminal =
     alert?.detection_status === "Dismissed" || alert?.detection_status === "Resolved"
@@ -186,7 +196,19 @@ export function IncidentDetailModal({
               </div>
 
               <div className="mb-6 space-y-3.5">
-                <MetaRow label="TIMESTAMP" value={formatFullDateTime(alert.detected_at)} />
+                <MetaRow
+                  label="TIMESTAMP"
+                  value={
+                    <span className="text-right">
+                      <span className="block">{formatFullDateTime(alert.detected_at)}</span>
+                      {isDelayed && alert.detection_status === "Unverified" ? (
+                        <span className="mt-0.5 block text-[10px] font-medium text-warning">
+                          {formatDuration(ageSeconds)} ago — delivered late
+                        </span>
+                      ) : null}
+                    </span>
+                  }
+                />
                 <MetaRow label="CAMERA NAME" value={alert.camera_name ?? "Unknown Camera"} />
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium tracking-[0.08em] text-fg-muted">
