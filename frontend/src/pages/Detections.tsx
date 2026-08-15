@@ -12,7 +12,7 @@ import { usePagination } from "@/hooks/usePagination"
 import {
   confirmAlert,
   dismissAlert,
-  exportAlertsCsv,
+  exportAlerts,
   getAlertDetails,
   getAlerts,
   resolveAlert,
@@ -121,7 +121,7 @@ export default function Detections() {
 
   const exportMutation = useMutation({
     mutationFn: () =>
-      exportAlertsCsv({
+      exportAlerts({
         status: LOG_ALERT_STATUSES,
         search: debouncedLogSearch || undefined,
         start_date: startDate || undefined,

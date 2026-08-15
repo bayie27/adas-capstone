@@ -34,6 +34,32 @@ export interface AlertListResponse {
   logs: AlertLog[]
 }
 
+/**
+ * The nine fields `ALERT_SORT_FIELDS` (`routes/alerts.py:51`) allows. An
+ * unlisted value is a **422**, so a sort key must always be taken from this
+ * list rather than assembled from a column id.
+ *
+ * Only four have a column on the Detections table; the rest are reachable only
+ * if a column is added for them.
+ */
+export const ALERT_SORT_FIELDS = [
+  "log_id",
+  "detected_at",
+  "confidence_score",
+  "detection_status",
+  "camera_id",
+  "verified_at",
+  "closed_at",
+  "created_at",
+  "updated_at",
+] as const
+
+export type AlertSortField = (typeof ALERT_SORT_FIELDS)[number]
+export type SortOrder = "asc" | "desc"
+
+/** The export routes' `?format=` parameter (`pattern="^(csv|pdf)$"`). */
+export type ExportFormat = "csv" | "pdf"
+
 export interface GetAlertsParams {
   start_date?: string
   end_date?: string
@@ -41,6 +67,13 @@ export interface GetAlertsParams {
   camera_id?: number[]
   user_id?: number[]
   search?: string
+  // `GET /api/alerts/` has always accepted both; this interface declared
+  // neither, so the table could not ask for a sort — the parameter was
+  // unreachable because the type had no word for it. Defaults server-side to
+  // `detected_at desc`, with `log_id` applied as a deterministic tie-break so
+  // equal-`detected_at` rows never shuffle between pages.
+  sort_by?: AlertSortField
+  sort_order?: SortOrder
   limit?: number
   offset?: number
 }
@@ -53,13 +86,27 @@ export async function getAlerts(params: GetAlertsParams) {
   return data
 }
 
-export async function exportAlertsCsv(params: GetAlertsParams) {
+/**
+ * `GET /api/alerts/export` takes the same filter set as the list route plus
+ * `sort_by`, `sort_order` and `format`.
+ *
+ * This was `exportAlertsCsv(params)` — a name and a signature that both
+ * forbade PDF, on a route that has always accepted `?format=csv|pdf`. Passing
+ * the sort through matters as much: without it a CSV of a confidence-sorted
+ * view arrives in `detected_at` order and quietly is not the thing on screen.
+ *
+ * Throws on 413 `PAYLOAD_TOO_LARGE` when the filtered row count exceeds
+ * `EXPORT_PDF_MAX_ROWS` (10,000) or `EXPORT_CSV_MAX_ROWS` (50,000). The
+ * backend's `detail` names the count, the limit and the async jobs endpoint,
+ * so callers should render it rather than substituting their own sentence.
+ */
+export async function exportAlerts(params: GetAlertsParams, format: ExportFormat = "csv") {
   const response = await api.get<Blob>("/alerts/export", {
-    params,
+    params: { ...params, format },
     responseType: "blob",
   })
 
-  downloadBlobResponse(response, "adas_incident_export.csv")
+  downloadBlobResponse(response, `adas_incident_export.${format}`)
 }
 
 export async function getAlertDetails(logId: number) {
