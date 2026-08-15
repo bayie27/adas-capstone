@@ -8,12 +8,19 @@ import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { Tabs } from "@/components/ui/Tabs"
 import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/api/health"
-import type { HealthWarning, SystemHealthDataPoint, SystemHealthLiveResponse } from "@/api/health"
+import type {
+  GpuRead,
+  HealthWarning,
+  SystemHealthDataPoint,
+  SystemHealthLiveResponse,
+} from "@/api/health"
 import { describeWarning } from "@/utils/healthWarnings"
 import { formatRelativeDateTime } from "@/utils/datetime"
+import { truncateLabel } from "@/utils/format"
 import { cn } from "@/utils/cn"
 import {
   RiAlertLine,
+  RiCpuLine,
   RiDashboard3Line,
   RiHardDrive2Line,
   RiServerLine,
@@ -58,6 +65,11 @@ function formatMs(value: number | null | undefined): string {
 function formatFps(value: number | null | undefined): string {
   if (value == null) return "N/A"
   return `${value.toFixed(1)} fps`
+}
+
+function formatTemp(value: number | null | undefined): string {
+  if (value == null) return "N/A"
+  return `${value.toFixed(0)}°C`
 }
 
 /**
@@ -187,6 +199,86 @@ function WarningsStrip({ warnings }: { warnings: HealthWarning[] }) {
   )
 }
 
+function GpuStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-stroke bg-canvas px-4 py-3">
+      <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-fg-muted">
+        {label}
+      </div>
+      <div className="mt-1 text-secondary font-semibold text-fg">{value}</div>
+    </div>
+  )
+}
+
+/**
+ * gpus[] is per-device, every metric nullable. Three cases, all real: zero
+ * GPUs (the CI runner, any CPU-only box) is a stated absence, not an empty
+ * table; one GPU renders its row and the live roll-ups are redundant with
+ * it, so they're dropped; two or more is where the roll-ups earn their
+ * place, because gpu_temp_max is the number that matters and the per-device
+ * rows say which device is producing it.
+ */
+function GpuSection({ live }: { live: SystemHealthLiveResponse | undefined }) {
+  if (!live) return null
+  const gpus = live.gpus
+
+  return (
+    <div className="mb-8 rounded-xl border border-stroke bg-surface-1 p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <RiCpuLine size={16} className="text-fg-muted" />
+        <h3 className="text-xs font-medium text-fg-body">GPU</h3>
+      </div>
+
+      {gpus.length === 0 ? (
+        <p className="text-caption text-fg-muted">No GPU detected on this machine.</p>
+      ) : (
+        <>
+          {gpus.length > 1 ? (
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <GpuStat label="Usage (avg)" value={formatPercent(live.gpu_usage_avg)} />
+              <GpuStat label="Temperature (max)" value={formatTemp(live.gpu_temp_max)} />
+              <GpuStat label="Memory (max)" value={formatPercent(live.gpu_mem_pct_max)} />
+            </div>
+          ) : null}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-stroke text-fg-muted">
+                  <th className="py-2 pr-4 text-xs font-medium">#</th>
+                  <th className="py-2 pr-4 text-xs font-medium">Device</th>
+                  <th className="py-2 pr-4 text-right text-xs font-medium">Usage</th>
+                  <th className="py-2 pr-4 text-right text-xs font-medium">Temp</th>
+                  <th className="py-2 text-right text-xs font-medium">Memory</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stroke">
+                {gpus.map((gpu: GpuRead) => (
+                  <tr key={gpu.index} className="text-fg-body">
+                    <td className="py-2.5 pr-4 text-xs">{gpu.index}</td>
+                    <td className="py-2.5 pr-4 text-xs" title={gpu.name}>
+                      {truncateLabel(gpu.name, 32)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right text-xs">
+                      {formatPercent(gpu.usage_percent)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right text-xs">{formatTemp(gpu.temp_c)}</td>
+                    <td className="py-2.5 text-right text-xs">
+                      {gpu.mem_used_mb !== null && gpu.mem_total_mb !== null
+                        ? `${(gpu.mem_used_mb / 1024).toFixed(1)} / ${(gpu.mem_total_mb / 1024).toFixed(1)} GB`
+                        : "N/A"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── page ────────────────────────────────────────────────────────────────────
 
 export default function SystemHealth() {
@@ -290,6 +382,8 @@ export default function SystemHealth() {
           subtext={formatDiskSubtext(live)}
         />
       </div>
+
+      <GpuSection live={live} />
 
       <div className="mb-5">
         <Tabs
