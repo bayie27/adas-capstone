@@ -56,9 +56,25 @@ function formatDiskSubtext(live: SystemHealthLiveResponse | undefined): string |
   // failed on an otherwise-good sample — so it gets a message rather than
   // a number, and never a crash.
   if (!live.disk_available) return "Disk metrics unavailable"
-  const { disk_used_bytes: used, disk_total_bytes: total } = live
-  if (used == null || total == null) return undefined
-  return `${(used / BYTES_PER_GB).toFixed(1)} GB / ${(total / BYTES_PER_GB).toFixed(1)} GB`
+  const { disk_available_bytes: free, disk_total_bytes: total } = live
+  if (free == null || total == null) return undefined
+  return `${(free / BYTES_PER_GB).toFixed(1)} GB free of ${(total / BYTES_PER_GB).toFixed(1)} GB`
+}
+
+function formatServerUptimeSubtext(live: SystemHealthLiveResponse | undefined): string | undefined {
+  if (!live || live.process_uptime_seconds == null) return undefined
+  return `Backend process: ${formatUptime(live.process_uptime_seconds)}`
+}
+
+// avg_fps and avg_inference_latency_ms are aggregated across whatever
+// cameras reported freshly — "12.4 FPS" doesn't say whether that's one
+// camera or forty, and those are different facts. This is their
+// denominator, so it belongs as the subtext on those two cards rather than
+// a card of its own.
+function formatSampleCameraSubtext(live: SystemHealthLiveResponse | undefined): string | undefined {
+  if (!live) return undefined
+  const count = live.sample_camera_count
+  return count === 1 ? "1 camera reporting" : `${count} cameras reporting`
 }
 
 function formatPercent(value: number | null | undefined): string {
@@ -467,20 +483,21 @@ export default function SystemHealth() {
           title="Server Uptime"
           value={formatUptime(live?.host_uptime_seconds)}
           isLoading={liveQuery.isLoading}
+          subtext={formatServerUptimeSubtext(live)}
         />
         <StatCard
           icon={RiTimerLine}
           title="Inference Latency"
           value={formatMs(live?.avg_inference_latency_ms)}
           isLoading={liveQuery.isLoading}
-          subtext="Average AI inference time"
+          subtext={formatSampleCameraSubtext(live)}
         />
         <StatCard
           icon={RiDashboard3Line}
           title="Processing Speed"
           value={formatFps(live?.avg_fps)}
           isLoading={liveQuery.isLoading}
-          subtext="Average frames per second"
+          subtext={formatSampleCameraSubtext(live)}
         />
         <StatCard
           icon={RiHardDrive2Line}
