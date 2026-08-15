@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, type AnchorHTMLAttributes, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
+import ReactMarkdown from "react-markdown"
+import rehypeSanitize from "rehype-sanitize"
 import {
   RiArrowLeftLine,
   RiArrowRightSLine,
@@ -85,7 +87,11 @@ export default function HelpCenter() {
       </div>
 
       {selectedSlug ? (
-        <ArticleDetail query={articleQuery} onBack={() => setSelectedSlug(null)} />
+        <ArticleDetail
+          query={articleQuery}
+          onBack={() => setSelectedSlug(null)}
+          onNavigateToSlug={openArticle}
+        />
       ) : (
         <>
           <div className="mb-6 flex flex-wrap items-center gap-2.5">
@@ -165,13 +171,112 @@ function ArticleGrid({
   )
 }
 
+/**
+ * A body-relative link — e.g. `[Correcting a Mistaken
+ * Confirmation](correcting-a-mistaken-confirmation)`, the cross-reference
+ * shape the seeded articles actually use — is a slug, not a browsable URL:
+ * this SPA has no route for it, so letting the browser navigate there
+ * verbatim would 404 the whole app. Anything absolute (a real external URL,
+ * or `mailto:`) opens normally in a new tab instead.
+ */
+function isInternalSlugHref(href: string) {
+  return !/^([a-z][a-z0-9+.-]*:)/i.test(href)
+}
+
+function MarkdownLink({
+  href,
+  children,
+  onNavigateToSlug,
+}: AnchorHTMLAttributes<HTMLAnchorElement> & {
+  onNavigateToSlug: (slug: string) => void
+}) {
+  if (href && isInternalSlugHref(href)) {
+    return (
+      <button
+        type="button"
+        onClick={() => onNavigateToSlug(href)}
+        className="font-medium text-fg underline underline-offset-2 hover:text-fg-body"
+      >
+        {children}
+      </button>
+    )
+  }
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="font-medium text-fg underline underline-offset-2 hover:text-fg-body"
+    >
+      {children}
+    </a>
+  )
+}
+
+/** Markdown element styling — this app has no Tailwind Typography plugin, so
+ * each block maps onto the same tokens the rest of the app already uses
+ * rather than pulling in a second styling system for one page. */
+function markdownComponents(onNavigateToSlug: (slug: string) => void) {
+  return {
+    h1: ({ children }: { children?: ReactNode }) => (
+      <h2 className="mt-6 mb-3 text-lg font-semibold text-fg first:mt-0">{children}</h2>
+    ),
+    h2: ({ children }: { children?: ReactNode }) => (
+      <h3 className="mt-6 mb-3 text-base font-semibold text-fg first:mt-0">{children}</h3>
+    ),
+    h3: ({ children }: { children?: ReactNode }) => (
+      <h4 className="mt-5 mb-2 text-secondary font-semibold text-fg first:mt-0">{children}</h4>
+    ),
+    p: ({ children }: { children?: ReactNode }) => (
+      <p className="mb-4 text-secondary leading-relaxed text-fg-body last:mb-0">{children}</p>
+    ),
+    ul: ({ children }: { children?: ReactNode }) => (
+      <ul className="mb-4 list-disc space-y-1.5 pl-5 text-secondary text-fg-body last:mb-0">
+        {children}
+      </ul>
+    ),
+    ol: ({ children }: { children?: ReactNode }) => (
+      <ol className="mb-4 list-decimal space-y-1.5 pl-5 text-secondary text-fg-body last:mb-0">
+        {children}
+      </ol>
+    ),
+    li: ({ children }: { children?: ReactNode }) => <li>{children}</li>,
+    strong: ({ children }: { children?: ReactNode }) => (
+      <strong className="font-semibold text-fg">{children}</strong>
+    ),
+    blockquote: ({ children }: { children?: ReactNode }) => (
+      <blockquote className="mb-4 border-l-2 border-stroke pl-4 text-fg-muted italic last:mb-0">
+        {children}
+      </blockquote>
+    ),
+    hr: () => <hr className="my-6 border-stroke" />,
+    code: ({ children }: { children?: ReactNode }) => (
+      <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption text-fg">
+        {children}
+      </code>
+    ),
+    pre: ({ children }: { children?: ReactNode }) => (
+      <pre className="mb-4 overflow-x-auto rounded-md bg-surface-2 p-4 font-mono text-caption text-fg-body last:mb-0">
+        {children}
+      </pre>
+    ),
+    a: (props: AnchorHTMLAttributes<HTMLAnchorElement>) => (
+      <MarkdownLink {...props} onNavigateToSlug={onNavigateToSlug} />
+    ),
+  }
+}
+
 function ArticleDetail({
   query,
   onBack,
+  onNavigateToSlug,
 }: {
   query: ReturnType<typeof useQuery<Awaited<ReturnType<typeof getHelpArticle>>>>
   onBack: () => void
+  onNavigateToSlug: (slug: string) => void
 }) {
+  const components = useMemo(() => markdownComponents(onNavigateToSlug), [onNavigateToSlug])
   return (
     <div>
       <button
@@ -212,12 +317,17 @@ function ArticleDetail({
           {query.data.summary ? (
             <p className="mb-6 text-caption text-fg-muted">{query.data.summary}</p>
           ) : null}
-          {/* TODO(feat/fe-15-help-center): rendered as sanitised markdown
-              in the next commit. Placeholder so the detail view is wired
-              and testable before the renderer lands. */}
-          <div className="whitespace-pre-wrap text-secondary leading-relaxed text-fg-body">
+          {/*
+            rehype-sanitize strips anything outside its safe-tag allowlist
+            before render. Article content is admin-authored and seeded, not
+            user-generated, which lowers the XSS risk but doesn't eliminate
+            it — the backend's own doc comment says as much: it never
+            renders HTML from article content, so this is the only place
+            that does, and it does so defensively.
+          */}
+          <ReactMarkdown rehypePlugins={[rehypeSanitize]} components={components}>
             {query.data.body_markdown}
-          </div>
+          </ReactMarkdown>
         </article>
       ) : null}
     </div>
