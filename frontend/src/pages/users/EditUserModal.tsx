@@ -1,12 +1,16 @@
 import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
 
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 import { Modal } from "@/components/ui/Modal"
+import { Switch } from "@/components/ui/Switch"
 import { updateUser } from "@/api/users"
 import type { ApiUserRole } from "@/api/auth"
 import type { UpdateUserInput, UserRecord } from "@/api/users"
 import { getApiErrorMessage } from "@/api/client"
 import { formatShortDateTime } from "@/utils/datetime"
+import { cn } from "@/utils/cn"
 import { RiPencilLine } from "@remixicon/react"
 
 type EditUserFormState = {
@@ -14,6 +18,7 @@ type EditUserFormState = {
   last_name: string
   username: string
   role: ApiUserRole
+  is_active: boolean
 }
 
 interface EditUserModalProps {
@@ -28,6 +33,7 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
     last_name: user.last_name,
     username: user.username,
     role: user.role,
+    is_active: user.is_active,
   })
   const [validationError, setValidationError] = useState<string | null>(null)
 
@@ -52,6 +58,7 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
       last_name: form.last_name.trim(),
       username: form.username.trim(),
       role: form.role,
+      is_active: form.is_active,
     }
 
     if (!payload.first_name || !payload.last_name || !payload.username) {
@@ -63,7 +70,8 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
       payload.first_name === user.first_name &&
       payload.last_name === user.last_name &&
       payload.username === user.username &&
-      payload.role === user.role
+      payload.role === user.role &&
+      payload.is_active === user.is_active
     ) {
       setValidationError("No user changes to save.")
       return
@@ -98,22 +106,34 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
             <div className="mb-2">
               <label className="mb-2 block text-[11px] font-semibold text-fg-body">Role</label>
               <div className="flex items-center gap-8">
-                <label className="flex cursor-pointer items-center gap-2 text-xs text-fg-body">
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2 text-xs text-fg-body",
+                    mutation.isPending && "cursor-not-allowed opacity-60",
+                  )}
+                >
                   <input
                     type="radio"
                     name="editRole"
                     className="accent-white"
                     checked={form.role === "Admin"}
+                    disabled={mutation.isPending}
                     onChange={() => updateField("role", "Admin")}
                   />
                   Administrator
                 </label>
-                <label className="flex cursor-pointer items-center gap-2 text-xs text-fg-body">
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2 text-xs text-fg-body",
+                    mutation.isPending && "cursor-not-allowed opacity-60",
+                  )}
+                >
                   <input
                     type="radio"
                     name="editRole"
                     className="accent-white"
                     checked={form.role === "Operator"}
+                    disabled={mutation.isPending}
                     onChange={() => updateField("role", "Operator")}
                   />
                   Operator
@@ -121,37 +141,63 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
               </div>
             </div>
 
-            <div>
-              <label className="mb-2 block text-[11px] font-semibold text-fg-body">
-                First Name
-              </label>
-              <input
-                type="text"
-                value={form.first_name}
-                onChange={(event) => updateField("first_name", event.target.value)}
-                className="w-full rounded-md border border-stroke bg-surface-1 px-3 py-2 text-sm text-fg focus:border-stroke-strong focus:outline-none"
+            {/*
+              PATCH /api/users/{id} accepts is_active as a first-class field,
+              guarded the same way role is (the last active admin cannot be
+              deactivated) — but nothing in the UI could ever send it, so that
+              guard was unreachable. This makes it reachable. Note the switch
+              is effectively one-way from here: GET /api/users/ only ever
+              lists is_active=true rows, so a deactivated account's row
+              disappears from this table on the next refetch and there is no
+              screen left to flip it back — reactivation is a real backend
+              capability (see `being_enabled` in routes/users.py) with no
+              frontend path to it. Recorded as a follow-up, not fixed here.
+            */}
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-fg-body">Active</span>
+              <Switch
+                checked={form.is_active}
+                disabled={mutation.isPending}
+                label={form.is_active ? "Deactivate account" : "Activate account"}
+                onChange={() => updateField("is_active", !form.is_active)}
               />
             </div>
-            <div>
-              <label className="mb-2 block text-[11px] font-semibold text-fg-body">Last Name</label>
-              <input
-                type="text"
-                value={form.last_name}
-                onChange={(event) => updateField("last_name", event.target.value)}
-                className="w-full rounded-md border border-stroke bg-surface-1 px-3 py-2 text-sm text-fg focus:border-stroke-strong focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-[11px] font-semibold text-fg-body">Username</label>
-              <input
-                type="text"
-                value={form.username}
-                onChange={(event) => updateField("username", event.target.value)}
-                className="w-full rounded-md border border-stroke bg-surface-1 px-3 py-2 text-sm text-fg focus:border-stroke-strong focus:outline-none"
-              />
-            </div>
+
+            <Input
+              label="First Name"
+              value={form.first_name}
+              disabled={mutation.isPending}
+              onChange={(event) => updateField("first_name", event.target.value)}
+            />
+            <Input
+              label="Last Name"
+              value={form.last_name}
+              disabled={mutation.isPending}
+              onChange={(event) => updateField("last_name", event.target.value)}
+            />
+            <Input
+              label="Username"
+              value={form.username}
+              disabled={mutation.isPending}
+              onChange={(event) => updateField("username", event.target.value)}
+            />
           </div>
         </div>
+
+        {/*
+          role_changed / being_deactivated in routes/users.py both revoke
+          every session the target holds and close their WebSocket
+          connections in the same transaction — a side effect that was
+          invisible until it happened to a colleague mid-shift. Shown before
+          the click, not discovered after it.
+        */}
+        {form.role !== user.role || (user.is_active && !form.is_active) ? (
+          <p className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-caption text-warning">
+            {form.role !== user.role
+              ? "Changing this user's role will sign them out of every active session immediately."
+              : "Deactivating this account will sign it out of every active session immediately."}
+          </p>
+        ) : null}
 
         {errorMessage ? <p className="text-xs text-danger">{errorMessage}</p> : null}
 
@@ -163,20 +209,12 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
             <div>Last Changes: {formatShortDateTime(user.updated_at ?? null)}</div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-xs font-medium text-fg-body transition-colors hover:text-fg"
-            >
+            <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={mutation.isPending}
-              className="rounded-md bg-primary px-4 py-2 text-xs font-medium text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {mutation.isPending ? "Saving..." : "Save Changes"}
-            </button>
+            </Button>
+            <Button type="submit" isLoading={mutation.isPending} loadingLabel="Saving…">
+              Save Changes
+            </Button>
           </div>
         </div>
       </form>
