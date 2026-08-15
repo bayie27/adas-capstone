@@ -426,7 +426,13 @@ export default function Detections() {
               </Button>
             ) : null}
           </div>
+          {/*
+            `total_filtered` is already on the list response, so the count is
+            free and needs no extra request. It is the count for the SAME
+            filter set the export sends.
+          */}
           <ExportButton
+            rowCount={logsQuery.data?.total_filtered}
             isExporting={exportMutation.isPending}
             onExport={(format) => exportMutation.mutate(format)}
           />
@@ -442,6 +448,13 @@ export default function Detections() {
         </div>
       )}
 
+      {/*
+        A 413 can still arrive despite the pre-flight — the row count is read
+        when the page loads and the filter set can grow before the click. The
+        backend's own `detail` names the count, the limit and the async jobs
+        endpoint, so it is rendered verbatim rather than replaced with a second
+        sentence that can drift out of step with it.
+      */}
       {activeTab === "logs" && exportMutation.isError ? (
         <QueryErrorBanner error={exportMutation.error} fallback="Unable to export logs." />
       ) : null}
