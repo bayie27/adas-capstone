@@ -105,6 +105,16 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
           </div>
         </div>
 
+        {/*
+          POST /api/users/{id}/reset-password revokes every session the
+          target holds unconditionally — there is no reset that keeps them
+          signed in. Shown before the click, not discovered after it.
+        */}
+        <p className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-caption text-warning">
+          Resetting this password will sign {getUserFullName(user)} out of every active session
+          immediately.
+        </p>
+
         {errorMessage ? <p className="text-xs text-danger">{errorMessage}</p> : null}
 
         <div className="h-px w-full bg-surface-3" />

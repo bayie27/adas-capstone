@@ -184,6 +184,21 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
           </div>
         </div>
 
+        {/*
+          role_changed / being_deactivated in routes/users.py both revoke
+          every session the target holds and close their WebSocket
+          connections in the same transaction — a side effect that was
+          invisible until it happened to a colleague mid-shift. Shown before
+          the click, not discovered after it.
+        */}
+        {form.role !== user.role || (user.is_active && !form.is_active) ? (
+          <p className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-caption text-warning">
+            {form.role !== user.role
+              ? "Changing this user's role will sign them out of every active session immediately."
+              : "Deactivating this account will sign it out of every active session immediately."}
+          </p>
+        ) : null}
+
         {errorMessage ? <p className="text-xs text-danger">{errorMessage}</p> : null}
 
         <div className="h-px w-full bg-surface-3" />
