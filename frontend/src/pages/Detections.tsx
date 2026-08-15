@@ -36,8 +36,13 @@ import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useUserOptions } from "@/hooks/useUserOptions"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
-import type { AlertLog, AlertStatus } from "@/api/alerts"
-import { formatAlertCode, getAlertLastHandledBy, getAlertLastUpdated } from "@/utils/format"
+import type { AlertLog, AlertSortField, AlertStatus, SortOrder } from "@/api/alerts"
+import {
+  formatAlertCode,
+  formatAlertConfidence,
+  getAlertLastHandledBy,
+  getAlertLastUpdated,
+} from "@/utils/format"
 import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
 import { RiCloseLine, RiDownloadLine, RiEyeLine } from "@remixicon/react"
@@ -52,6 +57,39 @@ const TAB_ITEMS = [
   { value: "ongoing" as const, label: "Ongoing" },
   { value: "logs" as const, label: "Logs" },
 ]
+
+interface SortState {
+  key: AlertSortField
+  order: SortOrder
+}
+
+/**
+ * `detected_at desc` is the backend's own default and the only sane resting
+ * order for an incident queue — newest first.
+ */
+const DEFAULT_SORT: SortState = { key: "detected_at", order: "desc" }
+
+/**
+ * Column label -> allowlisted sort key. Every value here is a member of
+ * `ALERT_SORT_FIELDS`; an unlisted key is a 422, so this table is the only
+ * place a key is chosen and it is chosen from the exported allowlist.
+ *
+ * `Camera Name` sorts by `camera_id`, not by name — the backend allowlist has
+ * no `camera_name`. Grouping by camera is what the sort delivers, alphabetical
+ * order is not.
+ *
+ * `Last Handled By` has no allowlisted key (neither `verified_by` nor
+ * `closed_by` is sortable) and is deliberately not sortable rather than
+ * silently sorting by something else.
+ */
+const SORTABLE: Record<string, AlertSortField> = {
+  "Accident No.": "log_id",
+  Timestamp: "detected_at",
+  "Camera Name": "camera_id",
+  Confidence: "confidence_score",
+  Status: "detection_status",
+  "Last Updated": "updated_at",
+}
 
 export default function Detections() {
   const queryClient = useQueryClient()
@@ -81,11 +119,18 @@ export default function Detections() {
   const [seenLogsTotal, setSeenLogsTotal] = useState(0)
   const logsPagination = usePagination(seenLogsTotal, ALERTS_PAGE_SIZE)
 
+  // One sort per tab, mirroring the two paginations: the live queue and the
+  // archive are different questions and should not share an ordering.
+  const [activeSort, setActiveSort] = useState<SortState>(DEFAULT_SORT)
+  const [logsSort, setLogsSort] = useState<SortState>(DEFAULT_SORT)
+
   const activeAlertsQuery = useQuery({
-    queryKey: ["alerts", "active", activePagination.offset],
+    queryKey: ["alerts", "active", activePagination.offset, activeSort.key, activeSort.order],
     queryFn: () =>
       getAlerts({
         status: ACTIVE_ALERT_STATUSES,
+        sort_by: activeSort.key,
+        sort_order: activeSort.order,
         limit: ALERTS_PAGE_SIZE,
         offset: activePagination.offset,
       }),
@@ -102,11 +147,15 @@ export default function Detections() {
       endDate,
       cameraId,
       userId,
+      logsSort.key,
+      logsSort.order,
     ],
     queryFn: () =>
       getAlerts({
         status: LOG_ALERT_STATUSES,
         search: debouncedLogSearch || undefined,
+        sort_by: logsSort.key,
+        sort_order: logsSort.order,
         limit: ALERTS_PAGE_SIZE,
         offset: logsPagination.offset,
         start_date: startDate || undefined,
@@ -128,6 +177,11 @@ export default function Detections() {
       exportAlerts({
         status: LOG_ALERT_STATUSES,
         search: debouncedLogSearch || undefined,
+        // Same order as the screen. Without this a CSV of a
+        // confidence-sorted view arrives in detected_at order and quietly is
+        // not the thing the operator was looking at.
+        sort_by: logsSort.key,
+        sort_order: logsSort.order,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         camera_id: cameraId ? [Number(cameraId)] : undefined,
@@ -168,6 +222,39 @@ export default function Detections() {
 
   const currentQuery = activeTab === "ongoing" ? activeAlertsQuery : logsQuery
   const currentPagination = activeTab === "ongoing" ? activePagination : logsPagination
+  const currentSort = activeTab === "ongoing" ? activeSort : logsSort
+  const setCurrentSort = activeTab === "ongoing" ? setActiveSort : setLogsSort
+
+  /**
+   * D-8(a) — two states. Clicking the active column flips the direction;
+   * clicking any other column takes over the sort at `desc`, which is the
+   * useful default for every key on this table (newest, highest confidence,
+   * most recently updated). There is no third click that clears.
+   *
+   * Re-sorting changes the query key, so TanStack refetches rather than
+   * re-ordering the page in place — a client-side re-sort would reorder one
+   * page and lie about the rest, which is why Phase 1 of the earlier
+   * remediation removed one.
+   */
+  const handleSort = (key: string) => {
+    const sortKey = key as AlertSortField
+    currentPagination.reset()
+    setCurrentSort((prev) =>
+      prev.key === sortKey
+        ? { key: sortKey, order: prev.order === "asc" ? "desc" : "asc" }
+        : { key: sortKey, order: "desc" },
+    )
+  }
+
+  const sortFor = (label: string) => {
+    const key = SORTABLE[label]
+    if (!key) return undefined
+    return {
+      key,
+      active: currentSort.key === key ? currentSort.order : null,
+      onSort: handleSort,
+    }
+  }
 
   // Render rows in the server's order. The server paginates (limit/offset), so
   // it defines the total order; re-sorting a single page by a different key
@@ -379,21 +466,22 @@ export default function Detections() {
       >
         <Table>
           <TableHead>
-            <TableHeaderCell>Accident No.</TableHeaderCell>
-            <TableHeaderCell>Timestamp</TableHeaderCell>
-            <TableHeaderCell>Camera Name</TableHeaderCell>
-            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Accident No.")}>Accident No.</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Timestamp")}>Timestamp</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Camera Name")}>Camera Name</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Confidence")}>Confidence</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Status")}>Status</TableHeaderCell>
             <TableHeaderCell>Last Handled By</TableHeaderCell>
-            <TableHeaderCell>Last Updated</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Last Updated")}>Last Updated</TableHeaderCell>
             <TableHeaderCell className="text-right">Actions</TableHeaderCell>
           </TableHead>
           <TableBody>
             {currentQuery.isLoading ? (
-              <TableStateRow colSpan={7}>
+              <TableStateRow colSpan={8}>
                 {activeTab === "ongoing" ? "Loading active alerts…" : "Loading logs…"}
               </TableStateRow>
             ) : currentRows.length === 0 ? (
-              <TableStateRow colSpan={7}>
+              <TableStateRow colSpan={8}>
                 {activeTab === "ongoing"
                   ? "No active alerts in the queue."
                   : "No historical logs found for the current filters."}
@@ -408,6 +496,9 @@ export default function Detections() {
                     {formatFullDateTime(item.detected_at)}
                   </TableCell>
                   <TableCell>{item.camera_name ?? "Unknown Camera"}</TableCell>
+                  <TableCell className="tabular-nums">
+                    {formatAlertConfidence(item.confidence_score)}
+                  </TableCell>
                   <TableCell>
                     <AlertStatusText status={item.detection_status} />
                   </TableCell>
