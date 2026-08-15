@@ -56,6 +56,7 @@ const TAB_ITEMS = [
 export default function Detections() {
   const queryClient = useQueryClient()
   const removeAlert = useAlertStore((state) => state.removeAlert)
+  const handledByOther = useAlertStore((state) => state.handledByOther)
   const [activeTab, setActiveTab] = useState<TabKey>("ongoing")
   const [logSearch, setLogSearch] = useState("")
   const debouncedLogSearch = useDebouncedValue(logSearch.trim(), 300)
@@ -211,6 +212,9 @@ export default function Detections() {
     dismissMutation.reset()
     resolveMutation.reset()
   }
+
+  const broadcastHandled =
+    selectedAlertId !== null ? (handledByOther[selectedAlertId] ?? null) : null
 
   const cameraOptions = [
     { value: "", label: "All cameras" },
@@ -447,7 +451,17 @@ export default function Detections() {
                 {getApiErrorMessage(alertDetailsQuery.error, "Unable to refresh alert details.")}
               </div>
             ) : null}
+            {/*
+              Two sources, one presentation. `transitionConflict` is this
+              operator losing a race — a 409 answering their own request.
+              `broadcastHandled` is a colleague acting on the incident this
+              operator merely has open, which arrives over the socket and
+              reaches every tab. The first is a warning; the second is news.
+            */}
             {transitionConflict ? <IncidentHandledNotice info={transitionConflict} /> : null}
+            {!transitionConflict && broadcastHandled ? (
+              <IncidentHandledNotice info={broadcastHandled} tone="neutral" />
+            ) : null}
             {transitionError ? (
               <div className="mb-4 rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
                 {transitionError}
