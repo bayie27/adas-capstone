@@ -131,7 +131,9 @@ class TestAppFactoryIsolation:
 
 
 class TestSchedulerJobWiring:
-    def test_ws_session_revalidation_job_is_a_real_coroutine_function(self, tmp_path):
+    def test_ws_session_revalidation_job_is_a_real_coroutine_function(
+        self, tmp_path, monkeypatch
+    ):
         """Regression test: `lambda: ws_session_revalidation(...)` wraps a
         coroutine call in a plain sync function, so APScheduler's
         AsyncIOExecutor (which dispatches on
@@ -139,6 +141,23 @@ class TestSchedulerJobWiring:
         and drop the returned coroutine unawaited — the job silently never
         does anything. The scheduled job's `func` must itself satisfy
         `iscoroutinefunction` so APScheduler actually awaits it."""
+        # 18_PKG_scheduled_maintenance.md Step 1 added a lifespan startup
+        # due-check that calls create_backup() whenever the scheduler is
+        # enabled. That check (app.services.maintenance_schedule) reads
+        # DATABASE_URL/BACKUP_DIR from the *global* app.core.config.settings
+        # singleton, not app.state.settings — the same convention
+        # routes/maintenance.py already uses (test_maintenance.py's
+        # `maintenance_settings` fixture patches the same global for the
+        # same reason). Patching only the Settings() passed to create_app()
+        # below would not stop it from reading/backing up the real
+        # repo-root adas.db into the real var/backups/.
+        from app.core.config import settings as global_settings
+
+        monkeypatch.setattr(
+            global_settings, "DATABASE_URL", f"sqlite:///{tmp_path / 'scheduler.db'}"
+        )
+        monkeypatch.setattr(global_settings, "BACKUP_DIR", tmp_path / "backups")
+
         app_settings = Settings(
             _env_file=None,
             SECRET_KEY="test-secret-key-not-for-production-use",
