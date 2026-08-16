@@ -63,6 +63,30 @@ export interface RetrainingExportParams {
   camera_id?: number[]
 }
 
+/**
+ * `GET /api/exports/jobs` (P21 Step 4, `routes/exports.py:107-141`) — scoped
+ * to the caller's own jobs by default, for every role including Admin.
+ * `all_users` widens it and is Admin-only server-side (a 403 for an
+ * Operator); this client never sets it, since the tray only ever needs
+ * "my exports," not the whole system's.
+ */
+export interface GetExportJobsParams {
+  status?: ExportJobStatus[]
+  all_users?: boolean
+  limit?: number
+  offset?: number
+}
+
+export interface ExportJobListResponse {
+  total_filtered: number
+  items: ExportJobRead[]
+}
+
+export async function listExportJobs(params: GetExportJobsParams = {}) {
+  const { data } = await api.get<ExportJobListResponse>("/exports/jobs", { params })
+  return data
+}
+
 export async function createExportJob(params: ExportJobCreateParams) {
   const { data } = await api.post<ExportJobCreateResponse>("/exports/jobs", params)
   return data
