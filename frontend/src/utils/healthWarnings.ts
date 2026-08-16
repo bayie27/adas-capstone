@@ -36,12 +36,10 @@ const WARNING_COPY: Record<
 }
 
 /**
- * Three more codes are proposed against the backend and not yet emitted:
- * OUTBOX_QUARANTINED (Q15), CAPACITY_EXCEEDED (Q16), ENGINE_CLOCK_SKEW
- * (Q17). This is deliberately not a switch over the five known codes — a
- * switch means every new code needs a frontend change to appear at all.
- * The fallback below is what makes those three (and anything else the
- * backend ever adds) cost zero frontend work the day it starts emitting.
+ * This is deliberately not a switch over the five known codes above — a
+ * switch means every new code needs a frontend change to appear at all. The
+ * fallback below is what makes any future code the backend ever adds cost
+ * zero frontend work the day it starts emitting, sight unseen.
  */
 export function humanizeWarningCode(code: string): string {
   return code

@@ -318,7 +318,12 @@ export default function Detections() {
     // showing nothing.
     const match = usersQuery.data?.users.find((u) => u.user_id === row.snoozed_by_id)
     const who = match ? getUserFullName(match) : row.snoozed_by_id ? `#${row.snoozed_by_id}` : null
-    return describeSnoozeStatus(snoozedUntilMap[row.log_id] ?? row.snoozed_until, now, who)
+    return describeSnoozeStatus(
+      snoozedUntilMap[row.log_id] ?? row.snoozed_until,
+      now,
+      who,
+      row.snoozed_at,
+    )
   }
 
   const currentTotalFiltered = currentQuery.data?.total_filtered ?? 0

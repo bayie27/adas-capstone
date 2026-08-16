@@ -2,8 +2,10 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { RiAddLine, RiPencilLine, RiKey2Line, RiDeleteBinLine } from "@remixicon/react"
+import { Badge } from "@/components/ui/Badge"
 import { Button, focusRing } from "@/components/ui/Button"
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
+import { FilterSelect } from "@/components/ui/FilterSelect"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { SearchInput } from "@/components/ui/SearchInput"
@@ -45,6 +47,10 @@ export default function Users() {
   const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
   const [notice, setNotice] = useState<NoticeState | null>(null)
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
+  // "active" is a sentinel for "omit the param" — GET /api/users/ already
+  // defaults to active-only when is_active is absent, so this preserves
+  // today's behavior exactly rather than sending an explicit "true".
+  const [activeFilter, setActiveFilter] = useState<"active" | "false" | "null">("active")
 
   // usePagination derives `page`/`offset` from the total, but the query supplies
   // the total — so mirror it into state and sync during render (placeholderData
@@ -56,10 +62,11 @@ export default function Users() {
   )
 
   const usersQuery = useQuery({
-    queryKey: [...USERS_QUERY_KEY, debouncedSearchTerm, USERS_PAGE_SIZE, offset],
+    queryKey: [...USERS_QUERY_KEY, debouncedSearchTerm, activeFilter, USERS_PAGE_SIZE, offset],
     queryFn: () =>
       getUsers({
         search: debouncedSearchTerm || undefined,
+        is_active: activeFilter === "active" ? undefined : activeFilter,
         limit: USERS_PAGE_SIZE,
         offset,
       }),
@@ -102,15 +109,30 @@ export default function Users() {
       {notice ? <NoticeBanner notice={notice} /> : null}
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <SearchInput
-          value={searchTerm}
-          onChange={(value) => {
-            setNotice(null)
-            reset()
-            setSearchTerm(value)
-          }}
-          placeholder="Search..."
-        />
+        <div className="flex flex-wrap items-center gap-2.5">
+          <SearchInput
+            value={searchTerm}
+            onChange={(value) => {
+              setNotice(null)
+              reset()
+              setSearchTerm(value)
+            }}
+            placeholder="Search..."
+          />
+          <FilterSelect
+            value={activeFilter}
+            options={[
+              { value: "active", label: "Active only" },
+              { value: "false", label: "Deactivated only" },
+              { value: "null", label: "All" },
+            ]}
+            onChange={(value) => {
+              setNotice(null)
+              reset()
+              setActiveFilter(value)
+            }}
+          />
+        </div>
         <Button
           size="sm"
           onClick={() => {
@@ -165,7 +187,14 @@ export default function Users() {
                       className="text-fg-body transition-colors hover:bg-surface-1"
                     >
                       <td className="px-6 py-4 text-xs font-medium">{getUserFullName(user)}</td>
-                      <td className="px-6 py-4 text-xs">{user.username}</td>
+                      <td className="px-6 py-4 text-xs">
+                        {user.username}
+                        {!user.is_active ? (
+                          <Badge variant="subtle" tone="neutral" uppercase={false} className="ml-2">
+                            Deactivated
+                          </Badge>
+                        ) : null}
+                      </td>
                       <td className="px-6 py-4 text-xs">{formatUserRole(user.role)}</td>
                       <td className="px-6 py-4 text-xs">
                         {formatRelativeDateTime(user.last_login)}
