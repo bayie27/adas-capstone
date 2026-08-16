@@ -438,6 +438,7 @@ export default function Cameras() {
         camera={detailCamera}
         isOpen={detailCameraId !== null}
         onClose={() => setDetailCameraId(null)}
+        now={now}
       />
 
       {modal.kind === "add" && (
