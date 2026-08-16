@@ -11,6 +11,7 @@ import {
   RiAlertLine,
   RiCameraLine,
   RiDashboardLine,
+  RiFileHistoryLine,
   RiLayoutGridLine,
   RiLogoutBoxRLine,
   RiPulseLine,
@@ -72,7 +73,13 @@ export function Sidebar() {
     },
     {
       title: "ADMINISTRATION",
-      links: role === "Admin" ? [{ name: "Users", to: "/admin/users", icon: RiUserLine }] : [],
+      links:
+        role === "Admin"
+          ? [
+              { name: "Users", to: "/admin/users", icon: RiUserLine },
+              { name: "Audit Log", to: "/admin/audit", icon: RiFileHistoryLine },
+            ]
+          : [],
     },
   ]
 
