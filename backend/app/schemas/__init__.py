@@ -16,6 +16,7 @@ from app.schemas.camera import (
     AiBreakdown,
     CameraBreakdowns,
     CameraCreate,
+    CameraDetailRead,
     CameraKpis,
     CameraListResponse,
     CameraRead,
@@ -44,6 +45,7 @@ from app.schemas.events import (
 from app.schemas.exports import (
     ExportJobCreate,
     ExportJobCreateResponse,
+    ExportJobListResponse,
     ExportJobRead,
     RetrainingExportRequest,
 )
@@ -95,6 +97,7 @@ __all__ = [
     "BackupTriggerResponse",
     "CameraBreakdowns",
     "CameraCreate",
+    "CameraDetailRead",
     "CameraKpis",
     "CameraListResponse",
     "CameraRead",
@@ -112,6 +115,7 @@ __all__ = [
     "EventType",
     "ExportJobCreate",
     "ExportJobCreateResponse",
+    "ExportJobListResponse",
     "ExportJobRead",
     "GpuRead",
     "HealthHistoryPoint",

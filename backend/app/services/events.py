@@ -84,7 +84,7 @@ def snooze_activated_event(log: DetectionLog) -> EventEnvelope:
     data = SnoozeActivatedData(
         log_id=log.log_id,
         camera_id=log.camera_id,
-        snoozed_by=log.snoozed_by_id,
+        snoozed_by=format_user_name(log.snoozed_by),
         snoozed_until=log.snoozed_until,
     )
     return make_event(EventType.SNOOZE_ACTIVATED, data)

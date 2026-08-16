@@ -323,6 +323,16 @@ export default function Maintenance() {
             </div>
           </div>
 
+          {latestRestoreQuery.data.status === "requested" ? (
+            <p className="mt-3 text-caption text-fg-muted">
+              Waiting on a person — nothing happens automatically from here. Stop services and run{" "}
+              <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[11px]">
+                python -m app.maintenance restore {latestRestoreQuery.data.backup_id}
+              </code>{" "}
+              from the command line to complete it.
+            </p>
+          ) : null}
+
           {latestRestoreQuery.data.error ? (
             <p className="mt-3 text-caption text-danger">{latestRestoreQuery.data.error}</p>
           ) : null}
@@ -334,12 +344,11 @@ export default function Maintenance() {
           backupId={restoreTargetId}
           onClose={() => setRestoreTargetId(null)}
           onSuccess={() => {
-            setRestoreTargetId(null)
             setNotice({
               tone: "success",
-              message:
-                "Restore requested. The system will go offline shortly for the offline restore step.",
+              message: `Restore requested for backup ${restoreTargetId}. Nothing happens automatically — stop services and run the offline restore procedure to complete it.`,
             })
+            setRestoreTargetId(null)
             queryClient.invalidateQueries({ queryKey: LATEST_RESTORE_QUERY_KEY })
           }}
         />
