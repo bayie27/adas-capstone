@@ -164,3 +164,54 @@ def test_a_missing_sample_frame_exits_rather_than_benchmarking_a_blank(tmp_path)
     capacity under a flag that was asked for precisely to avoid one."""
     with pytest.raises(SystemExit):
         capacity.load_sample_frame(tmp_path / "nope.mp4")
+
+
+def test_the_default_model_is_still_the_configured_checkpoint(monkeypatch, tmp_path):
+    """Pins the no-argument behaviour the rest of this file's tests rely on:
+    omitting --model must keep benchmarking config.WEIGHTS_PATH, not silently
+    drift to something else."""
+    profile = _run(monkeypatch, tmp_path)
+    assert profile.model_path == str(config.WEIGHTS_PATH)
+
+
+def test_an_explicit_model_is_benchmarked_and_recorded(monkeypatch, tmp_path):
+    """Recording a path that was not the one loaded is precisely the
+    silent-wrong-model failure this repo has hit before (best.pt/best.engine),
+    so both halves — what was constructed and what was recorded — must
+    match the --model argument."""
+    model_path = tmp_path / "built.engine"
+    model_path.touch()
+
+    constructed = {}
+
+    def fake_detector(path, device=None):
+        constructed["path"] = path
+        return object()
+
+    def fake_benchmark(detector, batch, frame):
+        if batch not in LATENCIES:
+            raise RuntimeError("CUDA out of memory")
+        return LATENCIES[batch]
+
+    profile_path = tmp_path / "machine_profile.json"
+    monkeypatch.setattr(capacity, "resolve_device", lambda: "cpu")
+    monkeypatch.setattr(capacity, "AccidentDetector", fake_detector)
+    monkeypatch.setattr(capacity, "_benchmark", fake_benchmark)
+    monkeypatch.setattr(config, "PROFILE_PATH", profile_path)
+    monkeypatch.setattr(sys, "argv", ["capacity.py", "--model", str(model_path)])
+
+    capacity.main()
+    profile = load_profile(profile_path)
+
+    assert constructed["path"] == model_path
+    assert profile.model_path == str(model_path)
+
+
+def test_a_missing_model_exits_rather_than_falling_back(monkeypatch, tmp_path):
+    """Mirrors test_a_missing_sample_frame_exits_rather_than_benchmarking_a_blank:
+    a --model that does not exist must never silently fall back to the
+    configured checkpoint — that would write a profile claiming capacity for
+    an artifact that was never measured."""
+    with pytest.raises(SystemExit):
+        _run(monkeypatch, tmp_path, argv=["--model", str(tmp_path / "nope.engine")])
+    assert not (tmp_path / "machine_profile.json").exists()
