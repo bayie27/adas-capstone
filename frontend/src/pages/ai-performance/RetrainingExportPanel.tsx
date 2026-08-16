@@ -1,6 +1,7 @@
 import { useState } from "react"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 
+import { getAlerts } from "@/api/alerts"
 import { createRetrainingExport, type RetrainingExportParams } from "@/api/exports"
 import { Button } from "@/components/ui/Button"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
@@ -8,6 +9,15 @@ import { FilterSelect } from "@/components/ui/FilterSelect"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useExportJobsStore } from "@/store/useExportJobsStore"
+
+const ROWS = new Intl.NumberFormat("en-US")
+
+/**
+ * D-14: the plan's own illustrative "bad" example is a 50-incident window —
+ * used verbatim as the warning line rather than picking an unrelated
+ * number, so the threshold and the copy that explains it can't drift apart.
+ */
+const LOW_COUNT_WARNING_THRESHOLD = 50
 
 /**
  * D-14 owns this panel — Admin only, always async (there is no synchronous
@@ -37,6 +47,23 @@ export function RetrainingExportPanel() {
       label: c.camera_name,
     })),
   ]
+
+  // D-14: the population D-010 labels — Resolved (true positive) and
+  // Dismissed (false positive) — over the same range and camera filter the
+  // export itself will use. `limit: 1` costs one row; `total_filtered` is
+  // the real count regardless of the page size requested.
+  const labelledCountQuery = useQuery({
+    queryKey: ["retraining-labelled-count", startDate, endDate, cameraId],
+    queryFn: () =>
+      getAlerts({
+        status: ["Resolved", "Dismissed"],
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        camera_id: cameraId ? [Number(cameraId)] : undefined,
+        limit: 1,
+      }),
+  })
+  const labelledCount = labelledCountQuery.data?.total_filtered
 
   const track = useExportJobsStore((state) => state.track)
 
@@ -85,6 +112,20 @@ export function RetrainingExportPanel() {
           Export retraining package
         </Button>
       </div>
+
+      {labelledCount !== undefined ? (
+        <p
+          className={`mt-2 text-caption ${
+            labelledCount < LOW_COUNT_WARNING_THRESHOLD ? "text-warning" : "text-fg-muted"
+          }`}
+        >
+          {ROWS.format(labelledCount)} labelled incident{labelledCount === 1 ? "" : "s"} in this
+          range.
+          {labelledCount < LOW_COUNT_WARNING_THRESHOLD
+            ? ` Exporting fewer than ${LOW_COUNT_WARNING_THRESHOLD} wastes a training run — widen the range or camera filter first.`
+            : ""}
+        </p>
+      ) : null}
 
       {jobMutation.isError ? (
         <div className="mt-3">
