@@ -277,6 +277,12 @@ playwright-report/
 # Written by ai_engine/capacity.py. Machine-specific, like a TensorRT engine.
 ai_engine/machine_profile.json
 ai_engine/*.engine
+# Build artifacts, not sources: both are exported from epoch50.pt, which IS
+# tracked. The .engine is tied to the GPU, driver and TensorRT version that
+# built it and is useless anywhere else; the .onnx is an intermediate of the
+# same export chain. Rebuild them per machine rather than committing 10-20 MB
+# of binary that no other machine can load.
+ai_engine/*.onnx
 
 # Real accident footage, test-only, permanently. No public licence; shows identifiable
 # people/vehicles/locations. Already covered by *.mp4 above; this is belt-and-suspenders

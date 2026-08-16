@@ -3,6 +3,8 @@ incident handling in accident.py.
 """
 
 import logging
+import os.path
+from pathlib import Path
 
 import config
 import outbox
@@ -14,7 +16,42 @@ from supervisor import start_supervisor_thread
 logger = logging.getLogger("ai_engine")
 
 
-def _load_capacity() -> int:
+_FORMAT_LABELS = {
+    ".pt": "PyTorch checkpoint",
+    ".engine": "TensorRT engine",
+    ".onnx": "ONNX",
+}
+
+
+def _format_label(path) -> str:
+    """Names the build in the startup line. The old best.engine bug was
+    dangerous because it was INVISIBLE; a model that announces what it is on
+    every boot cannot quietly be the wrong one.
+    """
+    return _FORMAT_LABELS.get(Path(path).suffix.lower(), "unrecognised format")
+
+
+def _same_model(recorded: str, loaded) -> bool:
+    """Whether the profile was measured on the model about to be loaded.
+
+    Both sides go through config.under_repo_root because a profile written by
+    an older capacity.py records a RELATIVE path. Interpreting that against
+    the working directory made a model compare unequal to itself whenever the
+    process started anywhere but the repo root — a false alarm on the check
+    that exists to prevent quoting a capacity figure about the wrong build.
+
+    normcase because these paths are compared on Windows, where the same file
+    is reached by more than one casing.
+    """
+    try:
+        a = os.path.normcase(str(config.under_repo_root(recorded)))
+        b = os.path.normcase(str(config.under_repo_root(loaded)))
+        return a == b
+    except (OSError, ValueError):
+        return str(recorded) == str(loaded)
+
+
+def _load_capacity(model_path=None) -> int:
     """Camera capacity from the machine profile, or a pessimistic default.
 
     A missing profile is not an error — the engine runs, says so, and points
@@ -41,14 +78,33 @@ def _load_capacity() -> int:
         f"{profile.capacity_at_max_fps} camera(s) @ {config.FPS_BAND_MAX:.0f} FPS · "
         f"verification: {profile.verification}"
     )
+
+    # The profile's model_path is not used to CHOOSE the model — that would
+    # rebuild the best.engine failure, a gitignored file silently deciding what
+    # detects crashes. It is used to check one: capacity measured on the
+    # checkpoint describes neither build once an engine is loaded, and quoting
+    # it would be a number about nothing.
+    if model_path is not None and not _same_model(profile.model_path, model_path):
+        print(
+            f"[SYSTEM] WARNING: the profile was measured on "
+            f"{Path(profile.model_path).name} but {Path(model_path).name} is "
+            "loaded. The capacity above does NOT describe this build — re-run "
+            "`capacity.py --model` against it before quoting any figure."
+        )
+
     return profile.capacity_at_max_fps
 
 
 def run_multi_camera_inference() -> None:
     print("Initializing ADAS Edge Inference Server...")
 
-    capacity = _load_capacity()
-    detector = AccidentDetector(config.WEIGHTS_PATH)
+    # Resolved before anything else: a model that is not there must stop the
+    # process, not be discovered halfway through bringing cameras up.
+    model_path = config.resolve_model_path()
+    print(f"[SYSTEM] Model: {model_path.name} ({_format_label(model_path)})")
+
+    capacity = _load_capacity(model_path)
+    detector = AccidentDetector(model_path)
     print(f"[SYSTEM] Detector ready on device '{detector.device}'.")
 
     alert_manager = AccidentManager()
