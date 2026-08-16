@@ -81,13 +81,30 @@ from machine_profile import (
 # capacity_at_min_fps a dead field and pipeline.target_fps's band-drop lever
 # look pointless. Pinned by test_a_sparse_grid_understates_capacity.
 #
-# It runs to 16 rather than 8 because 8 was not enough on the GTX 1650 this was
-# developed against: batch 8 measured 63.6ms against the 66.7ms tick, so
-# capacity hit the top of the grid at BOTH ends of the band and the field went
-# dead again — truncated rather than quantised, but equally uninformative.
-# A grid can always be saturated by a fast enough machine, so _grid_limited
-# reports when that has happened instead of quietly returning the ceiling.
-BATCH_SIZES = list(range(1, 17))
+# It has been raised twice, both times because the machine outgrew the grid,
+# and the reason is always the same: a capacity equal to the largest batch
+# measured is not a measurement, it is "we stopped looking here".
+#
+#   8  -> 16   batch 8 measured 63.6ms against the 66.7ms tick on a GTX 1650,
+#              so capacity saturated at BOTH ends of the band and
+#              capacity_at_min_fps went dead.
+#   16 -> 32   a TensorRT build of the same model on the same card reached 14
+#              cameras at 15 FPS and hit the grid ceiling at 10 FPS, reporting
+#              15 when a linear fit of its own latencies (R^2 = 0.98) puts the
+#              real figure near 22. Compiled builds roughly halved per-batch
+#              latency, so the headroom 16 used to provide is gone.
+#
+# 32 is chosen to clear that extrapolated 22 with margin, not as a round
+# number. VRAM does not constrain it on the development card: measured
+# 2026-08-16, inference costs ~14 MiB per camera, so batch 32 peaks at 0.48 GiB
+# of a 4 GiB card. Compute is the binding constraint, which is what makes this
+# grid worth extending rather than a memory ceiling to respect.
+#
+# The cost is time: work scales with the SUM of the batch sizes, so 1..32 is
+# roughly 4x the sweep of 1..16. A machine that OOMs partway up stops there and
+# keeps what it measured, and _grid_limited still reports a capacity that
+# reached the top rather than quietly returning the ceiling as an answer.
+BATCH_SIZES = list(range(1, 33))
 WARMUP_ITERATIONS = 10
 TIMED_ITERATIONS = 30
 

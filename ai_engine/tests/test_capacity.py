@@ -17,7 +17,9 @@ from machine_profile import load_profile  # noqa: E402
 
 # A machine where the FPS band actually changes the answer: batch 3 costs
 # 82ms, which overruns the 66.7ms tick at 15 FPS but fits the 100ms tick at 10.
-LATENCIES = {batch: 25.0 * batch + 5.0 for batch in range(1, 17)}
+# Covers the whole grid so a sweep that runs to the end is not mistaken for one
+# that stopped early — test_every_benchmarked_batch_is_recorded depends on it.
+LATENCIES = {batch: 25.0 * batch + 5.0 for batch in range(1, 33)}
 # The two that decide it: batch 3 overruns the 66.7ms tick but fits the 100ms one.
 assert LATENCIES[2] == 55.0 and LATENCIES[3] == 80.0
 
@@ -48,15 +50,20 @@ def test_the_batch_grid_is_contiguous():
     test_a_sparse_grid_understates_capacity for the full argument — this pins
     the same requirement at the producing end."""
     grid = capacity.BATCH_SIZES
-    assert grid == list(range(1, 17))
+    assert grid == list(range(1, 33))
 
 
-def test_the_grid_reaches_past_eight():
-    """Measured, not guessed: on the GTX 1650 this was developed against,
-    batch 8 came in at 63.6ms against the 66.7ms tick, so a grid ending at 8
-    saturated at both ends of the band and reported the ceiling as if it were
-    the answer."""
-    assert max(capacity.BATCH_SIZES) > 8
+def test_the_grid_clears_what_a_compiled_build_reaches():
+    """Measured, not guessed, and raised twice for the same reason.
+
+    A grid ending at 8 saturated at both ends of the band on the GTX 1650
+    (batch 8 came in at 63.6ms against the 66.7ms tick). A grid ending at 16
+    then saturated again once a TensorRT build roughly halved per-batch
+    latency: 14 cameras at 15 FPS, and the 10 FPS end truncated at 15 where a
+    linear fit of the same run puts it near 22.
+
+    22 is therefore the number this has to clear, not 16."""
+    assert max(capacity.BATCH_SIZES) >= 22
 
 
 def test_the_two_capacities_are_not_swapped(monkeypatch, tmp_path):
