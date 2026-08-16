@@ -11,6 +11,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { getApiErrorMessage } from "@/api/client"
 import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/format"
 import { ChangePasswordModal } from "@/pages/profile/ChangePasswordModal"
+import { AlarmSettingsCard } from "@/pages/profile/AlarmSettingsCard"
 
 const PROFILE_QUERY_KEY = ["my-profile"] as const
 
@@ -243,6 +244,10 @@ export default function ProfileSettings() {
           </>
         )}
       </Card>
+
+      <div className="mt-8">
+        <AlarmSettingsCard />
+      </div>
 
       {modal.kind === "password" && (
         <ChangePasswordModal
