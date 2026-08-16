@@ -1,6 +1,5 @@
 import axios from "axios"
 import { API_BASE_URL } from "@/utils/env"
-import api from "@/api/client"
 
 export type ApiUserRole = "Admin" | "Operator"
 
@@ -48,10 +47,4 @@ export async function loginUser(credentials: LoginCredentials) {
 
 export async function logoutUser() {
   await authApi.post("/auth/logout")
-}
-
-export async function getCurrentUser() {
-  const { data } = await api.get<CurrentUserResponse>("/users/me")
-
-  return data
 }

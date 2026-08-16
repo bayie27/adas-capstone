@@ -94,8 +94,12 @@ export interface AlertListResponse {
  * unlisted value is a **422**, so a sort key must always be taken from this
  * list rather than assembled from a column id.
  *
- * Only four have a column on the Detections table; the rest are reachable only
- * if a column is added for them.
+ * Six of the nine have a column on the Detections table (see `SORTABLE` in
+ * `Detections.tsx`). The remaining three -- `verified_at`, `closed_at`,
+ * `created_at` -- are assessed, not an oversight: none has a column to
+ * attach to, there's no operator ask for one, and narrowing this type to
+ * six would just be a second source of truth against the backend's own
+ * allowlist for no reachability gain.
  */
 export const ALERT_SORT_FIELDS = [
   "log_id",
