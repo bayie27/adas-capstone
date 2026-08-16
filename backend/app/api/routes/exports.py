@@ -35,6 +35,9 @@ def _job_filters_dict(payload: ExportJobCreate) -> dict:
         "camera_id": payload.camera_id or [],
         "user_id": payload.user_id or [],
         "search": payload.search,
+        "action": payload.action or [],
+        "result": payload.result or [],
+        "target_type": payload.target_type or [],
     }
 
 

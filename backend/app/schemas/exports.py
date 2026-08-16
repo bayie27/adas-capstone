@@ -4,8 +4,10 @@ job endpoints (`/api/exports/jobs`)."""
 from datetime import datetime
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from sqlmodel import SQLModel
+
+from app.models import AUDIT_ACTIONS
 
 ExportJobReportType = Literal["incidents", "dashboard", "performance", "audit"]
 ExportJobFormat = Literal["csv", "pdf"]
@@ -30,6 +32,27 @@ class ExportJobCreate(SQLModel):
     search: str | None = None
     sort_by: str | None = None
     sort_order: str | None = None
+    # P21 Step 5 — an "audit" report_type job's own filters. Previously
+    # absent, so an async audit-log export could never carry them; PR #111
+    # worked around it by disabling the async fallback entirely whenever one
+    # of these was active.
+    action: list[str] | None = None
+    result: list[str] | None = None
+    target_type: list[str] | None = None
+
+    @field_validator("action")
+    @classmethod
+    def action_known(cls, v: list[str] | None) -> list[str] | None:
+        """01_CONTRACTS.md §8 — the same 26-entry catalog the synchronous
+        audit export validates `action` against, so an unknown value is a
+        422 here too, rather than a silently empty filter reaching the
+        worker."""
+        if v is None:
+            return v
+        unknown = [a for a in v if a not in AUDIT_ACTIONS]
+        if unknown:
+            raise ValueError(f"Unknown action(s): {', '.join(unknown)}")
+        return v
 
     @model_validator(mode="after")
     def validate_date_range(self) -> "ExportJobCreate":

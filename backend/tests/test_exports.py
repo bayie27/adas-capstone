@@ -740,6 +740,144 @@ class TestDiskFullDuringExport:
         assert download_resp.status_code == 404
 
 
+class TestAuditJobFilters:
+    """P21 Step 5 — action/result/target_type must reach the worker, not
+    merely be accepted into filters_json. A field accepted then dropped is
+    worse than a 422: the artifact would silently disagree with what the
+    operator saw on screen."""
+
+    def test_unknown_action_is_422(self, client: TestClient, session: Session):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={
+                "report_type": "audit",
+                "format": "csv",
+                "action": ["NOT_A_REAL_ACTION"],
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 422
+
+    def test_action_filter_reaches_the_worker_end_to_end(
+        self, client: TestClient, session: Session
+    ):
+        """Assert the whole path: create a job with an action filter, run
+        the worker, read the artifact back, confirm it contains only the
+        filtered rows — not merely that the field was accepted."""
+        make_admin(session)
+        # Logging in itself writes a LOGIN_SUCCESS audit row — seed the
+        # excluded actions too, so a correct filter is distinguishable from
+        # one that silently passed everything through.
+        headers = auth_headers(client, "admin", "Admin123")
+        session.add(AuditLog(actor_type="system", action="LOGOUT", result="success"))
+        session.add(
+            AuditLog(actor_type="system", action="CAMERA_DELETE", result="success")
+        )
+        session.commit()
+        expected_count = len(
+            session.exec(
+                select(AuditLog).where(AuditLog.action == "LOGIN_SUCCESS")
+            ).all()
+        )
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={
+                "report_type": "audit",
+                "format": "csv",
+                "action": ["LOGIN_SUCCESS"],
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 202, resp.text
+        job_id = resp.json()["job_id"]
+
+        process_export_job(session.get_bind(), job_id)
+
+        status_resp = client.get(f"/api/exports/jobs/{job_id}", headers=headers)
+        assert status_resp.json()["status"] == "completed", status_resp.text
+
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        assert download_resp.status_code == 200
+        rows = list(csv.reader(StringIO(download_resp.text[1:])))
+        header, data_rows = rows[0], rows[1:]
+        action_col = header.index("Action")
+        assert {row[action_col] for row in data_rows} == {"LOGIN_SUCCESS"}
+        assert len(data_rows) == expected_count
+
+    def test_result_filter_reaches_the_worker(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        session.add(AuditLog(actor_type="system", action="LOGOUT", result="success"))
+        session.add(AuditLog(actor_type="system", action="LOGOUT", result="denied"))
+        session.commit()
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "audit", "format": "csv", "result": ["denied"]},
+            headers=headers,
+        )
+        job_id = resp.json()["job_id"]
+        process_export_job(session.get_bind(), job_id)
+
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        rows = list(csv.reader(StringIO(download_resp.text[1:])))
+        header, data_rows = rows[0], rows[1:]
+        result_col = header.index("Result")
+        assert {row[result_col] for row in data_rows} == {"denied"}
+
+    def test_target_type_filter_reaches_the_worker(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        session.add(
+            AuditLog(
+                actor_type="system",
+                action="CAMERA_DELETE",
+                result="success",
+                target_type="camera",
+                target_ref="1",
+            )
+        )
+        session.add(
+            AuditLog(
+                actor_type="system",
+                action="USER_DISABLE",
+                result="success",
+                target_type="user",
+                target_ref="2",
+            )
+        )
+        session.commit()
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "audit", "format": "csv", "target_type": ["camera"]},
+            headers=headers,
+        )
+        job_id = resp.json()["job_id"]
+        process_export_job(session.get_bind(), job_id)
+
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        rows = list(csv.reader(StringIO(download_resp.text[1:])))
+        header, data_rows = rows[0], rows[1:]
+        target_col = header.index("Target")
+        assert all(row[target_col].startswith("camera:") for row in data_rows)
+        assert len(data_rows) == 1
+
+
 class TestRetraining:
     def test_retraining_requires_admin(self, client: TestClient, session: Session):
         make_operator(session)
