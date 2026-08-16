@@ -25,7 +25,10 @@ interface StatCardProps {
   value: ReactNode
   subtext?: string
   delta?: string
-  deltaPositive?: boolean
+  /** `true`/`false` pick the success/danger tone. `null` is a distinct third
+   * state -- a real, present delta that is exactly zero -- rendered neutral
+   * rather than defaulting to danger the way `false` would. */
+  deltaPositive?: boolean | null
   elevated?: boolean
   isLoading?: boolean
   className?: string
@@ -66,7 +69,7 @@ export function StatCard({
           {delta ? (
             <Badge
               variant="subtle"
-              tone={deltaPositive ? "success" : "danger"}
+              tone={deltaPositive === null ? "neutral" : deltaPositive ? "success" : "danger"}
               uppercase={false}
               className="mb-1"
             >

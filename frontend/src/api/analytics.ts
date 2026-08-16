@@ -6,6 +6,18 @@ export interface DashboardAnalyticsKpis {
   ongoing: number
   total_accidents: number
   total_resolved: number
+  /**
+   * Percentage change against the previous window of the same duration,
+   * with the same camera filter applied (`schemas/analytics.py:15-17`).
+   * `null` whenever there's no previous window to compare against: the
+   * default all-time load (both dates unset), a half-open range (only one
+   * date set), or a previous window that was itself zero (growth from
+   * nothing isn't a percentage an operator can act on). Never render `null`
+   * as 0% -- those are different facts.
+   */
+  ongoing_delta_pct: number | null
+  total_accidents_delta_pct: number | null
+  total_resolved_delta_pct: number | null
 }
 
 export interface DashboardLocationFrequency {

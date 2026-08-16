@@ -40,6 +40,22 @@ describe("StatCard", () => {
     expect(screen.getByText("-1.2%")).toHaveClass("text-danger")
   })
 
+  it("renders a null deltaPositive as the neutral tone, distinct from false", () => {
+    render(
+      <StatCard
+        icon={DummyIcon}
+        title="Ongoing Accidents"
+        value={4}
+        delta="0%"
+        deltaPositive={null}
+      />,
+    )
+
+    const delta = screen.getByText("0%")
+    expect(delta).not.toHaveClass("text-danger")
+    expect(delta).not.toHaveClass("text-success")
+  })
+
   it("fills the elevated variant with the raised surface", () => {
     const { container } = render(
       <StatCard icon={DummyIcon} title="Total Cameras" value={7} elevated />,
