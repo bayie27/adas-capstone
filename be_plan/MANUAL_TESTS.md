@@ -81,6 +81,78 @@ TensorRT model, triggered manually (not the real 3 AM window) via
 | Under the NFR-16 <10s (downtime only) budget? | **Yes** — 8.13s < 10s |
 | Anything unexpected in logs? | No errors. The only observation worth recording is the log-capture gap noted above. |
 
+### Results — 2026-08-16 (`be_plan/18_PKG_scheduled_maintenance.md` Step 8)
+
+Executed against the real stack (mediamtx + 5 ffmpeg feeds, backend, AI engine with the real
+TensorRT model) on the demo laptop. Unlike the 2026-08-11 pass, this one covers the actual
+**unattended** trigger (`scripts\register-maintenance-task.ps1`, task `\ADAS\DailyRestart`), not
+just a manually-invoked `-Action Restart` — and it found two real, previously-undiscovered bugs
+that only a genuine unattended firing could surface.
+
+**Methodology note on timing.** `register-maintenance-task.ps1` only supports hour-granularity
+triggers (`MAINTENANCE_HOUR_LOCAL`, matching NFR-16's own "3:00 AM" framing) — there is no way to
+schedule a trigger "two minutes from now" as this procedure's drill-1 instruction literally says.
+With the drill starting at 14:30 local, `MAINTENANCE_HOUR_LOCAL` was set to `15` (the next hour
+boundary, a ~30-minute real wait) rather than the system clock being touched to fake a closer
+trigger. The value was restored and the task re-registered at the real default (`3`) immediately
+after.
+
+**Unattended trigger, attempt 1 (2026-08-16, 15:00:00 local) — FAILED.** The task fired exactly on
+schedule with nobody touching it (`-Verify` showed `NextRunTime`/`LastRunTime` both `15:00:00`) —
+but the backend crashed before reaching `/healthz/ready`, and `-Action Restart` exited 1.
+`var\log\backend-20260816-150048.err.log` showed a real, reproducible `UnicodeEncodeError`:
+FastAPI CLI's startup banner (`Starting production server \U0001f680`) couldn't be encoded by the
+`cp1252` codepage the backend's stdout inherited once `-RedirectStandardOutput` detached it from a
+real console — the codepage a Task-Scheduler-launched process inherits differs from whatever an
+already-open interactive terminal may have customized, which is exactly why none of this pack's
+earlier manual `-Action Restart` drills (same day, same machine) had hit it. Fixed by setting
+`$env:PYTHONUTF8 = "1"` in `adas-maintenance.ps1` before spawning either child process.
+
+**A second, independent bug found in the same investigation:** the AI engine's own log file
+(`var\log\ai_engine-*.log`) came back empty on the *first* post-Step-5 restart, despite
+`-RedirectStandardOutput` being wired up correctly — Python block-buffers stdout when it isn't a
+real console, and `ai_engine/main.py`'s plain `print()` startup lines (never modified — `ai_engine/`
+is off-limits) never flushed while the process kept running. Fixed with `$env:PYTHONUNBUFFERED = "1"`,
+also set before spawning either child.
+
+**A third, unrelated bug found while transcript-reviewing the failed run:** `Write-Error` under this
+script's own `$ErrorActionPreference = "Stop"` is a *terminating* call, which was silently discarding
+every `exit N`/`$exitCode = N` statement written immediately after it — including the rollback
+path's `exit 2` ("manual intervention required"), which could never actually fire. Pre-existing
+since P7, provable only now that Step 5 gives the run a transcript to see it happen in. Fixed by
+adding `-ErrorAction Continue` to all six `Write-Error` call sites; verified the fix in isolation
+(`exit 2` after a fixed `Write-Error` now genuinely produces exit code 2, confirmed both broken and
+fixed behavior with a standalone `pwsh -Command` repro).
+
+**Unattended trigger, attempt 2 (2026-08-16, 15:06:49 local, via `Start-ScheduledTask` on-demand —
+genuinely re-invoked through Task Scheduler, not this session's own interactive shell) — PASSED.**
+`LastTaskResult: 0`. `var\log\backend-20260816-150658.log` shows the same `\U0001f680` banner
+printing cleanly with no crash, confirming the `PYTHONUTF8` fix under the real launch context that
+broke the first attempt.
+
+| Measurement | Result |
+|---|---|
+| Date/time of drill | 2026-08-16, unattended fire at 15:00:00 local (attempt 1, failed); on-demand re-verification 15:06:49 local via `Start-ScheduledTask` (attempt 2, passed) |
+| Backup phase duration | Attempt 1: 24.314s (anomalously slow for a dedup-skip check — `BACKUP_DIR` sits inside the OneDrive-synced tree, F17; not chased further). Attempt 2: 1.691s. Both **skipped** (Step 9's dedup: a valid scheduled backup already existed from this session's earlier manual drills) |
+| Downtime (stop → `/healthz/ready` true) | Attempt 1: 72.33s, but the run never reached ready — this is time-to-give-up, not a real recovery time. Attempt 2: 32.60s |
+| Model-load time (AI engine's own startup log, first frame processed) | Content now **survives** (closes F22) — `var\log\ai_engine-*.log` shows `"Detector ready on device '0'"` live, mid-run. Still not a precise *duration*: `ai_engine/main.py`'s `print()` output carries no timestamps of its own and `ai_engine/` is off-limits to add them, so this is as far as this fix can honestly take the measurement |
+| Camera(s) re-ingesting confirmed? (Y/N, which cameras) | Y, on the passing attempt — cameras 2, 4, 5 read `Connected` shortly after the wait phase completed, matching the established pattern from every prior drill this session |
+| Total restart-to-recovered wall time | Attempt 2: `ready_duration_seconds` 3.094s (backend), `heartbeat_duration_seconds` 16.297s |
+| Under the NFR-16 <10s (downtime only) budget? | **No, on both passing attempts this session** — see the note below |
+| Anything unexpected in logs? | Yes — the two real bugs above, both found and fixed live, not simulated |
+
+**On the >10s downtimes.** Every restart timed *today* (both drill 1's and drill 2's runs — see
+below) measured well over the 10s NFR-16 budget (19.8s–72.3s), a sharp contrast with the 2026-08-11
+pass's clean 8.13s. The likely cause matches F21's already-documented pattern exactly: this
+session ran MediaMTX + 5 ffmpeg transcodes + a live GPU inference engine + this session's own
+background PowerShell drill-1 wait-loop simultaneously, on the same machine, for the full ~35
+minutes these drills span — real resource contention from the *drilling session itself*, not a
+regression in the restart mechanism. Recorded honestly rather than re-run quietly on a quieter
+machine until a number under budget appeared; a real demo-day restart (no concurrent drilling
+session competing for the GPU and 5 transcodes) should look like 2026-08-11's number, not this
+one, but that is inference from the two data points available, not a claim this pass re-verified
+on a quiet machine.
+
 ---
 
 ## 2. NFR-18 — 60-second restore drill
@@ -134,6 +206,23 @@ observable as that row reverting.
 | Total time: restore request → `/healthz/ready` true | ~26s (stop+restore steps completed by 01:35:56.7; `ready_duration_seconds` 2.625s + `heartbeat_duration_seconds` 9.781s from there; finalize shortly after — well inside 60s) |
 | Under the NFR-18 <60s budget? | **Yes** — ~26s vs 60s budget |
 | Database state confirmed matches the restored backup? | **Yes** — `log_id 58` read back as `Unverified` (its state at backup time), not `Dismissed` (the change made after the backup but before the restore), proving the restore genuinely replaced DB content and not just restarted the process. |
+
+### Results — 2026-08-16 (`be_plan/18_PKG_scheduled_maintenance.md` Step 8, drill 4 — regression)
+
+Re-run to confirm Step 2's `-wal`/`-shm` sidecar-cleanup changes to `backup.py`/`restore.py` didn't
+disturb this flow. Same marker-row technique as 2026-08-11: `log_id 68` (camera 5, `Unverified`,
+created earlier this session by drill 3's write-load test) was dismissed to `Dismissed` immediately
+after taking the backup that was then restored.
+
+| Measurement | Result |
+|---|---|
+| Date/time of drill | 2026-08-16, started ~06:39:06 UTC |
+| Backup id restored | `5c3c0844820b40ff95adc924bba168e7` (taken 06:39:06, before the marker change) |
+| Emergency (pre-restore) backup id created | (not separately noted — `perform_offline_restore`'s own emergency-backup step, per its JSON step output) |
+| DB-file swap duration | 2.03ms (`swap_primary_database` step) |
+| Total time: restore request → `/healthz/ready` true | ~38s (stop+restore completed by 06:39:33; `ready_duration_seconds` 4.187s + `heartbeat_duration_seconds` 21.265s from there — well inside 60s) |
+| Under the NFR-18 <60s budget? | **Yes** — ~38s vs 60s budget |
+| Database state confirmed matches the restored backup? | **Yes** — `log_id 68` read back as `Unverified` (its state at backup time), not `Dismissed`. No orphaned `-wal`/`-shm` sidecars observed on any backup artifact touched by this drill — Step 2's fix holds under a real restore, not just the unit tests. |
 
 ---
 
@@ -203,6 +292,24 @@ at that moment captures the "Dismissed" state — and a correct rollback must la
 | Rollback DB-file swap duration | 1.25ms (`rollback_swap_primary_database` step) |
 | System confirmed back on the pre-restore (emergency) state? | **Yes** — after fixing `DATABASE_URL` back, running rollback, and restarting cleanly, `log_id 57` read back as `Dismissed` (its state at the moment of the restore attempt, captured in the emergency backup) — not `Unverified` (the failed restore's target state). This is exactly the distinction D-011 exists to guarantee: a failed restore must not leave the system on the failed target. |
 | Any manual intervention required beyond fixing the injected failure? | Restoring `.env`'s `DATABASE_URL` to its original value (the only thing this drill deliberately broke) and re-running `-Action Start`; no other manual DB surgery was needed — `perform_rollback()` handled the actual data recovery unattended once invoked. |
+
+### Results — 2026-08-16 (`be_plan/18_PKG_scheduled_maintenance.md` Step 8, drill 4 — regression)
+
+Re-run to confirm Step 2's sidecar-cleanup changes didn't disturb the rollback path either. Same
+methodology as 2026-08-11 (raw `python -m app.maintenance` commands, not a single `-Action Restore`
+call, to control exactly when the break lands), same marker-row technique — `log_id 68` (camera 5)
+dismissed immediately before the restore attempt, restore target an older backup taken before
+`log_id 68` existed, so a correct rollback must bring `log_id 68` back at all (not just in the
+right status) while a failed-and-stuck-on-target restore would show it missing entirely.
+
+| Measurement | Result |
+|---|---|
+| Date/time of drill | 2026-08-16, ~06:40:48–06:42:08 UTC |
+| Failure injected (what, exactly) | `.env`'s `DATABASE_URL` temporarily repointed to `sqlite:///./var/nonexistent_rollback_drill/adas.db` after the restore's own DB swap, then a fresh `fastapi run` backend started against it. Genuine: `sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) unable to open database file`, `Application startup failed. Exiting.`, exit code 3. |
+| Rollback triggered automatically? (Y/N) | **N (this session) / mechanism confirmed real** — same reasoning as 2026-08-11: triggered explicitly via `uv run python -m app.maintenance rollback` since the failure had to land at a precise point no single `-Action Restore` invocation can hook; identical `perform_rollback()` code path. |
+| Rollback DB-file swap duration | 1.52ms (`rollback_swap_primary_database` step) |
+| System confirmed back on the pre-restore (emergency) state? | **Yes** — after fixing `DATABASE_URL` and restarting, `log_id 68` read back as `Dismissed` (its state at the moment of the restore attempt), not absent (what the failed restore's older target would show, since that backup predates `log_id 68`). |
+| Any manual intervention required beyond fixing the injected failure? | Restoring `DATABASE_URL` and re-running `-Action Start`; no other manual DB surgery needed. |
 
 ---
 
@@ -435,9 +542,9 @@ this package doesn't own.
 
 | # | Test case(s) | Status |
 |---|---|---|
-| 1 | TC-R-303 | **pass** — 2026-08-11, 8.13s downtime (budget 10s) |
-| 2 | NFR-18 (no single TC id — the 60s restore window) | **pass** — 2026-08-11, ~26s (budget 60s) |
-| 3 | Rollback drill (D-011, no single TC id) | **pass** — 2026-08-11, genuine failure injected, rollback verified via marker row |
+| 1 | TC-R-303 | 2026-08-11 **pass** (8.13s downtime, budget 10s). 2026-08-16 (P18 Step 8, the real *unattended* trigger): attempt 1 **failed** (genuine `UnicodeEncodeError` crash, found and fixed live — `PYTHONUTF8`), attempt 2 **passed** functionally (`LastTaskResult: 0`) but **over the 10s downtime budget** (19.8s–72.3s across this session's runs) under this session's own heavy concurrent resource load — see the 2026-08-16 results block for the full accounting |
+| 2 | NFR-18 (no single TC id — the 60s restore window) | **pass** — 2026-08-11 (~26s) and 2026-08-16 regression re-run (~38s), both well inside the 60s budget |
+| 3 | Rollback drill (D-011, no single TC id) | **pass** — 2026-08-11 and 2026-08-16 regression re-run, both with a genuine failure injected and rollback verified via a marker row |
 | 4–5 | TC-R-401, TC-R-402 | not yet run — owner decision 2026-08-11, see results above |
 | 6 | TC-S-203 | not yet run — owner decision 2026-08-11, see results above |
 | 7 | TC-R-304 | **pass** — 2026-08-11, session + alert queue both survived a tab close/reopen |
@@ -447,5 +554,12 @@ this package doesn't own.
 Six of nine procedures executed 2026-08-11 as part of `be_audit/A6_manual_evidence.md`, all
 passing. The three not run are a deliberate scope decision (the two real-time-duration drills)
 or a genuine out-of-package-scope block (the bi-annual drill), not an oversight — see each
-procedure's Results section above for the specific reasoning. `be_plan/TRACEABILITY.md` and
-`be_audit/00_FINDINGS.md` reflect this same state.
+procedure's Results section above for the specific reasoning. P18 (2026-08-16) re-ran drills 1–3
+against the real unattended trigger and the sidecar-fix regression: two real bugs found and fixed
+live (backend `UnicodeEncodeError` under a redirected console codepage; AI-engine stdout
+block-buffering), one pre-existing bug found and fixed as a side effect (`Write-Error` silently
+discarding intended exit codes under `$ErrorActionPreference = "Stop"`), and the restart downtime
+budget missed on every run this session under self-inflicted concurrent load (recorded honestly,
+not re-run quietly until a passing number appeared) — see `be_audit/00_FINDINGS.md`'s F22
+resolution-log entry for the full account. `be_plan/TRACEABILITY.md` and `be_audit/00_FINDINGS.md`
+reflect this same state.
