@@ -19,6 +19,12 @@ const SHORT = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 })
 
+const TIME_ONLY = new Intl.DateTimeFormat("en-US", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+})
+
 const RELATIVE = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
 
 function parse(value: string | null | undefined): Date | null {
@@ -72,6 +78,12 @@ export function formatFullDateTime(value: string | null | undefined) {
 export function formatShortDateTime(value: string | null | undefined) {
   const date = parse(value)
   return date ? SHORT.format(date) : "-"
+}
+
+/** "HH:MM", 24-hour — a bare clock reading, no date. */
+export function formatTimeOnly(value: string | null | undefined) {
+  const date = parse(value)
+  return date ? TIME_ONLY.format(date) : null
 }
 
 /**

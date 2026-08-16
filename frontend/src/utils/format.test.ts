@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { describeCameraDesiredState, formatFileSize, isCameraInCooldown } from "@/utils/format"
+import {
+  describeCameraDesiredState,
+  describeSnoozeStatus,
+  formatFileSize,
+  isCameraInCooldown,
+} from "@/utils/format"
 
 const NOW = Date.parse("2026-08-14T12:00:00Z")
 
@@ -55,6 +60,30 @@ describe("isCameraInCooldown", () => {
     expect(isCameraInCooldown(camera("cooldown"))).toBe(true)
     expect(isCameraInCooldown(camera("incident"))).toBe(false)
     expect(isCameraInCooldown(camera(null))).toBe(false)
+  })
+})
+
+describe("describeSnoozeStatus", () => {
+  it("says nothing when there is no active snooze", () => {
+    expect(describeSnoozeStatus(null, NOW, null, null)).toBeNull()
+  })
+
+  it("leads with when the snooze started, not just when it resumes", () => {
+    expect(describeSnoozeStatus("2026-08-14T12:05:00Z", NOW, null, "2026-08-14T11:58:00Z")).toMatch(
+      /^Muted at \d{2}:\d{2} — resumes in 300s$/,
+    )
+  })
+
+  it("falls back to the un-prefixed form when snoozed_at is missing", () => {
+    expect(describeSnoozeStatus("2026-08-14T12:05:00Z", NOW, null, null)).toBe(
+      "Muted — resumes in 300s",
+    )
+  })
+
+  it("still names who snoozed it alongside the start time", () => {
+    expect(
+      describeSnoozeStatus("2026-08-14T12:05:00Z", NOW, "Jane Doe", "2026-08-14T11:58:00Z"),
+    ).toMatch(/^Muted at \d{2}:\d{2} by Jane Doe — resumes in 300s$/)
   })
 })
 
