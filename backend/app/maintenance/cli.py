@@ -52,6 +52,31 @@ def cmd_backup(args: argparse.Namespace) -> int:
     db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
     origin = ORIGIN_SCHEDULED if args.origin == "scheduled" else ORIGIN_MANUAL
     started = time.perf_counter()
+
+    # be_plan/18_PKG_scheduled_maintenance.md Step 9 — both restart
+    # orchestrators (scripts/adas-maintenance.ps1's Restart action,
+    # backend/scripts/daily_restart.sh) call this exact command with
+    # --origin scheduled as their own backup phase, on top of the in-app
+    # APScheduler job (Step 1) that already covers the daily obligation
+    # independently. Only `scheduled` gets this dedup — a manual backup is
+    # an intentional immediate action, never skipped.
+    if origin == ORIGIN_SCHEDULED:
+        from app.services.maintenance_schedule import scheduled_backup_is_due
+
+        if not scheduled_backup_is_due(settings.BACKUP_DIR, now=datetime.now(UTC)):
+            elapsed = time.perf_counter() - started
+            print(
+                json.dumps(
+                    {
+                        "skipped": True,
+                        "reason": "a valid scheduled backup already satisfies the daily interval",
+                        "duration_seconds": round(elapsed, 3),
+                    },
+                    indent=2,
+                )
+            )
+            return 0
+
     try:
         manifest = create_backup(
             db_path=db_path,
@@ -180,7 +205,7 @@ def cmd_archive(args: argparse.Namespace) -> int:
             backup_dir=settings.BACKUP_DIR,
             snapshot_root=settings.SNAPSHOT_ROOT,
             legacy_snapshot_dir=settings.LEGACY_SNAPSHOT_DIR,
-            model_weights_path=REPO_ROOT / "ai_engine" / "best.pt",
+            model_weights_path=REPO_ROOT / "ai_engine" / "epoch50.pt",
             archive_dir=settings.ARCHIVE_DIR,
         )
     except archive_mod.ArchiveSecurityError as exc:
@@ -293,21 +318,24 @@ def _wait_for_restart_readiness(settings, *, timeout: float) -> int:
         )
     )
     if heartbeat_at is None:
-        # Not a failure: nothing in this codebase writes
-        # Camera.last_heartbeat_at yet (that's the AI-owner's v2
-        # POST /api/internal/heartbeat contract, per
-        # be_plan/12_AI_ENGINE_CONTRACT.md §2.1 — deferred, not built by
-        # any merged package as of this branch). Gating the restart/restore
-        # pass/fail on it would mean every restore permanently rolls itself
-        # back, since the one thing it's waiting for can never happen —
-        # worse than not checking it at all. Ready-only is the honest
-        # criterion until that lands; `heartbeat_confirmed` above is
-        # reported for visibility and will start reflecting reality
-        # automatically once heartbeat writing exists.
+        # Not a failure, but not for the reason this comment used to give:
+        # P10 landed receive_heartbeat -> apply_observed() (services/
+        # cameras.py), which *does* write Camera.last_heartbeat_at on every
+        # v2 heartbeat, so a genuinely running AI engine with at least one
+        # enabled camera reliably clears this within a few seconds (2.6-2.7s
+        # observed on the 2026-08-11 restart drill, MANUAL_TESTS.md §1).
+        # The remaining, still-real reason to keep this non-blocking: a
+        # restart/restore is legitimately run with zero enabled/heartbeating
+        # cameras too (every camera disabled, a dev box with no AI engine
+        # attached, a from-scratch seed) — gating pass/fail on it would
+        # false-fail those, permanently rolling back a restore that never
+        # had anything wrong with it. Ready-only stays the honest pass/fail
+        # criterion; `heartbeat_confirmed` above is real signal now, not a
+        # placeholder, and is worth watching in the Step 8 drills.
         print(
-            "WARNING: AI heartbeat not confirmed — no writer of "
-            "Camera.last_heartbeat_at exists yet in this codebase "
-            "(pending the P4 heartbeat contract). Not treated as failure.",
+            "WARNING: AI heartbeat not confirmed within the timeout — no "
+            "camera reported a fresh heartbeat. Not treated as failure "
+            "(a restart with zero active cameras is legitimate).",
             file=sys.stderr,
         )
     return 0

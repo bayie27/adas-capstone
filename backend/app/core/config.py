@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     BACKUP_DIR: Path = Path("var/backups")
     EXPORT_DIR: Path = Path("var/exports")
     ARCHIVE_DIR: Path = Path("var/archive")
+    # scripts/adas-maintenance.ps1's own -LogDir default — kept in sync so
+    # GET /api/system/maintenance/status reads the same maintenance-runs.jsonl
+    # the PowerShell orchestrator writes.
+    LOG_DIR: Path = Path("var/log")
 
     # RTSP construction (backend-owned, §7.2)
     RTSP_URL_TEMPLATE: str = "rtsp://localhost:8554/channel{channel_id}"
@@ -160,6 +164,7 @@ class Settings(BaseSettings):
         "BACKUP_DIR",
         "EXPORT_DIR",
         "ARCHIVE_DIR",
+        "LOG_DIR",
     )
     @classmethod
     def resolve_repo_relative_path(cls, v: Path) -> Path:

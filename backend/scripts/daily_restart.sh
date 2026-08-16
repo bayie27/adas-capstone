@@ -11,7 +11,11 @@
 # stands up the production host, not a verified deployment artifact.
 #
 # Sequence, matching D-011 Step 7 exactly:
-#   1. online backup (services stay up)
+#   1. online backup (services stay up) -- `backup --origin scheduled`
+#      itself now skips writing a redundant backup when the in-app
+#      APScheduler cron job (app.main, be_plan/18_PKG_scheduled_
+#      maintenance.md Step 1) already covered today's obligation, so this
+#      script needs no dedup logic of its own.
 #   2. systemd restarts the backend + AI engine services natively
 #   3. wait for /healthz/ready and a fresh AI heartbeat, timed separately
 #      from the backup

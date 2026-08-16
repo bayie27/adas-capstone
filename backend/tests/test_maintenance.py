@@ -16,8 +16,9 @@ Two layers, deliberately kept separate:
 
 Covers 08_PKG_backup_ops.md's "Tests to write" table and the P7-tagged
 rows in 14_EDGE_CASES.md: 1.12, 1.13, 3.16, 4.10, 6.6, 6.18. Rows 5.10 and
-5.11 are not automated here — see the class docstring on
-`TestSchedulingEdgeCases` for why.
+5.11's restart half stays a documented skip — see the class docstring on
+`TestSchedulingEdgeCases` for why; the backup half is tested for real in
+test_maintenance_schedule.py.
 """
 
 import json
@@ -43,6 +44,7 @@ from app.maintenance.backup import (
 )
 from app.maintenance.manifest import (
     ORIGIN_MANUAL,
+    ORIGIN_SCHEDULED,
     InvalidBackupIdError,
     db_path_for,
     list_manifests,
@@ -335,6 +337,52 @@ class TestBackupCore:
     def test_resolve_sqlite_db_path_accepts_file_url(self, tmp_path):
         url = f"sqlite:///{(tmp_path / 'x.db').as_posix()}"
         assert resolve_sqlite_db_path(url) == tmp_path / "x.db"
+
+
+# ---------------------------------------------------------------------------
+# TestSidecarCleanup — 18_PKG_scheduled_maintenance.md Step 2. sqlite3.
+# Connection.backup() carries the source's WAL journal mode into the
+# destination, so every finished backup used to leave orphaned -wal/-shm
+# files behind it forever (~36 found in var/backups/ before this fix).
+# ---------------------------------------------------------------------------
+
+
+class TestSidecarCleanup:
+    def _sidecars(self, backup_dir):
+        return list(backup_dir.glob("*-wal")) + list(backup_dir.glob("*-shm"))
+
+    def test_create_backup_leaves_no_wal_or_shm_sidecars(self, maint_paths):
+        create_backup(db_path=maint_paths.db_path, backup_dir=maint_paths.backup_dir)
+        assert self._sidecars(maint_paths.backup_dir) == []
+
+    def test_list_backups_re_verification_creates_no_sidecars(self, maint_paths):
+        create_backup(db_path=maint_paths.db_path, backup_dir=maint_paths.backup_dir)
+        list_backups(maint_paths.backup_dir)  # re-hashes every retained backup
+        assert self._sidecars(maint_paths.backup_dir) == []
+
+    def test_prune_backups_removes_sidecars_for_the_removed_id(self, maint_paths):
+        ids = []
+        for i in range(3):
+            _write_row(maint_paths.db_path, f"row-{i}")
+            m = create_backup(
+                db_path=maint_paths.db_path,
+                backup_dir=maint_paths.backup_dir,
+                origin=ORIGIN_MANUAL,
+            )
+            ids.append(m.backup_id)
+            time.sleep(0.01)
+
+        # Simulate a pre-fix leftover sidecar next to the oldest backup —
+        # the one about to be pruned.
+        stale_db = db_path_for(maint_paths.backup_dir, ids[0])
+        stale_db.with_name(stale_db.name + "-wal").write_bytes(b"stale")
+        stale_db.with_name(stale_db.name + "-shm").write_bytes(b"stale")
+
+        prune_backups(
+            maint_paths.backup_dir, retention=RetentionConfig(daily=30, manual=1)
+        )
+
+        assert self._sidecars(maint_paths.backup_dir) == []
 
 
 # ---------------------------------------------------------------------------
@@ -768,6 +816,39 @@ class TestArchive:
         )
 
 
+class TestArchiveCli:
+    """18_PKG_scheduled_maintenance.md Step 3 — cmd_archive used to point
+    at the deleted ai_engine/best.pt; _add_file records a missing path as a
+    `missing_files` entry rather than raising, so every archive built so
+    far shipped without the model, silently. Unlike every other TestArchive
+    case above (which call archive_mod.build_archive directly with an
+    explicit, test-controlled model_weights_path), this exercises the real
+    cli.py entrypoint against the real REPO_ROOT/ai_engine/epoch50.pt to
+    guard the regression at the layer it actually broke."""
+
+    def test_cmd_archive_includes_the_real_model_weights(
+        self, maint_paths, monkeypatch
+    ):
+        import zipfile
+
+        from app.core.config import settings as app_settings
+        from app.maintenance import cli as cli_mod
+
+        archive_dir = maint_paths.backup_dir.parent / "archive"
+        monkeypatch.setattr(app_settings, "BACKUP_DIR", maint_paths.backup_dir)
+        monkeypatch.setattr(app_settings, "ARCHIVE_DIR", archive_dir)
+
+        create_backup(db_path=maint_paths.db_path, backup_dir=maint_paths.backup_dir)
+
+        exit_code = cli_mod.main(["archive"])
+        assert exit_code == 0
+
+        archive_path = next(archive_dir.glob("adas_archive_*.zip"))
+        with zipfile.ZipFile(archive_path) as zf:
+            names = zf.namelist()
+        assert "model/epoch50.pt" in names
+
+
 # ---------------------------------------------------------------------------
 # API-layer tests
 # ---------------------------------------------------------------------------
@@ -785,13 +866,20 @@ def maintenance_settings(client: TestClient, tmp_path, monkeypatch):
 
     backup_dir = tmp_path / "backups"
     archive_dir = tmp_path / "archive"
+    log_dir = tmp_path / "log"
     real_db_url = client.app.state.settings.DATABASE_URL
 
     monkeypatch.setattr(app_settings, "DATABASE_URL", real_db_url)
     monkeypatch.setattr(app_settings, "BACKUP_DIR", backup_dir)
     monkeypatch.setattr(app_settings, "ARCHIVE_DIR", archive_dir)
+    # GET /api/system/maintenance/status reads LOG_DIR/maintenance-runs.jsonl
+    # from this same global — without patching it too, the status route
+    # would read the real demo laptop's actual restart-drill history.
+    monkeypatch.setattr(app_settings, "LOG_DIR", log_dir)
 
-    return SimpleNamespace(backup_dir=backup_dir, archive_dir=archive_dir)
+    return SimpleNamespace(
+        backup_dir=backup_dir, archive_dir=archive_dir, log_dir=log_dir
+    )
 
 
 def _audit_rows_on_disk(client: TestClient, action: str) -> list[AuditLog]:
@@ -1072,6 +1160,77 @@ class TestRestoreRoutes:
         assert resp.status_code == 404
 
 
+class TestMaintenanceStatusRoute:
+    def test_requires_admin(self, client, session, maintenance_settings):
+        make_operator(session)
+        headers = auth_headers(client, "operator", "Operator123")
+        resp = client.get("/api/system/maintenance/status", headers=headers)
+        assert resp.status_code == 403
+
+    def test_fields_null_safe_before_anything_has_ever_run(
+        self, client, session, maintenance_settings
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        resp = client.get("/api/system/maintenance/status", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["last_scheduled_backup"] is None
+        assert body["last_manual_backup"] is None
+        # SCHEDULER_ENABLED=False in tests -> app.state.scheduler is None.
+        assert body["next_scheduled_backup_at"] is None
+        assert body["backup_overdue"] is True
+        assert body["last_restart"] is None
+        assert body["latest_restore"] is None
+        assert body["maintenance_hour_local"] == 3
+        assert body["maintenance_timezone"] == "Asia/Manila"
+
+    def test_backup_overdue_false_after_a_fresh_scheduled_backup(
+        self, client, session, maintenance_settings
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        db_path = resolve_sqlite_db_path(client.app.state.settings.DATABASE_URL)
+        create_backup(
+            db_path=db_path,
+            backup_dir=maintenance_settings.backup_dir,
+            origin=ORIGIN_SCHEDULED,
+        )
+
+        resp = client.get("/api/system/maintenance/status", headers=headers)
+        body = resp.json()
+        assert body["backup_overdue"] is False
+        assert body["last_scheduled_backup"]["valid"] is True
+
+    def test_no_absolute_path_anywhere_in_body(
+        self, client, session, maintenance_settings
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        # Populate last_manual_backup and latest_restore too, not just the
+        # empty-state case — more surface area for a leaked path.
+        assert client.post("/api/system/backups", headers=headers).status_code == 202
+        backup_id = client.get("/api/system/backups", headers=headers).json()["items"][
+            0
+        ]["backup_id"]
+        client.post(
+            "/api/system/restores",
+            json={
+                "backup_id": backup_id,
+                "current_password": "Admin123",
+                "confirmation": f"RESTORE {backup_id}",
+            },
+            headers=headers,
+        )
+
+        resp = client.get("/api/system/maintenance/status", headers=headers)
+        serialized = str(resp.json()).lower()
+        assert "c:\\" not in serialized
+        assert str(maintenance_settings.backup_dir).lower() not in serialized
+
+
 class TestCrossOperationLock:
     """Edge case 1.12 — restore and backup share the same maintenance lock,
     so either operation must reject the other, not just itself
@@ -1130,23 +1289,34 @@ class TestCrossOperationLock:
 
 
 class TestSchedulingEdgeCases:
-    """Edge cases 5.10 (MAINTENANCE_HOUR_LOCAL across a DST transition) and
-    5.11 (scheduler misfire after suspend/resume) are handled entirely by
-    the OS-level scheduler, not by Python in this package: the daily
-    restart is triggered by a Windows Scheduled Task (local-time trigger)
-    or the systemd timer in deploy/systemd/adas-maintenance.timer, which
-    sets `Persistent=true` specifically so a missed 3 AM firing (host
-    asleep/off) catches up once rather than being silently skipped. There
-    is no Python code in app.maintenance computing "local restart time" to
-    unit-test — see 08_PKG_backup_ops.md Step 7 and this repo's
-    deploy/systemd/README.md. Genuinely inapplicable to pytest coverage;
-    documented here rather than silently dropped, per 14_EDGE_CASES.md's
-    own instruction.
+    """5.10 (MAINTENANCE_HOUR_LOCAL across a DST transition) and 5.11
+    (scheduler misfire after suspend/resume) used to both be documented as
+    pure OS-scheduler concerns and skipped outright, back when nothing in
+    this codebase read MAINTENANCE_HOUR_LOCAL at all
+    (18_PKG_scheduled_maintenance.md).
+
+    That is still true for the *restart* half — it is genuinely a Windows
+    Scheduled Task (scripts/register-maintenance-task.ps1, task
+    \\ADAS\\DailyRestart) or the systemd timer in
+    deploy/systemd/adas-maintenance.timer, neither of which is Python code
+    this suite can exercise; that half stays a documented skip below.
+
+    The *backup* half is different now: app.main.py registers a real
+    `daily_backup` APScheduler cron job with an explicit `timezone=`, so it
+    earns real tests instead of a skip —
+    test_maintenance_schedule.py::TestDailyBackupCronTimezone (5.10's
+    "wrong timezone" half) and ::TestDailyBackupCronDstBehavior (5.10's DST
+    half). 5.11's general misfire-coalescing behavior is covered
+    independently by test_scheduler.py::TestMisfireCoalescing.
     """
 
-    def test_documented_as_os_scheduler_responsibility(self):
+    def test_restart_scheduling_is_the_os_schedulers_responsibility(self):
         pytest.skip(
-            "5.10/5.11 are OS-scheduler concerns (Windows Scheduled Task "
-            "local trigger; systemd timer Persistent=true) — no Python "
-            "logic in this package computes restart scheduling to test."
+            "The restart half of scheduling is a Windows Scheduled Task "
+            "(scripts/register-maintenance-task.ps1, task "
+            "\\ADAS\\DailyRestart) or the systemd timer in "
+            "deploy/systemd/adas-maintenance.timer — no Python logic in "
+            "this package computes restart scheduling to test. The backup "
+            "half is now real Python cron logic, tested directly in "
+            "test_maintenance_schedule.py."
         )
