@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 
 import { exportDashboardAnalytics, getDashboardAnalytics } from "@/api/analytics"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
+import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { AreaChartCard } from "@/components/charts/AreaChartCard"
 import { BarChartCard } from "@/components/charts/BarChartCard"
 import { Button } from "@/components/ui/Button"
@@ -46,6 +47,8 @@ export default function Dashboard() {
   const exportMutation = useMutation({
     mutationFn: (format: ExportFormat) => exportDashboardAnalytics(filters, format),
   })
+
+  const exportJobMutation = useExportJobSubmit()
 
   const lineData = useMemo(
     () =>
@@ -124,6 +127,16 @@ export default function Dashboard() {
           <ExportButton
             isExporting={exportMutation.isPending}
             onExport={(format) => exportMutation.mutate(format)}
+            isSubmittingJob={exportJobMutation.isPending}
+            onExportJob={(format) =>
+              exportJobMutation.mutateAsync({
+                report_type: "dashboard",
+                format,
+                start_date: filters.start_date,
+                end_date: filters.end_date,
+                camera_id: filters.camera_id,
+              })
+            }
           />
         </div>
 
@@ -131,6 +144,13 @@ export default function Dashboard() {
           <QueryErrorBanner
             error={exportMutation.error}
             fallback="Unable to export the dashboard report."
+          />
+        ) : null}
+
+        {exportJobMutation.isError ? (
+          <QueryErrorBanner
+            error={exportJobMutation.error}
+            fallback="Unable to start the background export job."
           />
         ) : null}
 

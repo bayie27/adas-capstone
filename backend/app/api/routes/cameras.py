@@ -31,6 +31,8 @@ from app.services import audit
 from app.services.cameras import (
     bump_if_ai_relevant_changed,
     compute_kpis_and_breakdowns,
+    presented_ai_status_expr,
+    presented_connection_status_expr,
     presented_statuses,
     recompute_desired_state,
     snapshot_ai_relevant_fields,
@@ -74,19 +76,28 @@ def _to_camera_read(camera: Camera, *, now: datetime) -> CameraRead:
 def _apply_camera_filters(
     query,
     *,
+    now: datetime,
     search: str | None,
     connection_statuses: list[ConnectionStatus] | None,
     ai_statuses: list[AIStatus] | None,
     is_enabled: bool | None,
 ):
+    """P19 §2 — filters compare the same staleness-aware *presented* status
+    the rows and breakdowns show, via presented_connection_status_expr()/
+    presented_ai_status_expr() (app.services.cameras), not the raw stored
+    columns. Filtering, counting and pagination all stay in SQL."""
     if search:
         query = query.where(col(Camera.camera_name).icontains(search))
     if connection_statuses:
         query = query.where(
-            col(Camera.connection_status).in_([s.value for s in connection_statuses])
+            presented_connection_status_expr(now=now).in_(
+                [s.value for s in connection_statuses]
+            )
         )
     if ai_statuses:
-        query = query.where(col(Camera.ai_status).in_([s.value for s in ai_statuses]))
+        query = query.where(
+            presented_ai_status_expr(now=now).in_([s.value for s in ai_statuses])
+        )
     if is_enabled is not None:
         query = query.where(col(Camera.is_enabled).is_(is_enabled))
     return query
@@ -117,9 +128,9 @@ def get_all_cameras(
     events must not be allowed to overwrite a state fetched with a *higher*
     `config_version` than the event carries.
 
-    Filters compare against the raw stored connection_status/ai_status
-    columns, not the staleness-presented values `presented_statuses()`
-    computes — filtering by "Unresponsive" is a known gap, not covered here.
+    Filters compare against the same staleness-aware *presented* status the
+    rows and `breakdowns` show (P19 §2), so filtering by "Unresponsive"
+    returns exactly the cameras that display it.
     """
     now = datetime.now(UTC)
     kpis, breakdowns = compute_kpis_and_breakdowns(session, now=now)
@@ -127,6 +138,7 @@ def get_all_cameras(
     query = select(Camera).where(col(Camera.is_active).is_(True))
     query = _apply_camera_filters(
         query,
+        now=now,
         search=search,
         connection_statuses=connection_status,
         ai_statuses=ai_status,

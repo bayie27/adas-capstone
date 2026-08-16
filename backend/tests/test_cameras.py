@@ -4,12 +4,19 @@ shape, desired-state recomputation on mutation, and presented (staleness-
 aware) observed status.
 """
 
+import itertools
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.models import DetectionStatus
+from app.core.config import settings
+from app.models import AIStatus, Camera, ConnectionStatus, DetectionStatus
+from app.services.cameras import (
+    presented_ai_status_expr,
+    presented_connection_status_expr,
+    presented_statuses,
+)
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from .conftest import auth_headers, make_camera, make_detection, make_operator
 
@@ -278,6 +285,179 @@ class TestGetAllCameras:
         body = resp.json()
         assert body["total_filtered"] == 1
         assert body["cameras"][0]["camera_name"] == "Disabled Cam"
+
+
+class TestPresentedStatusFilters:
+    """P19 §2 — camera status filters must compare *presented*, staleness-
+    aware status, the same value the rows and breakdowns show, not the raw
+    stored columns."""
+
+    def test_sql_expr_matches_python_across_full_matrix(self, session: Session):
+        """The paired test that is the point of this step: for every
+        (is_enabled x heartbeat-timing x stored connection_status x stored
+        ai_status) combination, the SQL case() expression the filters use
+        must agree with presented_statuses(), the function the rows and
+        breakdowns are rendered from. Two copies of one rule is exactly how
+        the filter/display divergence happened; this is the guard against it
+        recurring."""
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(seconds=settings.HEARTBEAT_STALE_SECONDS)
+        heartbeat_cases = {
+            "never": None,
+            "fresh": now - timedelta(seconds=1),
+            "exactly_at_cutoff": cutoff,
+            "stale": cutoff - timedelta(seconds=1),
+        }
+
+        cameras: list[Camera] = []
+        channel = 1000
+        for is_enabled, hb_value, conn_status, ai_status in itertools.product(
+            (True, False),
+            heartbeat_cases.values(),
+            [s.value for s in ConnectionStatus],
+            [s.value for s in AIStatus],
+        ):
+            channel += 1
+            cam = make_camera(
+                session,
+                name=f"Matrix Cam {channel}",
+                channel_id=channel,
+                is_enabled=is_enabled,
+                connection_status=conn_status,
+                ai_status=ai_status,
+                last_heartbeat_at=hb_value,
+            )
+            cameras.append(cam)
+
+        rows = session.exec(
+            select(
+                Camera.camera_id,
+                presented_connection_status_expr(now=now),
+                presented_ai_status_expr(now=now),
+            )
+        ).all()
+        sql_by_id = {row[0]: (row[1], row[2]) for row in rows}
+
+        assert len(sql_by_id) == len(cameras)
+        for cam in cameras:
+            expected = presented_statuses(cam, now=now)
+            assert sql_by_id[cam.camera_id] == expected, (
+                f"{cam.camera_name}: is_enabled={cam.is_enabled} "
+                f"last_heartbeat_at={cam.last_heartbeat_at}"
+            )
+
+    def test_filter_by_unresponsive_returns_exactly_what_displays_it(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        now = datetime.now(UTC)
+        stale_but_stored_active = make_camera(
+            session,
+            name="Stale Displays Unresponsive",
+            channel_id=301,
+            connection_status="Connected",
+            ai_status="Active",
+            last_heartbeat_at=now - timedelta(seconds=30),
+        )
+        make_camera(
+            session,
+            name="Fresh Connected",
+            channel_id=302,
+            connection_status="Connected",
+            ai_status="Active",
+            last_heartbeat_at=now,
+        )
+        # Stored Unresponsive but disabled — the fix must not invent a
+        # reason to *exclude* a disabled camera whose stored value already
+        # happens to be Unresponsive; disabled cameras keep their stored
+        # value verbatim.
+        disabled_stored_unresponsive = make_camera(
+            session,
+            name="Disabled Stored Unresponsive",
+            channel_id=303,
+            is_enabled=False,
+            connection_status="Unresponsive",
+            ai_status="Unresponsive",
+        )
+
+        resp = client.get(
+            "/api/cameras/?connection_status=Unresponsive&ai_status=Unresponsive",
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        ids = {c["camera_id"] for c in body["cameras"]}
+        assert ids == {
+            stale_but_stored_active.camera_id,
+            disabled_stored_unresponsive.camera_id,
+        }
+        assert body["total_filtered"] == 2
+        for cam_row in body["cameras"]:
+            assert cam_row["connection_status"] == "Unresponsive"
+            assert cam_row["ai_status"] == "Unresponsive"
+
+    def test_filtered_total_agrees_with_unfiltered_breakdown_count(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        now = datetime.now(UTC)
+        make_camera(
+            session,
+            name="Stale One",
+            channel_id=310,
+            connection_status="Connected",
+            ai_status="Active",
+            last_heartbeat_at=now - timedelta(seconds=30),
+        )
+        make_camera(
+            session,
+            name="Stale Two",
+            channel_id=311,
+            connection_status="Connected",
+            ai_status="Active",
+            last_heartbeat_at=now - timedelta(seconds=45),
+        )
+        make_camera(
+            session,
+            name="Fresh One",
+            channel_id=312,
+            connection_status="Connected",
+            ai_status="Active",
+            last_heartbeat_at=now,
+        )
+
+        unfiltered = client.get("/api/cameras/", headers=headers).json()
+        breakdown_count = unfiltered["breakdowns"]["ai"]["unresponsive"]
+
+        filtered = client.get(
+            "/api/cameras/?ai_status=Unresponsive", headers=headers
+        ).json()
+
+        assert filtered["total_filtered"] == breakdown_count == 2
+
+    def test_disabled_long_stale_camera_returned_by_stored_status_not_unresponsive(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        cam = make_camera(
+            session,
+            name="Disabled Long Stale",
+            channel_id=320,
+            is_enabled=False,
+            connection_status="Connected",
+            ai_status="Active",
+            last_heartbeat_at=datetime.now(UTC) - timedelta(days=1),
+        )
+
+        unresponsive = client.get(
+            "/api/cameras/?connection_status=Unresponsive", headers=headers
+        ).json()
+        assert cam.camera_id not in {c["camera_id"] for c in unresponsive["cameras"]}
+
+        connected = client.get(
+            "/api/cameras/?connection_status=Connected", headers=headers
+        ).json()
+        assert cam.camera_id in {c["camera_id"] for c in connected["cameras"]}
 
 
 class TestCreateCamera:

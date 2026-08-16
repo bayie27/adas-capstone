@@ -8,6 +8,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { RealtimeAlertsBridge } from "@/components/RealtimeAlertsBridge"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { DevPanelTrigger } from "@/components/dev/DevPanelTrigger"
+import { ExportJobsTray } from "@/components/exports/ExportJobsTray"
 
 const Login = lazy(() => import("@/pages/Login"))
 const Dashboard = lazy(() => import("@/pages/Dashboard"))
@@ -40,6 +41,7 @@ function App() {
           so it is available on /login too. */}
       <MaintenanceNotice />
       <DevPanelTrigger />
+      <ExportJobsTray />
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
           <Routes>

@@ -50,6 +50,16 @@ interface ExportButtonProps {
   disabled?: boolean
   isExporting?: boolean
   className?: string
+  /**
+   * Phase 17 — when both ceilings are exceeded, an "over both limits" filter
+   * set otherwise has nowhere to go. Passing this activates the async job
+   * fallback in place of the static "too large" paragraph; omitting it keeps
+   * the exact prior behaviour, so every caller that predates Phase 17
+   * (Dashboard, Detections, AI Performance, Audit Log all passed no
+   * job-related prop before this) needs no change to keep working.
+   */
+  onExportJob?: (format: ExportFormat) => void | Promise<unknown>
+  isSubmittingJob?: boolean
 }
 
 const FORMAT_LABEL: Record<ExportFormat, string> = {
@@ -65,6 +75,8 @@ export function ExportButton({
   disabled,
   isExporting,
   className,
+  onExportJob,
+  isSubmittingJob,
 }: ExportButtonProps) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -90,6 +102,11 @@ export function ExportButton({
   async function choose(format: ExportFormat) {
     setOpen(false)
     await onExport(format)
+  }
+
+  async function chooseJob(format: ExportFormat) {
+    setOpen(false)
+    await onExportJob?.(format)
   }
 
   // `undefined` short-circuits every check below: unknown stays unknown.
@@ -148,13 +165,39 @@ export function ExportButton({
           })}
 
           {/*
-            Over BOTH ceilings there is nowhere to send the operator yet. The
-            async job route is Phase 17's surface and does not exist, so this
-            states the problem and stops — telling them before they wait for a
-            413 is the whole point, and offering a path that isn't built would
-            be worse than offering none.
+            Over BOTH ceilings, the synchronous routes have nowhere to send
+            the operator. Phase 17 gives them a real path: the async job
+            route has no row limit at all, so either format works — as long
+            as a caller opted in by passing onExportJob. A caller that
+            hasn't (yet) keeps the exact prior static paragraph.
           */}
-          {allBlocked ? (
+          {allBlocked && onExportJob ? (
+            <div className="border-t border-stroke px-3 py-2">
+              <p className="mb-1.5 text-[10px] text-fg-muted">
+                Too large to export directly. Run it as a background job instead — this has no row
+                limit.
+              </p>
+              <div className="flex gap-2">
+                {(["csv", "pdf"] as ExportFormat[]).map((format) => (
+                  <button
+                    key={format}
+                    type="button"
+                    disabled={isSubmittingJob}
+                    onClick={() => chooseJob(format)}
+                    className={cn(
+                      "rounded-sm border border-stroke px-2 py-1 text-[10px] font-medium text-fg-body",
+                      "transition-colors duration-150 hover:bg-surface-2",
+                      "disabled:cursor-not-allowed disabled:opacity-60",
+                    )}
+                  >
+                    Run as a background job ({format.toUpperCase()})
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {allBlocked && !onExportJob ? (
             <p className="border-t border-stroke px-3 py-2 text-[10px] text-fg-muted">
               This filter set is too large to export directly. Narrow the date range or the camera
               filter and try again.
