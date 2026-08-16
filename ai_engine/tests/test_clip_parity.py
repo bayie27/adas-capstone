@@ -18,6 +18,7 @@ import pytest
 cv2 = pytest.importorskip("cv2")
 pytest.importorskip("ultralytics")
 
+import config  # noqa: E402
 from accumulate import Accumulator  # noqa: E402
 from detector import AccidentDetector  # noqa: E402
 
@@ -25,7 +26,21 @@ pytestmark = pytest.mark.clips
 
 AI_ENGINE = Path(__file__).resolve().parents[1]
 CLIP = AI_ENGINE / "eval" / "clips" / "dekwatro.mp4"
-WEIGHTS = AI_ENGINE / "epoch50.pt"
+
+# DELIBERATELY the checkpoint, and deliberately NOT config.WEIGHTS_PATH — this
+# is the one clip test that must not follow AI_MODEL_PATH.
+#
+# What it proves is that PORTING the code changed no behaviour: ported
+# detector/accumulator against the frozen adas_transfer reference, asserted as
+# exact equality of t, peak_conf and score. Swapping in a different build adds
+# a variable that has nothing to do with the port, and a failure would no
+# longer distinguish "the port is broken" from "this build's numerics moved" —
+# which is the entire question the test exists to answer. The non-vacuity
+# guard below is likewise written against this checkpoint's known result on
+# dekwatro (fires once, t=14.20s).
+#
+# test_clip_regression.py is the one that follows the configured model.
+WEIGHTS = config.DEFAULT_WEIGHTS_PATH
 REFERENCE_RUNNER = AI_ENGINE / "adas_transfer" / "code" / "run.py"
 
 

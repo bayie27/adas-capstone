@@ -1279,7 +1279,7 @@ class TestSnooze:
         self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
     ):
         payloads = _capture_broadcasts(client, monkeypatch)
-        _, headers = operator_with_headers(client, session)
+        operator, headers = operator_with_headers(client, session)
         camera = make_camera(session, name="Broadcast Snooze Cam", channel_id=1)
         log = make_alert(session, camera, status=DetectionStatus.UNVERIFIED)
 
@@ -1288,6 +1288,50 @@ class TestSnooze:
         assert resp.status_code == 200
         assert [p["type"] for p in payloads] == ["SNOOZE_ACTIVATED"]
         assert payloads[0]["data"]["log_id"] == log.log_id
+        # P21 Step 3 (breaking) — a formatted name, not the raw user id an
+        # Operator could never resolve (GET /api/users/ is admin-only). The
+        # broadcast happens after commit against log.snoozed_by, a lazy
+        # relationship (D-005) — this also proves that resolves without a
+        # DetachedInstanceError, mirroring closed_by's post-commit call
+        # site in alert_status_update_event.
+        assert (
+            payloads[0]["data"]["snoozed_by"]
+            == f"{operator.first_name} {operator.last_name}"
+        )
+
+    def test_snooze_activated_event_snoozed_by_null_when_unset(self):
+        """A log with no snoozing user (snoozed_by_id unset) must report
+        `null`, not crash resolving the lazy relationship."""
+        from app.models import Camera, DetectionLog
+        from app.services.events import snooze_activated_event
+        from sqlmodel import Session, SQLModel, create_engine
+        from sqlmodel.pool import StaticPool
+
+        engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+        )
+        SQLModel.metadata.create_all(engine)
+        with Session(engine) as session:
+            camera = Camera(camera_name="Unit Cam", channel_id=1)
+            session.add(camera)
+            session.commit()
+            session.refresh(camera)
+
+            log = DetectionLog(
+                camera_id=camera.camera_id,
+                detected_at=datetime.now(UTC),
+                snapshot_key="a.jpg",
+                confidence_score=0.9,
+                source_event_id=str(uuid.uuid4()),
+                detection_status=DetectionStatus.UNVERIFIED.value,
+                snoozed_until=datetime.now(UTC) + timedelta(seconds=30),
+            )
+            session.add(log)
+            session.commit()
+            session.refresh(log)
+
+            envelope = snooze_activated_event(log)
+            assert envelope.data["snoozed_by"] is None
 
 
 class TestConcurrency:

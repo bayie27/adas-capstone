@@ -1,25 +1,62 @@
 """One-shot per-machine setup: probe, benchmark, write.
 
-    uv run python ai_engine/capacity.py
-
 Answers "how many cameras can this machine carry at the required frame
 rate?" — a number a person can act on — rather than picking a tick rate.
+The answer lands in machine_profile.json, which main.py reads at startup;
+that file is gitignored because it describes THIS machine and no other.
+
+Needs the `ai` extra — this module imports cv2 and, via detector.py,
+ultralytics. Install with `uv sync --extra ai`, or `--extra ai-cpu` on a
+machine without an NVIDIA GPU. Run from the repo root, like everything else
+here.
+
+Usage:
+    uv run python ai_engine/capacity.py
+
+    # benchmark a build that already exists, rather than the checkpoint
+    uv run python ai_engine/capacity.py --model ai_engine/epoch50.engine
+
+    # measure against real footage instead of a blank frame
+    uv run python ai_engine/capacity.py --sample-frame ai_engine/eval/clips/<clip>.mp4
+
+    # record fewer cameras than the machine can carry
+    uv run python ai_engine/capacity.py --cameras 4
+
+Flags:
+    --model         What to benchmark. Defaults to config.WEIGHTS_PATH
+                    (epoch50.pt). Any format Ultralytics can load works — a
+                    TensorRT engine, an ONNX export, another .pt — because
+                    detector.py loads all of them through the same YOLO(path).
+                    A path that does not exist is fatal, never a fallback to
+                    the checkpoint: a profile claiming capacity for an
+                    artifact that was never measured is worse than no profile.
+    --sample-frame  Benchmark against a video or image rather than a blank
+                    frame. See synthetic_frame() for why the default is
+                    optimistic and this is the number safe to quote.
+    --cameras       Override the recorded camera target. The measurement is
+                    still written in full; only chosen_camera_target moves.
+
+Takes a few minutes: sixteen batch sizes, each warmed up and then timed.
+Nothing is written until the sweep finishes.
 
 NOT the five-step probe/build/benchmark/verify/write of design doc section 6.1.
 Two of those steps are deliberately absent, and the numbers here must be read
 with that in mind:
 
-- **No build.** The design doc calls for exporting epoch50.pt to the fastest
-  format the machine supports (TensorRT where available). This benchmarks the
-  plain PyTorch weights, so the capacity reported is a FLOOR — a TensorRT or
-  ONNX build would raise it. TensorRT is deliberately outside the `ai` extra
-  because its PyPI stub hangs indefinitely on install, so that path cannot be
-  exercised here.
+- **No build.** This script does not export epoch50.pt to a faster format —
+  that stays out of band. By default it benchmarks the plain PyTorch weights,
+  so the capacity reported is a FLOOR — a TensorRT or ONNX build would raise
+  it. TensorRT is deliberately outside the `ai` extra because its PyPI stub
+  hangs indefinitely on install. Pass `--model` to benchmark a build that
+  already exists (a TensorRT engine, an ONNX export, or another .pt) instead
+  of the default checkpoint; the floor caveat applies to the default, not to
+  the script.
 - **No verify.** `verification` is always written as unverified. Only the
   clip regression can promote it, and that needs clips this machine may not
   have.
 
-`model_path` therefore always records the .pt, never a built artifact.
+`model_path` records whatever was actually benchmarked, so a profile is
+self-describing.
 """
 
 import argparse
@@ -73,6 +110,11 @@ def synthetic_frame():
     compared in eval/README.md.
     """
     return np.zeros((BENCHMARK_HEIGHT, BENCHMARK_WIDTH, 3), dtype="uint8")
+
+
+# Resolution lives in config so main.py and capacity.py cannot disagree about
+# which model a given AI_MODEL_PATH means, or about a missing one being fatal.
+resolve_model_path = config.resolve_model_path
 
 
 def load_sample_frame(path):
@@ -144,6 +186,15 @@ def main() -> None:
         "slightly OPTIMISTIC capacity; pass a representative clip for a "
         "number safe to quote.",
     )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="benchmark this model instead of the configured checkpoint — a "
+        "built TensorRT engine, an ONNX export, or another .pt. Defaults to "
+        f"{config.WEIGHTS_PATH.name}, which reports a FLOOR: a built artifact "
+        "raises capacity. Whatever is passed is recorded as the profile's "
+        "model_path.",
+    )
     args = parser.parse_args()
 
     device = resolve_device()
@@ -162,7 +213,9 @@ def main() -> None:
         frame = synthetic_frame()
         print("[capacity] benchmarking against a blank frame (optimistic)")
 
-    detector = AccidentDetector(config.WEIGHTS_PATH, device=device)
+    model_path = resolve_model_path(args.model)
+    print(f"[capacity] model: {model_path}")
+    detector = AccidentDetector(model_path, device=device)
 
     latency = {}
     for batch in BATCH_SIZES:
@@ -174,6 +227,13 @@ def main() -> None:
             # still correct, and crashing would leave the machine with no
             # profile at all.
             print(f"[capacity] batch {batch} failed ({exc}); stopping the sweep")
+            print(
+                "[capacity] Two causes look identical here: CUDA OOM on a "
+                "smaller card, or a TensorRT engine built for a fixed batch "
+                "size, which can only be benchmarked at that size. If this "
+                "is an engine, rebuild it with dynamic shapes to sweep the "
+                "grid."
+            )
             break
         print(f"[capacity] batch {batch}: {latency[batch]:.1f} ms")
 
@@ -207,7 +267,7 @@ def main() -> None:
 
     profile = MachineProfile(
         device=device,
-        model_path=str(config.WEIGHTS_PATH),
+        model_path=str(model_path),
         latency_ms_by_batch=latency,
         capacity_at_max_fps=capacity_max,
         capacity_at_min_fps=capacity_min,

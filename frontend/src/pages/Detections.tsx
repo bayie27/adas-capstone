@@ -32,6 +32,7 @@ import {
   getAlerts,
   getIncidentConflict,
   resolveAlert,
+  snoozeAlert,
 } from "@/api/alerts"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useUserOptions } from "@/hooks/useUserOptions"
@@ -103,6 +104,7 @@ const SORTABLE: Record<string, AlertSortField> = {
 export default function Detections() {
   const queryClient = useQueryClient()
   const removeAlert = useAlertStore((state) => state.removeAlert)
+  const activateSnooze = useAlertStore((state) => state.activateSnooze)
   const handledByOther = useAlertStore((state) => state.handledByOther)
   const snoozedUntilMap = useAlertStore((state) => state.snoozedUntil)
   const [activeTab, setActiveTab] = useState<TabKey>("ongoing")
@@ -234,6 +236,22 @@ export default function Detections() {
     onSuccess: handleMutationSuccess,
   })
 
+  // Snooze mutes an incident in place rather than closing it, so unlike the
+  // three mutations above it does not call removeAlert (that queue is the
+  // GlobalAlerts popup stack, not this table) — it only updates the cached
+  // alert and the shared snoozedUntil map that drives isSnoozedNow.
+  const snoozeMutation = useMutation({
+    mutationFn: snoozeAlert,
+    onSuccess: (snoozedAlert) => {
+      queryClient.setQueryData(["alert-details", snoozedAlert.log_id], snoozedAlert)
+      setSelectedAlertPreview(snoozedAlert)
+      if (snoozedAlert.snoozed_until) {
+        activateSnooze(snoozedAlert.log_id, snoozedAlert.snoozed_until)
+      }
+      queryClient.invalidateQueries({ queryKey: ["alerts"] })
+    },
+  })
+
   const activeTotal = activeAlertsQuery.data?.total_filtered ?? 0
   if (activeTotal !== seenActiveTotal) {
     setSeenActiveTotal(activeTotal)
@@ -315,9 +333,13 @@ export default function Detections() {
   const selectedAlert = alertDetailsQuery.data ?? selectedAlertPreview
 
   const isTransitionPending =
-    confirmMutation.isPending || dismissMutation.isPending || resolveMutation.isPending
+    confirmMutation.isPending ||
+    dismissMutation.isPending ||
+    resolveMutation.isPending ||
+    snoozeMutation.isPending
 
-  const transitionFailure = confirmMutation.error ?? dismissMutation.error ?? resolveMutation.error
+  const transitionFailure =
+    confirmMutation.error ?? dismissMutation.error ?? resolveMutation.error ?? snoozeMutation.error
 
   // A lost race is not a failure to report as one — it is news about what a
   // colleague did. It gets the named notice; everything else gets a banner.
@@ -337,6 +359,7 @@ export default function Detections() {
     confirmMutation.reset()
     dismissMutation.reset()
     resolveMutation.reset()
+    snoozeMutation.reset()
   }
 
   const openAlertModal = (alert: AlertLog) => {
@@ -345,6 +368,7 @@ export default function Detections() {
     confirmMutation.reset()
     dismissMutation.reset()
     resolveMutation.reset()
+    snoozeMutation.reset()
   }
 
   const broadcastHandled =
@@ -615,6 +639,20 @@ export default function Detections() {
         onDismiss={(logId) => dismissMutation.mutate(logId)}
         onConfirm={(logId) => confirmMutation.mutate(logId)}
         onResolve={(logId) => resolveMutation.mutate(logId)}
+        snoozeAction={
+          selectedAlert ? (
+            <Button
+              variant="secondary"
+              className="flex-1 uppercase tracking-[0.08em]"
+              disabled={isTransitionPending}
+              isLoading={snoozeMutation.isPending}
+              loadingLabel="Snoozing…"
+              onClick={() => snoozeMutation.mutate(selectedAlert.log_id)}
+            >
+              Snooze
+            </Button>
+          ) : null
+        }
         notice={
           <>
             {alertDetailsQuery.isError ? (

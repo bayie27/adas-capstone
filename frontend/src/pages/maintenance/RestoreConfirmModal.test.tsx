@@ -20,6 +20,13 @@ describe("RestoreConfirmModal", () => {
     expect(screen.getByLabelText(/type "restore abc123" to confirm/i)).toHaveValue("")
   })
 
+  it("states the real manual next step instead of claiming an automatic shutdown", () => {
+    renderModal()
+    expect(screen.getByText(/nothing happens automatically/i)).toBeInTheDocument()
+    expect(screen.getByText(/python -m app\.maintenance restore abc123/i)).toBeInTheDocument()
+    expect(screen.queryByText(/will go offline shortly/i)).not.toBeInTheDocument()
+  })
+
   it("keeps the submit button disabled until both the password and the exact confirmation are present", async () => {
     const user = userEvent.setup()
     renderModal()
