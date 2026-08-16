@@ -1,11 +1,14 @@
 import { Link, useLocation, useNavigate } from "react-router-dom"
 
 import { logoutUser } from "@/api/auth"
+import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
 import { formatUserRole, getUserInitials } from "@/utils/format"
+import { formatDuration } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
 import { focusRing } from "@/components/ui/Button"
 import {
+  RiAlertLine,
   RiCameraLine,
   RiDashboardLine,
   RiLayoutGridLine,
@@ -15,6 +18,16 @@ import {
   RiScan2Line,
   RiUserLine,
 } from "@remixicon/react"
+
+/**
+ * D-13: correct silently everywhere a relative time renders (useNow,
+ * formatRelativeDateTime), but don't correct *silently* past this point — a
+ * console whose clock disagrees with the server by more than a trivial
+ * amount is itself worth knowing about, not just working around. Below the
+ * threshold, correction happens with no visible trace, since a few seconds
+ * of skew is normal network/NTP noise, not a fact an operator needs.
+ */
+const CLOCK_SKEW_WARNING_MS = 60_000
 
 type NavLinkItem = {
   name: string
@@ -28,6 +41,9 @@ export function Sidebar() {
   const role = useAuthStore((state) => state.role)
   const username = useAuthStore((state) => state.username)
   const clearSession = useAuthStore((state) => state.clearSession)
+  const clockOffsetMs = useAlertStore((state) => state.clockOffsetMs)
+  const clockIsSkewed = Math.abs(clockOffsetMs) > CLOCK_SKEW_WARNING_MS
+  const connectionId = useAlertStore((state) => state.connectionId)
 
   const basePath = role === "Admin" ? "/admin" : "/user"
 
@@ -133,6 +149,20 @@ export function Sidebar() {
       </nav>
 
       <div className="space-y-0.5 border-t border-stroke p-3">
+        {clockIsSkewed ? (
+          <div
+            role="status"
+            className="mb-1 flex items-start gap-1.5 rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-[11px] text-warning"
+          >
+            <RiAlertLine size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <span>
+              This device's clock is off by{" "}
+              {formatDuration(Math.round(Math.abs(clockOffsetMs) / 1000))} from the server. Relative
+              times are corrected automatically, but the system clock itself should be fixed.
+            </span>
+          </div>
+        ) : null}
+
         <button
           type="button"
           onClick={() => navigate(`${basePath}/help`)}
@@ -170,6 +200,23 @@ export function Sidebar() {
           <RiLogoutBoxRLine size={16} className="text-fg-muted" />
           <span className="text-[13px] font-medium">Log Out</span>
         </button>
+
+        {/*
+          ConnectionReadyData.connection_id — the handle that identifies this
+          socket in the backend log. Purely diagnostic, so it gets the
+          lowest-priority treatment in the footer: truncated, monospace, no
+          affordance. Its only job is to be quotable in a support
+          conversation ("the alerts stopped updating on session a1b2c3d4"),
+          which a full UUID doesn't need to be to serve.
+        */}
+        {connectionId ? (
+          <p
+            className="truncate px-3 pt-1 font-mono text-[10px] text-fg-muted"
+            title={connectionId}
+          >
+            Session {connectionId.slice(0, 8)}
+          </p>
+        ) : null}
       </div>
     </aside>
   )

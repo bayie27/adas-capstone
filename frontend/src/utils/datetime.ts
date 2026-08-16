@@ -27,6 +27,43 @@ function parse(value: string | null | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+/**
+ * `ConnectionReadyData.server_time` minus the browser's own clock at the
+ * moment it arrived — a single offset computed once at handshake. Pure and
+ * exported so the sign (ahead vs. behind) is covered by a unit test rather
+ * than trusted by eye: a flipped sign makes every relative timestamp in the
+ * product wrong in the same direction, which looks plausible enough to ship.
+ * Falls back to **0**, never `NaN`, when `server_time` is missing or
+ * unparseable — an uncorrected clock is the safe default, not a broken one.
+ */
+export function computeClockOffsetMs(
+  serverTimeIso: string | null | undefined,
+  browserNowMs: number,
+): number {
+  const serverDate = parse(serverTimeIso)
+  if (!serverDate) return 0
+  return serverDate.getTime() - browserNowMs
+}
+
+// Set once per connection from CONNECTION_READY (RealtimeAlertsBridge). A
+// module-level value rather than store/context state: every relative-time
+// computation in the app funnels through this file already, so this is the
+// one place the correction has to be threaded through, not every caller.
+let serverClockOffsetMs = 0
+
+export function setServerClockOffsetMs(offsetMs: number): void {
+  serverClockOffsetMs = offsetMs
+}
+
+export function getServerClockOffsetMs(): number {
+  return serverClockOffsetMs
+}
+
+/** The browser clock, corrected by the last known server offset. */
+export function correctedNowMs(): number {
+  return Date.now() + serverClockOffsetMs
+}
+
 export function formatFullDateTime(value: string | null | undefined) {
   const date = parse(value)
   return date ? FULL.format(date) : "-"
@@ -80,7 +117,7 @@ export function formatRelativeDateTime(value: string | null | undefined) {
     return "-"
   }
 
-  const diffMinutes = Math.round((date.getTime() - Date.now()) / 60000)
+  const diffMinutes = Math.round((date.getTime() - correctedNowMs()) / 60000)
 
   if (Math.abs(diffMinutes) < 1) {
     return "Just now"
