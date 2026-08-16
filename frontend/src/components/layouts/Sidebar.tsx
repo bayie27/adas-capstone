@@ -9,6 +9,7 @@ import { cn } from "@/utils/cn"
 import { focusRing } from "@/components/ui/Button"
 import {
   RiAlertLine,
+  RiArrowRightSLine,
   RiCameraLine,
   RiDashboardLine,
   RiFileHistoryLine,
@@ -99,6 +100,7 @@ export function Sidebar() {
   }
 
   const isHelpActive = location.pathname === `${basePath}/help`
+  const isProfileActive = location.pathname === `${basePath}/profile`
 
   // §2.8 — nav rest / hover / active, shared by the links and the two footer
   // buttons so the Help Center row cannot drift from the rows above it.
@@ -182,24 +184,37 @@ export function Sidebar() {
           <span className="text-[13px] font-medium">Help Center</span>
         </button>
 
-        {/* Identity label, not a control. This carried `cursor-pointer`, a
-            hover fill and a disclosure chevron while having no handler at all,
-            so it advertised a menu that was never built — and the one screen
-            such a menu would lead to, /profile, has no inbound link anywhere
-            in the app. Whether the chip becomes a link or a real dropdown is
-            a design question (D-3); until it is answered the honest render is
-            a static label that does not claim to be clickable. */}
-        <div className="flex items-center gap-2.5 px-3 py-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-[10px] font-bold text-fg-muted">
+        {/*
+          D-3, settled: a plain Link to /profile, not a dropdown. The page
+          behind it (ProfileSettings.tsx) is a single destination, not a set
+          of them — a menu with one item would be a click to open a menu to
+          make one more click. This chip previously carried cursor-pointer, a
+          hover fill and a disclosure chevron with no handler behind any of
+          it, advertising a menu that was never built while the one screen it
+          would lead to had no inbound link anywhere in the app. Restored
+          here, now honestly pointing somewhere.
+        */}
+        <Link
+          to={`${basePath}/profile`}
+          aria-current={isProfileActive ? "page" : undefined}
+          className={cn(
+            "flex items-center gap-2.5",
+            navRow,
+            isProfileActive ? navActive : navInactive,
+            focusRing,
+          )}
+        >
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-[10px] font-bold text-fg-muted">
             {initials || <RiUserLine size={14} className="text-fg-muted" />}
           </div>
-          <div className="flex flex-col">
-            <span className="text-[13px] font-medium leading-tight text-fg-sidebar">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-[13px] font-medium leading-tight text-fg-sidebar">
               {displayName}
             </span>
             <span className="text-[11px] text-fg-muted">{displayRole}</span>
           </div>
-        </div>
+          <RiArrowRightSLine size={16} className="shrink-0 text-fg-muted" />
+        </Link>
 
         <button
           type="button"
