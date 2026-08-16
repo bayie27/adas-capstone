@@ -158,6 +158,14 @@ The two are mutually exclusive; pick one. `ai-cpu` resolves torch from PyTorch's
 
 The engine detects the absence of a GPU and falls back automatically. It will run and connect, which is useful for integration work, but it is not a detection platform — run `uv run python ai_engine/capacity.py` and it will tell you so.
 
+TensorRT is a further optional extra for NVIDIA machines that want a faster inference backend. It is **not** required — the engine runs on the PyTorch checkpoint either way, and the GPU is used regardless, since CUDA comes from torch:
+
+```bash
+uv sync --extra ai --extra ai-trt
+```
+
+An engine built from it is selected with `AI_MODEL_PATH` (see [Start the AI engine](#4-start-the-ai-engine)). It is tied to the GPU, driver and TensorRT version that built it, so it must be built on the machine that will run it and is never committed.
+
 **Node dependencies (frontend + root tooling):**
 
 Run from the **repo root**, not `frontend/` — this is a pnpm workspace, and running it at the root is also what activates the git hooks (see [CONTRIBUTING.md](CONTRIBUTING.md)):
@@ -365,13 +373,21 @@ uv run python ai_engine/main.py
 
 The engine loads `ai_engine/epoch50.pt` directly. There is no longer a `best.engine`/`best.pt` pair or a fallback between them — both files were removed when the detection core was ported, because `best.pt` lost checkpoint selection in all three training runs and `main.py` had been _preferring_ the stale TensorRT build of it.
 
+To run a different build, set `AI_MODEL_PATH` in `.env` (see `.env.example`):
+
+```bash
+AI_MODEL_PATH=ai_engine/epoch50.engine
+```
+
+The lesson from `best.engine` is kept rather than undone: the path is **fatal if it does not exist** — never a silent fall back to the checkpoint — and `main.py` prints which artifact it loaded on every start. Relative paths resolve from the repo root, not the working directory.
+
 Before running it on a new machine, calibrate:
 
 ```bash
 uv run python ai_engine/capacity.py
 ```
 
-This reports how many cameras the machine can carry at 10 and at 15 FPS and writes a gitignored `machine_profile.json`. See [`ai_engine/eval/README.md`](ai_engine/eval/README.md).
+This reports how many cameras the machine can carry at 10 and at 15 FPS and writes a gitignored `machine_profile.json`. Pass `--model ai_engine/epoch50.engine` to measure a built artifact instead of the checkpoint; the profile records whichever was benchmarked, and `main.py` warns at startup when that is not the one being loaded. See [`ai_engine/eval/README.md`](ai_engine/eval/README.md).
 
 #### Camera and seed-data behaviour — what to expect
 
