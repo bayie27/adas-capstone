@@ -77,29 +77,54 @@ fine, and it is reproducible on a machine that has no clips. `--sample-frame
 <video-or-image>` measures against real footage if you want to re-check this
 on different hardware.
 
-### Why the batch grid runs to 16
+### Why the batch grid runs to 32
 
 Capacity is reported as the largest benchmarked batch that still fits inside
 one tick, so it can only ever be a batch size that was actually measured.
-Two ways that goes wrong, both hit during development:
+Three ways that goes wrong, all hit during development:
 
 - A **powers-of-two** grid (`1, 2, 4, 8`) cannot express a capacity of 3, 5,
   6 or 7. It would report a 7-camera machine as 4.
 - A grid **ending at 8** was saturated by the GTX 1650, which ran batch 8 in
   63.6 ms against the 66.7 ms tick. Capacity came back as 8 at both ends of
   the band — the ceiling reported as though it were the answer.
+- A grid **ending at 16** was saturated again once a TensorRT build roughly
+  halved per-batch latency: 14 cameras at 15 FPS, and the 10 FPS end truncated
+  at 15 where the same run's own latencies extrapolate to about 22.
 
 Either way `capacity_at_max_fps` and `capacity_at_min_fps` come out equal,
 which makes the second field useless and hides the fact that dropping to the
-band floor is the only lever available when a machine is over capacity. With
-the contiguous 1–16 grid the GTX 1650 measures **8 cameras at 15 FPS and 12
-at 10 FPS** — a real 50% gain that the earlier grids both concealed.
+band floor is the only lever available when a machine is over capacity.
 
 A fast enough machine can saturate any grid, so `capacity.py` says so
 explicitly when capacity lands on the largest batch measured; treat that
 number as a floor and extend `BATCH_SIZES`. If a batch runs out of memory
 partway up, the sweep stops and keeps the smaller measurements rather than
 leaving the machine with no profile.
+
+The cost of a wider grid is time, not memory. Work scales with the **sum** of
+the batch sizes, so 1–32 is roughly four times the sweep of 1–16. Memory is
+not the constraint on this class of card: measured 2026-08-16, inference costs
+about **14 MiB per camera**, so batch 32 peaks at 0.48 GiB of a 4 GiB card
+with 2.3 GiB still free.
+
+### Estimating a batch size before building an engine
+
+An engine has to be built for some maximum batch before it can be benchmarked,
+which looks circular. It is not, for two reasons.
+
+A dynamic engine accepts **any batch from 1 to its maximum**, so that maximum
+is a ceiling rather than a commitment — build it comfortably above the number
+you expect and let the sweep find the real one. Ultralytics sets the engine's
+_optimal_ shape equal to its maximum, though, so a build tuned for 32 can be a
+few percent slower at 14 than one built for 14. Build wide to find the number,
+then rebuild at that number if the last camera matters.
+
+To pick the ceiling, extrapolate from a sweep you already have. Latency is
+close to linear in batch size — on the TensorRT build above,
+`latency_ms = 5.35 + 4.261 x batch` fits with R² = 0.98 and predicts 14.4
+cameras at 15 FPS against the 14 actually measured. Solving the same line at
+the 100 ms tick gives about 22, which is where the 32 ceiling comes from.
 
 ### What it does not do, and why that is fine
 
