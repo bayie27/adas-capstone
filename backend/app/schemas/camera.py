@@ -29,6 +29,21 @@ class CameraRead(CameraBase):
     updated_at: datetime
 
 
+class CameraDetailRead(CameraRead):
+    """GET /api/cameras/{camera_id} (01_CONTRACTS.md §5.4/§7.2, P21 Step 1)
+    — the six AI-owned telemetry columns CameraRead never exposed, plus a
+    redacted RTSP URL. The route itself is operator-visible; only
+    `rtsp_url_redacted` is admin-only within it (null for an Operator)."""
+
+    applied_config_version: int | None = None
+    last_heartbeat_at: datetime | None = None
+    measured_fps: float | None = None
+    inference_latency_ms: float | None = None
+    last_error_code: str | None = None
+    last_error_message: str | None = None
+    rtsp_url_redacted: str | None = None
+
+
 class CameraKpis(SQLModel):
     total: int
     enabled: int
