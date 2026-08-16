@@ -29,17 +29,24 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 /**
  * A labelled gap, not a placeholder — every "Unavailable" here is a real
  * absence in `CameraRead` (Q14), not a stand-in for a value the backend just
- * hasn't sent yet this render.
+ * hasn't sent yet this render. One row per field, same `DetailRow` shape as
+ * every real value above it, so the gap reads with the same visual weight as
+ * a value row rather than a single paragraph glossing over several fields.
  */
-function UnavailableNote({ children }: { children: ReactNode }) {
+function UnavailableRow({ label }: { label: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-md border border-stroke bg-surface-2 px-3 py-2">
-      <Badge tone="neutral" variant="subtle" uppercase={false} className="shrink-0">
+    <div className="flex items-center justify-between py-1.5 text-xs">
+      <span className="font-medium tracking-[0.08em] text-fg-muted">{label}</span>
+      <Badge tone="neutral" variant="subtle" uppercase={false}>
         Unavailable
       </Badge>
-      <p className="text-caption text-fg-muted">{children}</p>
     </div>
   )
+}
+
+/** The explanation moves here, below the field rows it used to replace. */
+function Footnote({ children }: { children: ReactNode }) {
+  return <p className="mt-2 text-caption text-fg-muted">{children}</p>
 }
 
 /**
@@ -77,12 +84,13 @@ export function CameraDetailPanel({
       <Section title="Identity">
         <DetailRow label="Camera name" value={camera.camera_name} />
         <DetailRow label="Channel" value={camera.channel_id} />
-        <UnavailableNote>
+        <UnavailableRow label="Stream URL" />
+        <Footnote>
           The RTSP stream URL is built by the backend from this channel and sent to the AI engine on
           every heartbeat, but never returned to the client (Q14). A wrong channel number produces a
           camera that looks configured and never connects, with no way to check the URL the system
           will actually dial.
-        </UnavailableNote>
+        </Footnote>
       </Section>
 
       <Section title="State">
@@ -115,24 +123,44 @@ export function CameraDetailPanel({
 
       <Section title="Convergence">
         <DetailRow label="Desired config version" value={camera.config_version} />
-        <UnavailableNote>
+        <UnavailableRow label="Applied config version" />
+        <Footnote>
           The engine's applied_config_version is persisted on every heartbeat but not yet exposed by
           CameraRead (Q14), so this drawer cannot yet say whether the engine has picked up the
           latest change — only what the backend currently desires. Phase 6's enable/disable toggle
           is optimistic, and this is the pair that would let an operator substantiate "the UI told
           me it was off" once it lands.
-        </UnavailableNote>
+        </Footnote>
       </Section>
 
       <Section title="Engine telemetry">
-        <UnavailableNote>
+        <UnavailableRow label="Last heartbeat" />
+        <UnavailableRow label="Measured FPS" />
+        <UnavailableRow label="Inference latency" />
+        {/*
+          Once CameraRead exposes last_error_code, its real values are the AI
+          engine's own per-camera failure codes, already in this codebase:
+          CONNECT_FAILED and STREAM_DROPPED (ai_engine/camera.py),
+          INFERENCE_FAILED (ai_engine/pipeline.py). This is a free-text column
+          (app/models/camera.py), not an enum, so nothing enforces this set —
+          it is exactly the three values the engine actually writes today.
+
+          Not to be confused with the System Health page's HealthWarning
+          codes (GPU_TEMP_CRITICAL, RAM_CRITICAL, DISK_CRITICAL,
+          DISK_WARNING, AI_HEARTBEAT_STALE — backend/app/api/routes/
+          system_health.py:64): those are machine-level warnings for a
+          different page and have no relationship to a single camera's
+          last_error_code.
+        */}
+        <UnavailableRow label="Last error code" />
+        <UnavailableRow label="Last error message" />
+        <Footnote>
           Last heartbeat, measured FPS (against the 10–15 FPS band), inference latency, and the
-          engine's own error code — CONNECT_FAILED, STREAM_DROPPED or INFERENCE_FAILED — plus its
-          message are all persisted on every heartbeat but not yet exposed by CameraRead (Q14). This
-          is the field that would tell a broken camera (an error code, a recent heartbeat) apart
-          from a dead engine (a stale heartbeat, no error code) — today an operator seeing
-          Unresponsive has nothing here to act on.
-        </UnavailableNote>
+          engine's own error code plus its message are all persisted on every heartbeat but not yet
+          exposed by CameraRead (Q14). This is the field that would tell a broken camera (an error
+          code, a recent heartbeat) apart from a dead engine (a stale heartbeat, no error code) —
+          today an operator seeing Unresponsive has nothing here to act on.
+        </Footnote>
       </Section>
     </SidePanel>
   )
