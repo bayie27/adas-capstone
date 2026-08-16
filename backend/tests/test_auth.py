@@ -727,6 +727,21 @@ class TestRateLimit:
         assert resp.status_code == 429
         assert resp.json()["code"] == "AUTH_RATE_LIMITED"
         assert "Retry-After" in resp.headers
+        assert int(resp.headers["Retry-After"]) > 0
+
+    def test_retry_after_is_cors_exposed(self, client: TestClient, session: Session):
+        """P19 §1 — Retry-After must be in CORS expose_headers or the SPA
+        (a different origin, no dev proxy) can't read it off a 429."""
+        make_admin(session)
+        for _ in range(settings.LOGIN_RATE_LIMIT_ATTEMPTS + 1):
+            resp = client.post(
+                "/api/auth/login",
+                data={"username": "admin", "password": "wrongpassword"},
+                headers={"Origin": "http://localhost:5173"},
+            )
+        assert resp.status_code == 429
+        exposed = resp.headers.get("access-control-expose-headers", "")
+        assert "Retry-After" in exposed
 
     def test_success_resets_the_limiter(self, client: TestClient, session: Session):
         make_admin(session)

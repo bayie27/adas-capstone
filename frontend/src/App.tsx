@@ -8,6 +8,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { RealtimeAlertsBridge } from "@/components/RealtimeAlertsBridge"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { DevPanelTrigger } from "@/components/dev/DevPanelTrigger"
+import { ExportJobsTray } from "@/components/exports/ExportJobsTray"
 
 const Login = lazy(() => import("@/pages/Login"))
 const Dashboard = lazy(() => import("@/pages/Dashboard"))
@@ -18,6 +19,8 @@ const AiPerformance = lazy(() => import("@/pages/AiPerformance"))
 const ProfileSettings = lazy(() => import("@/pages/ProfileSettings"))
 const HelpCenter = lazy(() => import("@/pages/HelpCenter"))
 const Users = lazy(() => import("@/pages/Users"))
+const AuditLog = lazy(() => import("@/pages/AuditLog"))
+const Maintenance = lazy(() => import("@/pages/Maintenance"))
 
 function RouteFallback() {
   return (
@@ -38,6 +41,7 @@ function App() {
           so it is available on /login too. */}
       <MaintenanceNotice />
       <DevPanelTrigger />
+      <ExportJobsTray />
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
@@ -62,6 +66,8 @@ function App() {
               <Route path="profile" element={<ProfileSettings />} />
               <Route path="help" element={<HelpCenter />} />
               <Route path="users" element={<Users />} />
+              <Route path="audit" element={<AuditLog />} />
+              <Route path="maintenance" element={<Maintenance />} />
             </Route>
 
             <Route
