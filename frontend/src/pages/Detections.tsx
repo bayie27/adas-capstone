@@ -35,14 +35,17 @@ import {
 } from "@/api/alerts"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useUserOptions } from "@/hooks/useUserOptions"
-import { useAlertStore } from "@/store/useAlertStore"
+import { useNow } from "@/hooks/useNow"
+import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
 import type { AlertLog, AlertSortField, AlertStatus, ExportFormat, SortOrder } from "@/api/alerts"
 import {
+  describeSnoozeStatus,
   formatAlertCode,
   formatAlertConfidence,
   getAlertLastHandledBy,
   getAlertLastUpdated,
+  getUserFullName,
 } from "@/utils/format"
 import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
@@ -100,6 +103,7 @@ export default function Detections() {
   const queryClient = useQueryClient()
   const removeAlert = useAlertStore((state) => state.removeAlert)
   const handledByOther = useAlertStore((state) => state.handledByOther)
+  const snoozedUntilMap = useAlertStore((state) => state.snoozedUntil)
   const [activeTab, setActiveTab] = useState<TabKey>("ongoing")
   const [logSearch, setLogSearch] = useState("")
   const debouncedLogSearch = useDebouncedValue(logSearch.trim(), 300)
@@ -276,6 +280,25 @@ export default function Detections() {
   // it defines the total order; re-sorting a single page by a different key
   // would make page boundaries and visible order disagree.
   const currentRows = currentQuery.data?.logs ?? []
+
+  // The store's snoozedUntil map is the live truth — SNOOZE_ACTIVATED and
+  // RE_ALARM update it directly without invalidating this table's REST
+  // query, so a row's own snoozed_until field can be stale between
+  // refetches. Only tick the clock while something on the visible page is
+  // actually counting down.
+  const anyRowSnoozed = currentRows.some((row) => isSnoozedNow(row.log_id, snoozedUntilMap))
+  const now = useNow(anyRowSnoozed, 1000)
+
+  function describeSnoozedRow(row: AlertLog): string | null {
+    if (!isSnoozedNow(row.log_id, snoozedUntilMap)) return null
+    // GET /api/users/ is admin-only, so this can only ever resolve to a name
+    // for an Admin viewer within the 100-user cap (Q10) — everyone else,
+    // and any id outside the cap, falls back to the raw id rather than
+    // showing nothing.
+    const match = usersQuery.data?.users.find((u) => u.user_id === row.snoozed_by_id)
+    const who = match ? getUserFullName(match) : row.snoozed_by_id ? `#${row.snoozed_by_id}` : null
+    return describeSnoozeStatus(snoozedUntilMap[row.log_id] ?? row.snoozed_until, now, who)
+  }
 
   const currentTotalFiltered = currentQuery.data?.total_filtered ?? 0
   const rangeStart = currentPagination.rangeStart
@@ -524,7 +547,10 @@ export default function Detections() {
                     {formatAlertConfidence(item.confidence_score)}
                   </TableCell>
                   <TableCell>
-                    <AlertStatusText status={item.detection_status} />
+                    <AlertStatusText
+                      status={item.detection_status}
+                      description={describeSnoozedRow(item)}
+                    />
                   </TableCell>
                   <TableCell className="text-fg-muted">{getAlertLastHandledBy(item)}</TableCell>
                   <TableCell className="text-fg-muted">{getAlertLastUpdated(item)}</TableCell>

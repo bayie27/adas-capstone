@@ -154,11 +154,31 @@ export function describeCameraDesiredState(
 }
 
 /** Whole seconds from `now` until an ISO deadline; `null` if unparsable. */
-function secondsUntil(deadline: string | null, now: number): number | null {
+export function secondsUntil(deadline: string | null, now: number): number | null {
   if (!deadline) return null
   const target = new Date(deadline).getTime()
   if (Number.isNaN(target)) return null
   return Math.max(0, Math.ceil((target - now) / 1000))
+}
+
+/**
+ * D-2: the muted-row description, same shape as the dismissal-cooldown line
+ * above — "who" is optional because it can only ever resolve to a name for
+ * an Admin (GET /api/users/ is admin-only) or when the id is within
+ * useUserOptions' 100-user cap (Q10); otherwise the caller passes the raw
+ * id, which still names *something* rather than nothing.
+ */
+export function describeSnoozeStatus(
+  snoozedUntil: string | null,
+  now: number,
+  who: string | null,
+): string | null {
+  if (!snoozedUntil) return null
+  const remaining = secondsUntil(snoozedUntil, now)
+  const suffix = who ? ` by ${who}` : ""
+  if (remaining === null) return `Muted${suffix}`
+  if (remaining <= 0) return `Muted${suffix} — resuming`
+  return `Muted${suffix} — resumes in ${remaining}s`
 }
 
 /** Is this camera counting down a cooldown that a clock needs to tick for? */

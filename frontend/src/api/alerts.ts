@@ -71,6 +71,11 @@ export interface AlertLog {
   closed_by_name: string | null
   closed_at: string | null
   camera_name: string | null
+  // "When it was muted" versus snoozed_until's "when it un-mutes" — the
+  // audit-shaped fact versus the countdown. DetectionLogRead has always
+  // returned this; it was parsed off the wire and discarded because this
+  // interface never declared it, the only such drop in the API surface.
+  snoozed_at: string | null
   snoozed_until: string | null
   snoozed_by_id: number | null
   created_at: string
@@ -176,5 +181,23 @@ export async function dismissAlert(logId: number) {
 
 export async function resolveAlert(logId: number) {
   const { data } = await api.post<AlertLog>(`/alerts/${logId}/resolve`)
+  return data
+}
+
+/**
+ * Mutes an Unverified incident for the actor's saved duration. **Takes no
+ * body** — a client-supplied duration is a 422 (D-004: the duration is the
+ * actor's saved `AlarmSettings`, never a request parameter), so this
+ * function has no parameter for one either.
+ *
+ * 400 `PRECONDITION_FAILED` when the incident is no longer Unverified —
+ * decidable from a plain read, since a terminal or Ongoing incident can't
+ * become Unverified again. 409 `CONFLICT_STATE` on a genuine race, reusing
+ * the same already-handled dialog as confirm/dismiss/resolve — callers
+ * should check `getIncidentConflict` first and fall back to the plain
+ * message only when it returns null, so the two failures render distinctly.
+ */
+export async function snoozeAlert(logId: number) {
+  const { data } = await api.post<AlertLog>(`/alerts/${logId}/snooze`)
   return data
 }

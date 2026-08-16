@@ -6,12 +6,19 @@ import { Modal } from "@/components/ui/Modal"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
 import { useNow } from "@/hooks/useNow"
-import { confirmAlert, dismissAlert, getIncidentConflict, resolveAlert } from "@/api/alerts"
+import {
+  confirmAlert,
+  dismissAlert,
+  getIncidentConflict,
+  resolveAlert,
+  snoozeAlert,
+} from "@/api/alerts"
 import { IncidentHandledNotice } from "@/components/ui/IncidentHandledNotice"
 import type { IncidentHandledInfo } from "@/api/alerts"
 import { formatAlertConfidence } from "@/utils/format"
 import { formatDuration, formatFullDateTime, secondsSince } from "@/utils/datetime"
 import { getApiErrorMessage } from "@/api/client"
+import { cn } from "@/utils/cn"
 
 /**
  * Above this age, a detection is presented as delayed rather than current.
@@ -39,6 +46,7 @@ export function GlobalAlerts() {
   const alerts = useAlertStore((state) => state.alerts)
   const snoozedUntil = useAlertStore((state) => state.snoozedUntil)
   const removeAlert = useAlertStore((state) => state.removeAlert)
+  const activateSnooze = useAlertStore((state) => state.activateSnooze)
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<IncidentHandledInfo | null>(null)
@@ -86,6 +94,39 @@ export function GlobalAlerts() {
         invalidateAlerts()
       } else {
         setError(getApiErrorMessage(err, failure))
+      }
+    } finally {
+      setLoadingId(null)
+    }
+  }
+
+  async function handleSnooze() {
+    const logId = alert.log_id
+    setLoadingId(logId)
+    setError(null)
+    setConflict(null)
+    try {
+      const snoozed = await snoozeAlert(logId)
+      // Applied directly from the response rather than waiting for the
+      // SNOOZE_ACTIVATED broadcast — this tab acted, so it shouldn't need
+      // to hear its own echo to mute. Other connected tabs still get it via
+      // the broadcast, same as every other transition in this component.
+      if (snoozed.snoozed_until) {
+        activateSnooze(logId, snoozed.snoozed_until)
+      }
+    } catch (err) {
+      // Same distinction runAction makes for confirm/dismiss/resolve: a lost
+      // race (409 CONFLICT_STATE) names the colleague who got there first,
+      // via the same already-handled dialog. A 400 PRECONDITION_FAILED —
+      // the incident is no longer Unverified — is not a race to explain;
+      // its own plain-string detail ("Only an 'Unverified' incident can be
+      // snoozed.") is specific enough to render as-is.
+      const raceLost = getIncidentConflict(err)
+      if (raceLost) {
+        setConflict(raceLost)
+        invalidateAlerts()
+      } else {
+        setError(getApiErrorMessage(err, "Failed to snooze alert."))
       }
     } finally {
       setLoadingId(null)
@@ -196,7 +237,28 @@ export function GlobalAlerts() {
           </div>
         ) : null}
 
-        <div className="grid grid-cols-2 gap-px border-t border-stroke bg-stroke">
+        <div
+          className={cn(
+            "grid gap-px border-t border-stroke bg-stroke",
+            isUnverified ? "grid-cols-3" : "grid-cols-2",
+          )}
+        >
+          {/*
+            Snooze only exists for Unverified — the backend 400s a snooze on
+            anything else (a terminal or Ongoing incident can't become
+            Unverified again) — so it has no button on the Ongoing variant at
+            all rather than one that can only fail.
+          */}
+          {isUnverified ? (
+            <Button
+              variant="secondary"
+              className="rounded-none py-4 text-xs font-black uppercase tracking-[0.08em]"
+              disabled={busy}
+              onClick={handleSnooze}
+            >
+              {busy ? "…" : "Snooze"}
+            </Button>
+          ) : null}
           <Button
             variant="secondary"
             className="rounded-none py-4 text-xs font-black uppercase tracking-[0.08em]"
