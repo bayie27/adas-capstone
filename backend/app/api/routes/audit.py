@@ -45,12 +45,17 @@ def _apply_audit_filters(
     action: list[AuditAction] | None,
     user_id: list[int] | None,
     result: list[AuditResult] | None,
-    target_type: str | None,
+    target_type: list[str] | None,
     target_ref: str | None,
     start_date: datetime | None,
     end_date: datetime | None,
     search: str | None,
 ):
+    """`target_type` is a list here (an IN filter) so the async export job
+    path (P21 Step 5, filters_json-sourced, genuinely multi-valued) and this
+    route's own singular `?target_type=` query param (01_CONTRACTS.md §5.7,
+    still frozen singular) can share one implementation — callers with a
+    single value wrap it in a one-element list."""
     if action:
         stmt = stmt.where(col(AuditLog.action).in_([a.value for a in action]))
     if user_id:
@@ -58,7 +63,7 @@ def _apply_audit_filters(
     if result:
         stmt = stmt.where(col(AuditLog.result).in_([r.value for r in result]))
     if target_type:
-        stmt = stmt.where(col(AuditLog.target_type) == target_type)
+        stmt = stmt.where(col(AuditLog.target_type).in_(target_type))
     if target_ref:
         stmt = stmt.where(col(AuditLog.target_ref) == target_ref)
     if start_date:
@@ -122,7 +127,7 @@ def list_audit_logs(
         action=action,
         user_id=user_id,
         result=result,
-        target_type=target_type,
+        target_type=[target_type] if target_type else None,
         target_ref=target_ref,
         start_date=start_date,
         end_date=end_date,
@@ -177,22 +182,33 @@ def _audit_filters_dict(
 def _audit_filters_summary(
     filters: dict, *, sort_by: str, sort_order: str
 ) -> list[str]:
+    """Shared by this route's own sync export (whose filters dict always has
+    every key, `target_type` scalar) and the async job worker's
+    _generate_audit (services/reports/jobs.py) — a filters_json-sourced
+    dict from ExportJobCreate that may be missing keys this route's own
+    filters never omit (e.g. `target_ref`, out of P21 Step 5's scope) and
+    whose `target_type` is a list. `.get()` throughout, and a shape check on
+    `target_type`, so both callers render correctly instead of KeyError-ing."""
     lines = []
-    if filters["action"]:
+    if filters.get("action"):
         lines.append("Action: " + ", ".join(filters["action"]))
-    if filters["user_id"]:
+    if filters.get("user_id"):
         lines.append("User IDs: " + ", ".join(str(u) for u in filters["user_id"]))
-    if filters["result"]:
+    if filters.get("result"):
         lines.append("Result: " + ", ".join(filters["result"]))
-    if filters["target_type"]:
-        lines.append(f"Target Type: {filters['target_type']}")
-    if filters["target_ref"]:
-        lines.append(f"Target Ref: {filters['target_ref']}")
-    if filters["start_date"] or filters["end_date"]:
-        lines.append(
-            f"Date range: {filters['start_date'] or '…'} to {filters['end_date'] or '…'}"
+    target_type = filters.get("target_type")
+    if target_type:
+        rendered = (
+            ", ".join(target_type) if isinstance(target_type, list) else target_type
         )
-    if filters["search"]:
+        lines.append(f"Target Type: {rendered}")
+    if filters.get("target_ref"):
+        lines.append(f"Target Ref: {filters['target_ref']}")
+    if filters.get("start_date") or filters.get("end_date"):
+        lines.append(
+            f"Date range: {filters.get('start_date') or '…'} to {filters.get('end_date') or '…'}"
+        )
+    if filters.get("search"):
         lines.append(f"Search: {filters['search']!r}")
     lines.append(f"Sort: {sort_by} {sort_order}")
     return lines
@@ -255,7 +271,7 @@ def export_audit_logs(
         action=action,
         user_id=user_id,
         result=result,
-        target_type=target_type,
+        target_type=[target_type] if target_type else None,
         target_ref=target_ref,
         start_date=start_date,
         end_date=end_date,
@@ -301,7 +317,7 @@ def export_audit_logs(
         action=action,
         user_id=user_id,
         result=result,
-        target_type=target_type,
+        target_type=[target_type] if target_type else None,
         target_ref=target_ref,
         start_date=start_date,
         end_date=end_date,

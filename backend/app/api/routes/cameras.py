@@ -8,6 +8,7 @@ from sqlmodel import Session, col, func, select
 from app.api.dependencies import get_current_user, get_realtime_manager
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
+from app.core.redaction import redact_text
 from app.models import (
     AIStatus,
     AuditResult,
@@ -16,11 +17,13 @@ from app.models import (
     DetectionLog,
     DetectionStatus,
     User,
+    UserRole,
 )
 from app.schemas import (
     AiBreakdown,
     CameraBreakdowns,
     CameraCreate,
+    CameraDetailRead,
     CameraKpis,
     CameraListResponse,
     CameraRead,
@@ -29,6 +32,7 @@ from app.schemas import (
 )
 from app.services import audit
 from app.services.cameras import (
+    _build_rtsp_url,
     bump_if_ai_relevant_changed,
     compute_kpis_and_breakdowns,
     presented_ai_status_expr,
@@ -160,6 +164,40 @@ def get_all_cameras(
         ),
         total_filtered=total_filtered,
         cameras=[_to_camera_read(c, now=now) for c in cameras],
+    )
+
+
+@router.get("/{camera_id}", response_model=CameraDetailRead)
+def get_camera_detail(
+    camera_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """01_CONTRACTS.md §5.4/§7.2 (P21 Step 1) — operator-visible diagnostic
+    detail: the six AI-owned telemetry columns plus a redacted RTSP URL.
+    `rtsp_url_redacted` is admin-only *within* this route, not a reason to
+    gate the whole thing to Admin — an Operator gets 200 with that one
+    field null. Not audited — routine viewing, per D-007."""
+    db_camera = session.get(Camera, camera_id)
+    if not db_camera or not db_camera.is_active:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    now = datetime.now(UTC)
+    base = _to_camera_read(db_camera, now=now)
+
+    rtsp_url_redacted = None
+    if current_user.role == UserRole.ADMIN:
+        rtsp_url_redacted = redact_text(_build_rtsp_url(db_camera.channel_id))
+
+    return CameraDetailRead(
+        **base.model_dump(),
+        applied_config_version=db_camera.applied_config_version,
+        last_heartbeat_at=db_camera.last_heartbeat_at,
+        measured_fps=db_camera.measured_fps,
+        inference_latency_ms=db_camera.inference_latency_ms,
+        last_error_code=db_camera.last_error_code,
+        last_error_message=db_camera.last_error_message,
+        rtsp_url_redacted=rtsp_url_redacted,
     )
 
 

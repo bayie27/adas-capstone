@@ -16,7 +16,7 @@ from app.schemas.internal import (
     HeartbeatRequest,
     HeartbeatResponse,
 )
-from app.services.cameras import ObservedReport, apply_observed
+from app.services.cameras import ObservedReport, _build_rtsp_url, apply_observed
 from app.services.events import camera_status_update_event, new_detection_event
 from app.services.incidents import (
     CameraUnavailableForIngest,
@@ -88,21 +88,6 @@ def _check_clock_skew(engine_id: str, sent_at: datetime, now: datetime) -> None:
             sent_at.isoformat(),
             now.isoformat(),
         )
-
-
-def _build_rtsp_url(channel_id: int) -> str:
-    """01_CONTRACTS.md §7.2 — backend-owned RTSP construction. Credential-
-    bearing in production; never logged (see app.core.redaction, which
-    already strips any `scheme://user:pass@host` URL generically)."""
-    return settings.RTSP_URL_TEMPLATE.format(
-        channel_id=channel_id,
-        dss_ip=settings.DSS_IP,
-        dss_port=settings.DSS_PORT,
-        dss_username=settings.DSS_USERNAME,
-        dss_password=(
-            settings.DSS_PASS.get_secret_value() if settings.DSS_PASS else None
-        ),
-    )
 
 
 @router.post("/alert", response_model=DetectionLog)
