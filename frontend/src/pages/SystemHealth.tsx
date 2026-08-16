@@ -328,14 +328,11 @@ function DiagnosticRow({ label, explanation }: { label: string; explanation: str
  * Two heartbeat-time checks (`_check_engine_identity`, `_check_clock_skew` —
  * `backend/app/api/routes/internal.py`) run on every heartbeat but only ever
  * log a warning — neither is persisted to a table or returned by any
- * response, so this section always reads Unavailable today (G7). Not a
- * placeholder for made-up codes: neither check has ever emitted a structured
- * code (unlike the five real `HealthWarning` codes `_build_warnings` does
- * emit — GPU_TEMP_CRITICAL, RAM_CRITICAL, DISK_CRITICAL, DISK_WARNING,
- * AI_HEARTBEAT_STALE, `system_health.py:64` — which power `WarningsStrip`
- * above and are unrelated to these two checks). `ENGINE_CLOCK_SKEW` and an
- * "OUTBOX_QUARANTINED"-style code for a two-engine conflict do not exist
- * anywhere in this codebase; this section does not invent them.
+ * response, so this section always reads Unavailable today (G7). Neither
+ * check has ever emitted a structured code of its own — unlike the five real
+ * `HealthWarning` codes `_build_warnings` does emit (`system_health.py:64`),
+ * which power `WarningsStrip` above and are unrelated to these two checks.
+ * This section has no code to react to and does not invent one.
  */
 function EngineDiagnosticsSection() {
   return (
