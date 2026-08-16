@@ -123,7 +123,9 @@ The important structural line is **which modules import `cv2`**. Everything that
   | `epoch50.pt`                      | 8 cameras  | 13       |
   | `epoch50.engine` (TensorRT, FP32) | 14 cameras | ≥ 15     |
 
-  The engine's 10 FPS figure is a floor, not a measurement: the sweep stopped at batch 15 because the engine was built for that maximum, not because the machine ran out. **Detection accuracy on the engine is `unverified`** — capacity measures speed only. Run `pytest -m clips` against it before citing these numbers alongside any detection claim.
+  The engine's 10 FPS figure is a floor, not a measurement: the sweep stopped at batch 15 because the engine was built for that maximum, not because the machine ran out.
+
+  **The engine's detection behaviour was verified against the checkpoint on 2026-08-16**: `pytest -m clips` passed all 17 clips clip-by-clip and held false positives within the recorded baseline of 3, with the parity gate green on the checkpoint in the same run. So the speed figure and the accuracy figure describe the same artifact — capacity alone measures speed, and quoting it beside a detection claim is only honest once this has been run against the build in question.
 
 - **A TensorRT engine is not portable.** It is tied to the GPU, driver and TensorRT version that built it, so it must be rebuilt on every machine that runs it. There is no fallback: a missing or invalid model stops the process rather than quietly reverting to the checkpoint. That is deliberate — `main.py` once _preferred_ a stale `best.engine` and silently ran the wrong model.
 - **FP16 is not free speed.** Measured 1.00× against FP32 on a GTX 1650 (batch 15: 92.0 ms against 91.6 ms). The GTX 16-series has no tensor cores despite reporting compute capability 7.5, so `half=True` costs precision and returns nothing. Export with `half=False` unless a card with tensor cores is measured to disagree.
