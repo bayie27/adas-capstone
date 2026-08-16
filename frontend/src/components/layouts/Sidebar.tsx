@@ -19,6 +19,7 @@ import {
   RiQuestionLine,
   RiScan2Line,
   RiUserLine,
+  RiUserSettingsLine,
 } from "@remixicon/react"
 
 /**
@@ -82,6 +83,10 @@ export function Sidebar() {
               { name: "Maintenance", to: "/admin/maintenance", icon: RiHardDrive2Line },
             ]
           : [],
+    },
+    {
+      title: "ACCOUNT",
+      links: [{ name: "Profile", to: `${basePath}/profile`, icon: RiUserSettingsLine }],
     },
   ]
 
@@ -182,19 +187,21 @@ export function Sidebar() {
           <span className="text-[13px] font-medium">Help Center</span>
         </button>
 
-        {/* Identity label, not a control. This carried `cursor-pointer`, a
-            hover fill and a disclosure chevron while having no handler at all,
-            so it advertised a menu that was never built — and the one screen
-            such a menu would lead to, /profile, has no inbound link anywhere
-            in the app. Whether the chip becomes a link or a real dropdown is
-            a design question (D-3); until it is answered the honest render is
-            a static label that does not claim to be clickable. */}
-        <div className="flex items-center gap-2.5 px-3 py-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-[10px] font-bold text-fg-muted">
+        {/*
+          D-3, settled: not a Link. A footer avatar chip that only sometimes
+          leads somewhere reads as decoration, not navigation — the prior fix
+          made this chip a Link to /profile, which is exactly the kind of
+          hard-to-notice destination this plan exists to eliminate. /profile
+          now has its own plain, unmistakable entry in the nav list above
+          (ACCOUNT -> Profile, same treatment as every other row); this chip
+          goes back to a pure identity display, no affordance implied.
+        */}
+        <div className={cn("flex items-center gap-2.5", navRow)}>
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-[10px] font-bold text-fg-muted">
             {initials || <RiUserLine size={14} className="text-fg-muted" />}
           </div>
-          <div className="flex flex-col">
-            <span className="text-[13px] font-medium leading-tight text-fg-sidebar">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-[13px] font-medium leading-tight text-fg-sidebar">
               {displayName}
             </span>
             <span className="text-[11px] text-fg-muted">{displayRole}</span>
