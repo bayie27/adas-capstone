@@ -18,7 +18,13 @@ from app.services.cameras import (
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from .conftest import auth_headers, make_camera, make_detection, make_operator
+from .conftest import (
+    auth_headers,
+    make_admin,
+    make_camera,
+    make_detection,
+    make_operator,
+)
 
 
 def _headers(client: TestClient, session: Session) -> dict:
@@ -458,6 +464,138 @@ class TestPresentedStatusFilters:
             "/api/cameras/?connection_status=Connected", headers=headers
         ).json()
         assert cam.camera_id in {c["camera_id"] for c in connected["cameras"]}
+
+
+class TestGetCameraDetail:
+    """01_CONTRACTS.md §5.4/§7.2, P21 Step 1."""
+
+    def test_returns_telemetry_fields_matching_list_presentation(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        cam = make_camera(
+            session,
+            name="Detail Cam",
+            channel_id=200,
+            connection_status="Connected",
+            ai_status="Active",
+            last_heartbeat_at=datetime.now(UTC),
+        )
+        cam.applied_config_version = 3
+        cam.measured_fps = 12.4
+        cam.inference_latency_ms = 33.1
+        cam.last_error_code = "E1"
+        cam.last_error_message = "boom"
+        session.add(cam)
+        session.commit()
+
+        list_row = next(
+            c
+            for c in client.get("/api/cameras/", headers=headers).json()["cameras"]
+            if c["camera_id"] == cam.camera_id
+        )
+
+        resp = client.get(f"/api/cameras/{cam.camera_id}", headers=headers)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["applied_config_version"] == 3
+        assert body["measured_fps"] == 12.4
+        assert body["inference_latency_ms"] == 33.1
+        assert body["last_error_code"] == "E1"
+        assert body["last_error_message"] == "boom"
+        assert "last_heartbeat_at" in body
+        # Staleness-presented identically to the list route — same helper.
+        assert body["connection_status"] == list_row["connection_status"]
+        assert body["ai_status"] == list_row["ai_status"]
+
+    def test_never_heartbeated_camera_has_null_telemetry_not_zero(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Fresh Cam", channel_id=205)
+
+        resp = client.get(f"/api/cameras/{cam.camera_id}", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["measured_fps"] is None
+        assert body["last_heartbeat_at"] is None
+
+    def test_operator_sees_null_rtsp_admin_sees_masked(
+        self, client: TestClient, session: Session
+    ):
+        op_headers = _headers(client, session)
+        make_admin(session)
+        admin_headers = auth_headers(client, "admin", "Admin123")
+        cam = make_camera(session, name="RTSP Cam", channel_id=201)
+
+        op_resp = client.get(f"/api/cameras/{cam.camera_id}", headers=op_headers)
+        assert op_resp.status_code == 200
+        assert op_resp.json()["rtsp_url_redacted"] is None
+
+        admin_resp = client.get(f"/api/cameras/{cam.camera_id}", headers=admin_headers)
+        assert admin_resp.status_code == 200
+        assert admin_resp.json()["rtsp_url_redacted"].startswith("rtsp://")
+
+    def test_redacts_userinfo_credentials_from_response_body(
+        self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
+    ):
+        from app.core import config as config_module
+        from pydantic import SecretStr
+
+        monkeypatch.setattr(
+            config_module.settings,
+            "RTSP_URL_TEMPLATE",
+            "rtsp://{dss_username}:{dss_password}@10.0.0.9:554/ch{channel_id}",
+        )
+        monkeypatch.setattr(config_module.settings, "DSS_USERNAME", "opuser")
+        monkeypatch.setattr(config_module.settings, "DSS_PASS", SecretStr("sekret"))
+
+        make_admin(session)
+        admin_headers = auth_headers(client, "admin", "Admin123")
+        cam = make_camera(session, name="Leaky Cam", channel_id=202)
+
+        resp = client.get(f"/api/cameras/{cam.camera_id}", headers=admin_headers)
+        assert resp.status_code == 200
+        assert "opuser" not in resp.text
+        assert "sekret" not in resp.text
+        assert "***:***@" in resp.json()["rtsp_url_redacted"]
+
+    def test_redacts_credential_appearing_outside_userinfo_position(
+        self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
+    ):
+        """The half a hand-rolled userinfo regex would miss: a template
+        putting the password in a query parameter is still covered by
+        collect_secret_values() replacing the literal DSS_PASS value."""
+        from app.core import config as config_module
+        from pydantic import SecretStr
+
+        monkeypatch.setattr(
+            config_module.settings,
+            "RTSP_URL_TEMPLATE",
+            "rtsp://10.0.0.9:554/ch{channel_id}?pwd={dss_password}",
+        )
+        monkeypatch.setattr(config_module.settings, "DSS_PASS", SecretStr("sekret"))
+
+        make_admin(session)
+        admin_headers = auth_headers(client, "admin", "Admin123")
+        cam = make_camera(session, name="Query Leak Cam", channel_id=203)
+
+        resp = client.get(f"/api/cameras/{cam.camera_id}", headers=admin_headers)
+        assert resp.status_code == 200
+        assert "sekret" not in resp.text
+
+    def test_404_on_unknown_camera(self, client: TestClient, session: Session):
+        headers = _headers(client, session)
+        resp = client.get("/api/cameras/9999", headers=headers)
+        assert resp.status_code == 404
+
+    def test_404_on_soft_deleted_camera(self, client: TestClient, session: Session):
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Gone Cam", channel_id=204)
+        client.delete(f"/api/cameras/{cam.camera_id}", headers=headers)
+
+        resp = client.get(f"/api/cameras/{cam.camera_id}", headers=headers)
+        assert resp.status_code == 404
 
 
 class TestCreateCamera:

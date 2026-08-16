@@ -344,7 +344,7 @@ def _generate_audit(session: Session, job: ExportJob) -> tuple[bytes, int]:
             action=action,
             user_id=filters_dict.get("user_id") or None,
             result=result_filter,
-            target_type=filters_dict.get("target_type"),
+            target_type=filters_dict.get("target_type") or None,
             target_ref=filters_dict.get("target_ref"),
             start_date=start_date,
             end_date=end_date,

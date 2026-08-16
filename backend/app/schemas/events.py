@@ -83,7 +83,10 @@ class CameraStatusUpdateData(BaseModel):
 class SnoozeActivatedData(BaseModel):
     log_id: int
     camera_id: int
-    snoozed_by: int | None = None
+    # P21 Step 3 — a formatted display name, matching
+    # AlertStatusUpdateData.handled_by, not a raw user id GET /api/users/
+    # (admin-only) an Operator could never resolve. BREAKING: was int | None.
+    snoozed_by: str | None = None
     snoozed_until: datetime
 
 
