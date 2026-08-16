@@ -62,6 +62,19 @@ def _get_active_user_or_404(user_id: int, session: Session) -> User:
     return user
 
 
+def _get_user_or_404(user_id: int, session: Session) -> User:
+    """Like _get_active_user_or_404, but does not require is_active — used
+    only by update_user (P19 §3), which is the sole route that must be able
+    to reach a deactivated row: it's the only way back from false to true.
+    Every other admin route (reset-password, delete) keeps requiring an
+    active target, since neither makes sense on an already-deactivated
+    account."""
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return user
+
+
 # ---------------------------------------------------------
 # SELF-SERVICE (Operator & Admin)
 # ---------------------------------------------------------
@@ -159,18 +172,54 @@ async def change_my_password(
 # ---------------------------------------------------------
 
 
+_IS_ACTIVE_FILTER_VALUES = {"true": True, "false": False, "null": None}
+
+
+def _parse_is_active_filter(raw: str | None) -> bool | None:
+    """P19 §3 — a plain `bool | None` query param can't express three
+    states over HTTP: with a non-None default, an *omitted* param and an
+    *explicit* null are indistinguishable to FastAPI's query binding (both
+    resolve to the default), and axios's own paramsSerializer silently drops
+    `null`-valued params before the request is even sent — so "explicit
+    null" would be unreachable by any real caller, not just untestable.
+    Accepting the raw string and treating the literal `null` as its own
+    value keeps all three states reachable over the wire."""
+    if raw is None:
+        return True
+    try:
+        return _IS_ACTIVE_FILTER_VALUES[raw.strip().lower()]
+    except KeyError:
+        raise HTTPException(
+            status_code=422,
+            detail="is_active must be 'true', 'false', or 'null'.",
+        ) from None
+
+
 @router.get(
     "/", response_model=UserListResponse, dependencies=[Depends(get_current_admin)]
 )
 def get_all_users(
     search: str | None = Query(default=None, min_length=1, max_length=100),
+    is_active: str | None = Query(
+        default=None,
+        description="'true' (default when omitted) lists active accounts"
+        " only; 'false' lists deactivated accounts; 'null' lists both.",
+    ),
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ) -> UserListResponse:
     """Admin: paginated, searchable user directory. Not audited — there is
-    no catalog action for viewing, and D-007 excludes routine viewing."""
-    query = select(User).where(col(User.is_active).is_(True))
+    no catalog action for viewing, and D-007 excludes routine viewing.
+
+    is_active defaults to active-only (P19 §3) — "the user directory" means
+    active users, so a caller that passes nothing sees exactly today's
+    behaviour. ?is_active=false surfaces deactivated accounts so they can be
+    found and reactivated; ?is_active=null lists both."""
+    is_active_filter = _parse_is_active_filter(is_active)
+    query = select(User)
+    if is_active_filter is not None:
+        query = query.where(col(User.is_active).is_(is_active_filter))
 
     if search:
         query = query.where(
@@ -256,8 +305,12 @@ async def update_user(
     manager: RealtimeManager = Depends(get_realtime_manager),
 ) -> UserRead:
     """Admin: edit a user's profile, role, or active status.
-    Guards against demoting or deactivating the last active admin."""
-    target = _get_active_user_or_404(user_id, session)
+    Guards against demoting or deactivating the last active admin.
+
+    Fetches by _get_user_or_404, not _get_active_user_or_404 (P19 §3) — this
+    is the only route that must be able to reach a deactivated row, since
+    it's also how a deactivated account gets reactivated."""
+    target = _get_user_or_404(user_id, session)
     update_data = update_in.model_dump(exclude_unset=True)
     source_ip = _client_ip(request)
 
