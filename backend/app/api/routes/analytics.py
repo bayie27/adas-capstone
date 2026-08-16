@@ -18,7 +18,7 @@ Precision formula (Use Case 7 / paper §Precision Calibration):
   Returns None when no detections exist in the window (zero-division guard).
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import selectinload
@@ -77,20 +77,21 @@ def _compute_precision(confirmed: int, dismissed: int) -> float | None:
 # ---------------------------------------------------------------------------
 
 
-def _compute_dashboard_data(
+def _compute_dashboard_kpi_counts(
     session: Session,
     *,
     start_date: datetime | None,
     end_date: datetime | None,
     camera_id: list[int] | None,
-) -> dict:
+) -> dict[str, int]:
+    """The three headline KPI counts only — shared by the current-window
+    computation below and P19 §5's previous-window comparison, neither of
+    which needs frequency_by_location/peak_accident_times recomputed."""
     filters = IncidentFilters(
         start_date=start_date, end_date=end_date, camera_ids=tuple(camera_id or ())
     )
 
-    # --- KPI counts (one query, GROUP BY status) --------------------------
     # GROUP BY instead of two separate COUNT queries halves the round trips.
-
     status_counts_query = apply_incident_filters(
         select(
             DetectionLog.detection_status,
@@ -111,7 +112,76 @@ def _compute_dashboard_data(
 
     ongoing_count = status_counts.get(DetectionStatus.ONGOING.value, 0)
     resolved_count = status_counts.get(DetectionStatus.RESOLVED.value, 0)
-    total_accidents = ongoing_count + resolved_count
+    return {
+        "ongoing": ongoing_count,
+        "total_accidents": ongoing_count + resolved_count,
+        "total_resolved": resolved_count,
+    }
+
+
+def _previous_window(
+    start_date: datetime | None, end_date: datetime | None
+) -> tuple[datetime, datetime] | None:
+    """P19 §5 — the same-duration window immediately preceding
+    [start_date, end_date]. None when the range isn't fully bounded: either
+    date missing means there's no well-defined duration to shift, and "all
+    time" (both unset) has no previous period at all.
+
+    apply_incident_filters compares detected_at with `>=` start and `<=`
+    end — both bounds inclusive — so previous_end is start_date minus one
+    microsecond, not start_date itself, or a detection exactly at
+    start_date would be counted in both windows."""
+    if start_date is None or end_date is None:
+        return None
+    duration = end_date - start_date
+    previous_end = start_date - timedelta(microseconds=1)
+    previous_start = previous_end - duration
+    return previous_start, previous_end
+
+
+def _delta_pct(current: int, previous: int) -> float | None:
+    """P19 §5 — None (never 0) when there's no previous window to compare
+    against, and None (never +100%/inf) when the previous count was zero:
+    growth from nothing isn't a figure an operator can act on. `0` would
+    read as "no change", a different and wrong claim in both cases."""
+    if previous == 0:
+        return None
+    return round((current - previous) / previous * 100, 1)
+
+
+def _compute_dashboard_data(
+    session: Session,
+    *,
+    start_date: datetime | None,
+    end_date: datetime | None,
+    camera_id: list[int] | None,
+) -> dict:
+    filters = IncidentFilters(
+        start_date=start_date, end_date=end_date, camera_ids=tuple(camera_id or ())
+    )
+
+    current = _compute_dashboard_kpi_counts(
+        session, start_date=start_date, end_date=end_date, camera_id=camera_id
+    )
+
+    previous_window = _previous_window(start_date, end_date)
+    if previous_window is None:
+        ongoing_delta_pct = total_accidents_delta_pct = total_resolved_delta_pct = None
+    else:
+        previous_start, previous_end = previous_window
+        previous = _compute_dashboard_kpi_counts(
+            session,
+            start_date=previous_start,
+            end_date=previous_end,
+            camera_id=camera_id,
+        )
+        ongoing_delta_pct = _delta_pct(current["ongoing"], previous["ongoing"])
+        total_accidents_delta_pct = _delta_pct(
+            current["total_accidents"], previous["total_accidents"]
+        )
+        total_resolved_delta_pct = _delta_pct(
+            current["total_resolved"], previous["total_resolved"]
+        )
 
     # --- Accident frequency by location -----------------------------------
 
@@ -175,9 +245,10 @@ def _compute_dashboard_data(
 
     return {
         "kpis": {
-            "ongoing": ongoing_count,
-            "total_accidents": total_accidents,
-            "total_resolved": resolved_count,
+            **current,
+            "ongoing_delta_pct": ongoing_delta_pct,
+            "total_accidents_delta_pct": total_accidents_delta_pct,
+            "total_resolved_delta_pct": total_resolved_delta_pct,
         },
         "frequency_by_location": frequency_by_location,
         "peak_accident_times": peak_accident_times,

@@ -102,6 +102,10 @@ class TestDashboardAnalytics:
             "ongoing": 1,
             "total_accidents": 2,
             "total_resolved": 1,
+            # No start_date/end_date — all time has no previous period.
+            "ongoing_delta_pct": None,
+            "total_accidents_delta_pct": None,
+            "total_resolved_delta_pct": None,
         }
         assert body["frequency_by_location"] == [
             {"camera_name": "Alpha Road", "accident_count": 1},
@@ -187,10 +191,18 @@ class TestDashboardAnalytics:
 
         assert resp.status_code == 200
         body = resp.json()
+        # Previous window (same ~24h duration immediately before the
+        # request's range, same camera_id filter): north's Ongoing log at
+        # Jan 1 09:00 falls in it, giving previous ongoing=1, resolved=0,
+        # total_accidents=1 — south is excluded from both windows by the
+        # camera_id filter.
         assert body["kpis"] == {
             "ongoing": 0,
             "total_accidents": 1,
             "total_resolved": 1,
+            "ongoing_delta_pct": -100.0,  # 0 vs previous 1
+            "total_accidents_delta_pct": 0.0,  # 1 vs previous 1
+            "total_resolved_delta_pct": None,  # previous resolved was 0
         }
         assert body["frequency_by_location"] == [
             {"camera_name": "North Gate", "accident_count": 1}
@@ -270,6 +282,197 @@ class TestDashboardAnalytics:
         assert resp.headers["content-type"] == "application/pdf"
         assert "adas_dashboard_export.pdf" in resp.headers["content-disposition"]
         assert resp.content.startswith(b"%PDF")
+
+
+class TestDashboardDeltas:
+    """P19 §5 — period-over-period comparison against the same-duration
+    window immediately preceding [start_date, end_date].
+
+    `ux_detection_open_camera` (CLAUDE.md) allows at most one Unverified/
+    Ongoing row per camera, so these tests build multi-count Ongoing totals
+    across distinct cameras (one Ongoing row each) and use Resolved — which
+    has no such limit — for anything that needs several rows on one camera."""
+
+    def _make_resolved_logs(self, session, camera, *, day: int, count: int):
+        for i in range(count):
+            make_analytics_log(
+                session,
+                camera,
+                detected_at=datetime(2026, 5, day, 14, i, tzinfo=UTC),
+                status=DetectionStatus.RESOLVED,
+                confidence_score=0.7,
+            )
+
+    def _make_ongoing_logs_on_fresh_cameras(
+        self, session, *, day: int, count: int, name_prefix: str, channel_start: int
+    ):
+        for i in range(count):
+            cam = make_camera(
+                session, name=f"{name_prefix} {i}", channel_id=channel_start + i
+            )
+            make_analytics_log(
+                session,
+                cam,
+                detected_at=datetime(2026, 5, day, 10, i, tzinfo=UTC),
+                status=DetectionStatus.ONGOING,
+                confidence_score=0.7,
+            )
+
+    def test_known_counts_across_adjacent_windows_produce_expected_percentages(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="deltaknown")
+        resolved_camera = make_camera(
+            session, name="Delta Resolved Camera", channel_id=71
+        )
+        # Previous window (May 1): 4 ongoing (4 distinct cameras), 2
+        # resolved -> 6 accidents.
+        self._make_ongoing_logs_on_fresh_cameras(
+            session, day=1, count=4, name_prefix="Delta Prev Ongoing", channel_start=700
+        )
+        self._make_resolved_logs(session, resolved_camera, day=1, count=2)
+        # Current window (May 2): 6 ongoing (6 distinct cameras), 4
+        # resolved -> 10 accidents.
+        self._make_ongoing_logs_on_fresh_cameras(
+            session, day=2, count=6, name_prefix="Delta Curr Ongoing", channel_start=710
+        )
+        self._make_resolved_logs(session, resolved_camera, day=2, count=4)
+
+        resp = client.get(
+            "/api/analytics/dashboard"
+            "?start_date=2026-05-02T00:00:00Z&end_date=2026-05-02T23:59:59Z",
+            headers=headers,
+        )
+
+        assert resp.status_code == 200
+        kpis = resp.json()["kpis"]
+        assert kpis["ongoing"] == 6
+        assert kpis["total_resolved"] == 4
+        assert kpis["total_accidents"] == 10
+        assert kpis["ongoing_delta_pct"] == 50.0  # (6-4)/4
+        assert kpis["total_resolved_delta_pct"] == 100.0  # (4-2)/2
+        assert kpis["total_accidents_delta_pct"] == 66.7  # (10-6)/6, rounded
+
+    def test_empty_previous_window_gives_null_not_zero_not_error(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="deltaempty")
+        resolved_camera = make_camera(
+            session, name="Delta Empty Resolved", channel_id=72
+        )
+        self._make_ongoing_logs_on_fresh_cameras(
+            session,
+            day=2,
+            count=2,
+            name_prefix="Delta Empty Ongoing",
+            channel_start=720,
+        )
+        self._make_resolved_logs(session, resolved_camera, day=2, count=1)
+        # Nothing at all on May 1 — the previous window is genuinely empty.
+
+        resp = client.get(
+            "/api/analytics/dashboard"
+            "?start_date=2026-05-02T00:00:00Z&end_date=2026-05-02T23:59:59Z",
+            headers=headers,
+        )
+
+        assert resp.status_code == 200
+        kpis = resp.json()["kpis"]
+        assert kpis["ongoing"] == 2
+        assert kpis["ongoing_delta_pct"] is None
+        assert kpis["total_resolved_delta_pct"] is None
+        assert kpis["total_accidents_delta_pct"] is None
+
+    def test_only_start_date_gives_null_deltas(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="deltastart")
+        camera = make_camera(session, name="Delta Half Open A", channel_id=73)
+        self._make_resolved_logs(session, camera, day=2, count=1)
+
+        resp = client.get(
+            "/api/analytics/dashboard?start_date=2026-05-02T00:00:00Z",
+            headers=headers,
+        )
+
+        assert resp.status_code == 200
+        kpis = resp.json()["kpis"]
+        assert kpis["ongoing_delta_pct"] is None
+        assert kpis["total_resolved_delta_pct"] is None
+        assert kpis["total_accidents_delta_pct"] is None
+
+    def test_only_end_date_gives_null_deltas(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="deltaend")
+        camera = make_camera(session, name="Delta Half Open B", channel_id=74)
+        self._make_resolved_logs(session, camera, day=2, count=1)
+
+        resp = client.get(
+            "/api/analytics/dashboard?end_date=2026-05-02T23:59:59Z",
+            headers=headers,
+        )
+
+        assert resp.status_code == 200
+        kpis = resp.json()["kpis"]
+        assert kpis["ongoing_delta_pct"] is None
+        assert kpis["total_resolved_delta_pct"] is None
+        assert kpis["total_accidents_delta_pct"] is None
+
+    def test_detection_exactly_on_window_boundary_counts_once_not_twice(
+        self, client: TestClient, session: Session
+    ):
+        """A detection at exactly start_date belongs to the current window
+        (apply_incident_filters is >= inclusive on start) and must not also
+        land in the previous window — if it did, the previous window
+        wouldn't be empty and the delta would read 0.0 instead of null."""
+        _, headers = operator_with_headers(client, session, username="deltaboundary")
+        camera = make_camera(session, name="Delta Boundary Camera", channel_id=75)
+        make_analytics_log(
+            session,
+            camera,
+            detected_at=datetime(2026, 5, 10, 0, 0, 0, tzinfo=UTC),
+            status=DetectionStatus.ONGOING,
+            confidence_score=0.7,
+        )
+
+        resp = client.get(
+            "/api/analytics/dashboard"
+            "?start_date=2026-05-10T00:00:00Z&end_date=2026-05-10T23:59:59Z",
+            headers=headers,
+        )
+
+        assert resp.status_code == 200
+        kpis = resp.json()["kpis"]
+        assert kpis["ongoing"] == 1
+        # Previous window must be empty -> null, not 0.0 (which is what
+        # double-counting the boundary detection would produce).
+        assert kpis["ongoing_delta_pct"] is None
+
+    def test_camera_id_filter_applies_to_previous_window_too(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="deltacamfilter")
+        target = make_camera(session, name="Delta Target Camera", channel_id=76)
+        other = make_camera(session, name="Delta Other Camera", channel_id=77)
+        # Previous window: target gets 2 resolved, other gets 5 resolved.
+        self._make_resolved_logs(session, target, day=1, count=2)
+        self._make_resolved_logs(session, other, day=1, count=5)
+        # Current window: target gets 4 resolved.
+        self._make_resolved_logs(session, target, day=2, count=4)
+
+        resp = client.get(
+            f"/api/analytics/dashboard?camera_id={target.camera_id}"
+            "&start_date=2026-05-02T00:00:00Z&end_date=2026-05-02T23:59:59Z",
+            headers=headers,
+        )
+
+        assert resp.status_code == 200
+        kpis = resp.json()["kpis"]
+        assert kpis["total_resolved"] == 4
+        # If `other`'s 5 leaked into the previous count, this would be
+        # (4-5)/5*100 = -20.0 instead of the target-only (4-2)/2*100 = 100.0.
+        assert kpis["total_resolved_delta_pct"] == 100.0
 
 
 class TestPerformanceAnalytics:
@@ -765,6 +968,9 @@ def test_dashboard_ignores_unverified_logs_and_returns_empty_state(
         "ongoing": 0,
         "total_accidents": 0,
         "total_resolved": 0,
+        "ongoing_delta_pct": None,
+        "total_accidents_delta_pct": None,
+        "total_resolved_delta_pct": None,
     }
     assert body["frequency_by_location"] == []
     assert len(body["peak_accident_times"]) == 24
@@ -786,6 +992,9 @@ def test_dashboard_with_a_genuinely_empty_database_returns_the_same_empty_state(
         "ongoing": 0,
         "total_accidents": 0,
         "total_resolved": 0,
+        "ongoing_delta_pct": None,
+        "total_accidents_delta_pct": None,
+        "total_resolved_delta_pct": None,
     }
     assert body["frequency_by_location"] == []
     assert len(body["peak_accident_times"]) == 24
