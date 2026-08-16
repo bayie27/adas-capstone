@@ -223,6 +223,35 @@ export function ExportJobsTray() {
             onRemove={() => untrack(tracked.jobId)}
           />
         ))}
+
+        {/*
+          G2 — GET /api/exports/jobs (a list route) doesn't exist, only
+          single-job GET by id, so "history" here can only ever mean jobs
+          this browser's own useExportJobsStore tracked. States that scope
+          limit outright instead of leaving it implied by what's absent.
+          The button is the seam: the day G2 ships, its onClick becomes a
+          real fetch and disabled goes away -- no structural change to the
+          tray itself.
+        */}
+        <div className="mt-4 space-y-2 border-t border-stroke pt-3">
+          <p className="text-caption text-fg-muted">
+            Showing exports started from this browser only.
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled
+              className="flex-1"
+              title="Not available yet -- no endpoint lists a user's export jobs across sessions (G2)"
+            >
+              Load history from other sessions
+            </Button>
+            <Badge tone="neutral" variant="subtle" uppercase={false} className="shrink-0">
+              Unavailable
+            </Badge>
+          </div>
+        </div>
       </SidePanel>
     </>
   )
