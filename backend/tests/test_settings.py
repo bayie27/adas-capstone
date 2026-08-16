@@ -1,5 +1,6 @@
 """Tests for /api/settings/alarm — 01_CONTRACTS.md §5.6, D-004."""
 
+from app.core.config import settings
 from app.models import AuditLog
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
@@ -10,6 +11,19 @@ from .conftest import auth_headers, make_operator
 def _headers(client: TestClient, session: Session) -> dict:
     make_operator(session, username="settingsop", password="Operator123")
     return auth_headers(client, "settingsop", "Operator123")
+
+
+def _expected_options() -> dict:
+    """P21 Step 2 — driven from `settings` (alarm_sound_keys, snooze
+    bounds), not a second hardcoded copy. volume_min/max have no settings
+    entry — 0/100 is the schema's only source for that bound."""
+    return {
+        "alarm_sound_keys": list(settings.ALARM_SOUND_KEYS),
+        "snooze_min_seconds": settings.SNOOZE_MIN_SECONDS,
+        "snooze_max_seconds": settings.SNOOZE_MAX_SECONDS,
+        "volume_min": 0,
+        "volume_max": 100,
+    }
 
 
 class TestGetAlarmSettings:
@@ -23,6 +37,7 @@ class TestGetAlarmSettings:
             "alarm_sound": "default",
             "volume": 80,
             "snooze_duration": 30,
+            "options": _expected_options(),
         }
 
     def test_is_side_effect_free(self, client: TestClient, session: Session):
@@ -50,6 +65,7 @@ class TestUpdateAlarmSettings:
             "alarm_sound": "default",
             "volume": 55,
             "snooze_duration": 45,
+            "options": _expected_options(),
         }
 
         follow_up = client.get("/api/settings/alarm", headers=headers)
@@ -173,3 +189,49 @@ class TestUpdateAlarmSettings:
             json={"alarm_sound": "default", "volume": 50, "snooze_duration": 30},
         )
         assert resp.status_code == 401
+
+
+class TestAlarmSettingsOptions:
+    """P21 Step 2 — every bound is asserted against `settings`, not a
+    literal, so a hardcoded test copy can never mask client/server drift."""
+
+    def test_options_present_on_get_and_put_and_match_settings(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        get_resp = client.get("/api/settings/alarm", headers=headers)
+        put_resp = client.put(
+            "/api/settings/alarm",
+            headers=headers,
+            json={"alarm_sound": "default", "volume": 50, "snooze_duration": 30},
+        )
+        for resp in (get_resp, put_resp):
+            assert resp.status_code == 200, resp.text
+            assert resp.json()["options"] == {
+                "alarm_sound_keys": list(settings.ALARM_SOUND_KEYS),
+                "snooze_min_seconds": settings.SNOOZE_MIN_SECONDS,
+                "snooze_max_seconds": settings.SNOOZE_MAX_SECONDS,
+                "volume_min": 0,
+                "volume_max": 100,
+            }
+
+    def test_put_body_ignores_an_unexpected_options_key(
+        self, client: TestClient, session: Session
+    ):
+        """22_FRONTEND_HANDOFF_P21.md §2 — options is read-only/server-owned;
+        a client that sends it back must not be rejected."""
+        headers = _headers(client, session)
+        resp = client.put(
+            "/api/settings/alarm",
+            headers=headers,
+            json={
+                "alarm_sound": "default",
+                "volume": 50,
+                "snooze_duration": 30,
+                "options": {"alarm_sound_keys": ["bogus"]},
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["options"]["alarm_sound_keys"] == list(
+            settings.ALARM_SOUND_KEYS
+        )
