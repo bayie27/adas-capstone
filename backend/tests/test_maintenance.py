@@ -866,13 +866,20 @@ def maintenance_settings(client: TestClient, tmp_path, monkeypatch):
 
     backup_dir = tmp_path / "backups"
     archive_dir = tmp_path / "archive"
+    log_dir = tmp_path / "log"
     real_db_url = client.app.state.settings.DATABASE_URL
 
     monkeypatch.setattr(app_settings, "DATABASE_URL", real_db_url)
     monkeypatch.setattr(app_settings, "BACKUP_DIR", backup_dir)
     monkeypatch.setattr(app_settings, "ARCHIVE_DIR", archive_dir)
+    # GET /api/system/maintenance/status reads LOG_DIR/maintenance-runs.jsonl
+    # from this same global — without patching it too, the status route
+    # would read the real demo laptop's actual restart-drill history.
+    monkeypatch.setattr(app_settings, "LOG_DIR", log_dir)
 
-    return SimpleNamespace(backup_dir=backup_dir, archive_dir=archive_dir)
+    return SimpleNamespace(
+        backup_dir=backup_dir, archive_dir=archive_dir, log_dir=log_dir
+    )
 
 
 def _audit_rows_on_disk(client: TestClient, action: str) -> list[AuditLog]:
