@@ -36,6 +36,7 @@ import {
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useUserOptions } from "@/hooks/useUserOptions"
 import { useNow } from "@/hooks/useNow"
+import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
 import type { AlertLog, AlertSortField, AlertStatus, ExportFormat, SortOrder } from "@/api/alerts"
@@ -208,6 +209,8 @@ export default function Detections() {
         format,
       ),
   })
+
+  const exportJobMutation = useExportJobSubmit()
 
   const handleMutationSuccess = (updatedAlert: AlertLog) => {
     queryClient.setQueryData(["alert-details", updatedAlert.log_id], updatedAlert)
@@ -458,6 +461,21 @@ export default function Detections() {
             rowCount={logsQuery.data?.total_filtered}
             isExporting={exportMutation.isPending}
             onExport={(format) => exportMutation.mutate(format)}
+            isSubmittingJob={exportJobMutation.isPending}
+            onExportJob={(format) =>
+              exportJobMutation.mutateAsync({
+                report_type: "incidents",
+                format,
+                status: LOG_ALERT_STATUSES,
+                search: debouncedLogSearch || undefined,
+                sort_by: logsSort.key,
+                sort_order: logsSort.order,
+                start_date: startDate || undefined,
+                end_date: endDate || undefined,
+                camera_id: cameraId ? [Number(cameraId)] : undefined,
+                user_id: userId ? [Number(userId)] : undefined,
+              })
+            }
           />
         </div>
       ) : (
@@ -480,6 +498,13 @@ export default function Detections() {
       */}
       {activeTab === "logs" && exportMutation.isError ? (
         <QueryErrorBanner error={exportMutation.error} fallback="Unable to export logs." />
+      ) : null}
+
+      {activeTab === "logs" && exportJobMutation.isError ? (
+        <QueryErrorBanner
+          error={exportJobMutation.error}
+          fallback="Unable to start the background export job."
+        />
       ) : null}
 
       {currentQuery.isError ? (

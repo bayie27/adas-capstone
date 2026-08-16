@@ -14,6 +14,7 @@ import { TableStateRow } from "@/components/ui/Table"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
+import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { formatPercent } from "@/utils/format"
 import {
   RiCarLine,
@@ -69,6 +70,8 @@ export default function AiPerformance() {
         format,
       ),
   })
+
+  const exportJobMutation = useExportJobSubmit()
 
   const globalKpis = performanceQuery.data?.global_kpis
   const perCamera = useMemo(() => performanceQuery.data?.per_camera ?? [], [performanceQuery.data])
@@ -207,6 +210,17 @@ export default function AiPerformance() {
           rowCount={perCamera.length}
           isExporting={exportMutation.isPending}
           onExport={(format) => exportMutation.mutate(format)}
+          isSubmittingJob={exportJobMutation.isPending}
+          onExportJob={(format) =>
+            exportJobMutation.mutateAsync({
+              report_type: "performance",
+              format,
+              search: debouncedSearchTerm || undefined,
+              start_date: startDate || undefined,
+              end_date: endDate || undefined,
+              camera_id: cameraId ? [Number(cameraId)] : undefined,
+            })
+          }
         />
       </div>
 
@@ -214,6 +228,13 @@ export default function AiPerformance() {
         <QueryErrorBanner
           error={exportMutation.error}
           fallback="Unable to export the AI performance report."
+        />
+      ) : null}
+
+      {exportJobMutation.isError ? (
+        <QueryErrorBanner
+          error={exportJobMutation.error}
+          fallback="Unable to start the background export job."
         />
       ) : null}
 

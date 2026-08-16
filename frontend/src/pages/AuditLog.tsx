@@ -31,6 +31,7 @@ import {
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { useUserOptions } from "@/hooks/useUserOptions"
+import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { formatFullDateTime } from "@/utils/datetime"
 import { getUserFullName } from "@/utils/format"
 
@@ -152,6 +153,22 @@ export default function AuditLog() {
   const exportMutation = useMutation({
     mutationFn: (format: ExportFormat) => exportAuditLogs(filters, format),
   })
+
+  const exportJobMutation = useExportJobSubmit()
+
+  /**
+   * `POST /api/exports/jobs`'s body (`ExportJobCreate`, `extra="forbid"`)
+   * has no `action`, `result` or `target_type` field — only
+   * start_date/end_date/status/camera_id/user_id/search/sort. The worker's
+   * own audit generator reads those three from the job's stored filters
+   * (`services/reports/jobs.py:312-347`), but the create route has no way
+   * to accept them from a client at all, so a job submitted while any of
+   * the three is active would silently export an unfiltered (or
+   * differently filtered) set than what's on screen. Rather than fabricate
+   * a background export that doesn't match the visible table, the job
+   * fallback is only offered when none of the three is set.
+   */
+  const jobFiltersSupported = !action && !result && !targetType
 
   // usePagination is seeded with 0 above (the total isn't known until the
   // query resolves); re-derive totalPages/page against the real total so
@@ -285,11 +302,34 @@ export default function AuditLog() {
           rowCount={totalFiltered}
           isExporting={exportMutation.isPending}
           onExport={(format) => exportMutation.mutate(format)}
+          isSubmittingJob={exportJobMutation.isPending}
+          onExportJob={
+            jobFiltersSupported
+              ? (format) =>
+                  exportJobMutation.mutateAsync({
+                    report_type: "audit",
+                    format,
+                    search: debouncedSearch || undefined,
+                    start_date: startDate || undefined,
+                    end_date: endDate || undefined,
+                    user_id: userId ? [Number(userId)] : undefined,
+                    sort_by: sort.key,
+                    sort_order: sort.order,
+                  })
+              : undefined
+          }
         />
       </div>
 
       {exportMutation.isError ? (
         <QueryErrorBanner error={exportMutation.error} fallback="Unable to export the audit log." />
+      ) : null}
+
+      {exportJobMutation.isError ? (
+        <QueryErrorBanner
+          error={exportJobMutation.error}
+          fallback="Unable to start the background export job."
+        />
       ) : null}
 
       <TableContainer
