@@ -9,6 +9,7 @@ import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { getAlarmSettings, updateAlarmSettings } from "@/api/settings"
 import type { AlarmSettings } from "@/api/settings"
 import { getApiErrorMessage } from "@/api/client"
+import { previewDetectionSound, setDetectionSoundVolume } from "@/utils/detectionSound"
 
 const ALARM_SETTINGS_QUERY_KEY = ["alarm-settings"] as const
 
@@ -35,9 +36,12 @@ export function AlarmSettingsCard() {
 
   // Seed the editable form once, the moment the fetch resolves — same
   // pattern ProfileSettings uses for its own form, so a background refetch
-  // can't stomp on an in-progress edit.
+  // can't stomp on an in-progress edit. Also the first point this session
+  // learns the actor's real saved volume, so the alarm — hardcoded to the
+  // browser default until now — picks it up here.
   if (settingsQuery.data && !form) {
     setForm(settingsQuery.data)
+    setDetectionSoundVolume(settingsQuery.data.volume)
   }
 
   const mutation = useMutation({
@@ -47,6 +51,7 @@ export function AlarmSettingsCard() {
     onSuccess: (updated) => {
       queryClient.setQueryData(ALARM_SETTINGS_QUERY_KEY, updated)
       setForm(updated)
+      setDetectionSoundVolume(updated.volume)
       setNotice({ tone: "success", message: "Alarm settings saved." })
     },
   })
@@ -122,10 +127,21 @@ export function AlarmSettingsCard() {
           </div>
 
           <div>
-            <label className="mb-2 block text-caption font-semibold text-fg-body">
-              Volume: {form.volume}
-              {form.volume === 0 ? " (Muted)" : ""}
-            </label>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="text-caption font-semibold text-fg-body">
+                Volume: {form.volume}
+                {form.volume === 0 ? " (Muted)" : ""}
+              </label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={form.volume === 0}
+                onClick={() => previewDetectionSound(form.volume)}
+              >
+                Test
+              </Button>
+            </div>
             <input
               type="range"
               min={0}
