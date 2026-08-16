@@ -4,7 +4,9 @@
 > **Created:** August 9, 2026. **Baseline:** branch `dx/ci-tooling-foundation`, commit `543e7f7`.
 
 This directory turns `be_decisions_review.md` (D-001 … D-012, all Locked) and the paper's
-requirements into nine executable work packages plus three companion handoff docs.
+requirements into executable work packages plus companion handoff docs. P1–P10 were the original
+set; **P19 was added 2026-08-16** to close the backend gaps the frontend owner recorded across
+PRs #95–#101.
 
 ---
 
@@ -96,6 +98,7 @@ auth change.
 | **P8** | [`09_PKG_help_center.md`](09_PKG_help_center.md) | FR-20 help articles, role filter, FTS5 search | S | P2 |
 | **P9** | [`10_PKG_migration_evidence.md`](10_PKG_migration_evidence.md) | Alembic initial migration, 100k-row perf evidence, 82-test-case traceability, docs, CI | L | all |
 | **P10** | [`15_PKG_ai_engine_integration.md`](15_PKG_ai_engine_integration.md) | AI engine → v2 heartbeat, `source_event_id`, durable outbox, `snapshot_key`. **The only package that modifies `ai_engine/`** | L | P4 |
+| **P19** | [`19_PKG_fe_backend_gaps.md`](19_PKG_fe_backend_gaps.md) | The five backend gaps the frontend owner raised in PRs #95–#101 — `Retry-After` exposure, presented-status camera filters, user reactivation, AI-performance pagination, dashboard deltas. **Worktree-safe** | M | — |
 
 Companions (not work packages):
 
@@ -105,6 +108,7 @@ Companions (not work packages):
 | [`01_CONTRACTS.md`](01_CONTRACTS.md) | every executing agent | read first, every package |
 | [`14_EDGE_CASES.md`](14_EDGE_CASES.md) | every executing agent | walk your package's rows before calling it done |
 | [`11_FRONTEND_MIGRATION.md`](11_FRONTEND_MIGRATION.md) | frontend owner | hand over before P2 merges |
+| [`20_FRONTEND_HANDOFF.md`](20_FRONTEND_HANDOFF.md) | frontend owner | hand over when P19 merges — §4 is a breaking response change |
 | [`12_AI_ENGINE_CONTRACT.md`](12_AI_ENGINE_CONTRACT.md) | AI engine owner | background — superseded in practice by P10 |
 | [`16_HEARTBEAT_VS_POLLING.md`](16_HEARTBEAT_VS_POLLING.md) | AI engine owner | explains what P10 changed and why, with an honest assessment |
 | [`17_AI_OWNER_OPEN_ITEMS.md`](17_AI_OWNER_OPEN_ITEMS.md) | AI engine owner | the D-012 evidence gate — threshold, qualification, hardware profile, TC-AI cases |
@@ -129,6 +133,7 @@ Update this table as packages land. Put the merge commit SHA in the last column.
 | P9 migration + evidence | 🔶 implemented, not pushed/PR'd — 7 commits, one per numbered step, on `feat/be-p9-migration-evidence` (branched from `main` with P1–P8 and P10 merged). `pnpm full:check` green (710 backend + 13 frontend tests, build, 1 e2e test). One hand-reviewed initial Alembic migration, diffed object-by-object against `SQLModel.metadata` with zero differences (`backend/scripts/verify_migration_schema.py`, also wired into a new CI `migration` job). `be_plan/EVIDENCE.md` records real NFR-04/06/08 numbers against a live 100,000-row database — including one flagged real finding, not silently rounded up: PDF export at the paper's literal "~10,000-row" target measures ~36-43s against a 5s budget (fpdf2's own table-rendering throughput, isolated and confirmed not a query/formatting bug). `be_plan/TRACEABILITY.md` covers all 82 paper test cases with no blank Owner cell. `be_plan/MANUAL_TESTS.md` has nine written procedures — **none executed yet**, that's separate work. All four verification-section checks that need a live server were live-drilled: admin login against a freshly migrated database, a real backup recording the actual Alembic revision in its manifest, and a deliberate stale/unrecognized-revision startup refusal in a simulated production mode. Edge-case sweep across all ten `14_EDGE_CASES.md` categories found ~28 partially- or un-covered rows out of ~150 (full list in the PR/session report) — mostly boundary values (limit/offset edges) and a few concurrency/timing races that need either a dedicated test or an explicit "acceptable gap" call. | `feat/be-p9-migration-evidence` | |
 | Frontend migration | ✅ merged — [PR #63](https://github.com/bayie27/adas-capstone/pull/63), [PR #66](https://github.com/bayie27/adas-capstone/pull/66) | `feat/fe-cookie-auth`, `feat/fe-authenticated-snapshots` | `48f2d03`, `c1497ec` |
 | AI engine cutover (P10) | ✅ merged — [PR #67](https://github.com/bayie27/adas-capstone/pull/67) | `feat/ai-p10-backend-integration` | `20fd987` |
+| P19 FE backend gaps | 🔶 implemented, not pushed/PR'd — 5 commits, one per numbered step, on `feat/be-p19-fe-backend-gaps` (branched from `main` with P1–P10 merged). Narrow scopes green (`test_auth.py` + `test_cameras.py` + `test_users.py` + `test_analytics.py`) plus a full `uv run pytest -n auto` pass. Step 3's `is_active` filter shipped as a string query param (`"true"`/`"false"`/`"null"`), not the plan's literal `bool \| None` — that type can't express three states over a real HTTP query string (a non-`None` default makes "omitted" and "explicit null" indistinguishable, and axios drops `null`-valued params before the request is sent), so the literal snippet would have made "both" unreachable by any real caller. `update_user` also switched from `_get_active_user_or_404` to a fetch that allows a deactivated target — without that, reactivation 404'd before ever reaching its own `is_active` handling, so it was unreachable even by a direct API call, not only missing a screen. Both deviations, and the corrected wire contract, are written up in [`20_FRONTEND_HANDOFF.md`](20_FRONTEND_HANDOFF.md) §3. Step 4 (AI-performance pagination) is the approved breaking response change. | `feat/be-p19-fe-backend-gaps` | |
 
 ---
 
