@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import { RiArrowDownSLine, RiArrowRightSLine, RiFileHistoryLine } from "@remixicon/react"
 
 import { AUDIT_ACTIONS, AUDIT_RESULTS, AUDIT_TARGET_TYPES, getAuditLogs } from "@/api/audit"
-import type { AuditLogEntry } from "@/api/audit"
+import type { AuditLogEntry, AuditSortField, SortOrder } from "@/api/audit"
 import { Badge } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
@@ -28,6 +28,24 @@ import { formatFullDateTime } from "@/utils/datetime"
 import { getUserFullName } from "@/utils/format"
 
 const AUDIT_PAGE_SIZE = 20
+
+/**
+ * Column label -> AUDIT_SORT_FIELDS key. Only the columns that have a
+ * header get an entry; audit_id and result-adjacent lookups with no column
+ * on this table (result *does* have a column, but result's own text is
+ * short enough that sorting by it has little practical use beyond
+ * grouping identical values, so it's included for completeness against the
+ * backend's allowlist) stay reachable only if a column is ever added for
+ * them. An unlisted value is a 422 server-side, so this map is the only
+ * source of a sort key this page will ever send.
+ */
+const SORTABLE: Record<string, AuditSortField> = {
+  Time: "created_at",
+  Actor: "user_id",
+  Action: "action",
+  Target: "target_type",
+  Result: "result",
+}
 
 const RESULT_TONE: Record<string, "success" | "warning" | "danger"> = {
   success: "success",
@@ -63,6 +81,12 @@ export default function AuditLog() {
   const [userId, setUserId] = useState("")
   const [targetType, setTargetType] = useState("")
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  // created_at desc is the default and the only sane resting state for an
+  // append-only log — the newest entries are what an admin opens this for.
+  const [sort, setSort] = useState<{ key: AuditSortField; order: SortOrder }>({
+    key: "created_at",
+    order: "desc",
+  })
 
   const hasFilters = Boolean(startDate || endDate || action || result || userId || targetType)
 
@@ -101,6 +125,8 @@ export default function AuditLog() {
     result: result ? [result as (typeof AUDIT_RESULTS)[number]] : undefined,
     user_id: userId ? [Number(userId)] : undefined,
     target_type: targetType || undefined,
+    sort_by: sort.key,
+    sort_order: sort.order,
   }
 
   const auditQuery = useQuery({
@@ -118,6 +144,29 @@ export default function AuditLog() {
   // the footer and the clamp agree with what actually came back.
   const realTotalPages = Math.max(1, Math.ceil(totalFiltered / pageSize))
   const realPage = Math.min(page, realTotalPages)
+
+  /**
+   * D-8(a)'s two-state pattern, reused rather than reinvented: clicking the
+   * active column flips direction; clicking any other column takes over at
+   * desc. No third click clears — "no sort" isn't a state the backend can
+   * express, since omitting sort_by just means created_at desc, a sort like
+   * any other.
+   */
+  function handleSort(key: string) {
+    const sortKey = key as AuditSortField
+    reset()
+    setSort((prev) =>
+      prev.key === sortKey
+        ? { key: sortKey, order: prev.order === "asc" ? "desc" : "asc" }
+        : { key: sortKey, order: "desc" },
+    )
+  }
+
+  function sortFor(label: string) {
+    const key = SORTABLE[label]
+    if (!key) return undefined
+    return { key, active: sort.key === key ? sort.order : null, onSort: handleSort }
+  }
 
   function clearFilters() {
     setStartDate("")
@@ -232,11 +281,11 @@ export default function AuditLog() {
       >
         <Table>
           <TableHead>
-            <TableHeaderCell>Time</TableHeaderCell>
-            <TableHeaderCell>Actor</TableHeaderCell>
-            <TableHeaderCell>Action</TableHeaderCell>
-            <TableHeaderCell>Target</TableHeaderCell>
-            <TableHeaderCell>Result</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Time")}>Time</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Actor")}>Actor</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Action")}>Action</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Target")}>Target</TableHeaderCell>
+            <TableHeaderCell sort={sortFor("Result")}>Result</TableHeaderCell>
             <TableHeaderCell className="text-right">Detail</TableHeaderCell>
           </TableHead>
           <TableBody>
