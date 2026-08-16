@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
+import { FilterSelect } from "@/components/ui/FilterSelect"
 import { Input } from "@/components/ui/Input"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
@@ -13,23 +14,22 @@ import { previewDetectionSound, setDetectionSoundVolume } from "@/utils/detectio
 
 const ALARM_SETTINGS_QUERY_KEY = ["alarm-settings"] as const
 
-// Mirrors settings.SNOOZE_MIN_SECONDS / SNOOZE_MAX_SECONDS
-// (backend/app/core/config.py) and the DB check constraint of the same
-// range -- not returned by GET /api/settings/alarm, so declared here
-// rather than left for the operator to discover via a 422.
-const SNOOZE_MIN_SECONDS = 15
-const SNOOZE_MAX_SECONDS = 60
+/** `alert_chime` -> "Alert Chime" — the backend sends raw allowlist keys,
+ * not display labels (confirmed: `AlarmSettingsOptions.alarm_sound_keys` is
+ * `list[str]`, nothing else). */
+function formatSoundLabel(key: string): string {
+  return key
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+}
 
 /**
- * D-3. No Figma frame. `GET /api/settings/alarm` returns only the actor's
- * current `{alarm_sound, volume, snooze_duration}` — not `ALARM_SOUND_KEYS`,
- * which exists only as a backend validation constant (Q13) with no endpoint
- * exposing it. The sound field stays read-only for that reason: a picker
- * needs a real allowlist to populate. The snooze-duration bounds are a
- * different case — a fixed DB check constraint (`SNOOZE_MIN_SECONDS`/
- * `SNOOZE_MAX_SECONDS`, 15-60), not a per-actor value the endpoint would
- * ever need to return, so they're declared as constants here instead of
- * left for the operator to discover via a 422.
+ * D-3. `GET`/`PUT /api/settings/alarm` now return `options` alongside the
+ * three values (P21 Step 2) -- the real sound allowlist and the real
+ * snooze/volume bounds, sourced from the backend's own config rather than a
+ * second copy of a number that could drift from what the PUT route
+ * actually enforces.
  */
 export function AlarmSettingsCard() {
   const queryClient = useQueryClient()
@@ -119,18 +119,27 @@ export function AlarmSettingsCard() {
             <label className="mb-2 block text-caption font-semibold text-fg-body">
               Alarm Sound
             </label>
-            <p className="text-secondary text-fg">{form.alarm_sound}</p>
-            {/*
-              A picker needs the real allowlist to populate — the backend
-              validates alarm_sound against ALARM_SOUND_KEYS but never
-              returns it (Q13). Showing a dropdown of one hardcoded option
-              would 422 the moment a second sound is added with no warning
-              at build time. This states the gap instead of hiding it.
-            */}
-            <p className="mt-1 text-caption text-fg-muted">
-              Additional sounds aren't available yet — the server doesn't expose the list of allowed
-              sounds.
-            </p>
+            <FilterSelect
+              value={form.alarm_sound}
+              options={form.options.alarm_sound_keys.map((key) => ({
+                value: key,
+                label: formatSoundLabel(key),
+              }))}
+              onChange={(value) => {
+                updateField("alarm_sound", value)
+                // "Selecting a sound immediately previews it" -- reuses the
+                // same preview path the Test button already calls. There is
+                // only one real audio asset in this codebase today
+                // (detection_sound.mp3); every alarm_sound_keys entry plays
+                // it, since inventing per-sound audio files the backend
+                // doesn't back would be exactly the fabrication this task
+                // rules out. The picker itself is real; the preview is
+                // honest about there being one sound behind it so far.
+                if (form.volume > 0) previewDetectionSound(form.volume)
+              }}
+              disabled={mutation.isPending}
+              className="w-full"
+            />
           </div>
 
           <div>
@@ -169,12 +178,12 @@ export function AlarmSettingsCard() {
             label="Snooze Duration (seconds)"
             type="number"
             inputMode="numeric"
-            min={SNOOZE_MIN_SECONDS}
-            max={SNOOZE_MAX_SECONDS}
+            min={form.options.snooze_min_seconds}
+            max={form.options.snooze_max_seconds}
             value={form.snooze_duration}
             disabled={mutation.isPending}
             onChange={(event) => updateField("snooze_duration", Number(event.target.value))}
-            hint={`Must be between ${SNOOZE_MIN_SECONDS} and ${SNOOZE_MAX_SECONDS} seconds.`}
+            hint={`Must be between ${form.options.snooze_min_seconds} and ${form.options.snooze_max_seconds} seconds.`}
           />
 
           {notice ? <NoticeBanner notice={notice} /> : null}
