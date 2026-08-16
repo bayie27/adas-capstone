@@ -117,7 +117,7 @@ export function formatRelativeDateTime(value: string | null | undefined) {
     return "-"
   }
 
-  const diffMinutes = Math.round((date.getTime() - Date.now()) / 60000)
+  const diffMinutes = Math.round((date.getTime() - correctedNowMs()) / 60000)
 
   if (Math.abs(diffMinutes) < 1) {
     return "Just now"

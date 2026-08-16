@@ -67,6 +67,7 @@ export function RealtimeAlertsBridge() {
   const currentUserId = useAuthStore((state) => state.userId)
   const clearSnooze = useAlertStore((state) => state.clearSnooze)
   const setConnectionId = useAlertStore((state) => state.setConnectionId)
+  const setClockOffsetMs = useAlertStore((state) => state.setClockOffsetMs)
   const setReconnectSummary = useAlertStore((state) => state.setReconnectSummary)
   const showMaintenanceNotice = useMaintenanceStore((state) => state.showNotice)
 
@@ -278,7 +279,9 @@ export function RealtimeAlertsBridge() {
     if (envelope.type === "CONNECTION_READY") {
       const ready = asConnectionReadyData(envelope.data)
       if (ready) {
-        setServerClockOffsetMs(computeClockOffsetMs(ready.server_time, Date.now()))
+        const offsetMs = computeClockOffsetMs(ready.server_time, Date.now())
+        setServerClockOffsetMs(offsetMs)
+        setClockOffsetMs(offsetMs)
         setConnectionId(ready.connection_id)
       }
       void runRecoverySequence()

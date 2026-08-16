@@ -78,6 +78,11 @@ interface AlertState {
    * instead of being unfalsifiable. Session-scoped; reset on every connect.
    */
   connectionId: string | null
+  /** Mirrors utils/datetime.ts's module-level offset into reactive state
+   * purely so a component can render it — the correction itself is always
+   * applied via correctedNowMs()/formatRelativeDateTime, not by reading this
+   * field. 0 until the first CONNECTION_READY lands. */
+  clockOffsetMs: number
   /** How many currently-active incidents were new to this client on the
    * most recent reconnect — the honest count behind "N alerts arrived while
    * you were disconnected", not a guess from the buffered-event replay
@@ -94,6 +99,7 @@ interface AlertState {
   isEventSeen: (eventId: string) => boolean
   markEventSeen: (eventId: string) => void
   setConnectionId: (connectionId: string) => void
+  setClockOffsetMs: (offsetMs: number) => void
   setReconnectSummary: (count: number) => void
   clearReconnectSummary: () => void
 }
@@ -119,6 +125,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
   handledByOther: {},
   seenEventIds: [],
   connectionId: null,
+  clockOffsetMs: 0,
   reconnectSummary: null,
   addAlert: (alert) => {
     const before = activeCount(get().alerts, get().snoozedUntil)
@@ -186,6 +193,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
       handledByOther: {},
       seenEventIds: [],
       connectionId: null,
+      clockOffsetMs: 0,
       reconnectSummary: null,
     })
   },
@@ -213,6 +221,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
     }))
   },
   setConnectionId: (connectionId) => set({ connectionId }),
+  setClockOffsetMs: (offsetMs) => set({ clockOffsetMs: offsetMs }),
   setReconnectSummary: (count) => set({ reconnectSummary: { count } }),
   clearReconnectSummary: () => set({ reconnectSummary: null }),
 }))
