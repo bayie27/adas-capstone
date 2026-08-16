@@ -1,12 +1,19 @@
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { RiArrowDownSLine, RiArrowRightSLine, RiFileHistoryLine } from "@remixicon/react"
 
-import { AUDIT_ACTIONS, AUDIT_RESULTS, AUDIT_TARGET_TYPES, getAuditLogs } from "@/api/audit"
+import {
+  AUDIT_ACTIONS,
+  AUDIT_RESULTS,
+  AUDIT_TARGET_TYPES,
+  exportAuditLogs,
+  getAuditLogs,
+} from "@/api/audit"
 import type { AuditLogEntry, AuditSortField, SortOrder } from "@/api/audit"
 import { Badge } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
+import { ExportButton, type ExportFormat } from "@/components/ui/ExportButton"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
@@ -139,6 +146,13 @@ export default function AuditLog() {
   const totalFiltered = auditQuery.data?.total_filtered ?? 0
   const rangeEndValue = rangeEnd(rows.length)
 
+  // Same filter set and the same sort_by/sort_order the list route uses —
+  // without forwarding the sort, an export of a user_id-sorted view would
+  // arrive in created_at order and quietly not match what was on screen.
+  const exportMutation = useMutation({
+    mutationFn: (format: ExportFormat) => exportAuditLogs(filters, format),
+  })
+
   // usePagination is seeded with 0 above (the total isn't known until the
   // query resolves); re-derive totalPages/page against the real total so
   // the footer and the clamp agree with what actually came back.
@@ -260,7 +274,23 @@ export default function AuditLog() {
             </Button>
           ) : null}
         </div>
+        {/*
+          total_filtered is already on this query, so the pre-flight count
+          is free. Both formats stay enabled here — confirmed directly
+          against routes/audit.py that GET /api/audit-logs/export's
+          synchronous route genuinely returns a real PDF today, not a stub
+          waiting on Phase 17's job queue.
+        */}
+        <ExportButton
+          rowCount={totalFiltered}
+          isExporting={exportMutation.isPending}
+          onExport={(format) => exportMutation.mutate(format)}
+        />
       </div>
+
+      {exportMutation.isError ? (
+        <QueryErrorBanner error={exportMutation.error} fallback="Unable to export the audit log." />
+      ) : null}
 
       <TableContainer
         footer={
