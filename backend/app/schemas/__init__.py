@@ -45,6 +45,7 @@ from app.schemas.events import (
 from app.schemas.exports import (
     ExportJobCreate,
     ExportJobCreateResponse,
+    ExportJobListResponse,
     ExportJobRead,
     RetrainingExportRequest,
 )
@@ -114,6 +115,7 @@ __all__ = [
     "EventType",
     "ExportJobCreate",
     "ExportJobCreateResponse",
+    "ExportJobListResponse",
     "ExportJobRead",
     "GpuRead",
     "HealthHistoryPoint",

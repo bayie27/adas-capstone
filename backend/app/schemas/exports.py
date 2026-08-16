@@ -9,6 +9,7 @@ from sqlmodel import SQLModel
 
 ExportJobReportType = Literal["incidents", "dashboard", "performance", "audit"]
 ExportJobFormat = Literal["csv", "pdf"]
+ExportJobStatus = Literal["queued", "processing", "completed", "failed", "expired"]
 
 
 class ExportJobCreate(SQLModel):
@@ -59,6 +60,14 @@ class ExportJobRead(SQLModel):
     started_at: datetime | None
     completed_at: datetime | None
     expires_at: datetime | None
+
+
+class ExportJobListResponse(SQLModel):
+    """GET /api/exports/jobs (P21 Step 4). Own-jobs by default for every
+    role, including Admin — ?all_users=true widens for an Admin only."""
+
+    total_filtered: int
+    items: list[ExportJobRead]
 
 
 class RetrainingExportRequest(SQLModel):
