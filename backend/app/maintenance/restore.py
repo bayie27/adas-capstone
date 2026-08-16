@@ -27,6 +27,7 @@ from pathlib import Path
 from app.maintenance.backup import (
     MaintenanceBusyError,
     _perform_backup_write,
+    _remove_sidecars,
     maintenance_lock,
 )
 from app.maintenance.manifest import (
@@ -172,19 +173,6 @@ def _is_revision_compatible(revision: str) -> bool:
     from app.core.migrations import is_known_schema_revision
 
     return is_known_schema_revision(app_settings, revision)
-
-
-def _remove_sidecars(path: Path) -> None:
-    """Removes `path`'s own `-wal`/`-shm` companions. Needed for the
-    *temporary* restore/rollback copy too, not just the final `db_path` —
-    `sqlite3.Connection.backup()` can carry WAL mode into the copy, and
-    even a read-only `run_integrity_check` against a WAL-mode file can
-    create a `-shm` sidecar next to it. Without this, a temp file's
-    sidecars survive the `os.replace()` that renames only the main file,
-    leaking `adas.db.restoring.tmp-wal`/`-shm` next to the real database
-    on every restore."""
-    for suffix in ("-wal", "-shm"):
-        path.with_name(path.name + suffix).unlink(missing_ok=True)
 
 
 @contextmanager

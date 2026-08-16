@@ -14,7 +14,9 @@ restore is performed later, by the external orchestrator, invoking
 stopped.
 """
 
+import json
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from sqlalchemy.engine import Engine
@@ -34,18 +36,27 @@ from app.maintenance.backup import (
     resolve_sqlite_db_path,
     try_acquire_maintenance_lock,
 )
-from app.maintenance.manifest import ORIGIN_MANUAL, InvalidBackupIdError
+from app.maintenance.manifest import (
+    ORIGIN_MANUAL,
+    ORIGIN_SCHEDULED,
+    InvalidBackupIdError,
+    list_manifests,
+)
 from app.models import AuditResult, User
 from app.schemas.events import EventType, MaintenanceNoticeData, make_event
 from app.schemas.maintenance import (
     BackupListResponse,
     BackupRead,
+    BackupSummaryRead,
     BackupTriggerResponse,
+    LastRestartRead,
+    MaintenanceStatusRead,
     RestoreRequestIn,
     RestoreStateRead,
     RestoreTriggerResponse,
 )
 from app.services import audit
+from app.services.maintenance_schedule import scheduled_backup_is_due
 from app.services.realtime import RealtimeManager
 
 logger = logging.getLogger("uvicorn.error")
@@ -326,13 +337,9 @@ async def trigger_restore(
     )
 
 
-@router.get("/restores/latest", response_model=RestoreStateRead | None)
-def latest_restore_route(
-    current_admin: User = Depends(get_current_admin),
+def _serialize_restore_state(
+    state: restore_mod.RestoreState | None,
 ) -> RestoreStateRead | None:
-    """Admin only. `None` (serialized as `null`) when no restore has ever
-    been requested."""
-    state = restore_mod.read_restore_state(settings.BACKUP_DIR)
     if state is None:
         return None
     return RestoreStateRead(
@@ -344,4 +351,80 @@ def latest_restore_route(
         steps=state.steps,
         error=state.error,
         completed_at=state.completed_at,
+    )
+
+
+@router.get("/restores/latest", response_model=RestoreStateRead | None)
+def latest_restore_route(
+    current_admin: User = Depends(get_current_admin),
+) -> RestoreStateRead | None:
+    """Admin only. `None` (serialized as `null`) when no restore has ever
+    been requested."""
+    state = restore_mod.read_restore_state(settings.BACKUP_DIR)
+    return _serialize_restore_state(state)
+
+
+def _newest_backup_summary(origin: str) -> BackupSummaryRead | None:
+    for manifest in list_manifests(settings.BACKUP_DIR):
+        if manifest.origin == origin and manifest.valid:
+            return BackupSummaryRead(
+                backup_id=manifest.backup_id,
+                created_at=manifest.created_at,
+                valid=manifest.valid,
+            )
+    return None
+
+
+def _last_restart_from_log() -> LastRestartRead | None:
+    """Reads the last line of var/log/maintenance-runs.jsonl (Step 5's
+    per-restart-run record). Missing or corrupt is `None`, never a 500 —
+    this file is written by an external PowerShell/systemd orchestrator
+    this route has no control over."""
+    path = settings.LOG_DIR / "maintenance-runs.jsonl"
+    if not path.exists():
+        return None
+    try:
+        lines = [line for line in path.read_text().splitlines() if line.strip()]
+        if not lines:
+            return None
+        record = json.loads(lines[-1])
+        return LastRestartRead(
+            ran_at=record["started_at"],
+            downtime_seconds=record.get("downtime_s"),
+            ready=bool(record.get("ready", False)),
+            exit_code=int(record.get("exit_code", 1)),
+        )
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return None
+
+
+@router.get("/maintenance/status", response_model=MaintenanceStatusRead)
+def maintenance_status_route(
+    request: Request,
+    current_admin: User = Depends(get_current_admin),
+) -> MaintenanceStatusRead:
+    """Admin only. Not audited — a routine read, and D-007 excludes routine
+    viewing. Serves two audiences: the demo ("prove it runs nightly") and
+    the frontend's Maintenance screen. Never returns `artifact_path`, a log
+    path, or any other absolute path (01_CONTRACTS.md §1.6)."""
+    scheduler = request.app.state.scheduler
+    next_scheduled_backup_at = None
+    if scheduler is not None:
+        job = scheduler.get_job("daily_backup")
+        if job is not None and job.next_run_time is not None:
+            next_scheduled_backup_at = job.next_run_time.astimezone(UTC)
+
+    return MaintenanceStatusRead(
+        last_scheduled_backup=_newest_backup_summary(ORIGIN_SCHEDULED),
+        last_manual_backup=_newest_backup_summary(ORIGIN_MANUAL),
+        next_scheduled_backup_at=next_scheduled_backup_at,
+        backup_overdue=scheduled_backup_is_due(
+            settings.BACKUP_DIR, now=datetime.now(UTC)
+        ),
+        maintenance_hour_local=settings.MAINTENANCE_HOUR_LOCAL,
+        maintenance_timezone=settings.REPORT_LOCAL_TIMEZONE,
+        last_restart=_last_restart_from_log(),
+        latest_restore=_serialize_restore_state(
+            restore_mod.read_restore_state(settings.BACKUP_DIR)
+        ),
     )

@@ -3,6 +3,7 @@ import logging
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import (
     Depends,
@@ -59,6 +60,10 @@ from app.services.cameras import (
     reconcile_camera_desired_states,
     schedule_pending_cooldowns,
     sweep_expired_cooldowns,
+)
+from app.services.maintenance_schedule import (
+    run_daily_backup,
+    run_daily_backup_if_due,
 )
 from app.services.realtime import CloseCode, RealtimeManager
 from app.services.realtime_revalidation import ws_session_revalidation
@@ -240,6 +245,38 @@ async def lifespan(app: FastAPI):
             trigger="interval",
             seconds=60,
         )
+
+        # P18 — daily backup (NFR-18). Different owner and catch-up policy
+        # than the restart, which is a Windows Scheduled Task / systemd
+        # timer outside this process entirely
+        # (18_PKG_scheduled_maintenance.md's "one architectural decision"):
+        # an online backup can safely self-heal on catch-up, while firing a
+        # restart at an arbitrary hour is worse than skipping a night.
+        #
+        # timezone= is mandatory here, not optional: create_scheduler() is
+        # AsyncIOScheduler(timezone=UTC), so a bare hour=MAINTENANCE_HOUR_LOCAL
+        # would fire at 03:00 UTC — 11:00 Manila, the middle of a demo day.
+        add_job(
+            scheduler,
+            lambda: run_daily_backup(engine, trigger="scheduled"),
+            job_id="daily_backup",
+            trigger="cron",
+            hour=app_settings.MAINTENANCE_HOUR_LOCAL,
+            minute=0,
+            timezone=ZoneInfo(app_settings.REPORT_LOCAL_TIMEZONE),
+        )
+        add_job(
+            scheduler,
+            lambda: run_daily_backup_if_due(engine),
+            job_id="daily_backup_catch_up",
+            trigger="interval",
+            hours=1,
+        )
+        # One due-check now, before the scheduler starts — turns "the
+        # laptop was off at 3 AM" into "we got today's backup at 09:04"
+        # rather than nothing.
+        run_daily_backup_if_due(engine)
+
         scheduler.start()
         app.state.scheduler = scheduler
         logger.info("Scheduler started.")
