@@ -43,6 +43,7 @@ export function Sidebar() {
   const clearSession = useAuthStore((state) => state.clearSession)
   const clockOffsetMs = useAlertStore((state) => state.clockOffsetMs)
   const clockIsSkewed = Math.abs(clockOffsetMs) > CLOCK_SKEW_WARNING_MS
+  const connectionId = useAlertStore((state) => state.connectionId)
 
   const basePath = role === "Admin" ? "/admin" : "/user"
 
@@ -199,6 +200,23 @@ export function Sidebar() {
           <RiLogoutBoxRLine size={16} className="text-fg-muted" />
           <span className="text-[13px] font-medium">Log Out</span>
         </button>
+
+        {/*
+          ConnectionReadyData.connection_id — the handle that identifies this
+          socket in the backend log. Purely diagnostic, so it gets the
+          lowest-priority treatment in the footer: truncated, monospace, no
+          affordance. Its only job is to be quotable in a support
+          conversation ("the alerts stopped updating on session a1b2c3d4"),
+          which a full UUID doesn't need to be to serve.
+        */}
+        {connectionId ? (
+          <p
+            className="truncate px-3 pt-1 font-mono text-[10px] text-fg-muted"
+            title={connectionId}
+          >
+            Session {connectionId.slice(0, 8)}
+          </p>
+        ) : null}
       </div>
     </aside>
   )
