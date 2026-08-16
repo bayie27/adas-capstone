@@ -50,8 +50,21 @@ def dev_settings_fixture(tmp_path) -> Settings:
 
 @pytest.fixture(name="dev_client")
 def dev_client_fixture(dev_settings: Settings):
+    """`base_url="https://testserver"` is required, not cosmetic.
+
+    app/core/security.py reads the process-global `app.core.config.settings`
+    singleton for the session cookie's Secure flag — not `dev_settings`
+    above, whatever `SESSION_COOKIE_SECURE` says here — so the cookie this
+    app issues is Secure whenever the *real* global settings is (its
+    default, and true in production/the LAN demo, per the audit decision
+    that the demo gets real TLS). Over a plain "http://testserver" base
+    url, httpx's cookie jar correctly refuses to resend a Secure cookie on
+    later requests, so every test past the first login would silently see
+    no cookie and 401 AUTH_REQUIRED. This only surfaces when the local .env
+    omits `SESSION_COOKIE_SECURE=false` — CI always has it, via
+    `.env.example`, so this was invisible there."""
     app = create_app(dev_settings)
-    with TestClient(app) as client:
+    with TestClient(app, base_url="https://testserver") as client:
         yield client
 
 

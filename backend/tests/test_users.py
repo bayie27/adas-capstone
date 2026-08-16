@@ -294,6 +294,80 @@ class TestGetAllUsers:
         assert resp.json()["total_filtered"] == 1  # only admin
 
 
+class TestGetAllUsersIsActiveFilter:
+    """P19 §3 — reactivation was unreachable because the list defaulted to
+    active-only with no way to see (or filter to) a deactivated row."""
+
+    def test_default_omits_inactive_rows(self, client: TestClient, session: Session):
+        """Pins today's behaviour: a caller that passes nothing must see
+        exactly what it saw before this change."""
+        make_admin(session)
+        op = make_operator(session)
+        op.is_active = False
+        session.add(op)
+        session.commit()
+
+        headers = auth_headers(client, "admin", "Admin123")
+        resp = client.get("/api/users/", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert body["users"][0]["username"] == "admin"
+
+    def test_is_active_false_returns_only_deactivated(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        op = make_operator(session)
+        op.is_active = False
+        session.add(op)
+        session.commit()
+
+        headers = auth_headers(client, "admin", "Admin123")
+        resp = client.get("/api/users/?is_active=false", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert body["users"][0]["username"] == "operator"
+        assert body["users"][0]["is_active"] is False
+
+    def test_is_active_null_returns_both(self, client: TestClient, session: Session):
+        make_admin(session)
+        op = make_operator(session)
+        op.is_active = False
+        session.add(op)
+        session.commit()
+
+        headers = auth_headers(client, "admin", "Admin123")
+        resp = client.get("/api/users/?is_active=null", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 2
+        usernames = {u["username"] for u in body["users"]}
+        assert usernames == {"admin", "operator"}
+
+    def test_search_composes_with_is_active(self, client: TestClient, session: Session):
+        make_admin(session)
+        op = make_operator(session)
+        op.is_active = False
+        session.add(op)
+        session.commit()
+
+        headers = auth_headers(client, "admin", "Admin123")
+        # search matches both, but is_active=false should still narrow it —
+        # composition, not override.
+        resp = client.get("/api/users/?is_active=false&search=o", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert body["users"][0]["username"] == "operator"
+
+    def test_invalid_is_active_value_is_422(self, client: TestClient, session: Session):
+        headers = admin_headers(client, session)
+        resp = client.get("/api/users/?is_active=maybe", headers=headers)
+        assert resp.status_code == 422
+
+
 # ---------------------------------------------------------------------------
 # POST /api/users/ — admin creates user (TC-I-402)
 # ---------------------------------------------------------------------------
@@ -514,6 +588,87 @@ class TestUpdateUser:
             "/api/users/99999", json={"first_name": "Ghost"}, headers=headers
         )
         assert resp.status_code == 404
+
+
+class TestReactivateUser:
+    """P19 §3 — the deactivate -> list-inactive -> reactivate -> list-active
+    round trip PR #101 built the switch for but had no path to reach, since
+    a deactivated row disappeared from the only screen with the switch."""
+
+    def test_round_trip_reactivation(self, client: TestClient, session: Session):
+        make_admin(session)
+        op = make_operator(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        deactivate = client.patch(
+            f"/api/users/{op.user_id}", json={"is_active": False}, headers=headers
+        )
+        assert deactivate.status_code == 200
+        assert deactivate.json()["is_active"] is False
+
+        inactive_list = client.get(
+            "/api/users/?is_active=false", headers=headers
+        ).json()
+        assert op.user_id in {u["user_id"] for u in inactive_list["users"]}
+
+        reactivate = client.patch(
+            f"/api/users/{op.user_id}", json={"is_active": True}, headers=headers
+        )
+        assert reactivate.status_code == 200
+        assert reactivate.json()["is_active"] is True
+
+        active_list = client.get("/api/users/", headers=headers).json()
+        assert op.user_id in {u["user_id"] for u in active_list["users"]}
+
+        # Both writes audited — USER_UPDATE is the base row every PATCH
+        # gets, USER_DISABLE/USER_ENABLE are the dedicated semantic rows on
+        # top (01_CONTRACTS.md §10's "USER_UPDATE, plus ... as applicable").
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.target_ref == str(op.user_id))
+        ).all()
+        actions = [r.action for r in rows]
+        assert actions.count("USER_DISABLE") == 1
+        assert actions.count("USER_ENABLE") == 1
+        assert actions.count("USER_UPDATE") == 2
+
+    def test_reactivation_does_not_revoke_sessions(
+        self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
+    ):
+        """For the frontend: PR #101's session-revocation warning must not
+        fire on the reactivate path."""
+        import app.api.routes.users as users_routes
+
+        make_admin(session)
+        op = make_operator(session)
+        op.is_active = False
+        session.add(op)
+        session.commit()
+        headers = auth_headers(client, "admin", "Admin123")
+
+        calls: list[tuple[int, str]] = []
+        original = users_routes.revoke_all_for_user
+
+        def spy(session_, user_id, reason):
+            calls.append((user_id, reason))
+            return original(session_, user_id, reason)
+
+        monkeypatch.setattr(users_routes, "revoke_all_for_user", spy)
+
+        resp = client.patch(
+            f"/api/users/{op.user_id}", json={"is_active": True}, headers=headers
+        )
+        assert resp.status_code == 200
+        assert calls == []
+
+    def test_operator_still_403_with_is_active_filter(
+        self, client: TestClient, session: Session
+    ):
+        """The new list param must not change the route's admin-only guard."""
+        make_admin(session)
+        make_operator(session)
+        headers = auth_headers(client, "operator", "Operator123")
+        resp = client.get("/api/users/?is_active=null", headers=headers)
+        assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------

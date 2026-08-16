@@ -8,6 +8,13 @@ class DashboardKpis(SQLModel):
     ongoing: int
     total_accidents: int
     total_resolved: int
+    # P19 §5 — period-over-period change vs. the same-duration window
+    # immediately preceding the request's [start_date, end_date]. None
+    # (never 0) when there's no bounded window to compare, or when the
+    # previous window's count was zero.
+    ongoing_delta_pct: float | None = None
+    total_accidents_delta_pct: float | None = None
+    total_resolved_delta_pct: float | None = None
 
 
 class LocationFrequency(SQLModel):
@@ -46,4 +53,7 @@ class PerformanceCameraRow(SQLModel):
 
 class PerformanceAnalyticsResponse(SQLModel):
     global_kpis: PerformanceGlobalKpis
+    # P19 §4 — total rows matching the filters, NOT len(per_camera).
+    # per_camera is now one page (default 10), not the full array.
+    total_filtered: int
     per_camera: list[PerformanceCameraRow]

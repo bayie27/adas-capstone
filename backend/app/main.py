@@ -536,9 +536,10 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
         # F5 — only 7 "simple" response headers are readable from JS
         # cross-origin by default. frontend/src/utils/download.ts reads
-        # Content-Disposition to name every export download, and
-        # X-Request-ID is useless for support if the browser can't read it.
-        expose_headers=["Content-Disposition", "X-Request-ID"],
+        # Content-Disposition to name every export download, X-Request-ID
+        # is useless for support if the browser can't read it, and
+        # Retry-After drives the login rate-limit countdown (P19 §1).
+        expose_headers=["Content-Disposition", "Retry-After", "X-Request-ID"],
     )
 
     application.middleware("http")(
