@@ -4,7 +4,7 @@
 // moving into api/ with the shapes they read.
 
 import type { AlertLog, AlertStatus } from "@/api/alerts"
-import { formatFullDateTime } from "@/utils/datetime"
+import { formatFullDateTime, formatTimeOnly } from "@/utils/datetime"
 import type { CameraAiStatus, CameraConnectionStatus, CameraRecord } from "@/api/cameras"
 import type { ApiUserRole } from "@/api/auth"
 import type { UserRecord } from "@/api/users"
@@ -172,13 +172,16 @@ export function describeSnoozeStatus(
   snoozedUntil: string | null,
   now: number,
   who: string | null,
+  snoozedAt?: string | null,
 ): string | null {
   if (!snoozedUntil) return null
   const remaining = secondsUntil(snoozedUntil, now)
   const suffix = who ? ` by ${who}` : ""
-  if (remaining === null) return `Muted${suffix}`
-  if (remaining <= 0) return `Muted${suffix} — resuming`
-  return `Muted${suffix} — resumes in ${remaining}s`
+  const startedAt = formatTimeOnly(snoozedAt)
+  const prefix = startedAt ? `Muted at ${startedAt}` : `Muted`
+  if (remaining === null) return `${prefix}${suffix}`
+  if (remaining <= 0) return `${prefix}${suffix} — resuming`
+  return `${prefix}${suffix} — resumes in ${remaining}s`
 }
 
 /** Is this camera counting down a cooldown that a clock needs to tick for? */

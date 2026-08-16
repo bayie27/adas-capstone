@@ -51,12 +51,7 @@ describe("describeWarning", () => {
     expect(describeWarning(warning("SOMETHING_NEW", "unknown-severity", 1, 2)).tone).toBe("neutral")
   })
 
-  // The three proposed-but-unemitted codes (Q15/Q16/Q17) are exactly this
-  // case today — this is what makes them free the day the backend emits
-  // them, with no frontend change required.
-  it("renders each of the three proposed codes via the fallback", () => {
-    expect(humanizeWarningCode("OUTBOX_QUARANTINED")).toBe("Outbox Quarantined")
-    expect(humanizeWarningCode("CAPACITY_EXCEEDED")).toBe("Capacity Exceeded")
-    expect(humanizeWarningCode("ENGINE_CLOCK_SKEW")).toBe("Engine Clock Skew")
+  it("humanises an arbitrary SCREAMING_SNAKE_CASE code into Title Case", () => {
+    expect(humanizeWarningCode("SOME_FUTURE_CODE")).toBe("Some Future Code")
   })
 })

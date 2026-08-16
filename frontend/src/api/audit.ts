@@ -111,6 +111,12 @@ export interface GetAuditLogsParams {
   user_id?: number[]
   result?: AuditResult[]
   target_type?: string
+  /**
+   * Declared, intentionally unsent: `target_ref` is read and displayed
+   * already (`AuditLog.tsx:409`), but nothing on the filter side sets it —
+   * the existing `search` box already matches against the backend's
+   * `target_ref`, so a dedicated filter field would just duplicate it.
+   */
   target_ref?: string
   start_date?: string
   end_date?: string

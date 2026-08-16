@@ -4,11 +4,13 @@ import AppLayout from "@/components/layouts/AppLayout"
 import AuthLayout from "@/components/layouts/AuthLayout"
 import { GlobalAlerts } from "@/components/GlobalAlerts"
 import { MaintenanceNotice } from "@/components/MaintenanceNotice"
+import { DeliveryBacklogNotice } from "@/components/DeliveryBacklogNotice"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { RealtimeAlertsBridge } from "@/components/RealtimeAlertsBridge"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { DevPanelTrigger } from "@/components/dev/DevPanelTrigger"
 import { ExportJobsTray } from "@/components/exports/ExportJobsTray"
+import { useDeliveryBacklog } from "@/hooks/useDeliveryBacklog"
 
 const Login = lazy(() => import("@/pages/Login"))
 const Dashboard = lazy(() => import("@/pages/Dashboard"))
@@ -31,6 +33,8 @@ function RouteFallback() {
 }
 
 function App() {
+  const deliveryBacklog = useDeliveryBacklog()
+
   return (
     <Router>
       <RealtimeAlertsBridge />
@@ -40,6 +44,10 @@ function App() {
           Suspense so it survives a page crash and lazy-route loading — and
           so it is available on /login too. */}
       <MaintenanceNotice />
+      {/* useDeliveryBacklog always returns null today (G5) -- mounted
+          anyway, same idiom as MaintenanceNotice, so this renders live and
+          simply has nothing to say most of the time. */}
+      {deliveryBacklog ? <DeliveryBacklogNotice {...deliveryBacklog} /> : null}
       <DevPanelTrigger />
       <ExportJobsTray />
       <ErrorBoundary>

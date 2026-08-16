@@ -33,6 +33,7 @@ import {
   RiDashboard3Line,
   RiHardDrive2Line,
   RiServerLine,
+  RiShieldCheckLine,
   RiTimerLine,
 } from "@remixicon/react"
 
@@ -304,6 +305,94 @@ function GpuSection({ live }: { live: SystemHealthLiveResponse | undefined }) {
   )
 }
 
+function DiagnosticRow({ label, explanation }: { label: string; explanation: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-stroke py-3 last:border-b-0">
+      <div>
+        <div className="text-xs font-medium text-fg-body">{label}</div>
+        <p className="mt-1 text-caption text-fg-muted">{explanation}</p>
+      </div>
+      <Badge
+        tone="neutral"
+        variant="subtle"
+        uppercase={false}
+        className="shrink-0 whitespace-nowrap"
+      >
+        Unavailable — logged server-side only
+      </Badge>
+    </div>
+  )
+}
+
+/**
+ * Two heartbeat-time checks (`_check_engine_identity`, `_check_clock_skew` —
+ * `backend/app/api/routes/internal.py`) run on every heartbeat but only ever
+ * log a warning — neither is persisted to a table or returned by any
+ * response, so this section always reads Unavailable today (G7). Neither
+ * check has ever emitted a structured code of its own — unlike the five real
+ * `HealthWarning` codes `_build_warnings` does emit (`system_health.py:64`),
+ * which power `WarningsStrip` above and are unrelated to these two checks.
+ * This section has no code to react to and does not invent one.
+ */
+function EngineDiagnosticsSection() {
+  return (
+    <div className="mb-8 rounded-xl border border-stroke bg-surface-1 p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <RiShieldCheckLine size={16} className="text-fg-muted" />
+        <h3 className="text-xs font-medium text-fg-body">Engine Diagnostics</h3>
+      </div>
+
+      <DiagnosticRow
+        label="Two-engine conflict"
+        explanation="Warns when a second engine_id heartbeats within the stale window of a different one -- e.g. two engine processes pointed at the same backend."
+      />
+      <DiagnosticRow
+        label="Engine clock skew"
+        explanation="Warns when a heartbeat's own sent_at disagrees with server time by more than 10 seconds -- a sign the engine's clock has drifted."
+      />
+    </div>
+  )
+}
+
+function CapacityRow({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-between py-1.5 text-xs">
+      <span className="font-medium tracking-[0.08em] text-fg-muted">{label}</span>
+      <Badge tone="neutral" variant="subtle" uppercase={false}>
+        Unavailable
+      </Badge>
+    </div>
+  )
+}
+
+/**
+ * `ai_engine/capacity.py` benchmarks the machine once at startup and writes
+ * `machine_profile.json` (device, chosen camera capacity, the FPS band the
+ * decision was made against) — gitignored, machine-local, and never
+ * transmitted to the backend (G8). Mounted live today, same as
+ * EngineDiagnosticsSection, always Unavailable until that changes.
+ */
+function MachineCapacitySection() {
+  return (
+    <div className="mb-8 rounded-xl border border-stroke bg-surface-1 p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <RiServerLine size={16} className="text-fg-muted" />
+        <h3 className="text-xs font-medium text-fg-body">Machine Capacity</h3>
+      </div>
+
+      <CapacityRow label="Device" />
+      <CapacityRow label="Chosen camera capacity" />
+      <CapacityRow label="FPS band" />
+
+      {/* CLAUDE.md, verbatim, on ai_engine/machine_profile.json's absence: */}
+      <p className="mt-3 text-caption text-fg-muted">
+        "Absence is not an error — the engine falls back to a conservative one camera and says so on
+        startup."
+      </p>
+    </div>
+  )
+}
+
 /**
  * The history points carry avg/peak *pairs* for two metrics — cpu_temp and
  * gpu_mem_pct — that nothing plotted at all before this, on top of the four
@@ -509,6 +598,10 @@ export default function SystemHealth() {
       </div>
 
       <GpuSection live={live} />
+
+      <EngineDiagnosticsSection />
+
+      <MachineCapacitySection />
 
       <div className="mb-5">
         <Tabs
