@@ -66,3 +66,27 @@ class RestoreStateRead(SQLModel):
     steps: list[RestoreStepRead] = []
     error: str | None = None
     completed_at: datetime | None = None
+
+
+class BackupSummaryRead(SQLModel):
+    backup_id: str
+    created_at: datetime
+    valid: bool
+
+
+class LastRestartRead(SQLModel):
+    ran_at: datetime
+    downtime_seconds: float | None = None
+    ready: bool
+    exit_code: int
+
+
+class MaintenanceStatusRead(SQLModel):
+    last_scheduled_backup: BackupSummaryRead | None = None
+    last_manual_backup: BackupSummaryRead | None = None
+    next_scheduled_backup_at: datetime | None = None
+    backup_overdue: bool
+    maintenance_hour_local: int
+    maintenance_timezone: str
+    last_restart: LastRestartRead | None = None
+    latest_restore: RestoreStateRead | None = None
