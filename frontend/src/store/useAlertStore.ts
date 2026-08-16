@@ -71,6 +71,20 @@ interface AlertState {
   handledByOther: Record<number, IncidentHandledInfo>
   /** event_ids applied this connection — 01_CONTRACTS.md §9.1 reconnect-race dedup */
   seenEventIds: string[]
+  /**
+   * `ConnectionReadyData.connection_id` — the handle that identifies this
+   * socket in the backend log, so a user-reported realtime fault ("the
+   * alerts stopped updating") can be matched to something server-side
+   * instead of being unfalsifiable. Session-scoped; reset on every connect.
+   */
+  connectionId: string | null
+  /** How many currently-active incidents were new to this client on the
+   * most recent reconnect — the honest count behind "N alerts arrived while
+   * you were disconnected", not a guess from the buffered-event replay
+   * (which only covers the brief window during the recovery fetch itself,
+   * not the whole disconnected period). `null` when there is nothing to
+   * report, e.g. the very first connection of the session. */
+  reconnectSummary: { count: number } | null
   addAlert: (alert: AlertLog) => void
   removeAlert: (logId: number) => void
   clearAlerts: () => void
@@ -79,6 +93,9 @@ interface AlertState {
   recordHandledByOther: (logId: number, info: IncidentHandledInfo) => void
   isEventSeen: (eventId: string) => boolean
   markEventSeen: (eventId: string) => void
+  setConnectionId: (connectionId: string) => void
+  setReconnectSummary: (count: number) => void
+  clearReconnectSummary: () => void
 }
 
 // Drive the alarm off the single fact that matters — whether the active
@@ -101,6 +118,8 @@ export const useAlertStore = create<AlertState>((set, get) => ({
   snoozedUntil: {},
   handledByOther: {},
   seenEventIds: [],
+  connectionId: null,
+  reconnectSummary: null,
   addAlert: (alert) => {
     const before = activeCount(get().alerts, get().snoozedUntil)
     set((state) => {
@@ -166,6 +185,8 @@ export const useAlertStore = create<AlertState>((set, get) => ({
       snoozedUntil: {},
       handledByOther: {},
       seenEventIds: [],
+      connectionId: null,
+      reconnectSummary: null,
     })
   },
   activateSnooze: (logId, snoozedUntil) => {
@@ -191,4 +212,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
       seenEventIds: [...state.seenEventIds, eventId].slice(-MAX_SEEN_EVENT_IDS),
     }))
   },
+  setConnectionId: (connectionId) => set({ connectionId }),
+  setReconnectSummary: (count) => set({ reconnectSummary: { count } }),
+  clearReconnectSummary: () => set({ reconnectSummary: null }),
 }))

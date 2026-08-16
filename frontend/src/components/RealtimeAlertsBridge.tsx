@@ -19,12 +19,14 @@ import { shouldApplyCameraEvent } from "@/utils/merge"
 import {
   asAlertStatusUpdateData,
   asCameraStatusUpdateData,
+  asConnectionReadyData,
   asIncidentPayload,
   asMaintenanceNoticeData,
   asReAlarmData,
   asSnoozeActivatedData,
   parseEventEnvelope,
 } from "@/api/events"
+import { computeClockOffsetMs, setServerClockOffsetMs } from "@/utils/datetime"
 
 // WS close codes that mean the session itself is gone — 01_CONTRACTS.md §9 —
 // mirror the REST 401 -> clearSession -> redirect flow exactly.
@@ -64,6 +66,8 @@ export function RealtimeAlertsBridge() {
   const recordHandledByOther = useAlertStore((state) => state.recordHandledByOther)
   const currentUserId = useAuthStore((state) => state.userId)
   const clearSnooze = useAlertStore((state) => state.clearSnooze)
+  const setConnectionId = useAlertStore((state) => state.setConnectionId)
+  const setReconnectSummary = useAlertStore((state) => state.setReconnectSummary)
   const showMaintenanceNotice = useMaintenanceStore((state) => state.showNotice)
 
   // The recovery sequence (01_CONTRACTS.md §9.5) must run on every accepted
@@ -73,6 +77,10 @@ export function RealtimeAlertsBridge() {
   // fetched during reconnection can never clobber a newer live event.
   const recoveringRef = useRef(false)
   const bufferedEventsRef = useRef<EventEnvelope[]>([])
+  // "N alerts arrived while you were disconnected" only makes sense on a
+  // reconnect, never on the very first connection of the session — there is
+  // no "while you were disconnected" yet.
+  const hasConnectedBeforeRef = useRef(false)
 
   useEffect(() => {
     if (!role) {
@@ -217,6 +225,11 @@ export function RealtimeAlertsBridge() {
   async function runRecoverySequence() {
     recoveringRef.current = true
     bufferedEventsRef.current = []
+    // A reconnect, not the first connection — capture what this client
+    // already knew before the refetch can add to it.
+    const isReconnect = hasConnectedBeforeRef.current
+    const previouslyKnownLogIds = new Set(useAlertStore.getState().alerts.map((a) => a.log_id))
+    hasConnectedBeforeRef.current = true
 
     try {
       const alertsResponse = await getAlerts({
@@ -234,6 +247,20 @@ export function RealtimeAlertsBridge() {
             activateSnooze(log.log_id, log.snoozed_until)
           }
         }
+
+        // An incident this client already had queued isn't "new" — it's
+        // just being re-confirmed by the refetch. Only a log_id this client
+        // has never seen counts as something that happened while
+        // disconnected, which is what makes the count honest rather than a
+        // guess from whatever the buffered-event replay happened to catch.
+        if (isReconnect) {
+          const newCount = alertsResponse.logs.filter(
+            (log) => !previouslyKnownLogIds.has(log.log_id),
+          ).length
+          if (newCount > 0) {
+            setReconnectSummary(newCount)
+          }
+        }
       }
 
       queryClient.invalidateQueries({ queryKey: ["cameras"] })
@@ -249,6 +276,11 @@ export function RealtimeAlertsBridge() {
 
   function handleEnvelope(envelope: EventEnvelope) {
     if (envelope.type === "CONNECTION_READY") {
+      const ready = asConnectionReadyData(envelope.data)
+      if (ready) {
+        setServerClockOffsetMs(computeClockOffsetMs(ready.server_time, Date.now()))
+        setConnectionId(ready.connection_id)
+      }
       void runRecoverySequence()
       return
     }
