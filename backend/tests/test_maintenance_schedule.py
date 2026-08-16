@@ -245,6 +245,43 @@ class TestRunDailyBackupIfDue:
 
 
 # ---------------------------------------------------------------------------
+# TestBackupCliDedup — Step 9. Both restart orchestrators
+# (adas-maintenance.ps1's Restart action, daily_restart.sh) call
+# `backup --origin scheduled` as their own backup phase, on top of the
+# in-app cron job that already covers the daily obligation independently.
+# Symmetric across both platforms for free, since they share this one
+# command -- neither script needed its own dedup logic.
+# ---------------------------------------------------------------------------
+
+
+class TestBackupCliDedup:
+    def test_scheduled_origin_skips_when_a_recent_scheduled_backup_exists(
+        self, sched_paths
+    ):
+        from app.maintenance import cli as cli_mod
+
+        first = cli_mod.main(["backup", "--origin", "scheduled"])
+        assert first == 0
+        manifests_after_first = list(sched_paths.backup_dir.glob("adas_backup_*.json"))
+        assert len(manifests_after_first) == 1
+
+        second = cli_mod.main(["backup", "--origin", "scheduled"])
+        assert second == 0
+        manifests_after_second = list(sched_paths.backup_dir.glob("adas_backup_*.json"))
+        assert len(manifests_after_second) == 1  # no new backup written
+
+    def test_manual_origin_is_never_skipped(self, sched_paths):
+        from app.maintenance import cli as cli_mod
+
+        first = cli_mod.main(["backup", "--origin", "manual"])
+        second = cli_mod.main(["backup", "--origin", "manual"])
+        assert first == 0
+        assert second == 0
+        manifests = list(sched_paths.backup_dir.glob("adas_backup_*.json"))
+        assert len(manifests) == 2  # both ran, dedup never applies to manual
+
+
+# ---------------------------------------------------------------------------
 # TestDailyBackupCronTimezone — the silent-8-hour-shift guard. Boots a real
 # app with SCHEDULER_ENABLED=True and inspects the actual job app.main.py
 # registers, rather than re-deriving the same add_job() call in the test.

@@ -52,6 +52,31 @@ def cmd_backup(args: argparse.Namespace) -> int:
     db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
     origin = ORIGIN_SCHEDULED if args.origin == "scheduled" else ORIGIN_MANUAL
     started = time.perf_counter()
+
+    # be_plan/18_PKG_scheduled_maintenance.md Step 9 — both restart
+    # orchestrators (scripts/adas-maintenance.ps1's Restart action,
+    # backend/scripts/daily_restart.sh) call this exact command with
+    # --origin scheduled as their own backup phase, on top of the in-app
+    # APScheduler job (Step 1) that already covers the daily obligation
+    # independently. Only `scheduled` gets this dedup — a manual backup is
+    # an intentional immediate action, never skipped.
+    if origin == ORIGIN_SCHEDULED:
+        from app.services.maintenance_schedule import scheduled_backup_is_due
+
+        if not scheduled_backup_is_due(settings.BACKUP_DIR, now=datetime.now(UTC)):
+            elapsed = time.perf_counter() - started
+            print(
+                json.dumps(
+                    {
+                        "skipped": True,
+                        "reason": "a valid scheduled backup already satisfies the daily interval",
+                        "duration_seconds": round(elapsed, 3),
+                    },
+                    indent=2,
+                )
+            )
+            return 0
+
     try:
         manifest = create_backup(
             db_path=db_path,
