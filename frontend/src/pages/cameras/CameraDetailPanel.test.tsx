@@ -46,16 +46,21 @@ describe("CameraDetailPanel", () => {
     expect(screen.getByText(/applied_config_version/)).toBeInTheDocument()
   })
 
-  it("renders the engine telemetry section as unavailable for an Unresponsive camera", () => {
+  it("renders the engine telemetry section field-by-field, each Unavailable, for an Unresponsive camera", () => {
     const unresponsive: typeof CAMERA = {
       ...CAMERA,
       connection_status: "Unresponsive",
       ai_status: "Unresponsive",
     }
     render(<CameraDetailPanel camera={unresponsive} isOpen onClose={vi.fn()} now={NOW} />)
-    expect(
-      screen.getByText(/CONNECT_FAILED, STREAM_DROPPED or INFERENCE_FAILED/),
-    ).toBeInTheDocument()
+    expect(screen.getByText("Last heartbeat")).toBeInTheDocument()
+    expect(screen.getByText("Measured FPS")).toBeInTheDocument()
+    expect(screen.getByText("Inference latency")).toBeInTheDocument()
+    expect(screen.getByText("Last error code")).toBeInTheDocument()
+    expect(screen.getByText("Last error message")).toBeInTheDocument()
+    // 7 total: Stream URL (Identity) + Applied config version (Convergence) +
+    // the 5 engine telemetry fields asserted above.
+    expect(screen.getAllByText("Unavailable")).toHaveLength(7)
   })
 
   it("counts down a cooldown live against the passed-in now", () => {
