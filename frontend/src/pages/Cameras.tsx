@@ -42,6 +42,7 @@ import {
 import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
 import { CameraBreakdownBar } from "@/pages/cameras/CameraBreakdownBar"
+import { CameraDetailPanel } from "@/pages/cameras/CameraDetailPanel"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"
 import {
   RiAddLine,
@@ -52,7 +53,11 @@ import {
   RiRobot2Line,
 } from "@remixicon/react"
 
-const CAMERAS_PAGE_SIZE = 8
+// M14: was 8, but PaginationFooter's items-per-page selector only offers
+// [10, 25, 50, 100] and cannot display a value outside that set. 10 matches
+// ALERTS_PAGE_SIZE and USERS_PAGE_SIZE rather than adding an option just for
+// this screen's old default.
+const CAMERAS_PAGE_SIZE = 10
 const CAMERAS_QUERY_KEY = ["cameras"] as const
 const TABLE_COLUMN_COUNT = 5
 
@@ -93,15 +98,28 @@ export default function Cameras() {
   const [isEnabledFilter, setIsEnabledFilter] = useState<"all" | "true" | "false">("all")
   const [notice, setNotice] = useState<NoticeState | null>(null)
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
+  // An id, not the row itself — so the panel re-derives against the live
+  // query below and reflects a toggle or a broadcast landing while it's open,
+  // rather than showing a snapshot frozen at the moment of the click.
+  const [detailCameraId, setDetailCameraId] = useState<number | null>(null)
 
   const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
   // See Users.tsx: mirror the query total into state so usePagination can clamp
   // the page at read time without an effect.
   const [seenTotal, setSeenTotal] = useState(0)
-  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, goTo, reset } = usePagination(
-    seenTotal,
-    CAMERAS_PAGE_SIZE,
-  )
+  const {
+    page,
+    pageSize,
+    totalPages,
+    offset,
+    rangeStart,
+    rangeEnd,
+    next,
+    prev,
+    goTo,
+    setPageSize,
+    reset,
+  } = usePagination(seenTotal, CAMERAS_PAGE_SIZE)
 
   const camerasQuery = useQuery({
     queryKey: [
@@ -110,6 +128,7 @@ export default function Cameras() {
       connectionFilter,
       aiFilter,
       isEnabledFilter,
+      pageSize,
       offset,
     ],
     queryFn: () =>
@@ -118,7 +137,7 @@ export default function Cameras() {
         connection_status: connectionFilter === "all" ? undefined : [connectionFilter],
         ai_status: aiFilter === "all" ? undefined : [aiFilter],
         is_enabled: isEnabledFilter === "all" ? undefined : isEnabledFilter === "true",
-        limit: CAMERAS_PAGE_SIZE,
+        limit: pageSize,
         offset,
       }),
     placeholderData: (previousData) => previousData,
@@ -221,6 +240,7 @@ export default function Cameras() {
   const rangeEndValue = rangeEnd(cameras.length)
   // Only the cooldown reason counts down; the clock stays still otherwise.
   const now = useNow(cameras.some(isCameraInCooldown))
+  const detailCamera = cameras.find((camera) => camera.camera_id === detailCameraId) ?? null
 
   return (
     <div className="mx-auto max-w-[1400px] p-8">
@@ -334,11 +354,12 @@ export default function Cameras() {
             rangeStart={rangeStart}
             rangeEnd={rangeEndValue}
             totalFiltered={totalFiltered}
-            pageSize={CAMERAS_PAGE_SIZE}
+            pageSize={pageSize}
             isFetching={camerasQuery.isFetching}
             onPrev={prev}
             onNext={next}
             onPageChange={goTo}
+            onPageSizeChange={setPageSize}
           />
         }
       >
@@ -361,7 +382,11 @@ export default function Cameras() {
               </TableStateRow>
             ) : (
               cameras.map((camera) => (
-                <TableRow key={camera.camera_id}>
+                <TableRow
+                  key={camera.camera_id}
+                  className="cursor-pointer"
+                  onClick={() => setDetailCameraId(camera.camera_id)}
+                >
                   <TableCell className="font-medium text-fg">{camera.camera_name}</TableCell>
                   <TableCell className="text-fg-muted">{camera.channel_id}</TableCell>
                   <TableCell>
@@ -373,7 +398,7 @@ export default function Cameras() {
                       description={describeCameraDesiredState(camera, now)}
                     />
                   </TableCell>
-                  <TableCell className="w-[133px]">
+                  <TableCell className="w-[133px]" onClick={(event) => event.stopPropagation()}>
                     <div className="flex items-center gap-3">
                       <Switch
                         checked={camera.is_enabled}
@@ -423,6 +448,13 @@ export default function Cameras() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <CameraDetailPanel
+        camera={detailCamera}
+        isOpen={detailCameraId !== null}
+        onClose={() => setDetailCameraId(null)}
+        now={now}
+      />
 
       {modal.kind === "add" && (
         <AddCameraModal
