@@ -9,7 +9,6 @@ import { cn } from "@/utils/cn"
 import { focusRing } from "@/components/ui/Button"
 import {
   RiAlertLine,
-  RiArrowRightSLine,
   RiCameraLine,
   RiDashboardLine,
   RiFileHistoryLine,
@@ -20,6 +19,7 @@ import {
   RiQuestionLine,
   RiScan2Line,
   RiUserLine,
+  RiUserSettingsLine,
 } from "@remixicon/react"
 
 /**
@@ -84,6 +84,10 @@ export function Sidebar() {
             ]
           : [],
     },
+    {
+      title: "ACCOUNT",
+      links: [{ name: "Profile", to: `${basePath}/profile`, icon: RiUserSettingsLine }],
+    },
   ]
 
   const displayName = username || "guest"
@@ -100,7 +104,6 @@ export function Sidebar() {
   }
 
   const isHelpActive = location.pathname === `${basePath}/help`
-  const isProfileActive = location.pathname === `${basePath}/profile`
 
   // §2.8 — nav rest / hover / active, shared by the links and the two footer
   // buttons so the Help Center row cannot drift from the rows above it.
@@ -185,25 +188,15 @@ export function Sidebar() {
         </button>
 
         {/*
-          D-3, settled: a plain Link to /profile, not a dropdown. The page
-          behind it (ProfileSettings.tsx) is a single destination, not a set
-          of them — a menu with one item would be a click to open a menu to
-          make one more click. This chip previously carried cursor-pointer, a
-          hover fill and a disclosure chevron with no handler behind any of
-          it, advertising a menu that was never built while the one screen it
-          would lead to had no inbound link anywhere in the app. Restored
-          here, now honestly pointing somewhere.
+          D-3, settled: not a Link. A footer avatar chip that only sometimes
+          leads somewhere reads as decoration, not navigation — the prior fix
+          made this chip a Link to /profile, which is exactly the kind of
+          hard-to-notice destination this plan exists to eliminate. /profile
+          now has its own plain, unmistakable entry in the nav list above
+          (ACCOUNT -> Profile, same treatment as every other row); this chip
+          goes back to a pure identity display, no affordance implied.
         */}
-        <Link
-          to={`${basePath}/profile`}
-          aria-current={isProfileActive ? "page" : undefined}
-          className={cn(
-            "flex items-center gap-2.5",
-            navRow,
-            isProfileActive ? navActive : navInactive,
-            focusRing,
-          )}
-        >
+        <div className={cn("flex items-center gap-2.5", navRow)}>
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-[10px] font-bold text-fg-muted">
             {initials || <RiUserLine size={14} className="text-fg-muted" />}
           </div>
@@ -213,8 +206,7 @@ export function Sidebar() {
             </span>
             <span className="text-[11px] text-fg-muted">{displayRole}</span>
           </div>
-          <RiArrowRightSLine size={16} className="shrink-0 text-fg-muted" />
-        </Link>
+        </div>
 
         <button
           type="button"
