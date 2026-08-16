@@ -171,6 +171,48 @@ class TestJobLifecycle:
         assert status_resp.json()["progress_total"] == 2
 
 
+class TestAuditReportJobIsAdminOnly:
+    """report_type="audit" must be gated the same way the synchronous
+    /api/audit-logs/export route is — an Operator has no audit access at
+    all (01_CONTRACTS.md §5.7), and the async job path must not become a
+    side door around that."""
+
+    def test_operator_gets_403(self, client: TestClient, session: Session):
+        make_operator(session, username="auditjobop")
+        headers = auth_headers(client, "auditjobop", "Operator123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "audit", "format": "csv"},
+            headers=headers,
+        )
+        assert resp.status_code == 403
+
+    def test_admin_still_allowed(self, client: TestClient, session: Session):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "audit", "format": "csv"},
+            headers=headers,
+        )
+        assert resp.status_code == 202, resp.text
+
+    def test_non_audit_report_types_unaffected_for_operator(
+        self, client: TestClient, session: Session
+    ):
+        make_operator(session, username="auditjobop2")
+        headers = auth_headers(client, "auditjobop2", "Operator123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=headers,
+        )
+        assert resp.status_code == 202, resp.text
+
+
 class TestListExportJobs:
     """P21 Step 4 — 01_CONTRACTS.md §5.10, own jobs by default for every
     role, admin-only widening, expired included, F29 pagination boundaries."""

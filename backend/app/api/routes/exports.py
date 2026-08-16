@@ -60,7 +60,20 @@ async def create_export_job(
     """Large or heavy exports bypass the synchronous row limits by going
     through here instead of `?format=`. Returns immediately with
     `queued` — the REPORT_EXPORT/AUDIT_EXPORT audit row is written when the
-    worker actually finishes (success or failure), not at creation."""
+    worker actually finishes (success or failure), not at creation.
+
+    `report_type="audit"` is Admin only, matching the synchronous
+    `/api/audit-logs/export` route (`get_current_admin`) — `/api/audit-logs`
+    itself is Admin only (01_CONTRACTS.md §5.7), and this async path must
+    not become a side door around that for an Operator, who would otherwise
+    both create *and*, as the job's owner, download it."""
+    if payload.report_type == "audit" and current_user.role != UserRole.ADMIN:
+        raise AppHTTPException(
+            403,
+            "Only an Admin may create an audit-log export job.",
+            code="FORBIDDEN",
+        )
+
     job = create_job(
         session,
         requested_by=current_user,
