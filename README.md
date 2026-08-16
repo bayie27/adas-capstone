@@ -74,6 +74,7 @@ adas-capstone/
 ├── mediamtx.yml             # Camera simulation — see "Simulate camera streams"
 ├── scripts/start-sim.ps1    # Preflighted wrapper around `mediamtx mediamtx.yml`
 ├── scripts/adas-maintenance.ps1  # Windows demo orchestrator for backup/restore/restart
+├── scripts/register-maintenance-task.ps1  # Registers the Windows Scheduled Task for the daily restart (NFR-16)
 ├── alembic.ini               # Points at backend/alembic/ — see CONTRIBUTING.md
 ├── pyproject.toml
 ├── uv.lock
@@ -120,14 +121,15 @@ DSS_PASS=your-vms-password
 Everything else (session lifetime, rate limiting, snooze/cooldown windows,
 health-sampling intervals, export row limits and TTLs, WebSocket connection
 limits, backup retention) has a safe default and only needs overriding for
-production. Three storage roots are worth knowing about up front since
+production. Four storage roots are worth knowing about up front since
 they're where the backend writes files outside the database:
 
-| Setting         | Default                      | What lives there                                                                                                             |
-| --------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `SNAPSHOT_ROOT` | `<repo>/ai_engine/snapshots` | Incident snapshot JPEGs, served only via the authenticated `GET /api/alerts/{log_id}/snapshot` — never a public static mount |
-| `BACKUP_DIR`    | `<repo>/var/backups`         | Verified online backups + `restore_state.json`                                                                               |
-| `EXPORT_DIR`    | `<repo>/var/exports`         | Generated CSV/PDF/ZIP export artifacts (expire after `EXPORT_ARTIFACT_TTL_HOURS`)                                            |
+| Setting         | Default                      | What lives there                                                                                                                                       |
+| --------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SNAPSHOT_ROOT` | `<repo>/ai_engine/snapshots` | Incident snapshot JPEGs, served only via the authenticated `GET /api/alerts/{log_id}/snapshot` — never a public static mount                           |
+| `BACKUP_DIR`    | `<repo>/var/backups`         | Verified online backups + `restore_state.json`                                                                                                         |
+| `EXPORT_DIR`    | `<repo>/var/exports`         | Generated CSV/PDF/ZIP export artifacts (expire after `EXPORT_ARTIFACT_TTL_HOURS`)                                                                      |
+| `LOG_DIR`       | `<repo>/var/log`             | `scripts\adas-maintenance.ps1`'s transcripts, per-component stdout/stderr, and `maintenance-runs.jsonl` (read by `GET /api/system/maintenance/status`) |
 
 `var/` is gitignored — safe scratch space for local backups, exports, and
 migration testing.
@@ -439,7 +441,17 @@ uv run python -m app.maintenance backup
 uv run python -m app.maintenance list
 ```
 
-On Windows, `scripts\adas-maintenance.ps1` wraps the full backup/restore/restart lifecycle (stopping and restarting the backend/AI engine processes around the same Python maintenance core) — see that script's own header comment for every `-Action`.
+On Windows, `scripts\adas-maintenance.ps1` wraps the full backup/restore/restart lifecycle (stopping and restarting the backend/AI engine processes around the same Python maintenance core) — see that script's own header comment for every `-Action`. Every run is captured under `var\log\` (transcript, per-component stdout/stderr, and one JSON line per `-Action Restart` run in `maintenance-runs.jsonl`) instead of a console window that vanishes when closed.
+
+**Automate the daily restart (NFR-16):**
+
+```powershell
+scripts\register-maintenance-task.ps1              # register (idempotent), reads MAINTENANCE_HOUR_LOCAL from .env
+scripts\register-maintenance-task.ps1 -Verify       # show trigger, next/last run, last result
+scripts\register-maintenance-task.ps1 -Unregister   # remove
+```
+
+Registers a Windows Scheduled Task (`\ADAS\DailyRestart`) that fires `adas-maintenance.ps1 -Action Restart` daily at the configured local hour. The daily _backup_ (NFR-18) needs no separate registration — it's an in-app APScheduler cron job (`app.main`, gated on `SCHEDULER_ENABLED`) that runs inside the backend process itself, with an hourly catch-up job and a startup due-check so a laptop that was off at 3 AM still gets that day's backup once it's back on.
 
 ---
 

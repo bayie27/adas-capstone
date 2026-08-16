@@ -44,6 +44,9 @@ export interface PerformanceCameraStat {
 
 export interface PerformanceAnalyticsResponse {
   global_kpis: PerformanceGlobalKpis
+  // P19 §4 (breaking) — total rows matching the filters, NOT len(per_camera).
+  // per_camera is one page (default limit=10), not the full array.
+  total_filtered: number
   per_camera: PerformanceCameraStat[]
 }
 
@@ -55,6 +58,8 @@ export interface AnalyticsFilters {
 
 export interface PerformanceAnalyticsFilters extends AnalyticsFilters {
   search?: string
+  limit?: number
+  offset?: number
 }
 
 export async function getDashboardAnalytics(params: AnalyticsFilters = {}) {

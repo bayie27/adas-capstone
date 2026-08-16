@@ -40,6 +40,24 @@ if TYPE_CHECKING:
 _OPEN_STATUSES = (DetectionStatus.UNVERIFIED.value, DetectionStatus.ONGOING.value)
 
 
+def _build_rtsp_url(channel_id: int) -> str:
+    """01_CONTRACTS.md §7.2 — backend-owned RTSP construction. Credential-
+    bearing in production; never logged (see app.core.redaction, which
+    already strips any `scheme://user:pass@host` URL generically). Moved
+    here from routes/internal.py (P21 Step 1) so the camera detail route
+    can reuse it for `rtsp_url_redacted` — behaviour must stay byte-identical
+    for the heartbeat, which internal.py imports this back for."""
+    return settings.RTSP_URL_TEMPLATE.format(
+        channel_id=channel_id,
+        dss_ip=settings.DSS_IP,
+        dss_port=settings.DSS_PORT,
+        dss_username=settings.DSS_USERNAME,
+        dss_password=(
+            settings.DSS_PASS.get_secret_value() if settings.DSS_PASS else None
+        ),
+    )
+
+
 def presented_statuses(camera: Camera, *, now: datetime) -> tuple[str, str]:
     """05_PKG_incidents_cameras.md Step 2/10 — the read-time presentation
     layer over the stored observed columns. Never written to the row, so a

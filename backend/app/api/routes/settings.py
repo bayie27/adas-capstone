@@ -8,7 +8,11 @@ from sqlmodel import Session
 from app.api.dependencies import get_current_user
 from app.core.db import get_session
 from app.models import AlarmSettings, AuditResult, User
-from app.schemas.settings import AlarmSettingsRead, AlarmSettingsUpdate
+from app.schemas.settings import (
+    AlarmSettingsRead,
+    AlarmSettingsUpdate,
+    build_alarm_settings_options,
+)
 from app.services import audit
 
 router = APIRouter(
@@ -28,14 +32,21 @@ _DEFAULT_SNOOZE_DURATION = 30
 def get_alarm_settings(current_user: User = Depends(get_current_user)):
     """Side-effect free. Returns the defaults rather than 404 when the row
     is somehow missing — PUT creates it lazily on the next save."""
+    options = build_alarm_settings_options()
     row = current_user.alarm_settings
     if row is None:
         return AlarmSettingsRead(
             alarm_sound=_DEFAULT_ALARM_SOUND,
             volume=_DEFAULT_VOLUME,
             snooze_duration=_DEFAULT_SNOOZE_DURATION,
+            options=options,
         )
-    return AlarmSettingsRead.model_validate(row)
+    return AlarmSettingsRead(
+        alarm_sound=row.alarm_sound,
+        volume=row.volume,
+        snooze_duration=row.snooze_duration,
+        options=options,
+    )
 
 
 @router.put("/alarm", response_model=AlarmSettingsRead)
@@ -77,4 +88,9 @@ def update_alarm_settings(
 
     session.commit()
     session.refresh(row)
-    return AlarmSettingsRead.model_validate(row)
+    return AlarmSettingsRead(
+        alarm_sound=row.alarm_sound,
+        volume=row.volume,
+        snooze_duration=row.snooze_duration,
+        options=build_alarm_settings_options(),
+    )

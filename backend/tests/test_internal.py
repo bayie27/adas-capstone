@@ -397,6 +397,32 @@ class TestHeartbeat:
         assert camera.last_heartbeat_at is not None
         assert [p["type"] for p in payloads] == ["CAMERA_STATUS_UPDATE"]
 
+    def test_rtsp_url_parity_after_build_rtsp_url_moved_to_services_cameras(
+        self, client: TestClient, session: Session
+    ):
+        """P21 Step 1 moved _build_rtsp_url() from routes/internal.py into
+        services/cameras.py. The heartbeat's rtsp_url must stay byte-identical
+        — this is the AI engine's own contract (01_CONTRACTS.md §6.2), not
+        just an internal refactor detail."""
+        from app.services.cameras import _build_rtsp_url
+
+        camera = make_camera(session, name="Parity Cam", channel_id=102)
+
+        resp = client.post(
+            "/api/internal/heartbeat",
+            headers=internal_headers(),
+            json={
+                "engine_id": "adas-ai-1",
+                "sent_at": "2026-07-12T10:30:05.120+00:00",
+                "cameras": [],
+            },
+        )
+        assert resp.status_code == 200
+        row = next(
+            c for c in resp.json()["cameras"] if c["camera_id"] == camera.camera_id
+        )
+        assert row["rtsp_url"] == _build_rtsp_url(camera.channel_id)
+
     def test_no_broadcast_when_nothing_changed(
         self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
     ):

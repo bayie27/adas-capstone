@@ -9,7 +9,7 @@ import io
 import sys
 import uuid
 import zipfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from io import StringIO
 
 import pytest
@@ -169,6 +169,236 @@ class TestJobLifecycle:
         status_resp = client.get(f"/api/exports/jobs/{job_id}", headers=headers)
         assert status_resp.json()["status"] == "completed"
         assert status_resp.json()["progress_total"] == 2
+
+
+class TestAuditReportJobIsAdminOnly:
+    """report_type="audit" must be gated the same way the synchronous
+    /api/audit-logs/export route is — an Operator has no audit access at
+    all (01_CONTRACTS.md §5.7), and the async job path must not become a
+    side door around that."""
+
+    def test_operator_gets_403(self, client: TestClient, session: Session):
+        make_operator(session, username="auditjobop")
+        headers = auth_headers(client, "auditjobop", "Operator123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "audit", "format": "csv"},
+            headers=headers,
+        )
+        assert resp.status_code == 403
+
+    def test_admin_still_allowed(self, client: TestClient, session: Session):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "audit", "format": "csv"},
+            headers=headers,
+        )
+        assert resp.status_code == 202, resp.text
+
+    def test_non_audit_report_types_unaffected_for_operator(
+        self, client: TestClient, session: Session
+    ):
+        make_operator(session, username="auditjobop2")
+        headers = auth_headers(client, "auditjobop2", "Operator123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=headers,
+        )
+        assert resp.status_code == 202, resp.text
+
+
+class TestListExportJobs:
+    """P21 Step 4 — 01_CONTRACTS.md §5.10, own jobs by default for every
+    role, admin-only widening, expired included, F29 pagination boundaries."""
+
+    def test_own_jobs_default_scope_for_operator(
+        self, client: TestClient, session: Session
+    ):
+        make_operator(session, username="ownscope")
+        headers = auth_headers(client, "ownscope", "Operator123")
+        make_operator(session, username="otherscope")
+        other_headers = auth_headers(client, "otherscope", "Operator123")
+
+        mine = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=headers,
+        ).json()["job_id"]
+        client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=other_headers,
+        )
+
+        resp = client.get("/api/exports/jobs", headers=headers)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert [j["job_id"] for j in body["items"]] == [mine]
+
+    def test_own_jobs_default_scope_for_admin(
+        self, client: TestClient, session: Session
+    ):
+        """The narrow default matches the question the UI is actually
+        asking ("where is my export?") — even an Admin's own tray does not
+        implicitly widen to everyone's jobs."""
+        make_admin(session)
+        admin_headers = auth_headers(client, "admin", "Admin123")
+        make_operator(session, username="otheradminscope")
+        other_headers = auth_headers(client, "otheradminscope", "Operator123")
+
+        client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=other_headers,
+        )
+
+        resp = client.get("/api/exports/jobs", headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json()["total_filtered"] == 0
+
+    def test_all_users_true_is_403_for_operator(
+        self, client: TestClient, session: Session
+    ):
+        make_operator(session, username="allusersop")
+        headers = auth_headers(client, "allusersop", "Operator123")
+
+        resp = client.get("/api/exports/jobs?all_users=true", headers=headers)
+        assert resp.status_code == 403
+
+    def test_all_users_true_widens_for_admin(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        admin_headers = auth_headers(client, "admin", "Admin123")
+        make_operator(session, username="widenscope")
+        op_headers = auth_headers(client, "widenscope", "Operator123")
+
+        client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=op_headers,
+        )
+        client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=admin_headers,
+        )
+
+        resp = client.get("/api/exports/jobs?all_users=true", headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json()["total_filtered"] == 2
+
+    def test_expired_jobs_included(self, client: TestClient, session: Session):
+        make_operator(session, username="expiredlist")
+        headers = auth_headers(client, "expiredlist", "Operator123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=headers,
+        )
+        job_id = resp.json()["job_id"]
+        job = session.get(ExportJob, job_id)
+        job.status = "expired"
+        session.add(job)
+        session.commit()
+
+        list_resp = client.get("/api/exports/jobs", headers=headers)
+        assert list_resp.status_code == 200
+        items = list_resp.json()["items"]
+        assert [i["status"] for i in items] == ["expired"]
+
+    def test_status_filter(self, client: TestClient, session: Session):
+        make_operator(session, username="statusfilterlist")
+        headers = auth_headers(client, "statusfilterlist", "Operator123")
+        queued_resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=headers,
+        )
+        completed_id = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "pdf"},
+            headers=headers,
+        ).json()["job_id"]
+        process_export_job(session.get_bind(), completed_id)
+        queued_id = queued_resp.json()["job_id"]
+
+        resp = client.get("/api/exports/jobs?status=completed", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert [j["job_id"] for j in body["items"]] == [completed_id]
+        assert queued_id not in {j["job_id"] for j in body["items"]}
+
+    def test_sorted_created_at_descending(self, client: TestClient, session: Session):
+        make_operator(session, username="sortlist")
+        headers = auth_headers(client, "sortlist", "Operator123")
+        first_id = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=headers,
+        ).json()["job_id"]
+        second_id = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=headers,
+        ).json()["job_id"]
+        # created_at has second-level precision; force distinct ordering
+        # rather than relying on wall-clock granularity between two calls.
+        first_job = session.get(ExportJob, first_id)
+        first_job.created_at = first_job.created_at - timedelta(seconds=5)
+        session.add(first_job)
+        session.commit()
+
+        resp = client.get("/api/exports/jobs", headers=headers)
+        assert [j["job_id"] for j in resp.json()["items"]] == [second_id, first_id]
+
+    @pytest.mark.parametrize("query", ["limit=0", "limit=101", "offset=-1"])
+    def test_pagination_boundary_rejections(
+        self, client: TestClient, session: Session, query: str
+    ):
+        """F29 — the same ge/le bounds every other list endpoint uses."""
+        make_operator(session, username="boundsreject")
+        headers = auth_headers(client, "boundsreject", "Operator123")
+        resp = client.get(f"/api/exports/jobs?{query}", headers=headers)
+        assert resp.status_code == 422
+
+    @pytest.mark.parametrize("query", ["limit=1", "limit=100", "offset=0"])
+    def test_pagination_boundary_accepted(
+        self, client: TestClient, session: Session, query: str
+    ):
+        make_operator(session, username="boundsaccept")
+        headers = auth_headers(client, "boundsaccept", "Operator123")
+        resp = client.get(f"/api/exports/jobs?{query}", headers=headers)
+        assert resp.status_code == 200
+
+    def test_offset_beyond_total_returns_empty_page_with_correct_total(
+        self, client: TestClient, session: Session
+    ):
+        make_operator(session, username="boundsoffset")
+        headers = auth_headers(client, "boundsoffset", "Operator123")
+        client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "csv"},
+            headers=headers,
+        )
+
+        resp = client.get("/api/exports/jobs?offset=50", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert body["items"] == []
+
+    def test_requires_auth(self, client: TestClient):
+        resp = client.get("/api/exports/jobs")
+        assert resp.status_code == 401
 
 
 class TestJobAuthorization:
@@ -550,6 +780,144 @@ class TestDiskFullDuringExport:
             f"/api/exports/jobs/{job_id}/download", headers=headers
         )
         assert download_resp.status_code == 404
+
+
+class TestAuditJobFilters:
+    """P21 Step 5 — action/result/target_type must reach the worker, not
+    merely be accepted into filters_json. A field accepted then dropped is
+    worse than a 422: the artifact would silently disagree with what the
+    operator saw on screen."""
+
+    def test_unknown_action_is_422(self, client: TestClient, session: Session):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={
+                "report_type": "audit",
+                "format": "csv",
+                "action": ["NOT_A_REAL_ACTION"],
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 422
+
+    def test_action_filter_reaches_the_worker_end_to_end(
+        self, client: TestClient, session: Session
+    ):
+        """Assert the whole path: create a job with an action filter, run
+        the worker, read the artifact back, confirm it contains only the
+        filtered rows — not merely that the field was accepted."""
+        make_admin(session)
+        # Logging in itself writes a LOGIN_SUCCESS audit row — seed the
+        # excluded actions too, so a correct filter is distinguishable from
+        # one that silently passed everything through.
+        headers = auth_headers(client, "admin", "Admin123")
+        session.add(AuditLog(actor_type="system", action="LOGOUT", result="success"))
+        session.add(
+            AuditLog(actor_type="system", action="CAMERA_DELETE", result="success")
+        )
+        session.commit()
+        expected_count = len(
+            session.exec(
+                select(AuditLog).where(AuditLog.action == "LOGIN_SUCCESS")
+            ).all()
+        )
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={
+                "report_type": "audit",
+                "format": "csv",
+                "action": ["LOGIN_SUCCESS"],
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 202, resp.text
+        job_id = resp.json()["job_id"]
+
+        process_export_job(session.get_bind(), job_id)
+
+        status_resp = client.get(f"/api/exports/jobs/{job_id}", headers=headers)
+        assert status_resp.json()["status"] == "completed", status_resp.text
+
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        assert download_resp.status_code == 200
+        rows = list(csv.reader(StringIO(download_resp.text[1:])))
+        header, data_rows = rows[0], rows[1:]
+        action_col = header.index("Action")
+        assert {row[action_col] for row in data_rows} == {"LOGIN_SUCCESS"}
+        assert len(data_rows) == expected_count
+
+    def test_result_filter_reaches_the_worker(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        session.add(AuditLog(actor_type="system", action="LOGOUT", result="success"))
+        session.add(AuditLog(actor_type="system", action="LOGOUT", result="denied"))
+        session.commit()
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "audit", "format": "csv", "result": ["denied"]},
+            headers=headers,
+        )
+        job_id = resp.json()["job_id"]
+        process_export_job(session.get_bind(), job_id)
+
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        rows = list(csv.reader(StringIO(download_resp.text[1:])))
+        header, data_rows = rows[0], rows[1:]
+        result_col = header.index("Result")
+        assert {row[result_col] for row in data_rows} == {"denied"}
+
+    def test_target_type_filter_reaches_the_worker(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        session.add(
+            AuditLog(
+                actor_type="system",
+                action="CAMERA_DELETE",
+                result="success",
+                target_type="camera",
+                target_ref="1",
+            )
+        )
+        session.add(
+            AuditLog(
+                actor_type="system",
+                action="USER_DISABLE",
+                result="success",
+                target_type="user",
+                target_ref="2",
+            )
+        )
+        session.commit()
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "audit", "format": "csv", "target_type": ["camera"]},
+            headers=headers,
+        )
+        job_id = resp.json()["job_id"]
+        process_export_job(session.get_bind(), job_id)
+
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        rows = list(csv.reader(StringIO(download_resp.text[1:])))
+        header, data_rows = rows[0], rows[1:]
+        target_col = header.index("Target")
+        assert all(row[target_col].startswith("camera:") for row in data_rows)
+        assert len(data_rows) == 1
 
 
 class TestRetraining:

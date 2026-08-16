@@ -112,6 +112,21 @@ def _check_disk_space(db_path: Path, backup_dir: Path) -> None:
         )
 
 
+def _remove_sidecars(path: Path) -> None:
+    """Removes `path`'s own `-wal`/`-shm` companions.
+
+    `sqlite3.Connection.backup()` carries the source's WAL journal mode into
+    the destination, so a read-only validation open (verify.py) or a later
+    read-only re-check (list_backups, cmd_verify, ...) can each create a
+    fresh `-shm`/`-wal` next to a finished artifact — a read-only connection
+    can't check-point or clean those up on close. `tmp_path.replace(...)`
+    only ever renames the main file, so without this those sidecars are
+    orphaned forever, one pair per backup, and archive.py's `.db`-only zip
+    member would silently miss any content still resident in a `-wal`."""
+    for suffix in ("-wal", "-shm"):
+        path.with_name(path.name + suffix).unlink(missing_ok=True)
+
+
 def _run_sqlite_backup(db_path: Path, tmp_path: Path) -> None:
     """The WAL-safe online backup itself. Source is opened read-only so this
     can never itself become a writer against the live database."""
@@ -121,6 +136,14 @@ def _run_sqlite_backup(db_path: Path, tmp_path: Path) -> None:
         dest = sqlite3.connect(tmp_path)
         try:
             source.backup(dest)
+            # Root fix for the sidecar leak: checkpoint whatever WAL content
+            # source.backup() carried over, then switch off WAL mode
+            # entirely, before dest is ever closed. Every backup artifact
+            # becomes one self-contained file — no later read-only open
+            # (validation here, list_backups' re-verification, cmd_verify,
+            # archive.py) creates anything beside it.
+            dest.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            dest.execute("PRAGMA journal_mode=DELETE")
         finally:
             dest.close()
     finally:
@@ -148,12 +171,19 @@ def _perform_backup_write(
         checks = verify.validate_backup(tmp_path, full=False)
         sha256 = verify.compute_sha256(tmp_path)
         file_size = tmp_path.stat().st_size
+        # Belt and braces on top of _run_sqlite_backup's own checkpoint: the
+        # read-only validate_backup/compute_sha256 opens just above can
+        # themselves recreate a `-shm` next to tmp_path, so sweep again
+        # right before the rename — the final path must never inherit a
+        # sidecar.
+        _remove_sidecars(tmp_path)
         # Atomic rename — the final name only ever appears once the file is
         # complete and validated (Step 1.4/1.5). Never leaves a file at the
         # final path if anything above raised.
         tmp_path.replace(final_path)
     except Exception:
         tmp_path.unlink(missing_ok=True)
+        _remove_sidecars(tmp_path)
         raise
 
     manifest = BackupManifest(
@@ -286,5 +316,7 @@ def prune_backups(
 
 
 def _remove_backup_files(backup_dir: Path, backup_id: str) -> None:
-    db_path_for(backup_dir, backup_id).unlink(missing_ok=True)
+    db_file = db_path_for(backup_dir, backup_id)
+    _remove_sidecars(db_file)
+    db_file.unlink(missing_ok=True)
     manifest_path_for(backup_dir, backup_id).unlink(missing_ok=True)

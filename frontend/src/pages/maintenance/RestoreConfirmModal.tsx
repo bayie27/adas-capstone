@@ -61,9 +61,12 @@ export function RestoreConfirmModal({ backupId, onClose, onSuccess }: RestoreCon
       <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-6">
         <div className="space-y-4">
           <p className="text-xs leading-relaxed text-fg-muted">
-            This does not restore anything by itself — it writes a request that an external operator
-            carries out later, offline, with services stopped. The system will go offline shortly
-            after you submit this.
+            This does not restore anything by itself, and nothing happens automatically. It writes a
+            request — completing it requires a person to stop services and run{" "}
+            <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[11px]">
+              python -m app.maintenance restore {backupId}
+            </code>{" "}
+            from the command line.
           </p>
 
           <PasswordInput
