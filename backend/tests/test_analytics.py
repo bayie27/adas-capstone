@@ -511,6 +511,149 @@ class TestPerformanceAnalytics:
         assert resp.content.startswith(b"%PDF")
 
 
+class TestPerformancePagination:
+    """P19 §4 — GET /api/analytics/performance's per_camera array is now one
+    page, not the full set. The trap this guards against: _compute_
+    performance_data must keep returning the full list, sliced only in the
+    route, or GET /api/analytics/export/performance's row-limit pre-flight
+    (which reuses the same helper) silently under-reports a large export."""
+
+    def _make_n_quiet_cameras(self, session: Session, n: int, *, start_channel: int):
+        """n cameras with zero detections, named so alphabetical order is
+        predictable — total activity ties at 0 for all of them, so the
+        per_camera sort falls through to camera_name."""
+        return [
+            make_camera(
+                session, name=f"Quiet Cam {i:02d}", channel_id=start_channel + i
+            )
+            for i in range(n)
+        ]
+
+    def test_total_filtered_reflects_full_set_per_camera_holds_one_page(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="perfpage1")
+        self._make_n_quiet_cameras(session, 15, start_channel=100)
+
+        resp = client.get("/api/analytics/performance", headers=headers)
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 15
+        assert len(body["per_camera"]) == 10  # default limit
+
+    @pytest.mark.parametrize("query", ["limit=0", "limit=101", "offset=-1"])
+    def test_pagination_boundary_rejections(
+        self, client: TestClient, session: Session, query: str
+    ):
+        """Edge case 2.1/2.2, same bounds every other list endpoint uses."""
+        _, headers = operator_with_headers(client, session, username="perfpage2")
+        resp = client.get(f"/api/analytics/performance?{query}", headers=headers)
+        assert resp.status_code == 422
+
+    @pytest.mark.parametrize("query", ["limit=1", "limit=100", "offset=0"])
+    def test_pagination_boundary_accepted(
+        self, client: TestClient, session: Session, query: str
+    ):
+        _, headers = operator_with_headers(client, session, username="perfpage3")
+        resp = client.get(f"/api/analytics/performance?{query}", headers=headers)
+        assert resp.status_code == 200
+
+    def test_offset_beyond_total_returns_empty_page_with_correct_total(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="perfpage4")
+        self._make_n_quiet_cameras(session, 3, start_channel=120)
+
+        resp = client.get("/api/analytics/performance?offset=100", headers=headers)
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 3
+        assert body["per_camera"] == []
+
+    def test_paging_through_whole_set_yields_every_camera_exactly_once(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="perfpage5")
+        cameras = self._make_n_quiet_cameras(session, 23, start_channel=140)
+        expected_ids = {c.camera_id for c in cameras}
+
+        seen_ids: list[int] = []
+        offset = 0
+        limit = 7
+        while True:
+            resp = client.get(
+                f"/api/analytics/performance?limit={limit}&offset={offset}",
+                headers=headers,
+            )
+            assert resp.status_code == 200
+            page = resp.json()["per_camera"]
+            if not page:
+                break
+            seen_ids.extend(row["camera_id"] for row in page)
+            offset += limit
+
+        assert len(seen_ids) == len(set(seen_ids)) == 23
+        assert set(seen_ids) == expected_ids
+
+    def test_zero_activity_camera_appears_in_total_and_on_its_page(
+        self, client: TestClient, session: Session
+    ):
+        """F24 still holds under pagination: a camera with zero confirmed
+        and zero dismissed incidents is still counted and still paged, not
+        silently dropped by the slice."""
+        _, headers = operator_with_headers(client, session, username="perfpage6")
+        make_camera(session, name="Only Quiet Camera", channel_id=160)
+
+        resp = client.get("/api/analytics/performance", headers=headers)
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert len(body["per_camera"]) == 1
+        assert body["per_camera"][0]["camera_name"] == "Only Quiet Camera"
+
+    def test_export_ignores_limit_and_offset_and_exports_every_row(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="perfpage7")
+        cameras = self._make_n_quiet_cameras(session, 15, start_channel=180)
+
+        resp = client.get(
+            "/api/analytics/export/performance?limit=1&offset=0", headers=headers
+        )
+
+        assert resp.status_code == 200
+        rows = list(csv.DictReader(StringIO(resp.text[1:])))
+        assert len(rows) == 15
+        assert {r["Camera Name"] for r in rows} == {c.camera_name for c in cameras}
+
+    def test_export_row_limit_preflight_counts_the_full_set_not_one_page(
+        self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
+    ):
+        """The exact trap the package doc warns about: if pagination ever
+        leaked into _compute_performance_data, this pre-flight would see
+        only one page and under-report a large export as small."""
+        _, headers = operator_with_headers(client, session, username="perfpage8")
+        self._make_n_quiet_cameras(session, 12, start_channel=200)
+
+        seen_row_counts: list[int] = []
+        original_check = analytics_routes.check_row_limit
+
+        def spy(row_count, *, format):
+            seen_row_counts.append(row_count)
+            return original_check(row_count, format=format)
+
+        monkeypatch.setattr(analytics_routes, "check_row_limit", spy)
+
+        resp = client.get(
+            "/api/analytics/export/performance?limit=1&offset=0", headers=headers
+        )
+        assert resp.status_code == 200
+        assert seen_row_counts == [12]
+
+
 @pytest.mark.parametrize(
     "path",
     [
@@ -712,6 +855,7 @@ def test_performance_ignores_unverified_logs_but_still_lists_the_camera(
             "avg_accident_confidence": None,
             "avg_dismissed_confidence": None,
         },
+        "total_filtered": 1,
         "per_camera": [
             {
                 "camera_id": camera.camera_id,
@@ -783,6 +927,7 @@ def test_performance_with_zero_cameras_registered_returns_empty_state(
             "avg_accident_confidence": None,
             "avg_dismissed_confidence": None,
         },
+        "total_filtered": 0,
         "per_camera": [],
     }
 

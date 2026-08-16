@@ -46,4 +46,7 @@ class PerformanceCameraRow(SQLModel):
 
 class PerformanceAnalyticsResponse(SQLModel):
     global_kpis: PerformanceGlobalKpis
+    # P19 §4 — total rows matching the filters, NOT len(per_camera).
+    # per_camera is now one page (default 10), not the full array.
+    total_filtered: int
     per_camera: list[PerformanceCameraRow]

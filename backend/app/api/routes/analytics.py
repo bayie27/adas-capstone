@@ -592,6 +592,8 @@ def get_ai_performance(
         max_length=100,
         description="Filter per-camera table by camera name (case-insensitive substring)",
     ),
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ):
     """
@@ -601,23 +603,41 @@ def get_ai_performance(
     Total Accidents, Total Dismissed, Precision Score, Avg Accident Confidence,
     Avg Dismissed Confidence. Confidence and Precision are null when no data exists.
 
-    **per_camera** — same five metrics broken down per camera, sorted by total
-    activity (accidents + dismissed) descending. Optionally filtered by camera
-    name via `?search=`. Only cameras that have at least one detection in the
-    filtered window appear in the table.
+    **per_camera** — one page (`limit`/`offset`, matching every other list
+    endpoint) of the same five metrics broken down per camera, sorted by
+    total activity (accidents + dismissed) descending — stable sort, so
+    pages don't shuffle between requests. `total_filtered` is the full
+    filtered count, not `len(per_camera)`. Optionally filtered by camera
+    name via `?search=`. Only cameras that have at least one detection in
+    the filtered window appear in the table.
+
+    **CHANGED (P19 §4, breaking):** previously returned every matching
+    camera in one array with no `limit`/`offset`. `GET
+    /api/analytics/export/performance` is unaffected — it still exports
+    every matching row regardless of any `limit`/`offset` on the request.
     """
     validate_common_filters(
         start_date=start_date,
         end_date=end_date,
         camera_ids=camera_id,
     )
-    return _compute_performance_data(
+    # P19 §4 — _compute_performance_data always returns the FULL per_camera
+    # list; slicing happens here, in the route, not in the shared helper.
+    # export_performance() calls the same helper and relies on the full list
+    # for both its row-limit pre-flight and the export itself — if
+    # pagination leaked into the helper, a large export would silently
+    # shrink to one page and the pre-flight would under-report the very
+    # thing it's guarding.
+    data = _compute_performance_data(
         session,
         start_date=start_date,
         end_date=end_date,
         camera_id=camera_id,
         search=search,
     )
+    data["total_filtered"] = len(data["per_camera"])
+    data["per_camera"] = data["per_camera"][offset : offset + limit]
+    return data
 
 
 @router.get("/export/performance")
