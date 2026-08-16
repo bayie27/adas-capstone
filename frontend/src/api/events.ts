@@ -68,10 +68,18 @@ export interface CameraStatusUpdateData {
   config_version: number
 }
 
+/**
+ * `snoozed_by` is the formatted display name (`format_user_name`,
+ * `services/events.py:87`), not an id — P21 Step 3, breaking. It was
+ * previously an id an Operator had no way to resolve, since `GET /api/users/`
+ * is admin-only; that constraint no longer applies, since every role now
+ * receives the name directly. `null` still means "unknown" (the snoozing
+ * user was deleted).
+ */
 export interface SnoozeActivatedData {
   log_id: number
   camera_id: number
-  snoozed_by: number | null
+  snoozed_by: string | null
   snoozed_until: string
 }
 
@@ -284,7 +292,7 @@ export function asSnoozeActivatedData(data: Record<string, unknown>): SnoozeActi
   if (
     typeof data.log_id !== "number" ||
     typeof data.camera_id !== "number" ||
-    !isNullableNumber(data.snoozed_by) ||
+    !isNullableString(data.snoozed_by) ||
     typeof data.snoozed_until !== "string"
   ) {
     return null

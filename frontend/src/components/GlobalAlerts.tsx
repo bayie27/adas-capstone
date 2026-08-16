@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
+import { useAuthStore } from "@/store/useAuthStore"
 import { useNow } from "@/hooks/useNow"
 import {
   confirmAlert,
@@ -47,6 +48,7 @@ export function GlobalAlerts() {
   const snoozedUntil = useAlertStore((state) => state.snoozedUntil)
   const removeAlert = useAlertStore((state) => state.removeAlert)
   const activateSnooze = useAlertStore((state) => state.activateSnooze)
+  const username = useAuthStore((state) => state.username)
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<IncidentHandledInfo | null>(null)
@@ -111,8 +113,11 @@ export function GlobalAlerts() {
       // SNOOZE_ACTIVATED broadcast — this tab acted, so it shouldn't need
       // to hear its own echo to mute. Other connected tabs still get it via
       // the broadcast, same as every other transition in this component.
+      // The broadcast carries a formatted name (P21 Step 3); this tab has no
+      // equivalent lookup for its own actor without an extra fetch, so it
+      // uses the session's own username as "who" for its own action.
       if (snoozed.snoozed_until) {
-        activateSnooze(logId, snoozed.snoozed_until)
+        activateSnooze(logId, snoozed.snoozed_until, username)
       }
     } catch (err) {
       // Same distinction runAction makes for confirm/dismiss/resolve: a lost

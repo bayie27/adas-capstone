@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { asMaintenanceNoticeData, parseEventEnvelope } from "@/api/events"
+import { asMaintenanceNoticeData, asSnoozeActivatedData, parseEventEnvelope } from "@/api/events"
 
 // MAINTENANCE_NOTICE was absent from three places at once: the
 // RealtimeEventType union, the EVENT_TYPES runtime array backing
@@ -59,5 +59,50 @@ describe("asMaintenanceNoticeData", () => {
 
   it("rejects a backup_id that is present but not a string or null", () => {
     expect(asMaintenanceNoticeData({ message: "x", backup_id: 42 })).toBeNull()
+  })
+})
+
+// P21 Step 3 (breaking): snoozed_by went from an id an Operator had no way
+// to resolve (GET /api/users/ is admin-only) to a formatted display name
+// sent to every role. The validator originally shipped checking a number
+// and silently discarded every real envelope after the backend changed —
+// this is the regression guard against that ever happening again.
+describe("asSnoozeActivatedData", () => {
+  it("accepts a real envelope carrying the formatted name P21 actually sends", () => {
+    expect(
+      asSnoozeActivatedData({
+        log_id: 42,
+        camera_id: 3,
+        snoozed_by: "Jane Doe",
+        snoozed_until: "2026-08-17T00:05:00Z",
+      }),
+    ).toEqual({
+      log_id: 42,
+      camera_id: 3,
+      snoozed_by: "Jane Doe",
+      snoozed_until: "2026-08-17T00:05:00Z",
+    })
+  })
+
+  it("accepts a null snoozed_by — the snoozing user has since been deleted", () => {
+    expect(
+      asSnoozeActivatedData({
+        log_id: 42,
+        camera_id: 3,
+        snoozed_by: null,
+        snoozed_until: "2026-08-17T00:05:00Z",
+      }),
+    ).toEqual({ log_id: 42, camera_id: 3, snoozed_by: null, snoozed_until: "2026-08-17T00:05:00Z" })
+  })
+
+  it("rejects the old pre-P21 shape — a numeric snoozed_by is no longer valid", () => {
+    expect(
+      asSnoozeActivatedData({
+        log_id: 42,
+        camera_id: 3,
+        snoozed_by: 7,
+        snoozed_until: "2026-08-17T00:05:00Z",
+      }),
+    ).toBeNull()
   })
 })

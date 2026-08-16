@@ -120,7 +120,7 @@ export function RealtimeAlertsBridge() {
       }
       case "SNOOZE_ACTIVATED": {
         const snooze = asSnoozeActivatedData(envelope.data)
-        if (snooze) activateSnooze(snooze.log_id, snooze.snoozed_until)
+        if (snooze) activateSnooze(snooze.log_id, snooze.snoozed_until, snooze.snoozed_by)
         return
       }
       case "RE_ALARM": {
@@ -252,9 +252,14 @@ export function RealtimeAlertsBridge() {
         for (const log of [...alertsResponse.logs].reverse()) {
           addAlert(log)
           // Step 4: rebuild snooze state from the persisted field, never
-          // from a previously received WS message.
+          // from a previously received WS message. No display name is
+          // available on this REST shape (only snoozed_by_id) -- passing
+          // null here is deliberate, not a loss: Detections.tsx's own
+          // describeSnoozedRow already falls back to resolving snoozed_by_id
+          // against the (admin-only) user list when the store carries no
+          // broadcast-sourced name for this incident.
           if (log.snoozed_until) {
-            activateSnooze(log.log_id, log.snoozed_until)
+            activateSnooze(log.log_id, log.snoozed_until, null)
           }
         }
 
