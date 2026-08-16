@@ -12,6 +12,7 @@ import {
   RiCameraLine,
   RiDashboardLine,
   RiFileHistoryLine,
+  RiHardDrive2Line,
   RiLayoutGridLine,
   RiLogoutBoxRLine,
   RiPulseLine,
@@ -78,6 +79,7 @@ export function Sidebar() {
           ? [
               { name: "Users", to: "/admin/users", icon: RiUserLine },
               { name: "Audit Log", to: "/admin/audit", icon: RiFileHistoryLine },
+              { name: "Maintenance", to: "/admin/maintenance", icon: RiHardDrive2Line },
             ]
           : [],
     },

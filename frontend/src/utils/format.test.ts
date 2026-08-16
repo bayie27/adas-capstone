@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { describeCameraDesiredState, isCameraInCooldown } from "@/utils/format"
+import { describeCameraDesiredState, formatFileSize, isCameraInCooldown } from "@/utils/format"
 
 const NOW = Date.parse("2026-08-14T12:00:00Z")
 
@@ -55,5 +55,14 @@ describe("isCameraInCooldown", () => {
     expect(isCameraInCooldown(camera("cooldown"))).toBe(true)
     expect(isCameraInCooldown(camera("incident"))).toBe(false)
     expect(isCameraInCooldown(camera(null))).toBe(false)
+  })
+})
+
+describe("formatFileSize", () => {
+  it("renders bytes, KB, MB and GB at their natural boundaries", () => {
+    expect(formatFileSize(512)).toBe("512 B")
+    expect(formatFileSize(2048)).toBe("2.0 KB")
+    expect(formatFileSize(5 * 1024 * 1024)).toBe("5.0 MB")
+    expect(formatFileSize(3 * 1024 * 1024 * 1024)).toBe("3.00 GB")
   })
 })
