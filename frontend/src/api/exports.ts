@@ -30,6 +30,16 @@ export interface ExportJobCreateParams {
   search?: string
   sort_by?: string
   sort_order?: "asc" | "desc"
+  /**
+   * `report_type: "audit"` only (P21 Step 5, `schemas/exports.py:39-41`).
+   * Validated 422 against the same 26-entry AUDIT_ACTIONS catalog the
+   * synchronous export route already checks — the filters genuinely reach
+   * the worker, which has its own end-to-end test asserting the produced
+   * artifact only contains the filtered rows.
+   */
+  action?: string[]
+  result?: string[]
+  target_type?: string[]
 }
 
 export interface ExportJobCreateResponse {

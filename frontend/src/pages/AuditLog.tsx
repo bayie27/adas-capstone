@@ -156,20 +156,6 @@ export default function AuditLog() {
 
   const exportJobMutation = useExportJobSubmit()
 
-  /**
-   * `POST /api/exports/jobs`'s body (`ExportJobCreate`, `extra="forbid"`)
-   * has no `action`, `result` or `target_type` field — only
-   * start_date/end_date/status/camera_id/user_id/search/sort. The worker's
-   * own audit generator reads those three from the job's stored filters
-   * (`services/reports/jobs.py:312-347`), but the create route has no way
-   * to accept them from a client at all, so a job submitted while any of
-   * the three is active would silently export an unfiltered (or
-   * differently filtered) set than what's on screen. Rather than fabricate
-   * a background export that doesn't match the visible table, the job
-   * fallback is only offered when none of the three is set.
-   */
-  const jobFiltersSupported = !action && !result && !targetType
-
   // usePagination is seeded with 0 above (the total isn't known until the
   // query resolves); re-derive totalPages/page against the real total so
   // the footer and the clamp agree with what actually came back.
@@ -297,26 +283,33 @@ export default function AuditLog() {
           against routes/audit.py that GET /api/audit-logs/export's
           synchronous route genuinely returns a real PDF today, not a stub
           waiting on Phase 17's job queue.
+
+          ExportJobCreate gained action/result/target_type in P21 Step 5 --
+          the async job path can now carry the same three filters the
+          synchronous export always could, so the job no longer needs to be
+          withheld while any of them is active (previously disabled here,
+          since a job submitted without them would silently export a
+          different set than what the screen showed).
         */}
         <ExportButton
           rowCount={totalFiltered}
           isExporting={exportMutation.isPending}
           onExport={(format) => exportMutation.mutate(format)}
           isSubmittingJob={exportJobMutation.isPending}
-          onExportJob={
-            jobFiltersSupported
-              ? (format) =>
-                  exportJobMutation.mutateAsync({
-                    report_type: "audit",
-                    format,
-                    search: debouncedSearch || undefined,
-                    start_date: startDate || undefined,
-                    end_date: endDate || undefined,
-                    user_id: userId ? [Number(userId)] : undefined,
-                    sort_by: sort.key,
-                    sort_order: sort.order,
-                  })
-              : undefined
+          onExportJob={(format) =>
+            exportJobMutation.mutateAsync({
+              report_type: "audit",
+              format,
+              search: debouncedSearch || undefined,
+              start_date: startDate || undefined,
+              end_date: endDate || undefined,
+              user_id: userId ? [Number(userId)] : undefined,
+              action: action ? [action] : undefined,
+              result: result ? [result] : undefined,
+              target_type: targetType ? [targetType] : undefined,
+              sort_by: sort.key,
+              sort_order: sort.order,
+            })
           }
         />
       </div>
