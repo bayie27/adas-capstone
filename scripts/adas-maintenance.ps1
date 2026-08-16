@@ -18,12 +18,28 @@
     script from the beginning) before running Restart/Restore, which need
     to know what to stop.
 
+    Every invocation is captured under -LogDir (default var\log\):
+    Start-Transcript/Stop-Transcript records the whole run, and the
+    backend/AI-engine child processes are launched with
+    -RedirectStandardOutput/-RedirectStandardError instead of the old
+    -WindowStyle Minimized console that vanished with nothing recoverable
+    once closed (be_audit/00_FINDINGS.md F22 — this is what blocked the
+    2026-08-11 restart drill's model-load-time measurement). A -Action
+    Restart run also appends one JSON line to
+    var\log\maintenance-runs.jsonl, which GET /api/system/maintenance/status
+    reads for its last_restart field.
+
 .PARAMETER Action
     Start | Stop | Backup | Restart | Restore | Archive
 
 .PARAMETER BackupId
     Required for -Action Restore — the backup id to restore (see
     `uv run python -m app.maintenance list`).
+
+.PARAMETER LogDir
+    Where transcripts, component stdout/stderr logs, and
+    maintenance-runs.jsonl are written. Relative paths resolve against the
+    repo root. Created if absent.
 
 .EXAMPLE
     scripts\adas-maintenance.ps1 -Action Start
@@ -40,7 +56,9 @@ param(
 
     [string]$BackupId,
 
-    [int]$ReadyTimeoutSeconds = 60
+    [int]$ReadyTimeoutSeconds = 60,
+
+    [string]$LogDir = "var\log"
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,6 +69,9 @@ $RunDir = Join-Path $RepoRoot "var\run"
 New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
 $BackendPidFile = Join-Path $RunDir "backend.pid"
 $AiPidFile = Join-Path $RunDir "ai_engine.pid"
+
+$LogDirFull = if ([System.IO.Path]::IsPathRooted($LogDir)) { $LogDir } else { Join-Path $RepoRoot $LogDir }
+New-Item -ItemType Directory -Force -Path $LogDirFull | Out-Null
 
 function Write-Step($message) {
     Write-Host "[adas-maintenance] $message" -ForegroundColor Cyan
@@ -75,7 +96,30 @@ function Invoke-Maintenance([string[]]$MaintenanceArgs) {
     try {
         $output = & uv run --no-sync python -m app.maintenance @MaintenanceArgs
         $output | ForEach-Object { Write-Host $_ }
-        return $LASTEXITCODE
+        $exitCode = $LASTEXITCODE
+
+        # The CLI's success/failure paths both print one JSON object to
+        # stdout (see app/maintenance/cli.py) — parsed here so callers can
+        # pull structured fields (backup_id, timings, heartbeat_confirmed,
+        # ...) for the maintenance-runs.jsonl record, on top of the plain
+        # exit-code check every caller already did. A parse failure just
+        # means no structured data was available (e.g. an ERROR: line went
+        # to stderr, which this capture never sees) — not a script error.
+        $data = $null
+        $jsonText = ($output -join "`n").Trim()
+        if ($jsonText) {
+            try {
+                $data = $jsonText | ConvertFrom-Json
+            }
+            catch {
+                $data = $null
+            }
+        }
+
+        return [PSCustomObject]@{
+            ExitCode = $exitCode
+            Data     = $data
+        }
     }
     finally {
         Pop-Location
@@ -117,119 +161,243 @@ function Stop-TrackedProcess([string]$PidFile, [string]$Label) {
 
 function Start-Backend {
     Write-Step "Starting backend..."
+    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $stdout = Join-Path $LogDirFull "backend-$timestamp.log"
+    $stderr = Join-Path $LogDirFull "backend-$timestamp.err.log"
+    # -WindowStyle Hidden, not Minimized: Start-Process's
+    # -RedirectStandardOutput/-RedirectStandardError only reliably applies
+    # with a hidden window — the two redirect targets must also be distinct
+    # files (backend's own .log vs .err.log here), or Start-Process throws.
     $proc = Start-Process -FilePath "uv" `
         -ArgumentList "run", "fastapi", "run", "backend/app/main.py" `
-        -WorkingDirectory $RepoRoot -PassThru -WindowStyle Minimized
+        -WorkingDirectory $RepoRoot -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     Set-Content -Path $BackendPidFile -Value $proc.Id
-    Write-Step "Backend started (PID $($proc.Id))."
+    Write-Step "Backend started (PID $($proc.Id)). Logs: $stdout / $stderr"
 }
 
 function Start-AiEngine {
     Write-Step "Starting AI engine..."
+    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $stdout = Join-Path $LogDirFull "ai_engine-$timestamp.log"
+    $stderr = Join-Path $LogDirFull "ai_engine-$timestamp.err.log"
     $proc = Start-Process -FilePath "uv" `
         -ArgumentList "run", "python", "ai_engine/main.py" `
-        -WorkingDirectory $RepoRoot -PassThru -WindowStyle Minimized
+        -WorkingDirectory $RepoRoot -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     Set-Content -Path $AiPidFile -Value $proc.Id
-    Write-Step "AI engine started (PID $($proc.Id))."
+    Write-Step "AI engine started (PID $($proc.Id)). Logs: $stdout / $stderr"
 }
 
 function Wait-Ready {
     Write-Step "Waiting for /healthz/ready and a fresh AI heartbeat (timeout ${ReadyTimeoutSeconds}s)..."
-    $exitCode = Invoke-Maintenance @("restart", "--phase", "wait", "--timeout", $ReadyTimeoutSeconds)
-    return $exitCode -eq 0
+    $result = Invoke-Maintenance @("restart", "--phase", "wait", "--timeout", $ReadyTimeoutSeconds)
+    $heartbeatConfirmed = $false
+    if ($result.Data -and $null -ne $result.Data.heartbeat_confirmed) {
+        $heartbeatConfirmed = [bool]$result.Data.heartbeat_confirmed
+    }
+    return [PSCustomObject]@{
+        Ready              = ($result.ExitCode -eq 0)
+        HeartbeatConfirmed = $heartbeatConfirmed
+    }
 }
 
-switch ($Action) {
-    "Start" {
-        Start-Backend
-        Start-AiEngine
-        Wait-Ready | Out-Null
-    }
+function Write-MaintenanceRunRecord([hashtable]$Record) {
+    $path = Join-Path $LogDirFull "maintenance-runs.jsonl"
+    $json = [PSCustomObject]$Record | ConvertTo-Json -Compress
+    Add-Content -Path $path -Value $json
+    Limit-MaintenanceRunLog -Path $path
+}
 
-    "Stop" {
-        Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
-        Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
+function Limit-MaintenanceRunLog([string]$Path) {
+    # Prune to the last 30 runs / 30 days so this cannot grow unbounded on
+    # a 24/7 box.
+    if (-not (Test-Path $Path)) {
+        return
     }
-
-    "Backup" {
-        $exitCode = Invoke-Maintenance @("backup", "--origin", "manual")
-        exit $exitCode
+    $cutoff = (Get-Date).ToUniversalTime().AddDays(-30)
+    $kept = @()
+    foreach ($line in (Get-Content $Path)) {
+        if (-not $line.Trim()) {
+            continue
+        }
+        try {
+            $entry = $line | ConvertFrom-Json
+            # ConvertFrom-Json auto-converts an ISO 8601 string like
+            # started_at into a [datetime] on PowerShell 7+, but leaves it
+            # a plain string on Windows PowerShell 5.1 — handle both rather
+            # than assuming one.
+            $entryTime = if ($entry.started_at -is [datetime]) {
+                $entry.started_at
+            }
+            else {
+                [datetime]::Parse(
+                    [string]$entry.started_at, $null,
+                    [System.Globalization.DateTimeStyles]::RoundtripKind
+                )
+            }
+            if ($entryTime -ge $cutoff) {
+                $kept += $line
+            }
+        }
+        catch {
+            # Corrupt/unparseable line — drop it rather than let it wedge
+            # pruning forever.
+        }
     }
+    if ($kept.Count -gt 30) {
+        $kept = $kept[($kept.Count - 30)..($kept.Count - 1)]
+    }
+    Set-Content -Path $Path -Value $kept
+}
 
-    "Restart" {
+function Invoke-RestartAction {
+    # A dedicated function (rather than inline in the switch statement)
+    # purely so a single try/finally can guarantee the run record is
+    # written on every exit path, including an unhandled exception —
+    # "a nightly run that crashed is the case this file exists for." No
+    # early `return` inside the try: PowerShell can't recover a
+    # short-circuited return value inside its own finally block, so every
+    # branch below assigns $exitCode and falls through instead.
+    $startedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    $backupId = $null
+    $backupDurationS = $null
+    $downtimeS = $null
+    $ready = $false
+    $heartbeatConfirmed = $false
+    $exitCode = 1
+
+    try {
         # D-011 / Step 7: backup first (online, services still up), timed
         # separately from restart downtime.
         Write-Step "Phase 1/2: online backup."
-        $backupExit = Invoke-Maintenance @("backup", "--origin", "scheduled")
-        if ($backupExit -ne 0) {
-            Write-Error "Scheduled backup failed; aborting restart without touching running services."
-            exit 1
+        $backupResult = Invoke-Maintenance @("backup", "--origin", "scheduled")
+        if ($backupResult.Data) {
+            $backupId = $backupResult.Data.backup_id
+            $backupDurationS = $backupResult.Data.duration_seconds
         }
 
-        Write-Step "Phase 2/2: restart downtime."
-        $restartStart = Get-Date
-        Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
-        Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
-        Start-Backend
-        Start-AiEngine
-        $ready = Wait-Ready
-        $downtime = (Get-Date) - $restartStart
-        Write-Step "Restart downtime: $($downtime.TotalSeconds) seconds."
-        if (-not $ready) {
-            Write-Error "Restart did not reach ready+heartbeat within ${ReadyTimeoutSeconds}s. Investigate before relying on this instance."
-            exit 1
+        if ($backupResult.ExitCode -eq 0) {
+            Write-Step "Phase 2/2: restart downtime."
+            $restartStart = Get-Date
+            Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
+            Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
+            Start-Backend
+            Start-AiEngine
+            $waitResult = Wait-Ready
+            $downtimeS = ((Get-Date) - $restartStart).TotalSeconds
+            Write-Step "Restart downtime: $downtimeS seconds."
+            $ready = $waitResult.Ready
+            $heartbeatConfirmed = $waitResult.HeartbeatConfirmed
+
+            if ($ready) {
+                $exitCode = 0
+            }
+            else {
+                Write-Error "Restart did not reach ready+heartbeat within ${ReadyTimeoutSeconds}s. Investigate before relying on this instance."
+                $exitCode = 1
+            }
+        }
+        else {
+            Write-Error "Scheduled backup failed; aborting restart without touching running services."
+            $exitCode = 1
+        }
+    }
+    finally {
+        Write-MaintenanceRunRecord -Record @{
+            started_at          = $startedAt
+            action              = "Restart"
+            backup_id           = $backupId
+            backup_duration_s   = $backupDurationS
+            downtime_s          = $downtimeS
+            ready               = $ready
+            heartbeat_confirmed = $heartbeatConfirmed
+            exit_code           = $exitCode
         }
     }
 
-    "Restore" {
-        if (-not $BackupId) {
-            Write-Error "-BackupId is required for -Action Restore."
-            exit 1
-        }
+    return $exitCode
+}
 
-        Write-Step "Stopping services for offline restore..."
-        Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
-        Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
+$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$transcriptPath = Join-Path $LogDirFull "maintenance-$Action-$timestamp.transcript.log"
+Start-Transcript -Path $transcriptPath | Out-Null
 
-        Write-Step "Running offline restore for backup $BackupId..."
-        $restoreExit = Invoke-Maintenance @("restore", $BackupId)
-
-        if ($restoreExit -ne 0) {
-            Write-Error "Offline restore reported failure before touching the primary database. Restarting original services unchanged."
+try {
+    switch ($Action) {
+        "Start" {
             Start-Backend
             Start-AiEngine
             Wait-Ready | Out-Null
+        }
+
+        "Stop" {
+            Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
+            Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
+        }
+
+        "Backup" {
+            $result = Invoke-Maintenance @("backup", "--origin", "manual")
+            exit $result.ExitCode
+        }
+
+        "Restart" {
+            exit (Invoke-RestartAction)
+        }
+
+        "Restore" {
+            if (-not $BackupId) {
+                Write-Error "-BackupId is required for -Action Restore."
+                exit 1
+            }
+
+            Write-Step "Stopping services for offline restore..."
+            Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
+            Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
+
+            Write-Step "Running offline restore for backup $BackupId..."
+            $restoreResult = Invoke-Maintenance @("restore", $BackupId)
+
+            if ($restoreResult.ExitCode -ne 0) {
+                Write-Error "Offline restore reported failure before touching the primary database. Restarting original services unchanged."
+                Start-Backend
+                Start-AiEngine
+                Wait-Ready | Out-Null
+                exit 1
+            }
+
+            Write-Step "Restore swapped the database. Starting services..."
+            Start-Backend
+            Start-AiEngine
+            $waitResult = Wait-Ready
+
+            if ($waitResult.Ready) {
+                Write-Step "Restore verified healthy. Finalizing."
+                Invoke-Maintenance @("restore", "--finalize", "completed") | Out-Null
+                exit 0
+            }
+
+            Write-Error "Restored system failed to become healthy. Rolling back to the emergency pre-restore backup."
+            Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
+            Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
+            $rollbackResult = Invoke-Maintenance @("rollback")
+            Start-Backend
+            Start-AiEngine
+            $rollbackWaitResult = Wait-Ready
+            if ($rollbackResult.ExitCode -ne 0 -or -not $rollbackWaitResult.Ready) {
+                Write-Error "ROLLBACK FAILED or the rolled-back system did not become healthy. Manual intervention required."
+                exit 2
+            }
+            Write-Step "Rollback complete; original system restored."
             exit 1
         }
 
-        Write-Step "Restore swapped the database. Starting services..."
-        Start-Backend
-        Start-AiEngine
-        $ready = Wait-Ready
-
-        if ($ready) {
-            Write-Step "Restore verified healthy. Finalizing."
-            Invoke-Maintenance @("restore", "--finalize", "completed") | Out-Null
-            exit 0
+        "Archive" {
+            $result = Invoke-Maintenance @("archive")
+            exit $result.ExitCode
         }
-
-        Write-Error "Restored system failed to become healthy. Rolling back to the emergency pre-restore backup."
-        Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
-        Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
-        $rollbackExit = Invoke-Maintenance @("rollback")
-        Start-Backend
-        Start-AiEngine
-        $rollbackReady = Wait-Ready
-        if ($rollbackExit -ne 0 -or -not $rollbackReady) {
-            Write-Error "ROLLBACK FAILED or the rolled-back system did not become healthy. Manual intervention required."
-            exit 2
-        }
-        Write-Step "Rollback complete; original system restored."
-        exit 1
     }
-
-    "Archive" {
-        $exitCode = Invoke-Maintenance @("archive")
-        exit $exitCode
-    }
+}
+finally {
+    Stop-Transcript | Out-Null
 }
