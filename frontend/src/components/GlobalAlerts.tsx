@@ -115,7 +115,19 @@ export function GlobalAlerts() {
         activateSnooze(logId, snoozed.snoozed_until)
       }
     } catch (err) {
-      setError(getApiErrorMessage(err, "Failed to snooze alert."))
+      // Same distinction runAction makes for confirm/dismiss/resolve: a lost
+      // race (409 CONFLICT_STATE) names the colleague who got there first,
+      // via the same already-handled dialog. A 400 PRECONDITION_FAILED —
+      // the incident is no longer Unverified — is not a race to explain;
+      // its own plain-string detail ("Only an 'Unverified' incident can be
+      // snoozed.") is specific enough to render as-is.
+      const raceLost = getIncidentConflict(err)
+      if (raceLost) {
+        setConflict(raceLost)
+        invalidateAlerts()
+      } else {
+        setError(getApiErrorMessage(err, "Failed to snooze alert."))
+      }
     } finally {
       setLoadingId(null)
     }
