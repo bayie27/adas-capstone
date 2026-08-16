@@ -65,6 +65,34 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
+# Live-drilled finding (P18 Step 8): ai_engine/main.py's startup output is
+# plain print() with no flush=True, and Python block-buffers stdout/stderr
+# whenever they're not a real console (exactly what -RedirectStandardOutput/
+# -RedirectStandardError makes them) -- the model-load line sat in an
+# in-process buffer and never reached the log file while the process kept
+# running, defeating the point of Step 5's persistent logs for the one
+# component F22 was actually about. ai_engine/ itself is off-limits to
+# edit, so this is fixed here instead: PYTHONUNBUFFERED forces Python to
+# flush every line regardless of what the target script does. Child
+# processes started via Start-Process below inherit this from the current
+# process environment.
+$env:PYTHONUNBUFFERED = "1"
+
+# Live-drilled finding (P18 Step 8, unattended-trigger drill): the very
+# first real 3 AM-equivalent unattended restart crashed the backend before
+# it ever became ready. -RedirectStandardOutput/-RedirectStandardError
+# detach stdout/stderr from a real console, so Python falls back to the
+# process's inherited console codepage for encoding -- cp1252 under the
+# Windows Scheduled Task's launch context (which differs from whatever an
+# already-open interactive terminal may have customized), not UTF-8. FastAPI
+# CLI's startup banner ("Starting production server \U0001f680") then raises
+# UnicodeEncodeError trying to print that emoji, and the process dies before
+# reaching /healthz/ready -- silent in a manual interactive run, which is
+# exactly why this only surfaced on the real Task Scheduler firing and not
+# in any of this pack's earlier manual drills. PYTHONUTF8 forces UTF-8 mode
+# regardless of the inherited codepage.
+$env:PYTHONUTF8 = "1"
+
 $RunDir = Join-Path $RepoRoot "var\run"
 New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
 $BackendPidFile = Join-Path $RunDir "backend.pid"
@@ -294,12 +322,12 @@ function Invoke-RestartAction {
                 $exitCode = 0
             }
             else {
-                Write-Error "Restart did not reach ready+heartbeat within ${ReadyTimeoutSeconds}s. Investigate before relying on this instance."
+                Write-Error "Restart did not reach ready+heartbeat within ${ReadyTimeoutSeconds}s. Investigate before relying on this instance." -ErrorAction Continue
                 $exitCode = 1
             }
         }
         else {
-            Write-Error "Scheduled backup failed; aborting restart without touching running services."
+            Write-Error "Scheduled backup failed; aborting restart without touching running services." -ErrorAction Continue
             $exitCode = 1
         }
     }
@@ -347,7 +375,7 @@ try {
 
         "Restore" {
             if (-not $BackupId) {
-                Write-Error "-BackupId is required for -Action Restore."
+                Write-Error "-BackupId is required for -Action Restore." -ErrorAction Continue
                 exit 1
             }
 
@@ -359,7 +387,7 @@ try {
             $restoreResult = Invoke-Maintenance @("restore", $BackupId)
 
             if ($restoreResult.ExitCode -ne 0) {
-                Write-Error "Offline restore reported failure before touching the primary database. Restarting original services unchanged."
+                Write-Error "Offline restore reported failure before touching the primary database. Restarting original services unchanged." -ErrorAction Continue
                 Start-Backend
                 Start-AiEngine
                 Wait-Ready | Out-Null
@@ -377,7 +405,7 @@ try {
                 exit 0
             }
 
-            Write-Error "Restored system failed to become healthy. Rolling back to the emergency pre-restore backup."
+            Write-Error "Restored system failed to become healthy. Rolling back to the emergency pre-restore backup." -ErrorAction Continue
             Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
             Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
             $rollbackResult = Invoke-Maintenance @("rollback")
@@ -385,7 +413,7 @@ try {
             Start-AiEngine
             $rollbackWaitResult = Wait-Ready
             if ($rollbackResult.ExitCode -ne 0 -or -not $rollbackWaitResult.Ready) {
-                Write-Error "ROLLBACK FAILED or the rolled-back system did not become healthy. Manual intervention required."
+                Write-Error "ROLLBACK FAILED or the rolled-back system did not become healthy. Manual intervention required." -ErrorAction Continue
                 exit 2
             }
             Write-Step "Rollback complete; original system restored."
