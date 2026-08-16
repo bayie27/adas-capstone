@@ -69,6 +69,8 @@ export function RealtimeAlertsBridge() {
   const setConnectionId = useAlertStore((state) => state.setConnectionId)
   const setClockOffsetMs = useAlertStore((state) => state.setClockOffsetMs)
   const setReconnectSummary = useAlertStore((state) => state.setReconnectSummary)
+  const reconnectSummary = useAlertStore((state) => state.reconnectSummary)
+  const clearReconnectSummary = useAlertStore((state) => state.clearReconnectSummary)
   const showMaintenanceNotice = useMaintenanceStore((state) => state.showNotice)
 
   // The recovery sequence (01_CONTRACTS.md §9.5) must run on every accepted
@@ -329,5 +331,25 @@ export function RealtimeAlertsBridge() {
     { enabled: Boolean(role), resetKey: sessionEpoch, onClose: handleWsClose },
   )
 
-  return null
+  // Auto-dismissing rather than requiring a click — this is a courtesy
+  // ("here's what you missed"), not a decision the operator has to act on,
+  // unlike the alarm modal it must never compete with for attention.
+  useEffect(() => {
+    if (!reconnectSummary) return
+    const timer = window.setTimeout(clearReconnectSummary, 8000)
+    return () => window.clearTimeout(timer)
+  }, [reconnectSummary, clearReconnectSummary])
+
+  if (!reconnectSummary) return null
+
+  return (
+    <div
+      role="status"
+      className="fixed bottom-4 left-[288px] z-50 rounded-md border border-stroke bg-surface-1 px-4 py-2.5 text-caption text-fg-body shadow-overlay"
+    >
+      {reconnectSummary.count === 1
+        ? "1 alert arrived while you were disconnected."
+        : `${reconnectSummary.count} alerts arrived while you were disconnected.`}
+    </div>
+  )
 }
