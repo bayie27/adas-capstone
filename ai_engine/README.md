@@ -34,6 +34,12 @@ Without an NVIDIA GPU, use the CPU install instead — the two extras are mutual
 uv sync --extra ai-cpu
 ```
 
+Optionally, to run a TensorRT build on an NVIDIA machine. Not required — the engine runs on the PyTorch checkpoint, and this only adds a faster inference backend:
+
+```bash
+uv sync --extra ai --extra ai-trt
+```
+
 Then measure this machine's capacity once, and start the engine:
 
 ```bash
@@ -50,6 +56,27 @@ mediamtx mediamtx.yml
 ```
 
 or the preflighted wrapper `.\scripts\start-sim.ps1`, which checks that `ffmpeg` and `mediamtx` are on PATH and that the five clips it needs are present. Both need those prerequisites — see **Simulate camera streams** in the [root README](../README.md#running-the-system).
+
+### Choosing which build runs
+
+The engine loads the adopted checkpoint `epoch50.pt` unless told otherwise. To run a faster build, set one line in the repo-root `.env`:
+
+```bash
+AI_MODEL_PATH=ai_engine/epoch50.engine
+```
+
+Unset or commented out, it is the checkpoint. Ultralytics loads `.pt`, `.engine` and `.onnx` through the same interface, so nothing downstream changes. Relative paths resolve from the repo root, never the working directory.
+
+`main.py` prints which artifact it loaded on every start, and warns when `machine_profile.json` was measured against a different one — capacity measured on the checkpoint describes neither build once an engine is loaded.
+
+Nothing here builds an engine; export is out of band. Build one, then measure it:
+
+```bash
+uv run yolo export model=ai_engine/epoch50.pt format=engine imgsz=640 dynamic=True batch=15 half=False workspace=1 device=0
+uv run python ai_engine/capacity.py --model ai_engine/epoch50.engine
+```
+
+`dynamic=True` is not optional if you intend to measure it: an engine built for a fixed batch size runs at exactly that size, so `capacity.py`'s batch sweep dies on its second step.
 
 ---
 
@@ -69,7 +96,7 @@ The important structural line is **which modules import `cv2`**. Everything that
 | `supervisor.py`      | Reconciles local camera runtimes against the backend's heartbeat snapshot | No  |
 | `backend_client.py`  | HTTP transport to the backend, and response classification                | No  |
 | `events.py`          | Event construction: UUIDs, snapshot keys, the v2 payload                  | No  |
-| `config.py`          | Constants, band bounds, paths                                             | No  |
+| `config.py`          | Constants, band bounds, paths, model resolution                           | No  |
 | `machine_profile.py` | Read/write/validate `machine_profile.json`                                | No  |
 | `capacity.py`        | How many cameras can this machine run? Writes the profile                 | Yes |
 
@@ -89,6 +116,22 @@ The important structural line is **which modules import `cv2`**. Everything that
 - **`adas_transfer/` is frozen.** Excluded from Ruff and Prettier. It is the reference the parity gate diffs against — never edit or reformat it.
 - **Capacity is measured, not assumed.** `capacity.py` writes a gitignored `machine_profile.json`. Its absence is not an error; the engine falls back to a conservative default of one camera.
 
+  Measured on a GTX 1650, blank-frame sweep, 2026-08-16:
+
+  | build                             | @ 15 FPS   | @ 10 FPS |
+  | --------------------------------- | ---------- | -------- |
+  | `epoch50.pt`                      | 8 cameras  | 13       |
+  | `epoch50.engine` (TensorRT, FP32) | 14 cameras | ≥ 15     |
+
+  The engine's 10 FPS figure is a floor, not a measurement: the sweep stopped at batch 15 because the engine was built for that maximum, not because the machine ran out.
+
+  **The engine's detection behaviour was verified against the checkpoint on 2026-08-16**: `pytest -m clips` passed all 17 clips clip-by-clip and held false positives within the recorded baseline of 3, with the parity gate green on the checkpoint in the same run. So the speed figure and the accuracy figure describe the same artifact — capacity alone measures speed, and quoting it beside a detection claim is only honest once this has been run against the build in question.
+
+- **A TensorRT engine is not portable.** It is tied to the GPU, driver and TensorRT version that built it, so it must be rebuilt on every machine that runs it. There is no fallback: a missing or invalid model stops the process rather than quietly reverting to the checkpoint. That is deliberate — `main.py` once _preferred_ a stale `best.engine` and silently ran the wrong model.
+- **FP16 is not free speed.** Measured 1.00× against FP32 on a GTX 1650 (batch 15: 92.0 ms against 91.6 ms). The GTX 16-series has no tensor cores despite reporting compute capability 7.5, so `half=True` costs precision and returns nothing. Export with `half=False` unless a card with tensor cores is measured to disagree.
+- **TensorRT is capped below 11, and the cap is load-bearing.** `NetworkDefinitionCreationFlag.EXPLICIT_BATCH` was removed in TensorRT 11, but ultralytics 8.4.41 still calls it, so every export dies with an `AttributeError`. Do not relax the pin until upstream supports TRT 11.
+- **`workspace` in the Ultralytics exporter does two jobs.** It is the build-time scratch budget _and_ a multiplier on the maximum dynamic input shape. Raising it makes the build dramatically more expensive, not merely roomier.
+
 ---
 
 ## Testing
@@ -99,6 +142,8 @@ uv run pytest -m clips     # needs a GPU and eval/clips populated
 ```
 
 `clips`-marked tests are excluded by default so CI stays fast and GPU-free. They are the ones that re-measure detection quality; everything else is pure logic with fakes standing in for cameras and the model.
+
+`-m clips` follows `AI_MODEL_PATH`, so it tests the build you actually run. The one exception is the parity gate, pinned to the checkpoint on purpose: it proves that _porting the code_ changed no behaviour, and swapping the build would stop a failure from distinguishing a broken port from shifted numerics.
 
 ---
 

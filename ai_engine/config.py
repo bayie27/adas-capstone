@@ -41,7 +41,68 @@ UNRESPONSIVE_AFTER_FAILURES = 3  # D-003
 # Every value below is closed with a measurement in adas_transfer/SPEC.md.
 # Do not tune them without new evidence.
 
-WEIGHTS_PATH = Path(__file__).resolve().parent / "epoch50.pt"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+# The adopted checkpoint, and the default every entry point loads.
+DEFAULT_WEIGHTS_PATH = Path(__file__).resolve().parent / "epoch50.pt"
+
+
+def under_repo_root(path) -> Path:
+    """Any model path as an absolute one, relative values taken from the repo
+    root rather than the working directory.
+
+    Used everywhere a model path is interpreted — the env var, the CLI
+    argument, and the path recorded in a machine profile — so that the same
+    string always means the same file. Resolving relative paths against the
+    CWD instead produced a live bug: a profile recording `ai_engine/x.engine`
+    compared unequal to itself when read from inside ai_engine/.
+    """
+    path = Path(path)
+    return path if path.is_absolute() else REPO_ROOT / path
+
+
+def _model_path_from_env() -> Path:
+    """AI_MODEL_PATH if set, else the adopted checkpoint.
+
+    This is how a TensorRT engine or ONNX export is put into service without
+    a code change: set AI_MODEL_PATH in the repo-root .env, and every entry
+    point that imports config picks it up. Ultralytics loads all three formats
+    through the same YOLO(path), so nothing downstream needs to know which.
+
+    A RELATIVE value resolves against the repo root, not the working
+    directory — same rule as the backend's DATABASE_URL. Everything here is
+    run from the repo root, and a CWD-relative model path would silently mean
+    a different file the first time something isn't.
+    """
+    raw = os.environ.get("AI_MODEL_PATH")
+    if not raw:
+        return DEFAULT_WEIGHTS_PATH
+    return under_repo_root(raw)
+
+
+WEIGHTS_PATH = _model_path_from_env()
+
+
+def resolve_model_path(candidate=None) -> Path:
+    """The model to load: `candidate` if given, else WEIGHTS_PATH.
+
+    A path that does not exist is FATAL, never a fallback to the checkpoint.
+    That rule is the whole point: main.py once preferred a stale best.engine
+    over the adopted weights and ran the wrong model with no error at all, so
+    a run must load the model it was told to load or refuse to start.
+    """
+    # Absolute, so whatever is handed on — in particular the model_path a
+    # machine profile records — is unambiguous rather than CWD-dependent.
+    path = under_repo_root(candidate) if candidate else WEIGHTS_PATH
+    if not path.exists():
+        raise SystemExit(
+            f"[ai_engine] model not found: {path}\n"
+            "Nothing falls back to the checkpoint. Check AI_MODEL_PATH in .env "
+            "(or --model), or clear it to use the default epoch50.pt."
+        )
+    return path
+
+
 # Written by capacity.py; machine-specific and gitignored.
 PROFILE_PATH = Path(__file__).resolve().parent / "machine_profile.json"
 

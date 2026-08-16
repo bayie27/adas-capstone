@@ -37,12 +37,24 @@ both ends of the FPS band. Writes `ai_engine/machine_profile.json`
 (gitignored, machine-specific), which `main.py` reads at startup.
 
     Device: 0
-    CAPACITY: 8 camera(s) at 15 FPS, or 12 at 10 FPS.
+    CAPACITY: 8 camera(s) at 15 FPS, or 13 at 10 FPS.
 
-Two flags: `--cameras N` records a lower target than the measured maximum,
+Three flags: `--cameras N` records a lower target than the measured maximum,
 which is a reasonable choice on a machine also running the dev server and a
 browser; `--sample-frame <video>` measures against real footage instead of a
-blank frame.
+blank frame; `--model <path>` benchmarks a built artifact — a TensorRT engine
+or an ONNX export — instead of the configured checkpoint.
+
+The profile records whichever model was benchmarked, so it is self-describing,
+and `main.py` warns at startup when the profile was measured against a build
+other than the one it is loading. A path that does not exist is fatal rather
+than a fallback: a profile claiming capacity for an artifact that was never
+measured is worse than no profile.
+
+The same GTX 1650, measured against a TensorRT engine (FP32, dynamic shapes,
+max batch 15) on 2026-08-16, reports 14 cameras at 15 FPS and at least 15 at
+10 FPS — "at least" because the sweep stops where the engine's batch ceiling
+is, not where the machine's is.
 
 Run it once per machine. Absence of a profile is not an error — the engine
 falls back to a conservative one camera and says so on startup.

@@ -51,7 +51,13 @@ ai-cpu = [
     { name = "ultralytics" },
 ]
 ai-trt = [
-    { name = "tensorrt" },
+    { name = "onnx" },
+    { name = "onnxruntime-gpu", marker = "sys_platform == 'linux' or sys_platform == 'win32' or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "onnxslim" },
+    { name = "tensorrt", marker = "sys_platform == 'linux' or sys_platform == 'win32' or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "tensorrt-cu13", marker = "sys_platform == 'linux' or sys_platform == 'win32' or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "tensorrt-cu13-bindings", marker = "sys_platform == 'linux' or sys_platform == 'win32' or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "tensorrt-cu13-libs", marker = "sys_platform == 'linux' or sys_platform == 'win32' or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 
 [package.dev-dependencies]
@@ -71,6 +77,9 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.136.1" },
     { name = "fpdf2", specifier = ">=2.8.8" },
     { name = "nvidia-ml-py", specifier = ">=13.590.20" },
+    { name = "onnx", marker = "extra == 'ai-trt'", specifier = ">=1.19.0" },
+    { name = "onnxruntime-gpu", marker = "(sys_platform == 'linux' and extra == 'ai-trt') or (sys_platform == 'win32' and extra == 'ai-trt')", specifier = ">=1.28.0" },
+    { name = "onnxslim", marker = "extra == 'ai-trt'", specifier = ">=0.1.90" },
     { name = "opencv-python", marker = "extra == 'ai'", specifier = ">=4.13.0.92" },
     { name = "opencv-python", marker = "extra == 'ai-cpu'", specifier = ">=4.13.0.92" },
     { name = "passlib", extras = ["argon2"], specifier = ">=1.7.4" },
@@ -81,7 +90,10 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.26" },
     { name = "requests", specifier = ">=2.33.1" },
     { name = "sqlmodel", specifier = ">=0.0.38" },
-    { name = "tensorrt", marker = "extra == 'ai-trt'", specifier = ">=10.16.1.11" },
+    { name = "tensorrt", marker = "(sys_platform == 'linux' and extra == 'ai-trt') or (sys_platform == 'win32' and extra == 'ai-trt')", specifier = ">=10.16.1.11,<11", index = "https://pypi.nvidia.com/" },
+    { name = "tensorrt-cu13", marker = "(sys_platform == 'linux' and extra == 'ai-trt') or (sys_platform == 'win32' and extra == 'ai-trt')", specifier = ">=10.16.1.11,<11", index = "https://pypi.nvidia.com/" },
+    { name = "tensorrt-cu13-bindings", marker = "(sys_platform == 'linux' and extra == 'ai-trt') or (sys_platform == 'win32' and extra == 'ai-trt')", specifier = ">=10.16.1.11,<11", index = "https://pypi.nvidia.com/" },
+    { name = "tensorrt-cu13-libs", marker = "(sys_platform == 'linux' and extra == 'ai-trt') or (sys_platform == 'win32' and extra == 'ai-trt')", specifier = ">=10.16.1.11,<11", index = "https://pypi.nvidia.com/" },
     { name = "torch", marker = "extra == 'ai'", specifier = ">=2.11.0", index = "https://download.pytorch.org/whl/cu130", conflict = { package = "adas-capstone", extra = "ai" } },
     { name = "torch", marker = "extra == 'ai-cpu'", specifier = ">=2.11.0", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "adas-capstone", extra = "ai-cpu" } },
     { name = "torchvision", marker = "extra == 'ai'", specifier = ">=0.26.0", index = "https://download.pytorch.org/whl/cu130", conflict = { package = "adas-capstone", extra = "ai" } },
@@ -319,7 +331,7 @@ name = "cuda-bindings"
 version = "13.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cuda-pathfinder", marker = "extra == 'extra-13-adas-capstone-ai'" },
+    { name = "cuda-pathfinder", marker = "(sys_platform != 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/52/c8/b2589d68acf7e3d63e2be330b84bc25712e97ed799affbca7edd7eae25d6/cuda_bindings-13.2.0-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:e865447abfb83d6a98ad5130ed3c70b1fc295ae3eeee39fd07b4ddb0671b6788", size = 5722404, upload-time = "2026-03-11T00:12:44.041Z" },
@@ -345,37 +357,37 @@ wheels = [
 
 [package.optional-dependencies]
 cublas = [
-    { name = "nvidia-cublas", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (sys_platform == 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "nvidia-cublas", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 cudart = [
-    { name = "nvidia-cuda-runtime", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (sys_platform == 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "nvidia-cuda-runtime", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 cufft = [
-    { name = "nvidia-cufft", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (sys_platform == 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "nvidia-cufft", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 cufile = [
     { name = "nvidia-cufile", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 cupti = [
-    { name = "nvidia-cuda-cupti", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (sys_platform == 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "nvidia-cuda-cupti", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 curand = [
-    { name = "nvidia-curand", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (sys_platform == 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "nvidia-curand", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 cusolver = [
-    { name = "nvidia-cusolver", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (sys_platform == 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "nvidia-cusolver", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 cusparse = [
-    { name = "nvidia-cusparse", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (sys_platform == 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "nvidia-cusparse", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 nvjitlink = [
-    { name = "nvidia-nvjitlink", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (sys_platform == 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "nvidia-nvjitlink", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 nvrtc = [
-    { name = "nvidia-cuda-nvrtc", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (sys_platform == 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "nvidia-cuda-nvrtc", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 nvtx = [
-    { name = "nvidia-nvtx", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (sys_platform == 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "nvidia-nvtx", marker = "(sys_platform == 'linux' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 
 [[package]]
@@ -526,6 +538,14 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b5/fe/997687a931ab51049acce6fa1f23e8f01216374ea81374ddee763c493db5/filelock-3.29.0.tar.gz", hash = "sha256:69974355e960702e789734cb4871f884ea6fe50bd8404051a3530bc07809cf90", size = 57571, upload-time = "2026-04-19T15:39:10.068Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/81/47/dd9a212ef6e343a6857485ffe25bba537304f1913bdbed446a23f7f592e1/filelock-3.29.0-py3-none-any.whl", hash = "sha256:96f5f6344709aa1572bbf631c640e4ebeeb519e08da902c39a001882f30ac258", size = 39812, upload-time = "2026-04-19T15:39:08.752Z" },
+]
+
+[[package]]
+name = "flatbuffers"
+version = "25.12.19"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e8/2d/d2a548598be01649e2d46231d151a6c56d10b964d94043a335ae56ea2d92/flatbuffers-25.12.19-py2.py3-none-any.whl", hash = "sha256:7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4", size = 26661, upload-time = "2025-12-19T23:16:13.622Z" },
 ]
 
 [[package]]
@@ -774,6 +794,22 @@ wheels = [
 ]
 
 [[package]]
+name = "ml-dtypes"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/12/72/307d7c4bd0600601c7133fba5cb78af7db968152951c1cd473abb1cda782/ml_dtypes-0.6.0.tar.gz", hash = "sha256:5e60251d32ced5598972e4d5e06a2f044341f9291402551a3f6f0ec44f9299b0", size = 3032327, upload-time = "2026-08-13T14:14:40.215Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/84/6a/441eb053b078954f7fea284dfb288701884d0a1404d39babb858e1649023/ml_dtypes-0.6.0-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:5359c588cc62de6f78d7430f06b65853d884955494d86d6ad90b6dd64a3f3a08", size = 565447, upload-time = "2026-08-13T14:14:01.737Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/cf/87e8a6c57eed63a91782a0d229856ddf73e138ce004dd71e2799a9dcdb33/ml_dtypes-0.6.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:37da32aa97749251025666d62372775019594577b9c9e9cfda83bed48d778fdb", size = 360227, upload-time = "2026-08-13T14:14:02.938Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/f9/7d76c1eae866f5d4636401b31b6d6dd90e4b4ced1fa7cfdfcca9c60e4bd3/ml_dtypes-0.6.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3b4a480aa8fd54a1805b8ac10f3f91763926a74f73c0c364c10f9231854f4170", size = 409890, upload-time = "2026-08-13T14:14:04.248Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/db/9c61ec2760b5cbfb1c6558d5c991a6d8fd3271053c32db20506a9a90272b/ml_dtypes-0.6.0-cp312-cp312-win_amd64.whl", hash = "sha256:2a3e9d53925597fbffafd2a37048dadeddd0bdaba58058f6ae0869ed709a184d", size = 439333, upload-time = "2026-08-13T14:14:05.501Z" },
+    { url = "https://files.pythonhosted.org/packages/6a/57/780ca3e5ab135b9fbdd8e5441abf5f801b30398371b691291e05ab9834c0/ml_dtypes-0.6.0-cp312-cp312-win_arm64.whl", hash = "sha256:6eaed129a4afe90694b8685e2f9b6294849f5eda4af9a15be83a4326eeebd775", size = 552268, upload-time = "2026-08-13T14:14:06.866Z" },
+]
+
+[[package]]
 name = "mpmath"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -855,7 +891,7 @@ name = "nvidia-cudnn-cu13"
 version = "9.19.0.56"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas", marker = "extra == 'extra-13-adas-capstone-ai'" },
+    { name = "nvidia-cublas", marker = "(sys_platform != 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f1/84/26025437c1e6b61a707442184fa0c03d083b661adf3a3eecfd6d21677740/nvidia_cudnn_cu13-9.19.0.56-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:6ed29ffaee1176c612daf442e4dd6cfeb6a0caa43ddcbeb59da94953030b1be4", size = 433781201, upload-time = "2026-02-03T20:40:53.805Z" },
@@ -868,7 +904,7 @@ name = "nvidia-cufft"
 version = "12.0.0.61"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink", marker = "extra == 'extra-13-adas-capstone-ai'" },
+    { name = "nvidia-nvjitlink", marker = "(sys_platform != 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/ae/f417a75c0259e85c1d2f83ca4e960289a5f814ed0cea74d18c353d3e989d/nvidia_cufft-12.0.0.61-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:2708c852ef8cd89d1d2068bdbece0aa188813a0c934db3779b9b1faa8442e5f5", size = 214053554, upload-time = "2025-09-04T08:31:38.196Z" },
@@ -900,9 +936,9 @@ name = "nvidia-cusolver"
 version = "12.0.4.66"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas", marker = "extra == 'extra-13-adas-capstone-ai'" },
-    { name = "nvidia-cusparse", marker = "extra == 'extra-13-adas-capstone-ai'" },
-    { name = "nvidia-nvjitlink", marker = "extra == 'extra-13-adas-capstone-ai'" },
+    { name = "nvidia-cublas", marker = "(sys_platform != 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "nvidia-cusparse", marker = "(sys_platform != 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "nvidia-nvjitlink", marker = "(sys_platform != 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/c3/b30c9e935fc01e3da443ec0116ed1b2a009bb867f5324d3f2d7e533e776b/nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:02c2457eaa9e39de20f880f4bd8820e6a1cfb9f9a34f820eb12a155aa5bc92d2", size = 223467760, upload-time = "2025-09-04T08:33:04.222Z" },
@@ -915,7 +951,7 @@ name = "nvidia-cusparse"
 version = "12.6.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink", marker = "extra == 'extra-13-adas-capstone-ai'" },
+    { name = "nvidia-nvjitlink", marker = "(sys_platform != 'win32' and extra == 'extra-13-adas-capstone-ai') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f8/94/5c26f33738ae35276672f12615a64bd008ed5be6d1ebcb23579285d960a9/nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:80bcc4662f23f1054ee334a15c72b8940402975e0eab63178fc7e670aa59472c", size = 162155568, upload-time = "2025-09-04T08:33:42.864Z" },
@@ -978,6 +1014,58 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c2/f3/d86c845465a2723ad7e1e5c36dcd75ddb82898b3f53be47ebd429fb2fa5d/nvidia_nvtx-13.0.85-py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:4936d1d6780fbe68db454f5e72a42ff64d1fd6397df9f363ae786930fd5c1cd4", size = 148047, upload-time = "2025-09-04T08:29:01.761Z" },
     { url = "https://files.pythonhosted.org/packages/a8/64/3708a90d1ebe202ffdeb7185f878a3c84d15c2b2c31858da2ce0583e2def/nvidia_nvtx-13.0.85-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:cb7780edb6b14107373c835bf8b72e7a178bac7367e23da7acb108f973f157a6", size = 148878, upload-time = "2025-09-04T08:28:53.627Z" },
     { url = "https://files.pythonhosted.org/packages/d2/50/0e2220f8620a177de994211186ffc5bfa9f2ce1e1282797f8f90096f9f88/nvidia_nvtx-13.0.85-py3-none-win_amd64.whl", hash = "sha256:d66ea44254dd3c6eacc300047af6e1288d2269dd072b417e0adffbf479e18519", size = 137066, upload-time = "2025-09-04T08:39:25.649Z" },
+]
+
+[[package]]
+name = "onnx"
+version = "1.22.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ml-dtypes" },
+    { name = "numpy" },
+    { name = "protobuf" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/04/19/8ea73a64b368b75fe339771a20a02bc61ea1f551484c9e3d9d0bfbd0450f/onnx-1.22.0.tar.gz", hash = "sha256:ef40c0aaf0b643857ea9306fc7eddce17eaf9fb0407e4801f1fc5758443a38e0", size = 12024721, upload-time = "2026-06-15T12:50:05.354Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ee/6a/481561f1093834376ed493e4ca42a73e5be0d50031f2969c86593bdc7c96/onnx-1.22.0-cp312-abi3-macosx_12_0_universal2.whl", hash = "sha256:596fbf0490947533c1c1045ba860851dc9fb77471023dac9a71ba5b42ceab103", size = 20167081, upload-time = "2026-06-15T12:49:32.078Z" },
+    { url = "https://files.pythonhosted.org/packages/84/55/b34fc2aa30aa54b4a775402d24c4082242c720283a274fe976ac8eb94480/onnx-1.22.0-cp312-abi3-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ae5a563f281cd9d2845622cecf6c092a57e4ee1b138f66fdbbdd4200567a5e16", size = 18889249, upload-time = "2026-06-15T12:49:34.7Z" },
+    { url = "https://files.pythonhosted.org/packages/09/a6/bd32357e6cc1ecb473afd78193d7231724f284435d2db25696ecfaaa1503/onnx-1.22.0-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:955e02e1f6d385b53d52f9cd7b9cdf5caf417c300bcfe3c64c6d542be763845b", size = 19106514, upload-time = "2026-06-15T12:49:37.424Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/9d/3af461ac6c714b8b369cb71499659932f4f12cfb066250b62f7567c3d530/onnx-1.22.0-cp312-abi3-pyemscripten_2025_0_wasm32.whl", hash = "sha256:82e9f27fc1223cb06d68a56bed6f9d3caf3d0dad1b61bce45006d529b15bd94c", size = 16966387, upload-time = "2026-06-15T12:49:40.918Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/f0/68195b5e5a53e333faf2660f5352ee43738d0e42fc5216cc6b1871a9fbfb/onnx-1.22.0-cp312-abi3-win32.whl", hash = "sha256:cc8b66b312f8f03a53e268afb67180a2d97dd12cc79e2b61361c6c0073448016", size = 17081568, upload-time = "2026-06-15T12:49:43.398Z" },
+    { url = "https://files.pythonhosted.org/packages/13/a8/734725bb703c5fabb687f79c79e51249475212b3eb37771ac4a4ac9b487f/onnx-1.22.0-cp312-abi3-win_amd64.whl", hash = "sha256:72ccebab3bac07215c204ce8848d42e78eaaa666badbf72d25cd359b9f269e3a", size = 17213290, upload-time = "2026-06-15T12:49:45.933Z" },
+    { url = "https://files.pythonhosted.org/packages/bd/2a/8ce48d8ae26a8761ad4e5dc771961b155c5c3c7c8540ec7f2f2d71b69af0/onnx-1.22.0-cp312-abi3-win_arm64.whl", hash = "sha256:f3c120dcdb70ad738f3c061b32798f408ea299eb69f84dd69ab4a6bf3c2ec01f", size = 17207030, upload-time = "2026-06-15T12:49:48.635Z" },
+]
+
+[[package]]
+name = "onnxruntime-gpu"
+version = "1.28.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flatbuffers", marker = "sys_platform != 'darwin' or extra == 'extra-13-adas-capstone-ai' or extra != 'extra-13-adas-capstone-ai-cpu'" },
+    { name = "numpy", marker = "sys_platform != 'darwin' or extra == 'extra-13-adas-capstone-ai' or extra != 'extra-13-adas-capstone-ai-cpu'" },
+    { name = "packaging", marker = "sys_platform != 'darwin' or extra == 'extra-13-adas-capstone-ai' or extra != 'extra-13-adas-capstone-ai-cpu'" },
+    { name = "protobuf", marker = "sys_platform != 'darwin' or extra == 'extra-13-adas-capstone-ai' or extra != 'extra-13-adas-capstone-ai-cpu'" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f2/18/e4e906d564af3dd84c2816118ce8e0c087d351ef69a819727b940fb01b6b/onnxruntime_gpu-1.28.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3b3a63cecd239d72432cd44569d047de8f4d69e471cd5f60f7ac7fc8769be5ec", size = 249767362, upload-time = "2026-07-29T16:31:09.077Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/9e/92554acd080db68f549fd0e653fcf51a9dea7cb31e70c497714a9f2310fc/onnxruntime_gpu-1.28.0-cp312-cp312-win_amd64.whl", hash = "sha256:3befb47dabd2843bb606a50abd6f14b1eb1324eb235d5e5f3b01dd8b8034af1f", size = 241459431, upload-time = "2026-07-25T01:25:05.77Z" },
+]
+
+[[package]]
+name = "onnxslim"
+version = "0.1.96"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama" },
+    { name = "ml-dtypes" },
+    { name = "onnx" },
+    { name = "packaging" },
+    { name = "sympy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/92/ac/b2230e9a0654a64d929398d703816b34655119998a9e136301c8f66585a3/onnxslim-0.1.96.tar.gz", hash = "sha256:386a1c64e61a66fb79cdd62de996323b9fb950d22de9b117cd31f211cac96048", size = 598898, upload-time = "2026-08-16T03:15:59.536Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dc/c0/7a491ab9ebc7fc7dfccb7ca36251d9d54ee35b9c88427733f05b09fc40e9/onnxslim-0.1.96-py3-none-any.whl", hash = "sha256:a43f800d39434e6b4d542abe17c25afb7fcc33aabf53d20464cb0dae0f66cbb6", size = 239022, upload-time = "2026-08-16T03:15:58.121Z" },
 ]
 
 [[package]]
@@ -1075,6 +1163,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d9/0b/b8d95fbed869fa4caabe9c400e4210374913b376e925e96fdcfa9be6416b/polars_runtime_32-1.40.1-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:992d14cf191dde043d36fbdbc98a65e43fbc7e9a5024cecd45f838ac4988c1ee", size = 54155564, upload-time = "2026-04-22T19:14:47.239Z" },
     { url = "https://files.pythonhosted.org/packages/06/d9/d091d8fb5cbed5e9536adfed955c4c89987a4cc3b8e73ae4532402b91c74/polars_runtime_32-1.40.1-cp310-abi3-win_amd64.whl", hash = "sha256:f78bb2abd00101cbb23cc0cb068f7e36e081057a15d2ec2dde3dda280709f030", size = 51829755, upload-time = "2026-04-22T19:14:50.85Z" },
     { url = "https://files.pythonhosted.org/packages/65/ad/b33c3022a394f3eb55c3310597cec615412a8a33880055eee191d154a628/polars_runtime_32-1.40.1-cp310-abi3-win_arm64.whl", hash = "sha256:b5cbfaf6b085b420b4bfcbe24e8f665076d1cccfdb80c0484c02a023ce205537", size = 45822104, upload-time = "2026-04-22T19:14:54.192Z" },
+]
+
+[[package]]
+name = "protobuf"
+version = "7.35.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/da/01/9ef0afd7999eb9badb3a768b4aedd78c86d4c65cfaf1958ab276199e76b4/protobuf-7.35.1.tar.gz", hash = "sha256:ce115a26fe0c39a2c29973d914d327e516a6455464489fe3cd1e51a1b354f81a", size = 458717, upload-time = "2026-06-11T21:55:40.257Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/10/03/8aeeb7458d22546bf64b5250ca1daeb5ff757d900e8e4a7476c6f0db843e/protobuf-7.35.1-cp310-abi3-macosx_10_9_universal2.whl", hash = "sha256:24f857477359a85c0c235261b8ba905fd51b2562f4a64ca1df5473f29850cbf6", size = 433226, upload-time = "2026-06-11T21:55:31.719Z" },
+    { url = "https://files.pythonhosted.org/packages/37/4b/dfb89eb0e652a1ff073c39a59fb5e3a83cfe9b57a2c83fa6d78270101767/protobuf-7.35.1-cp310-abi3-manylinux2014_aarch64.whl", hash = "sha256:11d6b0ec246892d85215b0a13ca6e0233cf5284b68f0ac02646427f4ff88a799", size = 328847, upload-time = "2026-06-11T21:55:34.035Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/58/dc12f2cd484951524af6e3382c785869b9b3fb5e52ee95ae23add53ee8f9/protobuf-7.35.1-cp310-abi3-manylinux2014_s390x.whl", hash = "sha256:b73f9489a4b8b1c9cb1f8ed951c736392592edb24b9d6819f36d2e10b171d5b4", size = 344030, upload-time = "2026-06-11T21:55:34.941Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/be/5b3cfe508bfab6761414ff944e3366eb13be4fd71efcd69450f89ba39f43/protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl", hash = "sha256:74758715c53d7158fb76caf4f0cfdacc5329a4b1bb994f865d6cf302d413a1c4", size = 327130, upload-time = "2026-06-11T21:55:35.921Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/bc/6d6c7ba8709c85f8f2c390b2b118d6fb08a783676a572271851bf45a7d22/protobuf-7.35.1-cp310-abi3-win32.whl", hash = "sha256:353652e4efd0bca5b5fc2656abf8307ef351f0cf938c9eba09f0e09c20a25c30", size = 428945, upload-time = "2026-06-11T21:55:37.034Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/19/8d0cb6f20a1ef7b18f1c8986ad5783f22f84cce39c6ce9a6e645ea55192e/protobuf-7.35.1-cp310-abi3-win_amd64.whl", hash = "sha256:230a75ddfc2de4806e56696ce9640c1cdfdb6543b7cfce98d42a4c0a0e7bdb87", size = 439996, upload-time = "2026-06-11T21:55:38.123Z" },
+    { url = "https://files.pythonhosted.org/packages/19/c7/5f7c636ec43e0c545e28d1f1db71990108306f7bdcb89f069ba97e428e7f/protobuf-7.35.1-py3-none-any.whl", hash = "sha256:4bc97768d8fe4ad6743c8a19403e314511ed9f6d13205b687e52421c023ac1b9", size = 171659, upload-time = "2026-06-11T21:55:39.155Z" },
 ]
 
 [[package]]
@@ -1519,37 +1622,41 @@ wheels = [
 [[package]]
 name = "tensorrt"
 version = "10.16.1.11"
-source = { registry = "https://pypi.org/simple" }
+source = { registry = "https://pypi.nvidia.com/" }
 dependencies = [
-    { name = "tensorrt-cu13" },
+    { name = "tensorrt-cu13", marker = "sys_platform != 'darwin' or extra == 'extra-13-adas-capstone-ai' or extra != 'extra-13-adas-capstone-ai-cpu'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fc/ca/e50b15ccd364a5347a23d56f93479735510109b70caabbe91a47d493bba7/tensorrt-10.16.1.11.tar.gz", hash = "sha256:5c31ef98e1a1b53197acc600327d6b1e4abb503024119a2e66f21a5654ea3996", size = 16617, upload-time = "2026-04-07T19:37:13.586Z" }
+sdist = { url = "https://pypi.nvidia.com/tensorrt/tensorrt-10.16.1.11.tar.gz", hash = "sha256:5c31ef98e1a1b53197acc600327d6b1e4abb503024119a2e66f21a5654ea3996" }
 
 [[package]]
 name = "tensorrt-cu13"
 version = "10.16.1.11"
-source = { registry = "https://pypi.org/simple" }
+source = { registry = "https://pypi.nvidia.com/" }
 dependencies = [
-    { name = "tensorrt-cu13-bindings" },
-    { name = "tensorrt-cu13-libs" },
+    { name = "tensorrt-cu13-bindings", marker = "sys_platform != 'darwin' or extra == 'extra-13-adas-capstone-ai' or extra != 'extra-13-adas-capstone-ai-cpu'" },
+    { name = "tensorrt-cu13-libs", marker = "sys_platform != 'darwin' or extra == 'extra-13-adas-capstone-ai' or extra != 'extra-13-adas-capstone-ai-cpu'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7c/9a/dfe6c293faa625457563c293d165f8948532d71b29a490e4f59773edf2aa/tensorrt_cu13-10.16.1.11.tar.gz", hash = "sha256:5d34203a92f38851b150c4eddd32b9b55c01fd40fc4d19bff83e8dfef1d8f69e", size = 17916, upload-time = "2026-04-07T19:37:15.536Z" }
+sdist = { url = "https://pypi.nvidia.com/tensorrt-cu13/tensorrt_cu13-10.16.1.11.tar.gz", hash = "sha256:5d34203a92f38851b150c4eddd32b9b55c01fd40fc4d19bff83e8dfef1d8f69e" }
 
 [[package]]
 name = "tensorrt-cu13-bindings"
 version = "10.16.1.11"
-source = { registry = "https://pypi.org/simple" }
+source = { registry = "https://pypi.nvidia.com/" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/6d/d46fd241895091d11d0e55a389abc5711c71892e8e63b03e272e61ca880a/tensorrt_cu13_bindings-10.16.1.11-cp312-none-manylinux_2_28_x86_64.whl", hash = "sha256:2fb87ac24a5e5f42e43f283c16d1b661dc72ef18568fd847ce2080b7db9ca232", size = 1341248, upload-time = "2026-04-07T19:42:10.807Z" },
-    { url = "https://files.pythonhosted.org/packages/ee/bb/3513236bc1b69fc6b88722f0f1f62ae4afd74b9f417ad3abf9a2bf971f22/tensorrt_cu13_bindings-10.16.1.11-cp312-none-manylinux_2_35_aarch64.whl", hash = "sha256:80d0cea41cb695e73a442ab5a0c1fb023730c488caa93ee3ca9c49d57314821d", size = 1329585, upload-time = "2026-04-07T19:42:35.412Z" },
-    { url = "https://files.pythonhosted.org/packages/e9/a8/dfda48ab992050f40d0b2da7a795f16db403f48ee89e6a526cbd00133445/tensorrt_cu13_bindings-10.16.1.11-cp312-none-win_amd64.whl", hash = "sha256:70ca2d73301ff427104d7986c26d5fa56f6a91578242d20e82b37c139be14ec0", size = 964883, upload-time = "2026-04-07T19:44:07.702Z" },
+    { url = "https://pypi.nvidia.com/tensorrt-cu13-bindings/tensorrt_cu13_bindings-10.16.1.11-cp312-none-manylinux_2_28_x86_64.whl", hash = "sha256:2fb87ac24a5e5f42e43f283c16d1b661dc72ef18568fd847ce2080b7db9ca232" },
+    { url = "https://pypi.nvidia.com/tensorrt-cu13-bindings/tensorrt_cu13_bindings-10.16.1.11-cp312-none-manylinux_2_35_aarch64.whl", hash = "sha256:80d0cea41cb695e73a442ab5a0c1fb023730c488caa93ee3ca9c49d57314821d" },
+    { url = "https://pypi.nvidia.com/tensorrt-cu13-bindings/tensorrt_cu13_bindings-10.16.1.11-cp312-none-win_amd64.whl", hash = "sha256:70ca2d73301ff427104d7986c26d5fa56f6a91578242d20e82b37c139be14ec0" },
 ]
 
 [[package]]
 name = "tensorrt-cu13-libs"
 version = "10.16.1.11"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/67/25/085bcc297237bfea56fac62cca0439f2298f875b6a26de5ae0413671687d/tensorrt_cu13_libs-10.16.1.11.tar.gz", hash = "sha256:0e86cd02321b7258c2521495a7d8f0591852e6966ed7e43cfe33640c737495a3", size = 15737, upload-time = "2026-04-07T19:38:09.175Z" }
+source = { registry = "https://pypi.nvidia.com/" }
+wheels = [
+    { url = "https://pypi.nvidia.com/tensorrt-cu13-libs/tensorrt_cu13_libs-10.16.1.11-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:91142c8ab3c58bed213cf1a563a6eb4e4f0ac529d05b5f909073acece0e3b712" },
+    { url = "https://pypi.nvidia.com/tensorrt-cu13-libs/tensorrt_cu13_libs-10.16.1.11-py3-none-manylinux_2_35_aarch64.whl", hash = "sha256:26f58281c79591b68c3ba1cf061ea11fac747feba0622954dbc892c2998d0153" },
+    { url = "https://pypi.nvidia.com/tensorrt-cu13-libs/tensorrt_cu13_libs-10.16.1.11-py3-none-win_amd64.whl", hash = "sha256:96262c3e8c64a45abd29aa3482d99480fac6845bd420b6de125699bb1ae365ff" },
+]
 
 [[package]]
 name = "torch"

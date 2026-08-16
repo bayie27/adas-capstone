@@ -54,26 +54,64 @@ ai-cpu = [
 # NOT part of the `ai` extra. The GPU is used either way — that comes from
 # torch's CUDA build. TensorRT would add a faster inference backend on top.
 #
-# Nothing currently builds or loads a TensorRT engine: capacity.py benchmarks
-# the plain .pt weights and does not probe for TensorRT, so installing this
-# extra changes nothing today. That is a deliberate stopping point, not an
-# oversight — the GTX 1650 this was developed on carries 8 cameras at 15 FPS on
-# the plain weights, comfortably above what the system needs, so an optimised
-# build would buy capacity nobody is short of. The extra stays for whoever
-# eventually needs it; see docs/2026-08-11-calibration-capacity-design.md for
-# what measuring it properly would involve.
+# Nothing currently BUILDS an engine — export stays out of band — but capacity.py
+# can now benchmark one that already exists, via `--model <path>.engine`. So this
+# extra is what an engine measurement needs, and it is no longer inert.
 #
-# It is separated because `tensorrt` on PyPI is a wheel-stub that downloads
-# several GB from NVIDIA's own index inside a PEP 517 build step, with no
-# timeout. That build hung indefinitely twice on a Windows dev machine
-# (2026-08-10), and because it sits in the `ai` extra it took every plain
-# `uv run` down with it. Opt in explicitly instead:
+# Whether it is worth installing is a separate question, and the answer on the
+# GTX 1650 this was developed on is "probably not". Measured 2026-08-16 on the
+# real model: FP16 runs at 1.00x FP32 (batch 15: 92.0ms vs 91.6ms), because the
+# GTX 16-series has no tensor cores despite reporting compute capability 7.5.
+# Batch 15 inside the 15 FPS tick needs ~1.75x on inference alone once the ~14ms
+# of CPU-side to_gray() is subtracted, which is above what TensorRT delivers on
+# Turing without tensor cores. 15 cameras at 10 FPS is the reachable claim.
+# See docs/2026-08-11-calibration-capacity-design.md.
 #
 #     uv sync --extra ai --extra ai-trt
 #
-# If it hangs, Ctrl+C and carry on with `--extra ai`; nothing in the engine
-# requires it.
-ai-trt = ["tensorrt>=10.16.1.11"]
+# WHY ALL FOUR tensorrt PACKAGES ARE DECLARED, and why they are pinned to
+# NVIDIA's index: on PyPI, `tensorrt`, `tensorrt-cu13` and `tensorrt-cu13-libs`
+# are wheel-stubs whose PEP 517 build downloads several GB from NVIDIA with no
+# timeout. That build hung indefinitely twice on a Windows dev machine
+# (2026-08-10). NVIDIA's own index ships `tensorrt-cu13-libs` — the package
+# actually carrying those gigabytes — as a prebuilt wheel, so there is nothing
+# left to hang on.
+#
+# Declaring all four is load-bearing, not belt-and-braces: [tool.uv.sources]
+# binds only the project's OWN declared dependencies, so pinning `tensorrt`
+# alone leaves the transitive -libs resolving from PyPI and reintroduces the
+# exact hang. Verified 2026-08-16 by locking each variant in a scratch project.
+#
+# The markers are load-bearing too — TensorRT has no macOS build at all, so an
+# unmarked dependency makes the lock unsolvable for a teammate on Apple silicon.
+ai-trt = [
+    # CAPPED BELOW 11, and the cap is the whole point — do not relax it to pick
+    # up a newer TensorRT. `NetworkDefinitionCreationFlag.EXPLICIT_BATCH` was
+    # deprecated in TensorRT 10 and REMOVED in 11, but ultralytics 8.4.41 still
+    # calls it (utils/export/engine.py:151), so every engine export dies with
+    #   AttributeError: ... has no attribute 'EXPLICIT_BATCH'
+    # Observed 2026-08-16 with tensorrt 11.2.1.2, which is what an uncapped
+    # `>=10.16.1.11` resolves to. 8.4.41 is the newest ultralytics available, so
+    # there is no upgrade out of this yet; the cap comes off only once upstream
+    # supports TRT 11.
+    "tensorrt>=10.16.1.11,<11; sys_platform == 'win32' or sys_platform == 'linux'",
+    "tensorrt-cu13>=10.16.1.11,<11; sys_platform == 'win32' or sys_platform == 'linux'",
+    "tensorrt-cu13-bindings>=10.16.1.11,<11; sys_platform == 'win32' or sys_platform == 'linux'",
+    "tensorrt-cu13-libs>=10.16.1.11,<11; sys_platform == 'win32' or sys_platform == 'linux'",
+    # The .pt -> ONNX -> .engine chain Ultralytics runs during export. These were
+    # previously absent from the lock entirely: Ultralytics pip-installs them
+    # itself at export time via check_requirements(), which puts them outside
+    # uv's view, so any `uv sync` could prune them and break the export with a
+    # second, unrelated-looking error. Locked here instead.
+    "onnx>=1.19.0",
+    "onnxslim>=0.1.90",
+    # Same story, and the reason this one matters: it supplies the CUDA and
+    # TensorRT execution providers, so it is what runs an exported .onnx on the
+    # GPU. Leaving it unlocked meant `uv sync` PRUNED it — caught by --dry-run
+    # 2026-08-16 — silently removing the GPU ONNX path while appearing to
+    # succeed. Markers as above: no macOS build.
+    "onnxruntime-gpu>=1.28.0; sys_platform == 'win32' or sys_platform == 'linux'",
+]
 
 [dependency-groups]
 dev = [
@@ -94,6 +132,13 @@ name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
+# NVIDIA's own index. `explicit` so it is used ONLY for the packages pinned to
+# it below — it must never become a general fallback for the rest of the tree.
+[[tool.uv.index]]
+name = "nvidia"
+url = "https://pypi.nvidia.com"
+explicit = true
+
 [tool.uv]
 # `ai` and `ai-cpu` both provide torch, from different indexes. uv cannot
 # resolve a single lock entry for a package whose source depends on which
@@ -111,6 +156,14 @@ torchvision = [
     { index = "pytorch-cu130", extra = "ai" },
     { index = "pytorch-cpu", extra = "ai-cpu" },
 ]
+# Unqualified by extra, unlike the torch pins above: torch appears in both `ai`
+# and `ai-cpu`, so its index must be selected per-extra. These four appear in
+# `ai-trt` only, and an extra-qualified source additionally requires each named
+# package to be declared in that extra — uv rejects the config otherwise.
+tensorrt = { index = "nvidia" }
+tensorrt-cu13 = { index = "nvidia" }
+tensorrt-cu13-bindings = { index = "nvidia" }
+tensorrt-cu13-libs = { index = "nvidia" }
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "ai_engine/tests"]
