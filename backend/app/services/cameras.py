@@ -11,11 +11,13 @@ instead of stranding the camera Paused forever.
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from sqlalchemy import case
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
@@ -65,6 +67,44 @@ def presented_statuses(camera: Camera, *, now: datetime) -> tuple[str, str]:
         return ConnectionStatus.UNRESPONSIVE.value, AIStatus.UNRESPONSIVE.value
 
     return camera.connection_status, camera.ai_status
+
+
+def _stale_cutoff(now: datetime) -> datetime:
+    return now - timedelta(seconds=settings.HEARTBEAT_STALE_SECONDS)
+
+
+def presented_connection_status_expr(*, now: datetime) -> ColumnElement[str]:
+    """P19 §2 — SQL mirror of presented_statuses()'s connection dimension,
+    kept next to it deliberately: two copies of one rule is exactly how the
+    filter/display divergence happened, and the paired test in
+    test_cameras.py is what stops it from happening again.
+
+    Branch order matters — a disabled camera is never stale and must
+    short-circuit before any heartbeat check runs."""
+    cutoff = _stale_cutoff(now)
+    return case(
+        (col(Camera.is_enabled).is_(False), col(Camera.connection_status)),
+        (
+            col(Camera.last_heartbeat_at).is_(None),
+            ConnectionStatus.RECONNECTING.value,
+        ),
+        (col(Camera.last_heartbeat_at) <= cutoff, ConnectionStatus.UNRESPONSIVE.value),
+        else_=col(Camera.connection_status),
+    )
+
+
+def presented_ai_status_expr(*, now: datetime) -> ColumnElement[str]:
+    """P19 §2 — SQL mirror of presented_statuses()'s AI dimension. See
+    presented_connection_status_expr(). Asymmetric with the connection
+    dimension by design: a never-heartbeated camera presents as
+    Reconnecting on connection but keeps its *stored* AI status."""
+    cutoff = _stale_cutoff(now)
+    return case(
+        (col(Camera.is_enabled).is_(False), col(Camera.ai_status)),
+        (col(Camera.last_heartbeat_at).is_(None), col(Camera.ai_status)),
+        (col(Camera.last_heartbeat_at) <= cutoff, AIStatus.UNRESPONSIVE.value),
+        else_=col(Camera.ai_status),
+    )
 
 
 def compute_kpis_and_breakdowns(
