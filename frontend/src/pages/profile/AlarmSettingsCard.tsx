@@ -13,16 +13,23 @@ import { previewDetectionSound, setDetectionSoundVolume } from "@/utils/detectio
 
 const ALARM_SETTINGS_QUERY_KEY = ["alarm-settings"] as const
 
+// Mirrors settings.SNOOZE_MIN_SECONDS / SNOOZE_MAX_SECONDS
+// (backend/app/core/config.py) and the DB check constraint of the same
+// range -- not returned by GET /api/settings/alarm, so declared here
+// rather than left for the operator to discover via a 422.
+const SNOOZE_MIN_SECONDS = 15
+const SNOOZE_MAX_SECONDS = 60
+
 /**
  * D-3. No Figma frame. `GET /api/settings/alarm` returns only the actor's
  * current `{alarm_sound, volume, snooze_duration}` — not `ALARM_SOUND_KEYS`,
- * not the snooze-duration bounds. Both exist only as backend validation
- * constants (Q13). Rather than hardcode them and drift the day either
- * changes, this form renders exactly what the endpoint returns and states
- * plainly where it can't offer more: the sound field is read-only (a picker
- * needs a real allowlist to populate, which doesn't exist yet) and the
- * duration field carries no client-side bound, relying on the backend's own
- * 422 message rather than a guessed range.
+ * which exists only as a backend validation constant (Q13) with no endpoint
+ * exposing it. The sound field stays read-only for that reason: a picker
+ * needs a real allowlist to populate. The snooze-duration bounds are a
+ * different case — a fixed DB check constraint (`SNOOZE_MIN_SECONDS`/
+ * `SNOOZE_MAX_SECONDS`, 15-60), not a per-actor value the endpoint would
+ * ever need to return, so they're declared as constants here instead of
+ * left for the operator to discover via a 422.
  */
 export function AlarmSettingsCard() {
   const queryClient = useQueryClient()
@@ -162,10 +169,12 @@ export function AlarmSettingsCard() {
             label="Snooze Duration (seconds)"
             type="number"
             inputMode="numeric"
+            min={SNOOZE_MIN_SECONDS}
+            max={SNOOZE_MAX_SECONDS}
             value={form.snooze_duration}
             disabled={mutation.isPending}
             onChange={(event) => updateField("snooze_duration", Number(event.target.value))}
-            hint="The server enforces the allowed range; an out-of-range value is rejected on save."
+            hint={`Must be between ${SNOOZE_MIN_SECONDS} and ${SNOOZE_MAX_SECONDS} seconds.`}
           />
 
           {notice ? <NoticeBanner notice={notice} /> : null}
