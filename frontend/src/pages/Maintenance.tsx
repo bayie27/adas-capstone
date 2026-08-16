@@ -31,6 +31,12 @@ const BACKUPS_QUERY_KEY = ["system-backups"] as const
 const LATEST_RESTORE_QUERY_KEY = ["latest-restore"] as const
 const TABLE_COLUMN_COUNT = 5
 
+// Mirrors settings.BACKUP_DAILY_RETENTION / BACKUP_MANUAL_RETENTION
+// (backend/app/core/config.py) -- fixed retention counts, not returned by
+// GET /api/system/backups, so declared here rather than left unstated.
+const BACKUP_DAILY_RETENTION = 30
+const BACKUP_MANUAL_RETENTION = 10
+
 const RESTORE_STATUS_LABEL: Record<string, string> = {
   requested: "Requested",
   in_progress: "In progress",
@@ -192,6 +198,10 @@ export default function Maintenance() {
             <h1 className="mb-0.5 text-xl font-semibold text-fg">Maintenance</h1>
             <p className="text-xs text-fg-muted">
               Database backups and the restore request flow — never a filesystem path
+            </p>
+            <p className="mt-0.5 text-caption text-fg-muted">
+              Up to {BACKUP_DAILY_RETENTION} daily / {BACKUP_MANUAL_RETENTION} manual backups are
+              kept — older ones are pruned automatically.
             </p>
           </div>
         </div>
