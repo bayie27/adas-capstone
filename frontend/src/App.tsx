@@ -18,6 +18,7 @@ const AiPerformance = lazy(() => import("@/pages/AiPerformance"))
 const ProfileSettings = lazy(() => import("@/pages/ProfileSettings"))
 const HelpCenter = lazy(() => import("@/pages/HelpCenter"))
 const Users = lazy(() => import("@/pages/Users"))
+const AuditLog = lazy(() => import("@/pages/AuditLog"))
 
 function RouteFallback() {
   return (
@@ -62,6 +63,7 @@ function App() {
               <Route path="profile" element={<ProfileSettings />} />
               <Route path="help" element={<HelpCenter />} />
               <Route path="users" element={<Users />} />
+              <Route path="audit" element={<AuditLog />} />
             </Route>
 
             <Route

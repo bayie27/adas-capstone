@@ -48,6 +48,26 @@ export const AUDIT_RESULTS = ["success", "denied", "failure"] as const
 export type AuditResult = (typeof AUDIT_RESULTS)[number]
 
 /**
+ * `target_type` has no enum on the backend — it's a free `str` column, one
+ * literal string per call site (`audit.record(..., target_type="camera")`
+ * and friends). Enumerated here by grepping every such call site rather
+ * than guessed: `backup`, `camera`, `export`, `incident`, `restore`,
+ * `session`, `user`. Same reasoning as AUDIT_ACTIONS — these are literal
+ * strings in the backend's own source, not data that could add a new value
+ * without a code change, so mirroring them is a real reflection of the
+ * backend, not a stand-in for one.
+ */
+export const AUDIT_TARGET_TYPES = [
+  "backup",
+  "camera",
+  "export",
+  "incident",
+  "restore",
+  "session",
+  "user",
+] as const
+
+/**
  * The six fields `AUDIT_SORT_FIELDS` (`routes/audit.py:28`) allows.
  * `audit_id` is always applied as a tie-break server-side even when sorting
  * by something else, so equal-`created_at` rows never shuffle between pages.
