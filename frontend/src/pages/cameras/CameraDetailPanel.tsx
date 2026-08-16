@@ -123,6 +123,17 @@ export function CameraDetailPanel({
           me it was off" once it lands.
         </UnavailableNote>
       </Section>
+
+      <Section title="Engine telemetry">
+        <UnavailableNote>
+          Last heartbeat, measured FPS (against the 10–15 FPS band), inference latency, and the
+          engine's own error code — CONNECT_FAILED, STREAM_DROPPED or INFERENCE_FAILED — plus its
+          message are all persisted on every heartbeat but not yet exposed by CameraRead (Q14). This
+          is the field that would tell a broken camera (an error code, a recent heartbeat) apart
+          from a dead engine (a stale heartbeat, no error code) — today an operator seeing
+          Unresponsive has nothing here to act on.
+        </UnavailableNote>
+      </Section>
     </SidePanel>
   )
 }

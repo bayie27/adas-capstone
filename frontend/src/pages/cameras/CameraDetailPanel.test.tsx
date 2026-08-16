@@ -46,6 +46,18 @@ describe("CameraDetailPanel", () => {
     expect(screen.getByText(/applied_config_version/)).toBeInTheDocument()
   })
 
+  it("renders the engine telemetry section as unavailable for an Unresponsive camera", () => {
+    const unresponsive: typeof CAMERA = {
+      ...CAMERA,
+      connection_status: "Unresponsive",
+      ai_status: "Unresponsive",
+    }
+    render(<CameraDetailPanel camera={unresponsive} isOpen onClose={vi.fn()} now={NOW} />)
+    expect(
+      screen.getByText(/CONNECT_FAILED, STREAM_DROPPED or INFERENCE_FAILED/),
+    ).toBeInTheDocument()
+  })
+
   it("counts down a cooldown live against the passed-in now", () => {
     const cooling: typeof CAMERA = {
       ...CAMERA,
