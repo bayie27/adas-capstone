@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
 import { exportPerformanceAnalytics, getPerformanceAnalytics } from "@/api/analytics"
@@ -49,14 +49,24 @@ export default function AiPerformance() {
     })),
   ]
 
+  // See Users.tsx: mirror the query total into state so usePagination can clamp
+  // the page at read time without an effect.
+  const [seenTotal, setSeenTotal] = useState(0)
+  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
+    seenTotal,
+    ITEMS_PER_PAGE,
+  )
+
   const performanceQuery = useQuery({
-    queryKey: [...PERFORMANCE_QUERY_KEY, debouncedSearchTerm, startDate, endDate, cameraId],
+    queryKey: [...PERFORMANCE_QUERY_KEY, debouncedSearchTerm, startDate, endDate, cameraId, offset],
     queryFn: () =>
       getPerformanceAnalytics({
         search: debouncedSearchTerm || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         camera_id: cameraId ? [Number(cameraId)] : undefined,
+        limit: ITEMS_PER_PAGE,
+        offset,
       }),
     placeholderData: (previousData) => previousData,
   })
@@ -77,20 +87,12 @@ export default function AiPerformance() {
   const exportJobMutation = useExportJobSubmit()
 
   const globalKpis = performanceQuery.data?.global_kpis
-  const perCamera = useMemo(() => performanceQuery.data?.per_camera ?? [], [performanceQuery.data])
-  // Client-side pagination: the total is `perCamera.length`, available in the
-  // same render, so usePagination clamps the page directly (no state mirror).
-  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
-    perCamera.length,
-    ITEMS_PER_PAGE,
-  )
-
-  const visibleRows = useMemo(
-    () => perCamera.slice(offset, offset + ITEMS_PER_PAGE),
-    [perCamera, offset],
-  )
-
-  const rangeEndValue = rangeEnd(visibleRows.length)
+  const perCamera = performanceQuery.data?.per_camera ?? []
+  const totalFiltered = performanceQuery.data?.total_filtered ?? 0
+  if (totalFiltered !== seenTotal) {
+    setSeenTotal(totalFiltered)
+  }
+  const rangeEndValue = rangeEnd(perCamera.length)
 
   return (
     <div className="mx-auto max-w-[1400px] p-8">
@@ -204,13 +206,13 @@ export default function AiPerformance() {
           ) : null}
         </div>
         {/*
-          Unlike Dashboard, this screen knows its row count up front —
-          per_camera[] arrives in full (the same property that forces the
-          client-side pagination below), so a real rowCount gets the
-          pre-flight for free instead of rendering rowCount: undefined.
+          total_filtered (P19 §4), not perCamera.length — the page now only
+          holds one page of rows (default 10), and the export pre-flight
+          needs the real filtered count across every page, not just the one
+          currently on screen.
         */}
         <ExportButton
-          rowCount={perCamera.length}
+          rowCount={totalFiltered}
           isExporting={exportMutation.isPending}
           onExport={(format) => exportMutation.mutate(format)}
           isSubmittingJob={exportJobMutation.isPending}
@@ -257,12 +259,12 @@ export default function AiPerformance() {
             <tbody className="divide-y divide-stroke">
               {performanceQuery.isLoading ? (
                 <TableStateRow colSpan={6}>Loading AI performance...</TableStateRow>
-              ) : visibleRows.length === 0 ? (
+              ) : perCamera.length === 0 ? (
                 <TableStateRow colSpan={6}>
                   No camera statistics found for the current filters.
                 </TableStateRow>
               ) : (
-                visibleRows.map((item) => (
+                perCamera.map((item) => (
                   <tr
                     key={item.camera_id}
                     className="text-fg-body transition-colors hover:bg-surface-1"
@@ -312,7 +314,7 @@ export default function AiPerformance() {
           totalPages={totalPages}
           rangeStart={rangeStart}
           rangeEnd={rangeEndValue}
-          totalFiltered={perCamera.length}
+          totalFiltered={totalFiltered}
           pageSize={ITEMS_PER_PAGE}
           isFetching={performanceQuery.isFetching}
           onPrev={prev}
