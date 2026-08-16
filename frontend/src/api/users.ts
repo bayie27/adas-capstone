@@ -22,6 +22,14 @@ export interface UserListResponse {
 
 export interface GetUsersParams {
   search?: string
+  /**
+   * String-typed to match the backend's own three-value parse exactly
+   * (`_parse_is_active_filter`, `routes/users.py`) — omitted entirely
+   * preserves today's default (active-only) behavior byte-for-byte.
+   * `"false"` surfaces deactivated accounts so they can be found and
+   * reactivated; `"null"` lists both.
+   */
+  is_active?: "true" | "false" | "null"
   limit?: number
   offset?: number
 }
