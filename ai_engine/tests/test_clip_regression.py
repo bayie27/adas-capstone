@@ -13,6 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import config
 import pytest
 
 pytest.importorskip("ultralytics")
@@ -22,6 +23,18 @@ pytestmark = pytest.mark.clips
 AI_ENGINE = Path(__file__).resolve().parents[1]
 EVAL = AI_ENGINE / "eval"
 BASELINE = json.loads((EVAL / "baseline_epoch50.json").read_text())
+
+# The model the SYSTEM is configured to run, not a hardcoded checkpoint. This
+# test asks "is what I am running still correct", so it has to follow
+# AI_MODEL_PATH — otherwise it passes for epoch50.pt while main.py loads a
+# TensorRT engine, which is a green result about a build nobody is running.
+#
+# The baseline is still the checkpoint's (baseline_epoch50.json). A different
+# build is therefore measured against the .pt's recorded truth, which is the
+# right reference to start from but is NOT like-for-like: a build that drifts
+# is kept and its drift recorded, so read a failure here as "this build differs
+# from the checkpoint", not automatically as "this build is broken".
+MODEL = config.WEIGHTS_PATH
 
 
 @pytest.fixture(scope="module")
@@ -52,7 +65,7 @@ def results(tmp_path_factory):
                 sys.executable,
                 str(EVAL / "run_clips.py"),
                 "--weights",
-                str(AI_ENGINE / "epoch50.pt"),
+                str(MODEL),
                 "--events-dir",
                 str(out),
             ],
@@ -74,7 +87,8 @@ def results(tmp_path_factory):
 def test_each_clip_matches_the_recorded_baseline(results, clip):
     expected = BASELINE["clips"][clip]["hit"]
     assert results["clips"][clip]["hit"] is expected, (
-        f"{clip}: baseline says hit={expected}, got {results['clips'][clip]['hit']}"
+        f"{clip}: baseline ({BASELINE['model']}) says hit={expected}, "
+        f"{MODEL.name} got {results['clips'][clip]['hit']}"
     )
 
 
@@ -84,4 +98,7 @@ def test_each_clip_matches_the_recorded_baseline(results, clip):
 def test_false_positive_count_has_not_regressed(results):
     """0.27 FP/min is roughly 16 false alerts per hour per camera, which is
     already a design constraint on the review queue."""
-    assert results["false_positives"] <= BASELINE["false_positives"]
+    assert results["false_positives"] <= BASELINE["false_positives"], (
+        f"{MODEL.name} produced {results['false_positives']} false positives "
+        f"against the {BASELINE['model']} baseline's {BASELINE['false_positives']}"
+    )
