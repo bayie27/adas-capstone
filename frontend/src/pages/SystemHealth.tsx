@@ -357,6 +357,45 @@ function EngineDiagnosticsSection() {
   )
 }
 
+function CapacityRow({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-between py-1.5 text-xs">
+      <span className="font-medium tracking-[0.08em] text-fg-muted">{label}</span>
+      <Badge tone="neutral" variant="subtle" uppercase={false}>
+        Unavailable
+      </Badge>
+    </div>
+  )
+}
+
+/**
+ * `ai_engine/capacity.py` benchmarks the machine once at startup and writes
+ * `machine_profile.json` (device, chosen camera capacity, the FPS band the
+ * decision was made against) — gitignored, machine-local, and never
+ * transmitted to the backend (G8). Mounted live today, same as
+ * EngineDiagnosticsSection, always Unavailable until that changes.
+ */
+function MachineCapacitySection() {
+  return (
+    <div className="mb-8 rounded-xl border border-stroke bg-surface-1 p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <RiServerLine size={16} className="text-fg-muted" />
+        <h3 className="text-xs font-medium text-fg-body">Machine Capacity</h3>
+      </div>
+
+      <CapacityRow label="Device" />
+      <CapacityRow label="Chosen camera capacity" />
+      <CapacityRow label="FPS band" />
+
+      {/* CLAUDE.md, verbatim, on ai_engine/machine_profile.json's absence: */}
+      <p className="mt-3 text-caption text-fg-muted">
+        "Absence is not an error — the engine falls back to a conservative one camera and says so on
+        startup."
+      </p>
+    </div>
+  )
+}
+
 /**
  * The history points carry avg/peak *pairs* for two metrics — cpu_temp and
  * gpu_mem_pct — that nothing plotted at all before this, on top of the four
@@ -564,6 +603,8 @@ export default function SystemHealth() {
       <GpuSection live={live} />
 
       <EngineDiagnosticsSection />
+
+      <MachineCapacitySection />
 
       <div className="mb-5">
         <Tabs
