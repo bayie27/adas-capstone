@@ -4,16 +4,15 @@ import { formatDuration } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
 
 /**
- * Modelled on `MaintenanceNotice.tsx`'s banner shape (a dismissable-looking
- * strip across the top of the app, warning tone by default), but this one
- * takes plain props and fetches nothing — there is no backend endpoint yet
- * that exposes the AI engine's undelivered-detection backlog (G5,
- * `ai_engine/outbox.py`). Not mounted anywhere: there is no data source to
- * drive it, and a banner permanently wired to zero would be indistinguishable
- * from one that was never built, which defeats the point of shelling it now.
- * The day G5 ships, this becomes a real `useQuery`-backed component mounted
- * in `App.tsx` alongside `MaintenanceNotice`/`DevPanelTrigger` — this file is
- * that component's presentation half, already built and already tested.
+ * Modelled on `MaintenanceNotice.tsx`'s banner shape (a strip across the top
+ * of the app, warning tone by default). This half is pure presentation —
+ * plain props, no fetch of its own — because there is no backend endpoint
+ * yet that exposes the AI engine's undelivered-detection backlog (G5,
+ * `ai_engine/outbox.py`). The fetch lives in `useDeliveryBacklog`
+ * (`hooks/useDeliveryBacklog.ts`), which always returns `null` today for
+ * exactly that reason. Mounted in `App.tsx` alongside `MaintenanceNotice` —
+ * same idiom: wired all the way through, renders nothing most of the time,
+ * not "built but not wired in."
  *
  * Renders nothing when `pendingCount` is 0 — a backlog of zero is not a
  * warning.
