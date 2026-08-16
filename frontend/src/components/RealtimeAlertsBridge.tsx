@@ -49,6 +49,13 @@ function incidentToAlertLog(payload: IncidentPayload): AlertLog {
     closed_by_name: payload.closed_by_name,
     closed_at: payload.closed_at,
     camera_name: payload.camera_name,
+    // The backend's own IncidentPayload (schemas/events.py) has no
+    // snoozed_at field at all — unlike DetectionLogRead, which does. Not a
+    // frontend gap: the WS envelope genuinely never carries it, so this
+    // falls back to null rather than asserting a value that was never sent.
+    // A REST refetch (confirm/dismiss/resolve invalidation, or the recovery
+    // sequence) still gets the real value from DetectionLogRead.
+    snoozed_at: null,
     snoozed_until: payload.snoozed_until,
     snoozed_by_id: payload.snoozed_by_id,
     created_at: payload.created_at,

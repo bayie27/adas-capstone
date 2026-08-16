@@ -52,8 +52,18 @@ export function StatusText({
 }
 
 /** Convenience wrappers so a call site names the domain, not the tone. */
-export function AlertStatusText({ status }: { status: AlertStatus }) {
-  return <StatusText tone={getAlertStatusTone(status)}>{status}</StatusText>
+export function AlertStatusText({
+  status,
+  description,
+}: {
+  status: AlertStatus
+  description?: ReactNode
+}) {
+  return (
+    <StatusText tone={getAlertStatusTone(status)} description={description}>
+      {status}
+    </StatusText>
+  )
 }
 
 export function CameraConnectionText({ status }: { status: CameraConnectionStatus }) {
