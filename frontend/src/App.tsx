@@ -20,6 +20,7 @@ const ProfileSettings = lazy(() => import("@/pages/ProfileSettings"))
 const HelpCenter = lazy(() => import("@/pages/HelpCenter"))
 const Users = lazy(() => import("@/pages/Users"))
 const AuditLog = lazy(() => import("@/pages/AuditLog"))
+const Maintenance = lazy(() => import("@/pages/Maintenance"))
 
 function RouteFallback() {
   return (
@@ -66,6 +67,7 @@ function App() {
               <Route path="help" element={<HelpCenter />} />
               <Route path="users" element={<Users />} />
               <Route path="audit" element={<AuditLog />} />
+              <Route path="maintenance" element={<Maintenance />} />
             </Route>
 
             <Route
