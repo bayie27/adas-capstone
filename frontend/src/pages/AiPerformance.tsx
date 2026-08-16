@@ -15,6 +15,8 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
+import { useAuthStore } from "@/store/useAuthStore"
+import { RetrainingExportPanel } from "@/pages/ai-performance/RetrainingExportPanel"
 import { formatPercent } from "@/utils/format"
 import {
   RiCarLine,
@@ -28,6 +30,7 @@ const PERFORMANCE_QUERY_KEY = ["performance-analytics"] as const
 const ITEMS_PER_PAGE = 10
 
 export default function AiPerformance() {
+  const role = useAuthStore((state) => state.role)
   const [searchTerm, setSearchTerm] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
@@ -316,6 +319,8 @@ export default function AiPerformance() {
           onNext={next}
         />
       </div>
+
+      {role === "Admin" ? <RetrainingExportPanel /> : null}
     </div>
   )
 }
