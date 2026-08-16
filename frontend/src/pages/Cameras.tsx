@@ -53,7 +53,11 @@ import {
   RiRobot2Line,
 } from "@remixicon/react"
 
-const CAMERAS_PAGE_SIZE = 8
+// M14: was 8, but PaginationFooter's items-per-page selector only offers
+// [10, 25, 50, 100] and cannot display a value outside that set. 10 matches
+// ALERTS_PAGE_SIZE and USERS_PAGE_SIZE rather than adding an option just for
+// this screen's old default.
+const CAMERAS_PAGE_SIZE = 10
 const CAMERAS_QUERY_KEY = ["cameras"] as const
 const TABLE_COLUMN_COUNT = 5
 
@@ -103,10 +107,19 @@ export default function Cameras() {
   // See Users.tsx: mirror the query total into state so usePagination can clamp
   // the page at read time without an effect.
   const [seenTotal, setSeenTotal] = useState(0)
-  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, goTo, reset } = usePagination(
-    seenTotal,
-    CAMERAS_PAGE_SIZE,
-  )
+  const {
+    page,
+    pageSize,
+    totalPages,
+    offset,
+    rangeStart,
+    rangeEnd,
+    next,
+    prev,
+    goTo,
+    setPageSize,
+    reset,
+  } = usePagination(seenTotal, CAMERAS_PAGE_SIZE)
 
   const camerasQuery = useQuery({
     queryKey: [
@@ -115,6 +128,7 @@ export default function Cameras() {
       connectionFilter,
       aiFilter,
       isEnabledFilter,
+      pageSize,
       offset,
     ],
     queryFn: () =>
@@ -123,7 +137,7 @@ export default function Cameras() {
         connection_status: connectionFilter === "all" ? undefined : [connectionFilter],
         ai_status: aiFilter === "all" ? undefined : [aiFilter],
         is_enabled: isEnabledFilter === "all" ? undefined : isEnabledFilter === "true",
-        limit: CAMERAS_PAGE_SIZE,
+        limit: pageSize,
         offset,
       }),
     placeholderData: (previousData) => previousData,
@@ -340,11 +354,12 @@ export default function Cameras() {
             rangeStart={rangeStart}
             rangeEnd={rangeEndValue}
             totalFiltered={totalFiltered}
-            pageSize={CAMERAS_PAGE_SIZE}
+            pageSize={pageSize}
             isFetching={camerasQuery.isFetching}
             onPrev={prev}
             onNext={next}
             onPageChange={goTo}
+            onPageSizeChange={setPageSize}
           />
         }
       >
