@@ -18,6 +18,7 @@ uses to run the engine at all (mediamtx.yml).
 
 import contextlib
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -48,11 +49,22 @@ SYNTHETIC_CLIP = Path(__file__).resolve().parent / "eval" / "_bench_synthetic.mp
 # defaults to 1472; 1300 clears the limit with room for RTP headers.
 RTP_PKT_SIZE = 1300
 
-STREAM_READY_TIMEOUT = 30.0
+# Waiting for a camera to connect has to allow for config.RECONNECT_INTERVAL_SECONDS
+# (10s): a camera that misses once sleeps that long before trying again, so a
+# 30s budget bought only three attempts and two unlucky ones killed the run.
+# Scales with camera count because opening N 1440p RTSP sessions at once takes
+# longer the more of them there are.
+STREAM_READY_BASE_SECONDS = 45.0
+STREAM_READY_PER_CAMERA_SECONDS = 3.0
 
-# Long enough for ffmpeg to open its RTSP session and register the path with
-# MediaMTX before any camera tries to DESCRIBE it.
-PUBLISHER_SETTLE_SECONDS = 2.0
+# Cameras are constructed a beat apart rather than all at once. N simultaneous
+# DESCRIBEs against a server that is also accepting N publishes is a thundering
+# herd of the harness's own making, and real cameras never start in lockstep.
+CAMERA_START_STAGGER_SECONDS = 0.15
+
+# Ceiling on waiting for publishers to register their paths. The wait itself
+# ends as soon as every path is live — see MediaMtxServer.await_publishers.
+PUBLISHER_READY_TIMEOUT = 60.0
 
 
 class BenchSourceError(RuntimeError):
@@ -61,6 +73,18 @@ class BenchSourceError(RuntimeError):
     Raised rather than folded into a failed run on purpose: a publisher that
     died is the harness breaking, and recording it as "this machine cannot
     carry N cameras" would be a wrong answer indistinguishable from a right one.
+    """
+
+
+class StreamsNotReadyError(BenchSourceError):
+    """Streams could not all be brought up at this camera count.
+
+    Distinct from its parent because it is NOT necessarily a broken harness.
+    Publishers, the server and the readers all share one machine here, so
+    failing to establish N streams at once is a real ceiling — just a blurred
+    one, since a deployment would not be running the publishers. capacity.py
+    records it as a failed run and lets the climb walk down, rather than
+    aborting and discarding a measurement that was minutes in the making.
     """
 
 
@@ -326,6 +350,40 @@ class MediaMtxServer:
             return "(no log)"
         return "\n".join(self._log.read_text(encoding="utf-8").splitlines()[-lines:])
 
+    def published_paths(self) -> set[str]:
+        """Paths MediaMTX has confirmed a publisher on, read from its log."""
+        if not self._log.exists():
+            return set()
+        text = self._log.read_text(encoding="utf-8", errors="replace")
+        return set(re.findall(r"is publishing to path '([^']+)'", text))
+
+    def await_publishers(self, count: int, timeout=PUBLISHER_READY_TIMEOUT) -> None:
+        """Block until every bench path has a publisher, or give up.
+
+        Replaces a fixed sleep, which was the direct cause of a run dying on a
+        fast machine: MediaMTX only creates a path when its publisher connects,
+        so a camera that opens first gets `404 Not Found`, and camera.py then
+        backs off for config.RECONNECT_INTERVAL_SECONDS — ten seconds. With
+        fourteen publishers still settling, several cameras took that penalty
+        and never recovered inside the ready window.
+
+        Waiting on the server's own confirmation is both faster than a
+        conservative sleep and correct at any camera count.
+        """
+        expected = {f"bench{i}" for i in range(1, count + 1)}
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if expected <= self.published_paths():
+                return
+            time.sleep(0.2)
+
+        missing = sorted(expected - self.published_paths())
+        raise StreamsNotReadyError(
+            f"{len(missing)} of {count} publishers never registered a path "
+            f"({', '.join(missing[:6])}{'...' if len(missing) > 6 else ''}) "
+            f"within {timeout:.0f}s"
+        )
+
     def __exit__(self, *exc):
         if self.process is not None:
             self.process.terminate()
@@ -416,13 +474,14 @@ class Publishers:
                     stderr=handle,
                 )
             )
-        # MediaMTX creates a path when its publisher connects, so a camera that
-        # opens first gets `DESCRIBE failed: 404 Not Found` and falls into the
-        # reconnect loop with its one-second sleep. Harmless — the warm-up
-        # discards it — but it burns warm-up seconds and buries real errors in
-        # noise, and the first frames off a half-established session decode with
-        # `bad cseq` corruption.
-        time.sleep(PUBLISHER_SETTLE_SECONDS)
+        # Wait for the server to confirm every path, rather than sleeping a
+        # fixed interval and hoping. MediaMTX only creates a path when its
+        # publisher connects, so a camera that opens first gets
+        # `DESCRIBE failed: 404 Not Found` and backs off for
+        # config.RECONNECT_INTERVAL_SECONDS — ten seconds, which is long enough
+        # to blow the whole ready budget.
+        self.assert_alive()
+        self.server.await_publishers(self.count)
         self.assert_alive()
         return self
 
@@ -465,15 +524,19 @@ class Publishers:
 
 def start_cameras(server: MediaMtxServer, count: int) -> dict:
     """Bring up `count` real CameraStreams and wait for every one to connect."""
-    cameras = {
-        index: BenchCameraStream(
+    cameras: dict = {}
+    for index in range(1, count + 1):
+        cameras[index] = BenchCameraStream(
             channel_id=index, camera_id=index, rtsp_url=server.url_for(index)
         )
-        for index in range(1, count + 1)
-    }
+        # A beat between each, so N readers do not all DESCRIBE at once against
+        # a server that is simultaneously accepting N publishes.
+        if CAMERA_START_STAGGER_SECONDS:
+            time.sleep(CAMERA_START_STAGGER_SECONDS)
 
+    timeout = STREAM_READY_BASE_SECONDS + STREAM_READY_PER_CAMERA_SECONDS * count
     pending: list[int] = []
-    deadline = time.monotonic() + STREAM_READY_TIMEOUT
+    deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         pending = [
             camera.camera_id
@@ -485,8 +548,9 @@ def start_cameras(server: MediaMtxServer, count: int) -> dict:
         time.sleep(0.25)
 
     stop_cameras(cameras)
-    raise BenchSourceError(
-        f"cameras {pending} never reached Connected within {STREAM_READY_TIMEOUT:.0f}s"
+    raise StreamsNotReadyError(
+        f"cameras {pending} never reached Connected within {timeout:.0f}s "
+        f"at {count} camera(s)"
     )
 
 

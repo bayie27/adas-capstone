@@ -28,6 +28,7 @@ from runtime_bench import (
     FAILURE_INFERENCE_FAILED,
     FAILURE_STARVED,
     FAILURE_STREAM_DROPPED,
+    FAILURE_STREAMS_NOT_READY,
     InstrumentedPipeline,
     RecordsHandover,
     RunSample,
@@ -200,6 +201,28 @@ def test_an_inference_failure_stops_the_search_instead_of_walking_down():
     assert result.aborted is True
     assert len(result.samples) == 1  # did not walk down
     assert result.capacity == 0
+
+
+def test_streams_failing_to_start_walks_down_instead_of_aborting():
+    """Observed on a GTX 1650 at 14 cameras: two never reached Connected, the
+    error propagated out of the climb, and a seed sweep that had taken minutes
+    was discarded with no profile written.
+
+    Bringing up N streams at once is part of what is being measured, so it is a
+    failed run at that count — the climb keeps looking downward and the user
+    still gets an answer."""
+
+    def measure(n):
+        if n > 3:
+            return _sample(
+                cameras=n, passed=False, failure_reason=FAILURE_STREAMS_NOT_READY
+            )
+        return _sample(cameras=n, passed=True)
+
+    result = climb(measure, seed_prediction=16, max_cameras=32)
+
+    assert result.aborted is False
+    assert result.capacity == 3
 
 
 def test_an_ordinary_failure_does_not_abort_the_search():

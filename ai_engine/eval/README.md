@@ -93,9 +93,24 @@ sampled at a seventh of the required rate.
 The failure reason is recorded per run because the responses are opposite:
 `starved` means the machine cannot process that many, `stream_dropped` means it
 cannot hold that many streams open, `contaminated_by_events` means the clip had
-a crash in it, and `inference_failed` means the model refused the batch (see
-below). Only the last short-circuits the search, because trying fewer cameras
-cannot fix a model that will not accept the batch.
+a crash in it, `inference_failed` means the model refused the batch (see below),
+and `streams_not_ready` means the streams could not all be brought up at that
+count at all. Only `inference_failed` short-circuits the search, because trying
+fewer cameras cannot fix a model that will not accept the batch.
+
+`streams_not_ready` deserves a note. Publishers, the server and the readers all
+share one machine, so failing to establish N streams simultaneously is a real
+ceiling — just a blurred one, since a deployment would not be running the
+publishers. It is recorded as a failed run and the climb walks down, rather than
+aborting: a seed sweep costs minutes and must not be thrown away over it. If you
+see it well below the capacity you expect, run MediaMTX separately and point
+`--source` at it, which removes the publishers from the machine under test.
+
+Corrupt-frame noise in the log (`error while decoding MB ...`, `RTP: PT=60: bad
+cseq ...`) at high camera counts is the same signal: MediaMTX's write queues
+overflow when readers cannot keep up, and the discontinuities surface as decode
+errors. Warm-up discards those frames, but a steady stream of them means the
+harness itself is contending for the machine.
 
 ### Measuring a TensorRT engine or ONNX export
 
