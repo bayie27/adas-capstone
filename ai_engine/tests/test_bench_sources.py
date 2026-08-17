@@ -7,6 +7,7 @@ counted — because those are what silently produce a plausible-but-wrong number
 The process lifecycle is exercised for real by the closed-loop run itself.
 """
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -182,37 +183,75 @@ def test_each_publisher_targets_its_own_path():
 # --- waiting for publishers ----------------------------------------------
 
 
-def test_published_paths_are_read_from_the_server_log(tmp_path):
-    server = sources.MediaMtxServer(tmp_path, port=8999)
-    (tmp_path / "mediamtx.log").write_text(
-        "INF [RTSP] [session a] is publishing to path 'bench1_1'\n"
-        "INF [path bench1_1] stream is available and online, 1 track (H264)\n"
-        "INF [RTSP] [session b] is publishing to path 'bench1_2'\n",
-        encoding="utf-8",
-    )
+def _api_returning(monkeypatch, live_paths, not_ready=()):
+    """Stand in for MediaMTX's /v3/paths/list."""
+    payload = {
+        "items": [{"name": name, "ready": True} for name in live_paths]
+        + [{"name": name, "ready": False} for name in not_ready]
+    }
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return json.dumps(payload).encode()
+
+    class _Opener:
+        def open(self, url, timeout):
+            return _Response()
+
+    # Patch the opener, not urllib.urlopen: the loopback opener deliberately
+    # bypasses proxy environment variables, so it is what actually gets called.
+    monkeypatch.setattr(sources, "_LOOPBACK_OPENER", _Opener())
+
+
+def test_live_paths_come_from_the_control_api(monkeypatch, tmp_path):
+    """Asked over the API, never scraped from the log. The log is CUMULATIVE,
+    so a previous camera count's entries answered the next one's question — the
+    check passed while doing nothing. The API reports current state, so history
+    cannot answer for the present."""
+    server = sources.MediaMtxServer(tmp_path, port=8999, api_port=8998)
+    _api_returning(monkeypatch, ["bench1_1", "bench1_2"])
 
     assert server.published_paths() == {"bench1_1", "bench1_2"}
 
 
-def test_awaiting_publishers_returns_as_soon_as_every_path_is_live(tmp_path):
-    server = sources.MediaMtxServer(tmp_path, port=8999)
+def test_a_path_that_exists_but_is_not_ready_does_not_count(monkeypatch, tmp_path):
+    """MediaMTX keeps a path listed after its publisher dies — which is exactly
+    what a hard-killed ffmpeg leaves behind on Windows. Only `ready` means a
+    camera can actually read from it."""
+    server = sources.MediaMtxServer(tmp_path, port=8999, api_port=8998)
+    _api_returning(monkeypatch, ["bench1_1"], not_ready=["bench1_2"])
+
+    assert server.published_paths() == {"bench1_1"}
+
+
+def test_an_unreachable_api_reads_as_not_ready_rather_than_crashing(tmp_path):
+    """Polled during startup, before the server is listening. An empty answer
+    means 'not yet'; an exception would take down the whole run."""
+    server = sources.MediaMtxServer(tmp_path, port=8999, api_port=1)
+
+    assert server.published_paths() == set()
+
+
+def test_awaiting_publishers_returns_once_every_path_is_live(monkeypatch, tmp_path):
+    server = sources.MediaMtxServer(tmp_path, port=8999, api_port=8998)
     server.new_session()
-    (tmp_path / "mediamtx.log").write_text(
-        "is publishing to path 'bench1_1'\nis publishing to path 'bench1_2'\n",
-        encoding="utf-8",
-    )
+    _api_returning(monkeypatch, ["bench1_1", "bench1_2"])
 
     server.await_publishers(2, timeout=2.0)  # must not raise or stall
 
 
-def test_awaiting_publishers_raises_the_recoverable_error(tmp_path):
+def test_awaiting_publishers_raises_the_recoverable_error(monkeypatch, tmp_path):
     """StreamsNotReadyError, not a bare BenchSourceError — capacity.py treats
     the two differently: one fails a run, the other aborts everything."""
-    server = sources.MediaMtxServer(tmp_path, port=8999)
+    server = sources.MediaMtxServer(tmp_path, port=8999, api_port=8998)
     server.new_session()
-    (tmp_path / "mediamtx.log").write_text(
-        "is publishing to path 'bench1_1'\n", encoding="utf-8"
-    )
+    _api_returning(monkeypatch, ["bench1_1"])
 
     with pytest.raises(sources.StreamsNotReadyError) as excinfo:
         server.await_publishers(3, timeout=0.5)
@@ -220,26 +259,25 @@ def test_awaiting_publishers_raises_the_recoverable_error(tmp_path):
     assert "bench1_2" in str(excinfo.value)
 
 
-def test_an_earlier_runs_publishers_cannot_satisfy_a_later_wait(tmp_path):
+def test_an_earlier_runs_publishers_cannot_satisfy_a_later_wait(monkeypatch, tmp_path):
     """The defect that made a whole GTX 1650 climb meaningless.
 
-    One server serves every camera count and its log is cumulative. With shared
-    path names, the 14-camera run's log entries satisfied the 13-camera run's
-    wait instantly — so cameras opened before their publishers existed, took a
-    404, and backed off ten seconds each. The readiness check reported success
-    while doing nothing, and the resulting curve peaked at 3 cameras and got
+    One server serves every camera count. With a cumulative log and shared path
+    names, the 14-camera run's entries satisfied the 13-camera run's wait
+    instantly — cameras opened before their publishers existed, took a 404, and
+    backed off ten seconds each. The resulting curve peaked at 3 cameras and got
     WORSE at 1, which is impossible for a capacity measurement.
+
+    Two independent guards now: the API reports only what is live, and each run
+    takes fresh path names.
     """
-    server = sources.MediaMtxServer(tmp_path, port=8999)
+    server = sources.MediaMtxServer(tmp_path, port=8999, api_port=8998)
 
-    server.new_session()  # run one, 3 cameras
-    (tmp_path / "mediamtx.log").write_text(
-        "\n".join(f"is publishing to path 'bench1_{i}'" for i in (1, 2, 3)),
-        encoding="utf-8",
-    )
-    server.await_publishers(3, timeout=1.0)  # genuinely live
+    server.new_session()  # run one, 3 cameras, genuinely live
+    _api_returning(monkeypatch, ["bench1_1", "bench1_2", "bench1_3"])
+    server.await_publishers(3, timeout=1.0)
 
-    server.new_session()  # run two, 2 cameras — nothing published yet
+    server.new_session()  # run two — those paths are the PREVIOUS run's
     with pytest.raises(sources.StreamsNotReadyError):
         server.await_publishers(2, timeout=0.5)
 
@@ -289,14 +327,27 @@ def test_the_generated_config_declares_a_catch_all_path():
     assert "paths:" in config
 
 
-def test_the_generated_config_turns_off_every_other_listener():
+def test_the_generated_config_turns_off_every_listener_except_what_is_needed():
     """Keeps the bench off a dev stack's 8554, and avoids the auto.crt /
-    auto.key pair MediaMTX drops in its working directory for WebRTC."""
-    config = sources.MediaMtxServer(Path("/tmp"), port=8999).config_text
+    auto.key pair MediaMTX drops in its working directory for WebRTC. The
+    control API stays on — it is how readiness is checked — and is bound to
+    loopback so the bench never listens on the network."""
+    server = sources.MediaMtxServer(Path("/tmp"), port=8999, api_port=8998)
+    config = server.config_text
 
-    for listener in ("rtmp", "hls", "webrtc", "srt", "api", "metrics"):
+    for listener in ("rtmp", "hls", "webrtc", "srt", "metrics", "pprof"):
         assert f"{listener}: no" in config
     assert "rtspAddress: :8999" in config
+    assert "api: yes" in config
+    assert "apiAddress: 127.0.0.1:8998" in config
+
+
+def test_the_api_gets_its_own_port():
+    """Sharing the RTSP port would fail to bind; a fixed one would collide with
+    a second bench or a dev stack."""
+    server = sources.MediaMtxServer(Path("/tmp"))
+
+    assert server.api_port != server.port
 
 
 def test_ports_are_allocated_free():

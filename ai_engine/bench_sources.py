@@ -17,12 +17,13 @@ uses to run the engine at all (mediamtx.yml).
 """
 
 import contextlib
+import json
 import os
-import re
 import shutil
 import socket
 import subprocess
 import time
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -65,6 +66,28 @@ CAMERA_START_STAGGER_SECONDS = 0.15
 # Ceiling on waiting for publishers to register their paths. The wait itself
 # ends as soon as every path is live — see MediaMtxServer.await_publishers.
 PUBLISHER_READY_TIMEOUT = 60.0
+
+# How long a publisher gets to honour `q` on stdin before it is terminated.
+GRACEFUL_EXIT_SECONDS = 5.0
+
+
+class _LoopbackOpener:
+    """urllib with proxies disabled, for talking to our own MediaMTX.
+
+    urlopen honours HTTP_PROXY/HTTPS_PROXY from the environment. On a machine
+    behind a corporate proxy whose no_proxy does not list 127.0.0.1 — common on
+    a managed Windows box — every readiness check would be routed to the proxy
+    and fail, and the bench would report that no publisher ever came up.
+    """
+
+    def __init__(self):
+        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    def open(self, url, timeout):
+        return self._opener.open(url, timeout=timeout)
+
+
+_LOOPBACK_OPENER = _LoopbackOpener()
 
 
 class BenchSourceError(RuntimeError):
@@ -287,9 +310,10 @@ class MediaMtxServer:
     not of the server.
     """
 
-    def __init__(self, workdir: Path, port: int | None = None):
+    def __init__(self, workdir: Path, port: int | None = None, api_port=None):
         self.workdir = Path(workdir)
         self.port = port or free_port()
+        self.api_port = api_port or free_port()
         self.process: subprocess.Popen | None = None
         self._log = self.workdir / "mediamtx.log"
         self._log_handle = None
@@ -306,11 +330,20 @@ class MediaMtxServer:
             "hls: no\n"
             "webrtc: no\n"
             "srt: no\n"
-            "api: no\n"
+            # The control API is how readiness is checked. Everything else stays
+            # off: it keeps the bench clear of a dev stack's ports and avoids the
+            # auto.crt / auto.key pair the WebRTC listener drops in its working
+            # directory.
+            "api: yes\n"
+            f"apiAddress: 127.0.0.1:{self.api_port}\n"
             "metrics: no\n"
             "pprof: no\n"
             "playback: no\n"
             "paths:\n"
+            # REQUIRED, and not decoration: without a catch-all, MediaMTX answers
+            # a publish with `400 Bad Request: path 'benchN' is not configured`.
+            # Auto-creation on publish is a property of this entry, not of the
+            # server.
             "  all_others:\n"
         )
 
@@ -378,19 +411,46 @@ class MediaMtxServer:
         raise BenchSourceError(f"mediamtx did not open port {self.port}")
 
     def _tail(self, lines: int = 10) -> str:
-        if not self._log.exists():
-            return "(no log)"
-        return "\n".join(self._log.read_text(encoding="utf-8").splitlines()[-lines:])
+        # Guarded because the server holds this file open for writing, and on
+        # Windows that can refuse a concurrent read. This runs on the error
+        # path, so failing to read the log must not replace the real error.
+        try:
+            text = self._log.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return "(log unreadable)"
+        return "\n".join(text.splitlines()[-lines:]) or "(no log)"
 
     def published_paths(self) -> set[str]:
-        """Paths MediaMTX has confirmed a publisher on, read from its log."""
-        if not self._log.exists():
+        """Paths that are LIVE right now, from MediaMTX's control API.
+
+        Asked over the API rather than scraped from the log, and the difference
+        is not cosmetic. The log is cumulative, so a previous camera count's
+        entries satisfied the next one's wait instantly — the check passed while
+        doing nothing, and cameras opened before their publishers existed. The
+        API reports current state, so history cannot answer for the present.
+
+        It also sidesteps two Windows-only hazards in reading a file the server
+        holds open: sharing-mode refusals, and output that has not been flushed
+        yet.
+        """
+        try:
+            with _LOOPBACK_OPENER.open(
+                f"http://127.0.0.1:{self.api_port}/v3/paths/list", timeout=2
+            ) as response:
+                payload = json.load(response)
+        except (OSError, ValueError):
+            # Server not up yet, or mid-restart. Callers poll, so an empty
+            # answer simply means "not ready", never a crash.
             return set()
-        text = self._log.read_text(encoding="utf-8", errors="replace")
-        return set(re.findall(r"is publishing to path '([^']+)'", text))
+
+        return {
+            item["name"]
+            for item in payload.get("items", [])
+            if item.get("ready") and item.get("name")
+        }
 
     def await_publishers(self, count: int, timeout=PUBLISHER_READY_TIMEOUT) -> None:
-        """Block until every bench path has a publisher, or give up.
+        """Block until every bench path is live, or give up.
 
         Replaces a fixed sleep, which was the direct cause of a run dying on a
         fast machine: MediaMTX only creates a path when its publisher connects,
@@ -504,6 +564,11 @@ class Publishers:
                     self._command(index),
                     stdout=subprocess.DEVNULL,
                     stderr=handle,
+                    # A pipe of our own, for two reasons. It is how ffmpeg is
+                    # asked to quit cleanly (see __exit__), and it stops N
+                    # publishers inheriting — and competing for — the console's
+                    # stdin, which on Windows can swallow the user's keystrokes.
+                    stdin=subprocess.PIPE,
                 )
             )
         # Wait for the server to confirm every path, rather than sleeping a
@@ -540,13 +605,38 @@ class Publishers:
         return [p.pid for p in self.processes if p.poll() is None]
 
     def __exit__(self, *exc):
+        # Ask ffmpeg to quit rather than killing it. `q` on stdin is its
+        # documented graceful exit, and it matters most on Windows, where
+        # Popen.terminate() is TerminateProcess — a hard kill with no cleanup,
+        # so no RTSP TEARDOWN is ever sent. MediaMTX then keeps the session
+        # until the socket times out, and across a full walk-down that is one
+        # abandoned session per publisher per camera count. On POSIX terminate()
+        # is SIGTERM and ffmpeg already exits cleanly, so this simply makes both
+        # platforms behave the way only one of them did.
         for process in self.processes:
-            process.terminate()
+            if process.poll() is not None:
+                continue
+            with contextlib.suppress(Exception):
+                process.stdin.write(b"q")
+                process.stdin.flush()
+
+        deadline = time.monotonic() + GRACEFUL_EXIT_SECONDS
+        for process in self.processes:
+            remaining = max(0.0, deadline - time.monotonic())
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                process.wait(timeout=remaining)
+
+        for process in self.processes:
+            if process.poll() is None:
+                process.terminate()
+            with contextlib.suppress(Exception):
+                process.stdin.close()
         for process in self.processes:
             try:
                 process.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 process.kill()
+
         for _, handle in self._logs:
             with contextlib.suppress(Exception):
                 handle.close()
@@ -610,13 +700,43 @@ def reconnect_count(cameras: dict, baseline: dict, resumes: dict) -> int:
 
 
 def cpu_seconds(pids) -> float | None:
-    """Total CPU seconds burned by the given processes, via /proc.
+    """Total CPU seconds burned by the given processes.
 
-    Linux-only and deliberately dependency-free: psutil is only present here as
-    a transitive of ultralytics, and the harness should not start depending on
-    something nothing declares. Returns None where /proc is unavailable, and the
-    confound is reported as unmeasured rather than guessed.
+    Tries psutil first, which works on every platform this project runs on. The
+    original /proc reader was Linux-only, so `harness_cpu_pct` was silently None
+    on Windows — the field that exists to say how pessimistic a capacity figure
+    is, blank on the machine most likely to be producing the figure.
+
+    psutil is not declared as a direct dependency (it arrives with ultralytics),
+    hence the fallback rather than a bare import: on a machine that somehow has
+    neither psutil nor /proc, the confound is reported as unmeasured rather than
+    guessed at.
     """
+    total = _cpu_seconds_psutil(pids)
+    if total is not None:
+        return total
+    return _cpu_seconds_proc(pids)
+
+
+def _cpu_seconds_psutil(pids) -> float | None:
+    try:
+        import psutil
+    except ImportError:
+        return None
+
+    total = 0.0
+    seen_any = False
+    for pid in pids:
+        try:
+            times = psutil.Process(pid).cpu_times()
+        except Exception:  # noqa: BLE001 - gone, or not ours to inspect
+            continue
+        total += times.user + times.system
+        seen_any = True
+    return total if seen_any else None
+
+
+def _cpu_seconds_proc(pids) -> float | None:
     ticks = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else None
     if not ticks:
         return None
