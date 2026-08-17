@@ -25,9 +25,17 @@ assert LATENCIES[2] == 55.0 and LATENCIES[3] == 80.0
 
 
 def _run(monkeypatch, tmp_path, argv=(), latencies=None):
-    """Drive main() with the model and the clock stubbed out."""
+    """Drive main() with the model and the clock stubbed out.
+
+    `--mode inference` is passed explicitly because the DEFAULT is now
+    closed-loop, which needs mediamtx, ffmpeg and real RTSP streams. Everything
+    in this file is about the batched-inference sweep — the full grid, the
+    OOM-partway-up behaviour, the model bookkeeping — so it names the mode that
+    owns those. The closed-loop half is covered in test_runtime_bench.py.
+    """
     latencies = latencies if latencies is not None else LATENCIES
     profile_path = tmp_path / "machine_profile.json"
+    argv = ("--mode", "inference", *argv)
 
     def fake_benchmark(detector, batch, frame):
         if batch not in latencies:
@@ -205,13 +213,43 @@ def test_an_explicit_model_is_benchmarked_and_recorded(monkeypatch, tmp_path):
     monkeypatch.setattr(capacity, "AccidentDetector", fake_detector)
     monkeypatch.setattr(capacity, "_benchmark", fake_benchmark)
     monkeypatch.setattr(config, "PROFILE_PATH", profile_path)
-    monkeypatch.setattr(sys, "argv", ["capacity.py", "--model", str(model_path)])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["capacity.py", "--mode", "inference", "--model", str(model_path)],
+    )
 
     capacity.main()
     profile = load_profile(profile_path)
 
     assert constructed["path"] == model_path
     assert profile.model_path == str(model_path)
+
+
+def test_the_seed_sweep_stops_once_no_supported_frame_rate_could_fit(monkeypatch):
+    """Closed-loop mode only needs the sweep to place a starting point, so it
+    stops at the loosest window in the band (100ms at 10 FPS). Past that no
+    supported rate can fit and the remaining sizes would be timed purely to be
+    discarded — several minutes of it on a CPU-only machine."""
+    monkeypatch.setattr(capacity, "_benchmark", lambda d, batch, f: 25.0 * batch + 5.0)
+
+    latency = capacity.sweep(object(), None, stop_at_ms=100.0)
+
+    # 25n+5 crosses 100ms at batch 4 (105ms), so 4 is measured and 5 is not.
+    assert max(latency) == 4
+    assert len(latency) < len(capacity.BATCH_SIZES)
+
+
+def test_without_a_budget_the_sweep_still_grinds_the_whole_grid(monkeypatch):
+    """`--mode inference` must keep its existing behaviour exactly: the full
+    contiguous grid is the evidence behind that mode's capacity claim, and
+    _grid_limited's 'we stopped looking here' warning depends on reaching the
+    top."""
+    monkeypatch.setattr(capacity, "_benchmark", lambda d, batch, f: 25.0 * batch + 5.0)
+
+    latency = capacity.sweep(object(), None, stop_at_ms=None)
+
+    assert sorted(latency) == capacity.BATCH_SIZES
 
 
 def test_a_missing_model_exits_rather_than_falling_back(monkeypatch, tmp_path):

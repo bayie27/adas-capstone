@@ -143,33 +143,6 @@ class TestGetAllCameras:
         assert cam.connection_status == "Connected"
         assert cam.ai_status == "Active"
 
-    def test_heartbeat_staleness_boundary(self, client: TestClient, session: Session):
-        """Edge case 2.18 — exactly HEARTBEAT_STALE_SECONDS (10s) old is
-        Unresponsive; 9.9s old is still fresh."""
-        headers = _headers(client, session)
-        now = datetime.now(UTC)
-        fresh = make_camera(
-            session,
-            name="Just Fresh Cam",
-            channel_id=93,
-            connection_status="Connected",
-            ai_status="Active",
-            last_heartbeat_at=now - timedelta(seconds=9.9),
-        )
-        stale = make_camera(
-            session,
-            name="Just Stale Cam",
-            channel_id=94,
-            connection_status="Connected",
-            ai_status="Active",
-            last_heartbeat_at=now - timedelta(seconds=10),
-        )
-
-        resp = client.get("/api/cameras/", headers=headers)
-        rows = {c["camera_id"]: c for c in resp.json()["cameras"]}
-        assert rows[fresh.camera_id]["connection_status"] == "Connected"
-        assert rows[stale.camera_id]["connection_status"] == "Unresponsive"
-
     def test_never_heartbeated_presented_as_reconnecting(
         self, client: TestClient, session: Session
     ):
@@ -291,6 +264,46 @@ class TestGetAllCameras:
         body = resp.json()
         assert body["total_filtered"] == 1
         assert body["cameras"][0]["camera_name"] == "Disabled Cam"
+
+
+class TestPresentedStatuses:
+    """The staleness rule itself, asserted against presented_statuses() with
+    an explicit `now` — the same shape as the sibling boundary test in
+    test_system_health.py, and for the same reason.
+
+    Deliberately not a route test: GET /api/cameras/ reads its own
+    datetime.now(UTC) at request time (routes/cameras.py), so a camera
+    parked a fraction of a second inside the window crosses the boundary
+    while the request is in flight. That gave the route-level version of
+    this test a ~100ms real-time budget and made it flaky under
+    `pytest -n auto`. Route-level staleness presentation is covered by
+    TestGetAllCameras with margins wide enough not to care.
+    """
+
+    def test_heartbeat_staleness_boundary(self, session: Session):
+        """Edge case 2.18 — exactly HEARTBEAT_STALE_SECONDS (10s) old is
+        Unresponsive on both dimensions; a hair under is still fresh."""
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(seconds=settings.HEARTBEAT_STALE_SECONDS)
+        fresh = make_camera(
+            session,
+            name="Just Fresh Cam",
+            channel_id=93,
+            connection_status="Connected",
+            ai_status="Active",
+            last_heartbeat_at=cutoff + timedelta(milliseconds=100),
+        )
+        stale = make_camera(
+            session,
+            name="Just Stale Cam",
+            channel_id=94,
+            connection_status="Connected",
+            ai_status="Active",
+            last_heartbeat_at=cutoff,
+        )
+
+        assert presented_statuses(fresh, now=now) == ("Connected", "Active")
+        assert presented_statuses(stale, now=now) == ("Unresponsive", "Unresponsive")
 
 
 class TestPresentedStatusFilters:

@@ -276,6 +276,9 @@ playwright-report/
 
 # Written by ai_engine/capacity.py. Machine-specific, like a TensorRT engine.
 ai_engine/machine_profile.json
+# Scratch for the closed-loop benchmark: the generated MediaMTX config and its
+# log, rewritten on every run.
+ai_engine/_bench/
 ai_engine/*.engine
 # Build artifacts, not sources: both are exported from epoch50.pt, which IS
 # tracked. The .engine is tied to the GPU, driver and TensorRT version that
