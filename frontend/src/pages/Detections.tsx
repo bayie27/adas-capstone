@@ -497,6 +497,7 @@ export default function Detections() {
           <ExportButton
             rowCount={logsQuery.data?.total_filtered}
             isExporting={exportMutation.isPending}
+            exportHasError={exportMutation.isError}
             onExport={(format) => exportMutation.mutate(format)}
             isSubmittingJob={exportJobMutation.isPending}
             onExportJob={(format) =>

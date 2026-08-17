@@ -49,6 +49,13 @@ interface ExportButtonProps {
   /** Disables the trigger entirely, e.g. while a query is still loading. */
   disabled?: boolean
   isExporting?: boolean
+  /**
+   * Whether the synchronous export just settled with an error. The caller
+   * already computes this for its own `QueryErrorBanner` -- passed through
+   * so the button can tell "finished" from "finished successfully" without
+   * a second copy of that state.
+   */
+  exportHasError?: boolean
   className?: string
   /**
    * Phase 17 — when both ceilings are exceeded, an "over both limits" filter
@@ -74,11 +81,20 @@ export function ExportButton({
   rowCount,
   disabled,
   isExporting,
+  exportHasError,
   className,
   onExportJob,
   isSubmittingJob,
 }: ExportButtonProps) {
   const [open, setOpen] = useState(false)
+  // §2.8's "swap the label for the present-progressive verb" idiom, carried
+  // one step further: a synchronous export gives no other sign it did
+  // anything (the file just appears in the browser's own download UI), so
+  // the button flashes a past-tense label the same way it shows a
+  // present-progressive one while in flight. Scoped to `isExporting`, not
+  // `isSubmittingJob` -- queuing a background job isn't "the file is ready".
+  const [justExported, setJustExported] = useState(false)
+  const wasExporting = useRef(false)
   // `position: fixed` + coordinates measured off the trigger, not
   // `absolute` + `right-0` on a statically-positioned ancestor chain.
   // Root cause: this menu sits inside <main>, which never establishes its
@@ -126,6 +142,17 @@ export function ExportButton({
     }
   }, [open])
 
+  useEffect(() => {
+    const justFinishedCleanly = wasExporting.current && !isExporting && !exportHasError
+    wasExporting.current = Boolean(isExporting)
+
+    if (justFinishedCleanly) {
+      setJustExported(true)
+      const timer = setTimeout(() => setJustExported(false), 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [isExporting, exportHasError])
+
   async function choose(format: ExportFormat) {
     setOpen(false)
     await onExport(format)
@@ -154,7 +181,7 @@ export function ExportButton({
         onClick={toggleOpen}
       >
         <RiDownloadLine size={13} />
-        Export
+        {justExported ? "Exported" : "Export"}
         <RiArrowDownSLine size={14} aria-hidden />
       </Button>
 

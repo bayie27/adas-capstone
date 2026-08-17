@@ -294,6 +294,7 @@ export default function AuditLog() {
         <ExportButton
           rowCount={totalFiltered}
           isExporting={exportMutation.isPending}
+          exportHasError={exportMutation.isError}
           onExport={(format) => exportMutation.mutate(format)}
           isSubmittingJob={exportJobMutation.isPending}
           onExportJob={(format) =>
