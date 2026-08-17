@@ -79,7 +79,27 @@ export function ExportButton({
   isSubmittingJob,
 }: ExportButtonProps) {
   const [open, setOpen] = useState(false)
+  // `position: fixed` + coordinates measured off the trigger, not
+  // `absolute` + `right-0` on a statically-positioned ancestor chain.
+  // Root cause: this menu sits inside <main>, which never establishes its
+  // own stacking context (no transform/opacity/isolation anywhere between
+  // it and <body>), so its z-index is compared against the Sidebar's
+  // `position: fixed` in the root stacking context — where Chromium's
+  // compositor promotes `position: fixed` descendants of the shell's
+  // `overflow-hidden` flex row to a layer no `position: absolute`
+  // z-index, however high, can paint above. Matching the Sidebar's own
+  // `position: fixed` escapes that trap; verified live against the
+  // running app before writing this fix.
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  function toggleOpen() {
+    if (!open && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      setMenuPosition({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    }
+    setOpen((prev) => !prev)
+  }
 
   useEffect(() => {
     if (!open) return
@@ -90,12 +110,19 @@ export function ExportButton({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false)
     }
+    // A `position: fixed` menu doesn't track the page under it — close
+    // rather than let it drift out from under the trigger on scroll.
+    function onScroll() {
+      setOpen(false)
+    }
 
     document.addEventListener("mousedown", onPointerDown)
     document.addEventListener("keydown", onKeyDown)
+    window.addEventListener("scroll", onScroll, true)
     return () => {
       document.removeEventListener("mousedown", onPointerDown)
       document.removeEventListener("keydown", onKeyDown)
+      window.removeEventListener("scroll", onScroll, true)
     }
   }, [open])
 
@@ -124,18 +151,19 @@ export function ExportButton({
         loadingLabel="Exporting…"
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={toggleOpen}
       >
         <RiDownloadLine size={13} />
         Export
         <RiArrowDownSLine size={14} aria-hidden />
       </Button>
 
-      {open ? (
+      {open && menuPosition ? (
         <div
           role="menu"
           aria-label="Export format"
-          className="absolute right-0 z-20 mt-1 w-64 overflow-hidden rounded-md border border-stroke bg-surface-1 shadow-overlay"
+          style={{ top: menuPosition.top, right: menuPosition.right }}
+          className="fixed z-20 w-64 overflow-hidden rounded-md border border-stroke bg-surface-1 shadow-overlay"
         >
           {(["csv", "pdf"] as ExportFormat[]).map((format) => {
             const blocked = overLimit(format)
