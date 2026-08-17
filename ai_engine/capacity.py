@@ -470,6 +470,10 @@ def _measure_at(
     cameras = {}
     try:
         if url_template is None:
+            # Fresh path names for this run. The server outlives every run and
+            # its log is cumulative, so reusing names let the readiness check
+            # match a PREVIOUS run's publishers and return instantly.
+            server.new_session()
             publishers = sources.Publishers(server, clip, n)
             publishers.__enter__()
         cameras = sources.start_cameras(server, n)

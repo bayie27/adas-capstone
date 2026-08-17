@@ -185,19 +185,20 @@ def test_each_publisher_targets_its_own_path():
 def test_published_paths_are_read_from_the_server_log(tmp_path):
     server = sources.MediaMtxServer(tmp_path, port=8999)
     (tmp_path / "mediamtx.log").write_text(
-        "INF [RTSP] [session a] is publishing to path 'bench1'\n"
-        "INF [path bench1] stream is available and online, 1 track (H264)\n"
-        "INF [RTSP] [session b] is publishing to path 'bench2'\n",
+        "INF [RTSP] [session a] is publishing to path 'bench1_1'\n"
+        "INF [path bench1_1] stream is available and online, 1 track (H264)\n"
+        "INF [RTSP] [session b] is publishing to path 'bench1_2'\n",
         encoding="utf-8",
     )
 
-    assert server.published_paths() == {"bench1", "bench2"}
+    assert server.published_paths() == {"bench1_1", "bench1_2"}
 
 
 def test_awaiting_publishers_returns_as_soon_as_every_path_is_live(tmp_path):
     server = sources.MediaMtxServer(tmp_path, port=8999)
+    server.new_session()
     (tmp_path / "mediamtx.log").write_text(
-        "is publishing to path 'bench1'\nis publishing to path 'bench2'\n",
+        "is publishing to path 'bench1_1'\nis publishing to path 'bench1_2'\n",
         encoding="utf-8",
     )
 
@@ -208,14 +209,50 @@ def test_awaiting_publishers_raises_the_recoverable_error(tmp_path):
     """StreamsNotReadyError, not a bare BenchSourceError — capacity.py treats
     the two differently: one fails a run, the other aborts everything."""
     server = sources.MediaMtxServer(tmp_path, port=8999)
+    server.new_session()
     (tmp_path / "mediamtx.log").write_text(
-        "is publishing to path 'bench1'\n", encoding="utf-8"
+        "is publishing to path 'bench1_1'\n", encoding="utf-8"
     )
 
     with pytest.raises(sources.StreamsNotReadyError) as excinfo:
         server.await_publishers(3, timeout=0.5)
 
-    assert "bench2" in str(excinfo.value)
+    assert "bench1_2" in str(excinfo.value)
+
+
+def test_an_earlier_runs_publishers_cannot_satisfy_a_later_wait(tmp_path):
+    """The defect that made a whole GTX 1650 climb meaningless.
+
+    One server serves every camera count and its log is cumulative. With shared
+    path names, the 14-camera run's log entries satisfied the 13-camera run's
+    wait instantly — so cameras opened before their publishers existed, took a
+    404, and backed off ten seconds each. The readiness check reported success
+    while doing nothing, and the resulting curve peaked at 3 cameras and got
+    WORSE at 1, which is impossible for a capacity measurement.
+    """
+    server = sources.MediaMtxServer(tmp_path, port=8999)
+
+    server.new_session()  # run one, 3 cameras
+    (tmp_path / "mediamtx.log").write_text(
+        "\n".join(f"is publishing to path 'bench1_{i}'" for i in (1, 2, 3)),
+        encoding="utf-8",
+    )
+    server.await_publishers(3, timeout=1.0)  # genuinely live
+
+    server.new_session()  # run two, 2 cameras — nothing published yet
+    with pytest.raises(sources.StreamsNotReadyError):
+        server.await_publishers(2, timeout=0.5)
+
+
+def test_each_session_gets_its_own_path_names(tmp_path):
+    server = sources.MediaMtxServer(tmp_path, port=8999)
+
+    server.new_session()
+    first = server.url_for(1)
+    server.new_session()
+    second = server.url_for(1)
+
+    assert first != second
 
 
 def test_streams_not_ready_is_recoverable_but_still_a_bench_source_error():
