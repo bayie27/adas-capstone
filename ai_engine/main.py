@@ -73,11 +73,25 @@ def _load_capacity(model_path=None) -> int:
         )
         return config.FALLBACK_CAMERA_CAPACITY
 
+    # The closed-loop figure wins whenever it exists. It was measured by running
+    # this engine against real RTSP, where the burst figure beside it times the
+    # forward pass alone and omits decode, thread contention and the scheduler —
+    # so on the same machine it reads high. Falling back keeps a profile written
+    # before that measurement existed perfectly usable.
+    measured = profile.e2e_capacity_at_max_fps
+    capacity = measured if measured is not None else profile.capacity_at_max_fps
+    basis = "measured end-to-end" if measured is not None else "inference-only"
     print(
         f"[SYSTEM] Machine profile: {profile.device} · capacity "
-        f"{profile.capacity_at_max_fps} camera(s) @ {config.FPS_BAND_MAX:.0f} FPS · "
+        f"{capacity} camera(s) @ {config.FPS_BAND_MAX:.0f} FPS ({basis}) · "
         f"verification: {profile.verification}"
     )
+    if measured is None:
+        print(
+            "[SYSTEM] That figure times batched inference only. Re-run "
+            "`uv run python ai_engine/capacity.py` to measure the whole "
+            "pipeline against real streams."
+        )
 
     # The profile's model_path is not used to CHOOSE the model — that would
     # rebuild the best.engine failure, a gitignored file silently deciding what
@@ -92,7 +106,7 @@ def _load_capacity(model_path=None) -> int:
             "`capacity.py --model` against it before quoting any figure."
         )
 
-    return profile.capacity_at_max_fps
+    return capacity
 
 
 def run_multi_camera_inference() -> None:
