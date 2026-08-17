@@ -316,6 +316,18 @@ class MediaMtxServer:
     def url_for(self, index: int) -> str:
         return f"rtsp://127.0.0.1:{self.port}/bench{index}"
 
+    @property
+    def pids(self) -> list[int]:
+        """The server's own process, for harness CPU accounting.
+
+        MediaMTX is not a bystander: it receives N 1440p streams and re-sends
+        each one, so roughly 2N streams pass through it. Counting only the
+        publishers understated the harness's cost by leaving that out.
+        """
+        if self.process is None or self.process.poll() is not None:
+            return []
+        return [self.process.pid]
+
     def __enter__(self):
         self.workdir.mkdir(parents=True, exist_ok=True)
         config_path = self.workdir / "bench-mediamtx.yml"

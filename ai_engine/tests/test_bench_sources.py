@@ -298,6 +298,51 @@ def test_more_resumes_than_bumps_cannot_go_negative():
 # --- publisher CPU accounting --------------------------------------------
 
 
+def test_the_server_exposes_its_pid_for_harness_accounting():
+    """MediaMTX is not a bystander in the confound: N streams go in and N come
+    back out, so about 2N pass through it. Counting only the publishers
+    understated what the harness costs — the field is meant to say how
+    pessimistic the capacity figure is, and it was saying too little."""
+
+    class _Proc:
+        pid = 4242
+
+        def poll(self):
+            return None
+
+    server = sources.MediaMtxServer(Path("/tmp"), port=8999)
+    assert server.pids == []  # nothing running yet
+
+    server.process = _Proc()
+    assert server.pids == [4242]
+
+
+def test_a_dead_server_contributes_no_pid():
+    """A finished process has no /proc entry; including its pid would read as
+    zero CPU and quietly drag the reported harness cost down."""
+
+    class _Dead:
+        pid = 4242
+
+        def poll(self):
+            return 0
+
+    server = sources.MediaMtxServer(Path("/tmp"), port=8999)
+    server.process = _Dead()
+    assert server.pids == []
+
+
+def test_cpu_seconds_sums_across_several_processes():
+    """The harness figure is publishers plus server, so the reader has to
+    accumulate rather than take the first it finds."""
+    import os
+
+    one = sources.cpu_seconds([os.getpid()])
+    twice = sources.cpu_seconds([os.getpid(), os.getpid()])
+
+    assert twice >= one * 1.9
+
+
 def test_cpu_seconds_reports_none_for_processes_it_cannot_read():
     """Linux-only by design. Where /proc is unavailable the confound is
     reported as unmeasured rather than guessed at."""

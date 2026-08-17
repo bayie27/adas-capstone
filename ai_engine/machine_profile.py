@@ -62,9 +62,12 @@ class MachineProfile:
     # it watched cannot be compared with another.
     clip_resolution: str | None = None
     clip_native_fps: float | None = None
-    # The disclosed confound: publishers the bench spawned itself consume CPU
-    # a real deployment does not, because real cameras encode off-box.
-    publisher_cpu_pct: float | None = None
+    # The disclosed confound: everything the bench runs to fake a camera system
+    # — the ffmpeg publishers AND the MediaMTX server relaying them — consumes
+    # CPU a deployment never spends, because there the cameras encode on poles
+    # and the video system is its own box. Capacity is pessimistic by roughly
+    # this much. None when measuring against a server the bench does not own.
+    harness_cpu_pct: float | None = None
     window_seconds: float | None = None
     warmup_seconds: float | None = None
     # Always false for now: there is no soak, so every figure is a burst
@@ -135,7 +138,7 @@ def load_profile(path) -> MachineProfile | None:
             source_detail=raw.get("source_detail"),
             clip_resolution=raw.get("clip_resolution"),
             clip_native_fps=_opt_float("clip_native_fps"),
-            publisher_cpu_pct=_opt_float("publisher_cpu_pct"),
+            harness_cpu_pct=_opt_float("harness_cpu_pct"),
             window_seconds=_opt_float("window_seconds"),
             warmup_seconds=_opt_float("warmup_seconds"),
             sustained_verified=bool(raw.get("sustained_verified", False)),

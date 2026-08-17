@@ -177,10 +177,24 @@ machine.
 - **No thermal soak.** Every figure is a burst figure and the profile records
   `sustained_verified: false`. Throttling is the one effect the 10–15 FPS band
   exists for, and it is not measured here.
-- **Publishers run on the machine under test.** Real cameras encode off-box;
-  these do not. `-c copy` keeps it to demux plus mux — measured at about 1% of a
-  core per stream on the development machine — and `publisher_cpu_pct` records
-  it per run. Pointing `--source` at a real VMS removes the confound entirely.
+- **The whole camera system is faked on the machine under test.** A deployment
+  runs three things in three places: cameras encoding on poles, a video system
+  on its own box, and the engine here. The bench has only this machine, so it
+  runs an `ffmpeg` per camera _and_ a MediaMTX server alongside the engine —
+  work production never pays, which makes the capacity figure pessimistic.
+
+  `harness_cpu_pct` records that cost per run, covering the publishers **and**
+  the server. `-c:v copy` keeps the publishers to demux plus mux, about 1% of a
+  core each on the development machine, but MediaMTX is not free either: N
+  streams go in and N come back out, so roughly 2N pass through it.
+
+  Only a source on **another machine** removes the confound — the real VMS, or a
+  MediaMTX elsewhere on the network. Running MediaMTX yourself on the same box
+  does not: `mediamtx.yml` spawns its own `ffmpeg` per channel via `runOnInit`,
+  so the load is the same and the cost stops being measured. That config also
+  publishes four clips that contain crashes, which would fire events and get the
+  runs flagged `contaminated_by_events`.
+
 - **Loopback is not a network.** No WAN latency, jitter or loss.
 - **Co-resident load.** Calibration cannot know what else you will run, so it
   states the condition rather than guessing. Derating stays yours, via
