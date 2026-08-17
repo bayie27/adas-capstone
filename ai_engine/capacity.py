@@ -365,13 +365,18 @@ def _run_closed_loop(args, detector, seed_prediction: int) -> dict:
         _print_trail(at_min)
 
     runs = [s.as_dict() for s in at_max.samples] + [s.as_dict() for s in at_min.samples]
-    publisher_cpu = next(
-        (
-            s.get("publisher_cpu_pct")
-            for s in reversed(runs)
-            if s.get("publisher_cpu_pct")
-        ),
-        None,
+    # From the run that decided the headline figure, not the last one attempted
+    # — the last is usually a FAILING count above capacity, whose harness cost
+    # describes a configuration nobody will run.
+    measured = [s for s in at_max.samples if s.harness_cpu_pct is not None]
+    harness_cpu = next(
+        (s.harness_cpu_pct for s in measured if s.cameras == at_max.capacity),
+        # No run matched the headline count — which happens whenever capacity
+        # came out 0, since nothing passed. Fall back to the smallest count that
+        # DID get measured rather than reporting nothing: the confound is most
+        # worth knowing precisely when the machine looks incapable, because it
+        # is part of why it looks that way.
+        min((s.harness_cpu_pct for s in measured), default=None),
     )
     if at_min.capacity < at_max.capacity:
         # Theory says a longer tick is strictly more headroom, so this cannot
@@ -398,7 +403,7 @@ def _run_closed_loop(args, detector, seed_prediction: int) -> dict:
         "source_detail": source_detail,
         "clip_resolution": clip.resolution if clip else None,
         "clip_native_fps": clip.fps if clip else None,
-        "publisher_cpu_pct": publisher_cpu,
+        "harness_cpu_pct": harness_cpu,
         "window_seconds": args.window,
         "warmup_seconds": args.warmup,
         "sustained_verified": False,
@@ -465,6 +470,10 @@ def _measure_at(
     cameras = {}
     try:
         if url_template is None:
+            # Fresh path names for this run. The server outlives every run and
+            # its log is cumulative, so reusing names let the readiness check
+            # match a PREVIOUS run's publishers and return instantly.
+            server.new_session()
             publishers = sources.Publishers(server, clip, n)
             publishers.__enter__()
         cameras = sources.start_cameras(server, n)
@@ -494,14 +503,20 @@ def _measure_at(
             capacity=target_period_capacity(n, at_max_fps),
         )
 
+        def harness_pids():
+            """Everything running only to fake a camera system: the publishers
+            AND the server relaying them. Counting publishers alone understated
+            the confound — MediaMTX takes N streams in and sends N back out."""
+            if publishers is None:
+                return []
+            return [*publishers.pids, *getattr(server, "pids", [])]
+
         def on_begin():
             baseline.update({cid: c.segment_id for cid, c in cameras.items()})
-            if publishers is not None:
-                cpu["start"] = sources.cpu_seconds(publishers.pids)
+            cpu["start"] = sources.cpu_seconds(harness_pids())
 
         def on_end():
-            if publishers is not None:
-                cpu["end"] = sources.cpu_seconds(publishers.pids)
+            cpu["end"] = sources.cpu_seconds(harness_pids())
 
         run_window(
             pipeline,
@@ -531,7 +546,7 @@ def _measure_at(
 
     if cpu["start"] is not None and cpu["end"] is not None and sample.window_seconds:
         pct = (cpu["end"] - cpu["start"]) / sample.window_seconds * 100
-        sample.publisher_cpu_pct = round(pct, 1)
+        sample.harness_cpu_pct = round(pct, 1)
     return sample
 
 

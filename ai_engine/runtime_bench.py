@@ -103,11 +103,20 @@ class RunSample:
     # a TensorRT engine built for a fixed batch, or a dynamic one whose maximum
     # the climb has now exceeded.
     isolated: int = 0
-    # Percent of one core burned by publishers the bench spawned itself. The
-    # disclosed confound — real cameras encode off-box and these do not — so it
-    # is reported per run rather than folded away. None when measuring against
-    # a server the bench does not own, where the confound does not exist.
-    publisher_cpu_pct: float | None = None
+    # Percent of one core burned by everything the bench runs to FAKE a camera
+    # system: the ffmpeg publishers and the MediaMTX server relaying them. In a
+    # deployment neither exists — cameras encode on poles and the video system
+    # is its own box — so this is work the measurement is paying that
+    # production would not, and the capacity figure is pessimistic by roughly
+    # this much.
+    #
+    # Counts the server as well as the publishers. It used to count only the
+    # publishers, which understated the confound: MediaMTX receives N streams
+    # and re-sends each one, so about 2N pass through it.
+    #
+    # None when pointed at a server the bench does not own, where there is no
+    # harness cost to attribute.
+    harness_cpu_pct: float | None = None
     passed: bool = False
     failure_reason: str | None = None
 

@@ -293,6 +293,7 @@ class MediaMtxServer:
         self.process: subprocess.Popen | None = None
         self._log = self.workdir / "mediamtx.log"
         self._log_handle = None
+        self._session = 0
 
     @property
     def config_text(self) -> str:
@@ -313,8 +314,39 @@ class MediaMtxServer:
             "  all_others:\n"
         )
 
+    def new_session(self) -> str:
+        """Start a fresh set of path names for the next camera count.
+
+        One server serves the whole climb, and its log is CUMULATIVE — so
+        reusing `bench1..benchN` meant await_publishers matched paths published
+        by an EARLIER run and returned immediately. Cameras then opened before
+        their publisher existed, took a 404, and backed off ten seconds. The
+        wait looked like it was working while doing nothing at all.
+
+        Unique names per run make history unmatchable, and also sidestep
+        MediaMTX briefly holding a path open after its publisher disconnects.
+        """
+        self._session += 1
+        return self.path_prefix
+
+    @property
+    def path_prefix(self) -> str:
+        return f"bench{self._session}_"
+
     def url_for(self, index: int) -> str:
-        return f"rtsp://127.0.0.1:{self.port}/bench{index}"
+        return f"rtsp://127.0.0.1:{self.port}/{self.path_prefix}{index}"
+
+    @property
+    def pids(self) -> list[int]:
+        """The server's own process, for harness CPU accounting.
+
+        MediaMTX is not a bystander: it receives N 1440p streams and re-sends
+        each one, so roughly 2N streams pass through it. Counting only the
+        publishers understated the harness's cost by leaving that out.
+        """
+        if self.process is None or self.process.poll() is not None:
+            return []
+        return [self.process.pid]
 
     def __enter__(self):
         self.workdir.mkdir(parents=True, exist_ok=True)
@@ -370,7 +402,7 @@ class MediaMtxServer:
         Waiting on the server's own confirmation is both faster than a
         conservative sleep and correct at any camera count.
         """
-        expected = {f"bench{i}" for i in range(1, count + 1)}
+        expected = {f"{self.path_prefix}{i}" for i in range(1, count + 1)}
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if expected <= self.published_paths():
