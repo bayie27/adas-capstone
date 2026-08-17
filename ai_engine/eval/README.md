@@ -103,8 +103,9 @@ share one machine, so failing to establish N streams simultaneously is a real
 ceiling — just a blurred one, since a deployment would not be running the
 publishers. It is recorded as a failed run and the climb walks down, rather than
 aborting: a seed sweep costs minutes and must not be thrown away over it. If you
-see it well below the capacity you expect, run MediaMTX separately and point
-`--source` at it, which removes the publishers from the machine under test.
+see it well below the capacity you expect, check `harness_cpu_pct` for that run
+to see how much of the machine the faked camera system was taking, and measure
+against a source on **another** machine to remove it.
 
 Corrupt-frame noise in the log (`error while decoding MB ...`, `RTP: PT=60: bad
 cseq ...`) at high camera counts is the same signal: MediaMTX's write queues
