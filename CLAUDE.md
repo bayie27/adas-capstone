@@ -4,21 +4,22 @@ Intelligent Real-Time Road Accident Detection & Alert System. Three components: 
 
 ## Commands
 
-| Task                              | Command                                                |
-| --------------------------------- | ------------------------------------------------------ |
-| Install (backend only)            | `uv sync`                                              |
-| Install (backend + AI engine)     | `uv sync --extra ai` (`--extra ai-cpu` without a GPU)  |
-| Install (frontend + root tooling) | `pnpm install` (repo root — activates git hooks)       |
-| Start dev stack                   | `pwsh -File scripts/start-dev.ps1`                     |
-| Run backend                       | `uv run fastapi dev backend/app/main.py`               |
-| Run frontend                      | `cd frontend && pnpm dev`                              |
-| Run AI engine                     | `uv run python ai_engine/main.py` (needs `--extra ai`) |
-| Reset + seed dev DB               | `uv run python backend/scripts/reseed_dev.py`          |
-| Backend tests (targeted)          | `uv run pytest backend/tests/test_alerts.py`           |
-| Backend tests (full, parallel)    | `uv run pytest -n auto`                                |
-| Frontend tests                    | `pnpm --filter frontend test:run`                      |
-| Full pre-push gate                | `pnpm check`                                           |
-| Full pre-PR gate                  | `pnpm full:check` (adds build + E2E)                   |
+| Task                              | Command                                                                |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| Install (backend only)            | `uv sync`                                                              |
+| Install (backend + AI engine)     | `uv sync --extra ai` (`--extra ai-cpu` without a GPU)                  |
+| Install (frontend + root tooling) | `pnpm install` (repo root — activates git hooks)                       |
+| Start dev stack                   | `pwsh -File scripts/start-dev.ps1`                                     |
+| Start LAN/TLS demo stack          | `pwsh -File scripts/start-dev.ps1 -Lan` ([LAN_SETUP.md](LAN_SETUP.md)) |
+| Run backend                       | `uv run fastapi dev backend/app/main.py`                               |
+| Run frontend                      | `cd frontend && pnpm dev`                                              |
+| Run AI engine                     | `uv run python ai_engine/main.py` (needs `--extra ai`)                 |
+| Reset + seed dev DB               | `uv run python backend/scripts/reseed_dev.py`                          |
+| Backend tests (targeted)          | `uv run pytest backend/tests/test_alerts.py`                           |
+| Backend tests (full, parallel)    | `uv run pytest -n auto`                                                |
+| Frontend tests                    | `pnpm --filter frontend test:run`                                      |
+| Full pre-push gate                | `pnpm check`                                                           |
+| Full pre-PR gate                  | `pnpm full:check` (adds build + E2E)                                   |
 
 Script reference, migration workflow, and CI jobs: [CONTRIBUTING.md](CONTRIBUTING.md).
 
