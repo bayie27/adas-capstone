@@ -68,6 +68,14 @@ export function PaginationFooter({
   onPageSizeChange,
   pageSizeOptions = PAGE_SIZE_OPTIONS,
 }: PaginationFooterProps) {
+  // usePagination's own `totalPages = Math.ceil(totalFiltered / pageSize)`
+  // (floored at 1) means "everything fits on one page" is exactly
+  // `totalFiltered <= pageSize` -- Previous/Next disabled, a page-size
+  // selector with nothing to page through, and a numbered-chip row that
+  // can only ever show "1" is chrome with no job to do. Applies to every
+  // paginated table through this one shared component.
+  if (totalFiltered <= pageSize) return null
+
   const navButton = cn(
     "flex items-center gap-1 rounded-sm transition-colors duration-150 hover:text-fg",
     "disabled:cursor-not-allowed disabled:opacity-50",
