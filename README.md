@@ -389,7 +389,11 @@ Before running it on a new machine, calibrate:
 uv run python ai_engine/capacity.py
 ```
 
-This reports how many cameras the machine can carry at 10 and at 15 FPS and writes a gitignored `machine_profile.json`. Pass `--model ai_engine/epoch50.engine` to measure a built artifact instead of the checkpoint; the profile records whichever was benchmarked, and `main.py` warns at startup when that is not the one being loaded. See [`ai_engine/eval/README.md`](ai_engine/eval/README.md).
+This brings up N real cameras against real RTSP, runs the engine for a timed window, and reports how many cameras the machine actually sustained at 10 and at 15 FPS, writing a gitignored `machine_profile.json`.
+
+It needs `mediamtx` and `ffmpeg` on PATH — on Linux, take the `linux_amd64` tarball from the [releases page](https://github.com/bluenviron/mediamtx/releases) and `install -m 755 mediamtx ~/.local/bin/mediamtx` (the MediaMTX notes under [Prerequisites](#prerequisites) and `scripts/start-sim.ps1` are Windows-only). To skip that and measure against a server already running — or against the real VMS, which gives the truest figure — pass `--source rtsp://host:8554/channel{n}`. `--mode inference` falls back to the old batched-inference sweep, which needs neither binary but times one stage rather than the system.
+
+Pass `--model ai_engine/epoch50.engine` to measure a built artifact instead of the checkpoint; the profile records whichever was benchmarked, and `main.py` warns at startup when that is not the one being loaded. See [`ai_engine/eval/README.md`](ai_engine/eval/README.md).
 
 #### Camera and seed-data behaviour — what to expect
 

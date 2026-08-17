@@ -98,6 +98,8 @@ The important structural line is **which modules import `cv2`**. Everything that
 | `events.py`          | Event construction: UUIDs, snapshot keys, the v2 payload                  | No  |
 | `config.py`          | Constants, band bounds, paths, model resolution                           | No  |
 | `machine_profile.py` | Read/write/validate `machine_profile.json`                                | No  |
+| `runtime_bench.py`   | Closed-loop capacity: instrumentation, pass criterion, the climb          | No  |
+| `bench_sources.py`   | RTSP sources for the bench: MediaMTX, ffmpeg publishers, clip metadata    | Yes |
 | `capacity.py`        | How many cameras can this machine run? Writes the profile                 | Yes |
 
 `eval/` holds the measurement harness — see [`eval/README.md`](eval/README.md).
@@ -116,7 +118,9 @@ The important structural line is **which modules import `cv2`**. Everything that
 - **`adas_transfer/` is frozen.** Excluded from Ruff and Prettier. It is the reference the parity gate diffs against — never edit or reformat it.
 - **Capacity is measured, not assumed.** `capacity.py` writes a gitignored `machine_profile.json`. Its absence is not an error; the engine falls back to a conservative default of one camera.
 
-  Measured on a GTX 1650, blank-frame sweep, 2026-08-16:
+  **The default mode runs the real engine against real RTSP** and reports the frame rate each camera achieved, so decode, thread contention and `run()`'s scheduler are inside the measurement. `--mode inference` still gives the old batched-inference sweep, which is retained as the seed for the closed-loop climb and written to the profile beside it as the burst figure.
+
+  Measured on a GTX 1650, blank-frame **inference sweep only**, 2026-08-16:
 
   | build                             | @ 15 FPS   | @ 10 FPS |
   | --------------------------------- | ---------- | -------- |
@@ -124,6 +128,10 @@ The important structural line is **which modules import `cv2`**. Everything that
   | `epoch50.engine` (TensorRT, FP32) | 14 cameras | ≥ 15     |
 
   The engine's 10 FPS figure is a floor, not a measurement: the sweep stopped at batch 15 because the engine was built for that maximum, not because the machine ran out.
+
+  **Those are sweep numbers and read high.** The sweep benchmarks a 1280×720 frame with no decode and no reader threads, while the clips are 2304×1296 and 2560×1440, and `to_gray()` runs two full-resolution `cvtColor` passes before YOLO downscales to 640. On the CPU-only development machine the sweep predicted 1 camera at 15 FPS where running the engine gave 0. Neither GTX 1650 row above has been re-measured closed-loop.
+
+- **A capacity at 10 FPS below the one at 15 FPS means the measurement is noise, not a result.** A longer tick is strictly more headroom, so the reverse cannot happen on a stable machine. `capacity.py` reports it rather than clamping it — a clamped number would be one no run ever observed.
 
   **The engine's detection behaviour was verified against the checkpoint on 2026-08-16**: `pytest -m clips` passed all 17 clips clip-by-clip and held false positives within the recorded baseline of 3, with the parity gate green on the checkpoint in the same run. So the speed figure and the accuracy figure describe the same artifact — capacity alone measures speed, and quoting it beside a detection claim is only honest once this has been run against the build in question.
 
