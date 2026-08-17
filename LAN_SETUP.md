@@ -158,8 +158,12 @@ Why each line matters:
   from the client even when everything else works perfectly — which sends you debugging a problem you
   do not have.
 
-> **Re-run `Set-NetConnectionProfile` after any addressing change.** Windows regenerates the profile
-> when the adapter's address changes, and it comes back as Public.
+> **Re-run `Set-NetConnectionProfile` after any addressing change — and be ready to re-run it even
+> without one.** Windows regenerates the profile when the adapter's address changes, and it comes
+> back as Public. A live two-machine drill (2026-08-17) also saw it revert to Public **mid-session
+> with no addressing change at all**. The symptom looks exactly like a cabling or routing problem —
+> `ping adas.local` resolves the name correctly but every reply times out — so if something that was
+> working suddenly stops, check `Get-NetConnectionProfile` before anything else.
 
 **Check:**
 
@@ -213,7 +217,15 @@ Three gotchas, each worth an hour if you hit it blind:
    recognise the certificate, not to be able to issue one.
 2. Double-click it → **Install Certificate** → **Local Machine** → "Place all certificates in the
    following store" → **Trusted Root Certification Authorities**.
-3. Use **Edge or Chrome**.
+   - **If double-click doesn't offer the import wizard** (seen on one client in the 2026-08-17
+     two-machine drill), use the `mmc` snap-in instead: `Win+R` → `mmc` → File → Add/Remove
+     Snap-in → **Certificates** → Add → **Computer account** → **Local computer** → OK. Then
+     navigate to Certificates → Trusted Root Certification Authorities → Certificates, right-click
+     → All Tasks → Import, and select the `.pem` (rename to `.cer` first if the file picker won't
+     show it — Windows sniffs the content, not the extension, so this is safe). Same destination
+     store, equally valid.
+3. Use **Edge or Chrome**, and restart it after installing the certificate — some browsers cache
+   the trust store at launch.
 
 **This step is what makes `wss://` work.** If you instead click through a browser warning for `:5173`,
 the dashboard will load and the WebSocket will fail **silently** — no events, no error, nothing in the
@@ -405,7 +417,14 @@ Then exercise the incident workflow, which is the part a panel will ask about:
 - **Confirm** → status `Ongoing`, camera stays paused.
 - **Resolve** → camera resumes immediately.
 - **Dismiss** (from a fresh alert) → camera enters cooldown, resumes after 60 s.
-- **Kill the AI engine** → every fed camera reads `Unresponsive` within ~10 s.
+- **Kill the AI engine** → every fed camera eventually reads `Unresponsive`, but **not necessarily
+  within 10s on a dashboard sitting idle**. The 10s figure is real (`HEARTBEAT_STALE_SECONDS`), but
+  it is only recomputed when the frontend fetches — there is no background job that sweeps stale
+  heartbeats and pushes the update over the WebSocket the way cooldowns/snoozes do. A live drill
+  (2026-08-17) watched a dashboard sit on `Connected` for well over a minute with no page action,
+  then flip to `Unresponsive` immediately on the next navigation. If you need to actually see this
+  transition during a demo, refresh the page or click to a different tab rather than just waiting.
+  Tracked as `be_audit/00_FINDINGS.md` F33.
 
 Sample clips loop, so the same accident frame recurs every few seconds once a camera resumes. Expect
 rapid re-triggering during a demo — that is a clip-length artifact, not a defect. Narrate it or trim
@@ -417,19 +436,22 @@ the clips.
 
 Ordered by how often each one actually happens.
 
-| Symptom                                                                 | Cause                                                                   | Fix                                                                                                   |
-| ----------------------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Client hangs connecting; no error either end                            | Ethernet profile is **Public** ("Unidentified network")                 | Step 2, `Set-NetConnectionProfile`. Re-run it after any IP change.                                    |
-| `ping` works, `Test-NetConnection` on 8000/5173 fails                   | Firewall rules missing or scoped to the wrong profile                   | Step 2, the two `New-NetFirewallRule` lines                                                           |
-| `ping` fails but ports connect fine                                     | Windows does not answer ICMP by default                                 | The `ADAS ICMPv4 Echo` rule — or just ignore it, nothing depends on ping                              |
-| Dashboard loads, but **no alerts ever arrive** and the console is clean | Certificate was click-through-accepted, not installed into Trusted Root | Step 3c. This is the classic silent failure.                                                          |
-| Login returns 200, then every request is 401                            | Secure cookie dropped — you are on `http://`, not `https://`            | Steps 3 and 6.2. Do **not** set `SESSION_COOKIE_SECURE=false`.                                        |
-| Writes return 403 `ORIGIN_REJECTED`, or the WebSocket closes instantly  | The browser's origin is not in `CORS_ORIGINS`                           | Step 5 — match scheme, host and port exactly                                                          |
-| Browser warns about the certificate on the client                       | Not in Trusted Root, or you are using Firefox                           | Step 3c; Firefox needs a separate import into its own store                                           |
-| `start-sim.ps1` exits immediately                                       | `mediamtx` or `ffmpeg` not on `PATH`                                    | Pass `-MediaMtxDir`, set `ADAS_MEDIAMTX_DIR`, or use Step 6.1's `$env:PATH` line                      |
-| AI engine logs TLS/certificate verification errors on every heartbeat   | `REQUESTS_CA_BUNDLE` unset — `requests` ignores the Windows store       | Step 6.4                                                                                              |
-| Cameras stuck on `Reconnecting`                                         | No RTSP feed for that channel, or MediaMTX is not running               | Step 6.1. Note `mediamtx.yml` defines five channels — a sixth camera in the DB has no feed by design. |
-| Export downloads land under a generic filename                          | `Content-Disposition` not readable cross-origin                         | Already fixed in `main.py`'s `expose_headers`; if it recurs, check that setting                       |
+| Symptom                                                                                                     | Cause                                                                                                                       | Fix                                                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Client hangs connecting; no error either end                                                                | Ethernet profile is **Public** ("Unidentified network")                                                                     | Step 2, `Set-NetConnectionProfile`. Re-run it after any IP change.                                                                                    |
+| Something that was working suddenly stops mid-session, `ping` times out but the name resolves               | Ethernet profile silently reverted Public → no addressing change needed to trigger it                                       | Re-check `Get-NetConnectionProfile -InterfaceAlias "Ethernet"`; re-run `Set-NetConnectionProfile` from Step 2 if it reads Public                      |
+| Cameras stay `Connected` for over a minute after the AI engine is killed, dashboard untouched               | No background sweep pushes the `Unresponsive` transition — it's computed only when the frontend fetches                     | Refresh the page, or navigate to a different tab; the underlying status is already correct, it just hasn't been pushed. `be_audit/00_FINDINGS.md` F33 |
+| Console fills with `WebSocket connection to 'wss://localhost:5173/...' failed` / `[vite] failed to connect` | Vite's own HMR socket, not `/ws/alerts` — it targets `localhost`, which is the client itself when browsing via `adas.local` | Harmless for a demo; the real alerts WebSocket is unaffected. `be_audit/00_FINDINGS.md` F34                                                           |
+| `ping` works, `Test-NetConnection` on 8000/5173 fails                                                       | Firewall rules missing or scoped to the wrong profile                                                                       | Step 2, the two `New-NetFirewallRule` lines                                                                                                           |
+| `ping` fails but ports connect fine                                                                         | Windows does not answer ICMP by default                                                                                     | The `ADAS ICMPv4 Echo` rule — or just ignore it, nothing depends on ping                                                                              |
+| Dashboard loads, but **no alerts ever arrive** and the console is clean                                     | Certificate was click-through-accepted, not installed into Trusted Root                                                     | Step 3c. This is the classic silent failure.                                                                                                          |
+| Login returns 200, then every request is 401                                                                | Secure cookie dropped — you are on `http://`, not `https://`                                                                | Steps 3 and 6.2. Do **not** set `SESSION_COOKIE_SECURE=false`.                                                                                        |
+| Writes return 403 `ORIGIN_REJECTED`, or the WebSocket closes instantly                                      | The browser's origin is not in `CORS_ORIGINS`                                                                               | Step 5 — match scheme, host and port exactly                                                                                                          |
+| Browser warns about the certificate on the client                                                           | Not in Trusted Root, or you are using Firefox                                                                               | Step 3c; Firefox needs a separate import into its own store                                                                                           |
+| `start-sim.ps1` exits immediately                                                                           | `mediamtx` or `ffmpeg` not on `PATH`                                                                                        | Pass `-MediaMtxDir`, set `ADAS_MEDIAMTX_DIR`, or use Step 6.1's `$env:PATH` line                                                                      |
+| AI engine logs TLS/certificate verification errors on every heartbeat                                       | `REQUESTS_CA_BUNDLE` unset — `requests` ignores the Windows store                                                           | Step 6.4                                                                                                                                              |
+| Cameras stuck on `Reconnecting`                                                                             | No RTSP feed for that channel, or MediaMTX is not running                                                                   | Step 6.1. Note `mediamtx.yml` defines five channels — a sixth camera in the DB has no feed by design.                                                 |
+| Export downloads land under a generic filename                                                              | `Content-Disposition` not readable cross-origin                                                                             | Already fixed in `main.py`'s `expose_headers`; if it recurs, check that setting                                                                       |
 
 ---
 
