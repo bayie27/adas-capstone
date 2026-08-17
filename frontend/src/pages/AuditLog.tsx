@@ -122,8 +122,26 @@ export default function AuditLog() {
     ...AUDIT_TARGET_TYPES.map((t) => ({ value: t, label: t })),
   ]
 
-  const { page, pageSize, offset, rangeStart, rangeEnd, next, prev, goTo, setPageSize, reset } =
-    usePagination(0, AUDIT_PAGE_SIZE)
+  // usePagination derives rangeStart/rangeEnd/totalPages from the total it's
+  // seeded with -- seeding it with a literal 0 (the total isn't known until
+  // the query resolves) meant rangeStart's own `totalFiltered === 0 ? 0 :
+  // ...` check was permanently true, so the footer read "0-0 of N" forever
+  // on every render, not just the first. Users.tsx already has the fix:
+  // mirror the query's real total into state, synced during render.
+  const [seenTotal, setSeenTotal] = useState(0)
+  const {
+    page,
+    pageSize,
+    offset,
+    totalPages,
+    rangeStart,
+    rangeEnd,
+    next,
+    prev,
+    goTo,
+    setPageSize,
+    reset,
+  } = usePagination(seenTotal, AUDIT_PAGE_SIZE)
 
   const filters = {
     search: debouncedSearch || undefined,
@@ -145,6 +163,9 @@ export default function AuditLog() {
 
   const rows = auditQuery.data?.items ?? []
   const totalFiltered = auditQuery.data?.total_filtered ?? 0
+  if (totalFiltered !== seenTotal) {
+    setSeenTotal(totalFiltered)
+  }
   const rangeEndValue = rangeEnd(rows.length)
 
   // Same filter set and the same sort_by/sort_order the list route uses —
@@ -155,12 +176,6 @@ export default function AuditLog() {
   })
 
   const exportJobMutation = useExportJobSubmit()
-
-  // usePagination is seeded with 0 above (the total isn't known until the
-  // query resolves); re-derive totalPages/page against the real total so
-  // the footer and the clamp agree with what actually came back.
-  const realTotalPages = Math.max(1, Math.ceil(totalFiltered / pageSize))
-  const realPage = Math.min(page, realTotalPages)
 
   /**
    * D-8(a)'s two-state pattern, reused rather than reinvented: clicking the
@@ -294,6 +309,7 @@ export default function AuditLog() {
         <ExportButton
           rowCount={totalFiltered}
           isExporting={exportMutation.isPending}
+          exportHasError={exportMutation.isError}
           onExport={(format) => exportMutation.mutate(format)}
           isSubmittingJob={exportJobMutation.isPending}
           onExportJob={(format) =>
@@ -328,8 +344,8 @@ export default function AuditLog() {
       <TableContainer
         footer={
           <PaginationFooter
-            page={realPage}
-            totalPages={realTotalPages}
+            page={page}
+            totalPages={totalPages}
             rangeStart={rangeStart}
             rangeEnd={rangeEndValue}
             totalFiltered={totalFiltered}

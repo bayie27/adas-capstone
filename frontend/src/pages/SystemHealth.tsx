@@ -428,6 +428,19 @@ function DualHealthChart({
     peak: point[peakKey] as number | null,
   }))
   const isEmpty = !isLoading && chartData.length === 0
+  // The history endpoint returns one row per time bucket regardless of
+  // whether the sensor behind avgKey/peakKey ever reports -- cpu_temp is
+  // null in every row on a host with no readable CPU sensor (Windows, per
+  // the comment above this component's only two call sites), so
+  // `chartData.length === 0` never fires and this used to fall through to
+  // a real <AreaChart> with nothing to plot: axes and a legend around a
+  // blank rectangle. Distinct from `isEmpty` (a real "no rows for this
+  // range" gap) because the fix is different -- MachineCapacitySection's
+  // "Unavailable" shell, not AreaChartCard's "No data for this range."
+  const isUnavailable =
+    !isLoading &&
+    chartData.length > 0 &&
+    chartData.every((point) => point.avg === null && point.peak === null)
 
   return (
     <div
@@ -451,6 +464,8 @@ function DualHealthChart({
         <ChartMessage>…</ChartMessage>
       ) : isEmpty ? (
         <ChartMessage>No data for this range.</ChartMessage>
+      ) : isUnavailable ? (
+        <ChartMessage>Unavailable — not reported on this host.</ChartMessage>
       ) : (
         <div className="-ml-4 flex-1">
           <ResponsiveContainer width="100%" height="100%">

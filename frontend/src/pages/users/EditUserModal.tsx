@@ -104,7 +104,7 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
           <div className="pt-1 text-xs font-semibold text-fg-body">User</div>
           <div className="space-y-4">
             <div className="mb-2">
-              <label className="mb-2 block text-[11px] font-semibold text-fg-body">Role</label>
+              <label className="mb-2 block text-caption font-semibold text-fg-body">Role</label>
               <div className="flex items-center gap-8">
                 <label
                   className={cn(
@@ -154,7 +154,7 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
               frontend path to it. Recorded as a follow-up, not fixed here.
             */}
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-fg-body">Active</span>
+              <span className="text-caption font-semibold text-fg-body">Active</span>
               <Switch
                 checked={form.is_active}
                 disabled={mutation.isPending}
