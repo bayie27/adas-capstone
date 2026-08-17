@@ -193,27 +193,60 @@ client's delivery time, confirming D-008's per-connection queue isolation
 holds under real HTTP + WebSocket + 100,000-row-database conditions, not
 just the synthetic fake-socket unit test in `test_realtime.py`.
 
-### LAN-measured NFR-04 — still owed, not this pass
+### LAN-measured NFR-04 — attempted 2026-08-17, still not captured
 
-`be_audit/A6_manual_evidence.md` asked for an end-to-end alert latency
-figure measured **over the network to a second laptop**, on the theory
-that A1's LAN/TLS drill produced one. It didn't: A1's own resolution log
-(`be_audit/00_FINDINGS.md`) states plainly that session "ran on a single
-physical machine," and the two-laptop physical steps (static IPs,
-firewall rules, installing the cert on a second machine) were **not
-executed**. There is no genuine LAN measurement to report yet, and this
-pass — also run on one machine — cannot manufacture one either.
+The two-machine drill (`LAN_DEMO_HANDOFF.md`, logged in
+`be_audit/DEMO_TOPOLOGY.md` §11) finally ran on real hardware, closing
+the physical-execution gap this section used to describe. NFR-04
+specifically is still not captured, for two independent reasons found
+while genuinely trying:
+
+1. **Clock alignment.** `w32tm /resync` needed an elevated shell that
+   wasn't available in that session; the server's un-resynced NTP status
+   showed a root dispersion of ~8s — far too loose to support the
+   sub-second figure this metric needs.
+2. **The one non-destructive measurement method attempted broke instead
+   of measuring.** Since the `NEW_DETECTION` WebSocket payload already
+   carries the backend's own `occurred_at` timestamp, and Chrome
+   DevTools already timestamps every frame's arrival, a small
+   console-only patch (no app code touched) was tried: wrap
+   `window.WebSocket` in a `Proxy` so every message's client-side
+   receive time gets logged next to its server-side `occurred_at`, using
+   the `CONNECTION_READY` handshake as a self-calibrating clock-skew
+   reference point. On reload, this broke the live WebSocket connection
+   entirely (`/ws/alerts` failed with "closed before the connection is
+   established", and Vite's own HMR socket failed too) rather than
+   producing a number — proxying the native `WebSocket` constructor
+   isn't safe in this browser. Reverted via a hard reload, which
+   restored the connection cleanly with no lasting effect.
+
+Rather than force a number from a method that had just demonstrably
+failed, or fall back to a human eyeballing two screens (which wouldn't
+have supported sub-second precision either), this is recorded honestly
+as **not captured**. What can be said honestly: during the same drill,
+live detections rendered on the client's screen with no perceptible lag
+after occurring — a qualitative floor, not a number to publish as
+NFR-04.
+
+`be_audit/A6_manual_evidence.md` originally asked for an end-to-end
+alert latency figure measured **over the network to a second laptop**,
+on the theory that A1's LAN/TLS drill produced one. It didn't: A1's own
+resolution log (`be_audit/00_FINDINGS.md`) states plainly that session
+"ran on a single physical machine," and the two-laptop physical steps
+were **not executed** in that pass — they finally were in the
+2026-08-17 drill above, just without a usable NFR-04 number.
 
 The best available data point beyond the `TestClient`-based numbers
-above is A3's live seam drill (`be_audit/00_FINDINGS.md`, A3 resolution
-log, 2026-08-10): a real running backend + AI engine + WebSocket client
-over **loopback** (not `TestClient`, not a second machine) measured
-**~0.53s** and **~0.84s** from detection to `NEW_DETECTION` delivery —
-still comfortably under the 2s budget, and a materially more realistic
-number than a `TestClient` measurement since it exercises the real ASGI
-server and a real OS socket. Treat it as a floor, not the LAN number.
-The genuine two-laptop measurement remains owed before the real demo —
-see `be_audit/DEMO_TOPOLOGY.md` for the runbook.
+above is still A3's live seam drill (`be_audit/00_FINDINGS.md`, A3
+resolution log, 2026-08-10): a real running backend + AI engine +
+WebSocket client over **loopback** (not `TestClient`, not a second
+machine) measured **~0.53s** and **~0.84s** from detection to
+`NEW_DETECTION` delivery — still comfortably under the 2s budget, and a
+materially more realistic number than a `TestClient` measurement since
+it exercises the real ASGI server and a real OS socket. Treat it as a
+floor, not the LAN number. A genuine two-laptop measurement remains
+owed — see `be_audit/DEMO_TOPOLOGY.md` §11 for what was tried and why
+it didn't land.
 
 ---
 
@@ -226,7 +259,7 @@ see `be_audit/DEMO_TOPOLOGY.md` for the runbook.
 | NFR-06 (10,000-row ceiling, retained for context) | < 5s | CSV 0.537s ✅ · PDF realistic (~180 rows) 1.031s ✅ · PDF 10k-row ceiling 48.4s ❌ | ⚠️ documented ceiling, not a requirement under the re-scope |
 | NFR-04 (alert delivery, `TestClient`) | < 2s | 0.020s | ✅ demo-validated |
 | NFR-04 (alert delivery, real loopback process) | < 2s | ~0.53–0.84s | ✅ demo-validated (loopback, not LAN — see note above) |
-| NFR-04 (alert delivery, real two-laptop LAN) | < 2s | not yet measured | ⏳ owed before the real demo |
+| NFR-04 (alert delivery, real two-laptop LAN) | < 2s | not captured (drill ran 2026-08-17; qualitative: no perceptible lag) | ⚠️ drill executed, no defensible number — see note above |
 | D-008 (slow-client isolation) | healthy client unaffected | 0.010s, no measurable delay | ✅ demo-validated |
 
 All numbers above are **demo-validated on the laptop described in "Machine

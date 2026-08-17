@@ -366,11 +366,73 @@ uv run python ai_engine/main.py
   and no `OperationalError`/lock errors appeared in any backend log. Not evidence F17 is wrong,
   just that this session's conditions didn't exercise it either way.
 
-### What is still owed on real hardware
+### What was still owed after the 2026-08-10 pass
 
 Everything gated on a second physical machine: static IP assignment on both NICs, the
 `Set-NetConnectionProfile`/firewall-rule pair, the client hosts-file entry, installing the
 certificate into the client's Trusted Root store, and the actual GUI walkthrough (login → live
 alert → confirm → resolve, watched in a real browser window on the second laptop). None of these
-have a scriptable substitute — they need to be run once, by hand, before the real demo day, ideally
-well before it per §6's "certificate … ideally done the day before."
+had a scriptable substitute — they needed to be run once, by hand. That run is logged below.
+
+## 11. Two-machine drill log (2026-08-17)
+
+Executed per `LAN_DEMO_HANDOFF.md`, with the owner physically present at both keyboards (server
+commands run by the agent in an elevated-when-needed PowerShell on the server; every client-side
+step — static IP, certificate install, hosts file, the browser itself — run by hand by the owner
+and reported back). This is the run that closes the gap the 2026-08-10 pass left open.
+
+### What ran
+
+- **Phase A (server)** — static IP `192.168.50.1/24` on the `Ethernet` adapter, profile set to
+  Private, three `ADAS*` firewall rules added. `.env`'s LAN keys were already in place from
+  2026-08-16, confirmed rather than re-added.
+- **Phase B (client)** — static IP `192.168.50.2/24`, `certs/adas-cert.pem` copied across (key
+  never left the server), installed into the **Local Machine → Trusted Root Certification
+  Authorities** store via the `mmc` snap-in (double-click-to-install wasn't available on this
+  client; the `mmc` → Certificates snap-in → Computer account → Local computer path is an
+  equally-valid destination and is now documented as an alternative — see `LAN_SETUP.md` Step 3c),
+  hosts entry added, DNS flushed.
+- **Phase C** — `scripts/start-dev.ps1 -Lan -MediaMtxDir ...` brought up all four components.
+  Preflight printed a valid certificate (expires 2028-11-12, correct SANs) and the two reachable
+  LAN origins. Every fed, enabled camera read `Connected` on the server's own browser once a
+  mid-drill network-profile revert (see below) was caught and fixed.
+- **Phase D (client)** — the full definition-of-done walkthrough, live, in Edge on the client:
+  `https://adas.local:5173` loaded with no certificate warning; login as `admin` survived
+  navigation; DevTools showed `CONNECTION_READY` on the `/ws/alerts` socket; a live detection
+  rendered with its snapshot and the camera went `Paused`; Confirm → Ongoing → Resolve → resume and
+  Dismiss → 60s cooldown → resume were both walked end to end; killing the AI engine eventually
+  drove every fed camera to `Unresponsive`, though not within a passive ~10s (see F33).
+
+### What failed, and what it turned out to be
+
+- **The server's network profile flipped from Private back to Public mid-drill, with no IP change
+  to trigger it** (`LAN_SETUP.md` Step 2 previously documented only the addressing-change trigger).
+  Symptom was `ping adas.local` resolving the name correctly but timing out 100% — indistinguishable
+  from a cabling problem until `Get-NetConnectionProfile` was re-checked and read `Public`. Same
+  one-line fix (`Set-NetConnectionProfile -NetworkCategory Private`), broader trigger than
+  documented. Recorded as F32.
+- **Cameras did not read `Unresponsive` within ~10s of the AI engine dying while the dashboard sat
+  idle**, contradicting this document's own §4 script and `LAN_SETUP.md` §7.9. Root-caused to source:
+  `presented_statuses()` computes the staleness transition correctly, but only at REST read time —
+  nothing sweeps stale heartbeats and pushes a WebSocket update the way the cooldown/snooze sweeps
+  do. The dashboard picked up the correct status the moment any fetch happened (a manual refresh, or
+  incidentally, navigating to a different page), so the underlying data was never wrong — only the
+  passive real-time push is missing. Recorded as F33; not fixed in this pass, since the guardrail
+  for this drill is explicitly "no application code changes."
+- **Vite's own HMR (live-reload) WebSocket fails on every LAN session** browsed via `adas.local`,
+  spamming console errors unrelated to the actual `/ws/alerts` connection, which worked correctly
+  throughout. Recorded as F34. Cosmetic; a one-line `vite.config.ts` fix is scoped but not applied.
+- **An attempted precise LAN NFR-04 latency measurement was abandoned mid-attempt.** A console
+  `WebSocket` proxy patch (intended to log the delta between each event's server-side `occurred_at`
+  and the client's own high-resolution receive time, self-calibrating for clock skew via the
+  `CONNECTION_READY` handshake) broke the live WebSocket connection instead of producing a number,
+  and was reverted via a hard reload. See `be_plan/EVIDENCE.md`'s NFR-04 section for why the figure
+  is recorded as not captured rather than estimated from a broken measurement.
+
+### What was confirmed clean
+
+F5 (export filename readability) closed with real browser verification: a CSV export triggered from
+the client saved as `adas_dashboard_export.csv`, the server's real filename. The self-blindfold
+pause-on-detection ordering, the full HITL state machine, and Secure-cookie auth over real TLS on
+non-loopback hardware all behaved exactly as `CLAUDE.md` and the earlier loopback-substituted pass
+predicted.
