@@ -28,7 +28,6 @@ ai_engine/adas_transfer/
 # Untracked team working docs — never touch these
 *.pdf
 final_paper_text.txt
-test-execution-validation-plan.md
 be_masterplan_text.txt
 *_review.md
 *_decisions.md
