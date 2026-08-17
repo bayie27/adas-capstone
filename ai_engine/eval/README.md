@@ -113,6 +113,31 @@ overflow when readers cannot keep up, and the discontinuities surface as decode
 errors. Warm-up discards those frames, but a steady stream of them means the
 harness itself is contending for the machine.
 
+### Windows and Linux
+
+The bench runs on both, but three things behave differently and each was a real
+failure before it was handled:
+
+- **`harness_cpu_pct` used to be blank on Windows.** It read `/proc`, which does
+  not exist there, so the field that says how pessimistic a capacity figure is
+  was empty on the machine most likely to produce the figure. It now measures
+  through `psutil`, with the `/proc` reader as a fallback.
+- **`terminate()` is a hard kill on Windows.** `TerminateProcess` gives ffmpeg
+  no chance to send an RTSP `TEARDOWN`, so MediaMTX keeps each session until the
+  socket times out — one abandoned session per publisher per camera count across
+  a whole walk-down. Publishers are now asked to quit with `q` on stdin first,
+  which is ffmpeg's documented graceful exit, and only killed if they ignore it.
+- **Readiness is asked over MediaMTX's control API, not read from its log.**
+  Reading a file the server holds open can be refused outright on Windows, and
+  buffered output can arrive late. The API also reports _current_ state, so a
+  previous camera count's publishers cannot answer for this one — which is what
+  made an entire GTX 1650 climb meaningless before it was fixed.
+
+Publishers also get their own stdin pipe rather than inheriting the console's,
+which on Windows can otherwise swallow keystrokes, and the API call bypasses
+`HTTP_PROXY`, which on a managed machine would route a loopback request to a
+corporate proxy and fail.
+
 ### Measuring a TensorRT engine or ONNX export
 
 `--model` works here as it does for the sweep, but **closed-loop mode needs a
