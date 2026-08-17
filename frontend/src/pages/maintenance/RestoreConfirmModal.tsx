@@ -92,13 +92,9 @@ export function RestoreConfirmModal({ backupId, onClose, onSuccess }: RestoreCon
         ) : null}
 
         <div className="flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-xs font-medium text-fg-body transition-colors hover:text-fg"
-          >
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>
             Cancel
-          </button>
+          </Button>
           <Button
             type="submit"
             variant="destructive"
