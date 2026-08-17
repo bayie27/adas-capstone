@@ -2,6 +2,7 @@ import { RiArrowLeftSLine, RiArrowRightSLine } from "@remixicon/react"
 
 import { cn } from "@/utils/cn"
 import { focusRing } from "@/components/ui/Button"
+import { FilterSelect } from "@/components/ui/FilterSelect"
 
 /**
  * The pagination footer as drawn on `37:74` and `38:82`.
@@ -88,22 +89,16 @@ export function PaginationFooter({
         <div className="flex items-center gap-2">
           Items per page
           {onPageSizeChange ? (
-            <select
-              value={pageSize}
-              onChange={(event) => onPageSizeChange(Number(event.target.value))}
-              aria-label="Items per page"
-              className={cn(
-                "rounded border border-stroke bg-surface-1 px-2 py-1 text-fg",
-                "transition-colors duration-150 hover:border-stroke-strong",
-                focusRing,
-              )}
-            >
-              {pageSizeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            <FilterSelect
+              value={String(pageSize)}
+              options={pageSizeOptions.map((option) => ({
+                value: String(option),
+                label: String(option),
+              }))}
+              onChange={(value) => onPageSizeChange(Number(value))}
+              ariaLabel="Items per page"
+              className="w-auto"
+            />
           ) : (
             <span className="flex items-center gap-1 rounded border border-stroke bg-surface-1 px-2 py-1 text-fg">
               {pageSize}
