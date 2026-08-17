@@ -6,11 +6,13 @@ import type {
   CameraConnectionStatus,
 } from "@/api/cameras"
 import { BadgeDot } from "@/components/ui/Badge"
+import { focusRing } from "@/components/ui/Button"
 import {
   getCameraAiTone,
   getCameraConnectionTone,
   type StatusTone,
 } from "@/components/ui/statusTone"
+import { cn } from "@/utils/cn"
 
 /**
  * `GET /api/cameras/` has always returned a `breakdowns` object beside
@@ -21,16 +23,13 @@ import {
  * with. Figma draws no such element, so this follows the screen's own idiom:
  * the tone mapping the status column already uses, and no new request.
  *
- * Deliberately NOT clickable, though every instinct says a count should lead
- * to its rows. `breakdowns` counts *presented* status — staleness-aware, the
- * same computation the table renders — while `GET /api/cameras/`'s
- * `ai_status` / `connection_status` filters compare the *stored* columns.
- * The two disagree whenever a camera has gone stale, which is most of them
- * when the AI engine is down: "Unresponsive 5" would filter to zero rows, and
- * "Inactive 1" to four. Wiring these up would make a correct count open an
- * incorrect list. Closing that gap is a backend change (filtering on
- * presented status), recorded in FE_Implementation.md rather than papered
- * over here.
+ * Now clickable (P19 §2): `GET /api/cameras/`'s `ai_status`/`connection_status`
+ * filters compare the same staleness-aware *presented* status `breakdowns`
+ * itself counts and the table cells render, not the raw stored columns --
+ * the mismatch that justified leaving these inert ("Unresponsive 5" filtering
+ * to zero rows) no longer exists. Each count maps to the exact same status
+ * string as its own label, single-select and toggling: clicking the active
+ * count clears the filter, clicking a different one replaces it.
  */
 
 /**
@@ -59,21 +58,53 @@ function BreakdownCount({
   label,
   tone,
   count,
+  isActive,
+  onClick,
 }: {
   label: string
   tone: StatusTone
   count: number
+  isActive: boolean
+  onClick: () => void
 }) {
   return (
-    <span className="flex items-center gap-1.5 px-1 text-caption text-fg-muted">
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={isActive}
+      className={cn(
+        "flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-caption text-fg-muted",
+        "transition-colors duration-150 hover:bg-surface-2",
+        isActive && "bg-primary/10 text-fg-body",
+        focusRing,
+      )}
+    >
       <BadgeDot tone={tone === "default" ? "neutral" : tone} />
       {label}
       <span className="font-medium text-fg">{count}</span>
-    </span>
+    </button>
   )
 }
 
-export function CameraBreakdownBar({ breakdowns }: { breakdowns: CameraBreakdowns | undefined }) {
+export function CameraBreakdownBar({
+  breakdowns,
+  activeConnectionStatus,
+  activeAiStatus,
+  onSelectConnectionStatus,
+  onSelectAiStatus,
+}: {
+  breakdowns: CameraBreakdowns | undefined
+  /** The single-select filter's current value, or `null` when unfiltered
+   * ("all"). Used only to render the pressed state -- Cameras.tsx owns the
+   * actual filter state. */
+  activeConnectionStatus: CameraConnectionStatus | null
+  activeAiStatus: CameraAiStatus | null
+  /** Toggle semantics belong to the caller: clicking the already-active
+   * status is expected to clear the filter, not re-select it -- this
+   * component only ever reports "this status was clicked." */
+  onSelectConnectionStatus: (status: CameraConnectionStatus) => void
+  onSelectAiStatus: (status: CameraAiStatus) => void
+}) {
   if (!breakdowns) return null
 
   return (
@@ -88,6 +119,8 @@ export function CameraBreakdownBar({ breakdowns }: { breakdowns: CameraBreakdown
             label={status}
             tone={getCameraConnectionTone(status)}
             count={breakdowns.connection[key]}
+            isActive={activeConnectionStatus === status}
+            onClick={() => onSelectConnectionStatus(status)}
           />
         ))}
       </div>
@@ -102,6 +135,8 @@ export function CameraBreakdownBar({ breakdowns }: { breakdowns: CameraBreakdown
             label={status}
             tone={getCameraAiTone(status)}
             count={breakdowns.ai[key]}
+            isActive={activeAiStatus === status}
+            onClick={() => onSelectAiStatus(status)}
           />
         ))}
       </div>

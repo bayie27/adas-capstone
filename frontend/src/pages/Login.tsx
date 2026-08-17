@@ -1,14 +1,22 @@
 import { useState, type FormEvent } from "react"
 import { Navigate, useLocation, useNavigate } from "react-router-dom"
 import { useMutation } from "@tanstack/react-query"
+import axios from "axios"
 import { loginUser } from "@/api/auth"
 import { useAuthStore } from "@/store/useAuthStore"
 import { toApiRole, getDefaultRouteForRole } from "@/utils/auth"
 import { getApiError, getApiErrorMessage } from "@/api/client"
+import { correctedNowMs } from "@/utils/datetime"
+import { secondsUntil } from "@/utils/format"
+import { useNow } from "@/hooks/useNow"
 import type { NoticeState } from "@/components/ui/NoticeBanner"
 import { PasswordInput } from "@/components/ui/PasswordInput"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+
+// If Retry-After is somehow absent despite the CORS fix below, a fixed
+// fallback still gives the operator a real countdown rather than nothing.
+const RATE_LIMIT_FALLBACK_SECONDS = 60
 
 function getNavigationMessage(locationState: unknown): string | undefined {
   return (locationState as { message?: string } | null)?.message
@@ -22,21 +30,26 @@ export default function Login() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   /**
-   * Set when `POST /api/auth/login` answers 429 AUTH_RATE_LIMITED, which
-   * blocks submitting until the operator edits a field.
-   *
-   * The plan asked for a countdown driven by the response's `Retry-After`
-   * header. That header is sent (`routes/auth.py`) but is not readable here:
-   * the SPA is a different origin to the API (`:5173` vs `:8000`, with no
-   * reverse proxy in `deploy/`), `Retry-After` is not a CORS-safelisted
-   * response header, and the backend's `expose_headers` allowlist lists only
-   * Content-Disposition and X-Request-ID. So the browser receives the seconds
-   * and hides them from JS, and the 429 body carries no number to fall back
-   * on. Until a backend change exposes the header we can say *that* the limit
-   * was hit but not *for how long* — hence an edit, not a timer, releases the
-   * button. See the Phase 5 note in FE_Implementation.md.
+   * Set to the deadline (ISO string) when `POST /api/auth/login` answers 429
+   * AUTH_RATE_LIMITED. `Retry-After` has been in the backend's CORS
+   * `expose_headers` allowlist since P19 §1 (`app/main.py:579`) alongside
+   * Content-Disposition and X-Request-ID -- readable here despite the SPA
+   * being a different origin to the API. `null` means not rate-limited.
    */
-  const [isRateLimited, setIsRateLimited] = useState(false)
+  const [rateLimitDeadline, setRateLimitDeadline] = useState<string | null>(null)
+  // Ticks only while a countdown is actually running -- useNow's own gate,
+  // same idiom as every other countdown in this app (camera cooldowns, the
+  // snooze countdown).
+  const rateLimitNow = useNow(rateLimitDeadline !== null, 1000)
+  const rateLimitSecondsLeft = secondsUntil(rateLimitDeadline, rateLimitNow)
+  const isRateLimited = rateLimitSecondsLeft !== null && rateLimitSecondsLeft > 0
+
+  // The countdown reaching zero clears itself during render -- the same
+  // "sync derived state while rendering" pattern Detections.tsx/Users.tsx
+  // use for query-derived totals, rather than an effect.
+  if (rateLimitDeadline !== null && rateLimitSecondsLeft === 0) {
+    setRateLimitDeadline(null)
+  }
   // Initialize from a one-time "post-action confirmation" message passed via
   // router navigation state, or else a session-expiry message left behind by
   // a 401 redirect. Reading/consuming that one-shot data during the lazy
@@ -76,12 +89,22 @@ export default function Login() {
       navigate(getDefaultRouteForRole(mappedRole), { replace: true })
     },
     onError: (error) => {
-      // The code comes from the body, which — unlike the header — is readable
-      // cross-origin, so the rate limit is at least distinguishable from a
-      // plain bad password instead of both reading as generic error text.
       const rateLimited = getApiError(error)?.code === "AUTH_RATE_LIMITED"
 
-      setIsRateLimited(rateLimited)
+      if (rateLimited) {
+        let seconds = RATE_LIMIT_FALLBACK_SECONDS
+        if (axios.isAxiosError(error)) {
+          const header = error.response?.headers["retry-after"]
+          const parsed = Number(header)
+          if (header !== undefined && !Number.isNaN(parsed)) {
+            seconds = parsed
+          }
+        }
+        setRateLimitDeadline(new Date(correctedNowMs() + seconds * 1000).toISOString())
+      } else {
+        setRateLimitDeadline(null)
+      }
+
       setStatusMessage({
         tone: "error",
         message: getApiErrorMessage(error, "Unable to log in. Please try again."),
@@ -153,8 +176,11 @@ export default function Login() {
             placeholder="username"
             value={username}
             onChange={(event) => {
-              setStatusMessage(null)
-              setIsRateLimited(false)
+              // Deliberately does NOT clear rateLimitDeadline -- the
+              // countdown reflects a real backend-enforced window now, so
+              // editing a field can no longer skip it (that would just
+              // trade a real wait for an immediate second 429).
+              if (!isRateLimited) setStatusMessage(null)
               setUsername(event.target.value)
             }}
             autoComplete="username"
@@ -163,8 +189,7 @@ export default function Login() {
             label="Password"
             value={password}
             onChange={(value) => {
-              setStatusMessage(null)
-              setIsRateLimited(false)
+              if (!isRateLimited) setStatusMessage(null)
               setPassword(value)
             }}
             autoComplete="current-password"
@@ -183,7 +208,7 @@ export default function Login() {
             loadingLabel="Signing in…"
             disabled={isRateLimited}
           >
-            Login
+            {isRateLimited ? `Try again in ${rateLimitSecondsLeft}s` : "Login"}
           </Button>
           {statusMessage ? (
             <p

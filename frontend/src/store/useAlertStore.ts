@@ -41,12 +41,9 @@ export function isSnoozedNow(logId: number, snoozedUntil: Record<number, string>
   return Boolean(until) && new Date(until).getTime() > Date.now()
 }
 
-function withoutSnooze(
-  snoozedUntil: Record<number, string>,
-  logId: number,
-): Record<number, string> {
-  if (!(logId in snoozedUntil)) return snoozedUntil
-  const next = { ...snoozedUntil }
+function withoutSnooze<T>(map: Record<number, T>, logId: number): Record<number, T> {
+  if (!(logId in map)) return map
+  const next = { ...map }
   delete next[logId]
   return next
 }
@@ -57,6 +54,15 @@ interface AlertState {
   handledIds: Set<number>
   /** log_id -> snoozed_until (ISO). Shared incident state, mirrored from SNOOZE_ACTIVATED/RE_ALARM. */
   snoozedUntil: Record<number, string>
+  /**
+   * log_id -> who snoozed it, mirrored from `SNOOZE_ACTIVATED.snoozed_by` (a
+   * formatted display name since P21 Step 3, not an id) or from the acting
+   * tab's own session username for the tab that performed the snooze itself.
+   * `null` means the snoozing user has since been deleted, same as the
+   * broadcast's own null case -- distinct from "no entry", which means no
+   * snooze is active at all.
+   */
+  snoozedBy: Record<number, string | null>
   /**
    * log_id -> who handled it, when a *different* operator did.
    *
@@ -93,7 +99,7 @@ interface AlertState {
   addAlert: (alert: AlertLog) => void
   removeAlert: (logId: number) => void
   clearAlerts: () => void
-  activateSnooze: (logId: number, snoozedUntil: string) => void
+  activateSnooze: (logId: number, snoozedUntil: string, snoozedBy: string | null) => void
   clearSnooze: (logId: number) => void
   recordHandledByOther: (logId: number, info: IncidentHandledInfo) => void
   isEventSeen: (eventId: string) => boolean
@@ -122,6 +128,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
   alerts: [],
   handledIds: readHandledIds(),
   snoozedUntil: {},
+  snoozedBy: {},
   handledByOther: {},
   seenEventIds: [],
   connectionId: null,
@@ -146,6 +153,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
           alerts: state.alerts.filter((a) => a.log_id !== alert.log_id),
           handledIds: nextHandled,
           snoozedUntil: withoutSnooze(state.snoozedUntil, alert.log_id),
+          snoozedBy: withoutSnooze(state.snoozedBy, alert.log_id),
         }
       }
 
@@ -179,6 +187,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
         alerts: state.alerts.filter((alert) => alert.log_id !== logId),
         handledIds: next,
         snoozedUntil: withoutSnooze(state.snoozedUntil, logId),
+        snoozedBy: withoutSnooze(state.snoozedBy, logId),
       }
     })
     syncSound(before, activeCount(get().alerts, get().snoozedUntil))
@@ -190,6 +199,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
       alerts: [],
       handledIds: new Set(),
       snoozedUntil: {},
+      snoozedBy: {},
       handledByOther: {},
       seenEventIds: [],
       connectionId: null,
@@ -197,14 +207,20 @@ export const useAlertStore = create<AlertState>((set, get) => ({
       reconnectSummary: null,
     })
   },
-  activateSnooze: (logId, snoozedUntil) => {
+  activateSnooze: (logId, snoozedUntil, snoozedBy) => {
     const before = activeCount(get().alerts, get().snoozedUntil)
-    set((state) => ({ snoozedUntil: { ...state.snoozedUntil, [logId]: snoozedUntil } }))
+    set((state) => ({
+      snoozedUntil: { ...state.snoozedUntil, [logId]: snoozedUntil },
+      snoozedBy: { ...state.snoozedBy, [logId]: snoozedBy },
+    }))
     syncSound(before, activeCount(get().alerts, get().snoozedUntil))
   },
   clearSnooze: (logId) => {
     const before = activeCount(get().alerts, get().snoozedUntil)
-    set((state) => ({ snoozedUntil: withoutSnooze(state.snoozedUntil, logId) }))
+    set((state) => ({
+      snoozedUntil: withoutSnooze(state.snoozedUntil, logId),
+      snoozedBy: withoutSnooze(state.snoozedBy, logId),
+    }))
     syncSound(before, activeCount(get().alerts, get().snoozedUntil))
   },
   // Deliberately does NOT call syncSound. It writes metadata only — `alerts`

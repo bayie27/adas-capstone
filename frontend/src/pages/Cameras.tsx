@@ -281,7 +281,19 @@ export default function Cameras() {
         />
       </div>
 
-      <CameraBreakdownBar breakdowns={camerasQuery.data?.breakdowns} />
+      <CameraBreakdownBar
+        breakdowns={camerasQuery.data?.breakdowns}
+        activeConnectionStatus={connectionFilter === "all" ? null : connectionFilter}
+        activeAiStatus={aiFilter === "all" ? null : aiFilter}
+        onSelectConnectionStatus={(status) => {
+          reset()
+          setConnectionFilter((current) => (current === status ? "all" : status))
+        }}
+        onSelectAiStatus={(status) => {
+          reset()
+          setAiFilter((current) => (current === status ? "all" : status))
+        }}
+      />
 
       {camerasQuery.isError ? (
         <QueryErrorBanner

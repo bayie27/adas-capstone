@@ -30,6 +30,16 @@ export interface ExportJobCreateParams {
   search?: string
   sort_by?: string
   sort_order?: "asc" | "desc"
+  /**
+   * `report_type: "audit"` only (P21 Step 5, `schemas/exports.py:39-41`).
+   * Validated 422 against the same 26-entry AUDIT_ACTIONS catalog the
+   * synchronous export route already checks — the filters genuinely reach
+   * the worker, which has its own end-to-end test asserting the produced
+   * artifact only contains the filtered rows.
+   */
+  action?: string[]
+  result?: string[]
+  target_type?: string[]
 }
 
 export interface ExportJobCreateResponse {
@@ -61,6 +71,30 @@ export interface RetrainingExportParams {
   start_date?: string
   end_date?: string
   camera_id?: number[]
+}
+
+/**
+ * `GET /api/exports/jobs` (P21 Step 4, `routes/exports.py:107-141`) — scoped
+ * to the caller's own jobs by default, for every role including Admin.
+ * `all_users` widens it and is Admin-only server-side (a 403 for an
+ * Operator); this client never sets it, since the tray only ever needs
+ * "my exports," not the whole system's.
+ */
+export interface GetExportJobsParams {
+  status?: ExportJobStatus[]
+  all_users?: boolean
+  limit?: number
+  offset?: number
+}
+
+export interface ExportJobListResponse {
+  total_filtered: number
+  items: ExportJobRead[]
+}
+
+export async function listExportJobs(params: GetExportJobsParams = {}) {
+  const { data } = await api.get<ExportJobListResponse>("/exports/jobs", { params })
+  return data
 }
 
 export async function createExportJob(params: ExportJobCreateParams) {

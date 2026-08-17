@@ -67,6 +67,36 @@ export interface GetCamerasParams {
   offset?: number
 }
 
+/**
+ * `GET /api/cameras/{camera_id}` (P21 Step 1, `schemas/camera.py:32-44`) —
+ * `CameraRecord` plus the seven AI-owned telemetry columns the list route
+ * never exposed. `connection_status`/`ai_status` are staleness-presented
+ * exactly as the list presents them, so the drawer and the row can never
+ * disagree. Every field is nullable by design: a camera the engine has
+ * never reported on has `measured_fps: null` ("no measurement yet"), never
+ * a fabricated zero.
+ */
+export interface CameraDetail extends CameraRecord {
+  applied_config_version: number | null
+  last_heartbeat_at: string | null
+  measured_fps: number | null
+  inference_latency_ms: number | null
+  last_error_code: string | null
+  last_error_message: string | null
+  /**
+   * Admin-only within an otherwise operator-visible route — `null` for an
+   * Operator, not an error. Arrives pre-masked by the backend
+   * (`rtsp://***:***@host:port/path`); there is no real value to "reveal"
+   * behind it, and nothing here attempts to reconstruct one.
+   */
+  rtsp_url_redacted: string | null
+}
+
+export async function getCameraDetail(cameraId: number) {
+  const { data } = await api.get<CameraDetail>(`/cameras/${cameraId}`)
+  return data
+}
+
 export interface CreateCameraInput {
   camera_name: string
   channel_id: number

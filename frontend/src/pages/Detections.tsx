@@ -107,6 +107,7 @@ export default function Detections() {
   const activateSnooze = useAlertStore((state) => state.activateSnooze)
   const handledByOther = useAlertStore((state) => state.handledByOther)
   const snoozedUntilMap = useAlertStore((state) => state.snoozedUntil)
+  const snoozedByMap = useAlertStore((state) => state.snoozedBy)
   const [activeTab, setActiveTab] = useState<TabKey>("ongoing")
   const [logSearch, setLogSearch] = useState("")
   const debouncedLogSearch = useDebouncedValue(logSearch.trim(), 300)
@@ -116,6 +117,7 @@ export default function Detections() {
   const [userId, setUserId] = useState("")
 
   const role = useAuthStore((state) => state.role)
+  const username = useAuthStore((state) => state.username)
   const hasFilters = Boolean(startDate || endDate || cameraId || userId)
 
   const camerasQuery = useCameraOptions()
@@ -246,7 +248,7 @@ export default function Detections() {
       queryClient.setQueryData(["alert-details", snoozedAlert.log_id], snoozedAlert)
       setSelectedAlertPreview(snoozedAlert)
       if (snoozedAlert.snoozed_until) {
-        activateSnooze(snoozedAlert.log_id, snoozedAlert.snoozed_until)
+        activateSnooze(snoozedAlert.log_id, snoozedAlert.snoozed_until, username)
       }
       queryClient.invalidateQueries({ queryKey: ["alerts"] })
     },
@@ -312,12 +314,18 @@ export default function Detections() {
 
   function describeSnoozedRow(row: AlertLog): string | null {
     if (!isSnoozedNow(row.log_id, snoozedUntilMap)) return null
-    // GET /api/users/ is admin-only, so this can only ever resolve to a name
-    // for an Admin viewer within the 100-user cap (Q10) — everyone else,
-    // and any id outside the cap, falls back to the raw id rather than
-    // showing nothing.
+    // SNOOZE_ACTIVATED has carried a real display name since P21 Step 3, for
+    // every role — no admin-only lookup needed when this tab actually saw
+    // the broadcast (or performed the snooze itself). That only covers
+    // incidents snoozed during this connection, though: a row rebuilt from
+    // REST on reconnect (RealtimeAlertsBridge's recovery sequence) has no
+    // broadcast to carry a name, so it still falls back to the same
+    // admin-only user-list lookup (Q10's 100-user cap) or the raw id.
+    const broadcastName = snoozedByMap[row.log_id]
     const match = usersQuery.data?.users.find((u) => u.user_id === row.snoozed_by_id)
-    const who = match ? getUserFullName(match) : row.snoozed_by_id ? `#${row.snoozed_by_id}` : null
+    const who =
+      broadcastName ??
+      (match ? getUserFullName(match) : row.snoozed_by_id ? `#${row.snoozed_by_id}` : null)
     return describeSnoozeStatus(
       snoozedUntilMap[row.log_id] ?? row.snoozed_until,
       now,

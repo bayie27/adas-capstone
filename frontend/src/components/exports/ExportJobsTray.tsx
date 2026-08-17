@@ -7,9 +7,10 @@ import {
   RiTimerLine,
 } from "@remixicon/react"
 
-import { downloadExportJob, getExportJob, type ExportJobRead } from "@/api/exports"
+import { downloadExportJob, getExportJob, listExportJobs, type ExportJobRead } from "@/api/exports"
 import { Badge, type BadgeTone } from "@/components/ui/Badge"
 import { Button, focusRing } from "@/components/ui/Button"
+import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SidePanel } from "@/components/ui/SidePanel"
 import { useExportJobsStore, type TrackedExportJob } from "@/store/useExportJobsStore"
 import { useNow } from "@/hooks/useNow"
@@ -19,6 +20,7 @@ import { cn } from "@/utils/cn"
 import { useState } from "react"
 
 const POLL_INTERVAL_MS = 3000
+const HISTORY_PAGE_SIZE = 20
 // A safety valve, not a backend timeout — EXPORT_JOB_WORKERS is 1, so a
 // queue backed up behind a slow job is a real, if unusual, situation. After
 // this long still queued/processing, stop polling automatically and hand the
@@ -174,14 +176,84 @@ function JobRow({
 }
 
 /**
+ * A history row already carries its full `ExportJobRead` from the list
+ * fetch — unlike `JobRow`, it does not poll `GET /api/exports/jobs/{id}`
+ * itself. Most history rows are already terminal (completed/failed/
+ * expired) by the time an operator asks to see them; a row still
+ * queued/processing on another device simply reflects whatever the list
+ * returned until the tray is reopened, which is an acceptable staleness
+ * for a "what did I run earlier" view, not a live status board.
+ */
+function HistoryJobRow({ job }: { job: ExportJobRead }) {
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+
+  async function handleDownload() {
+    setDownloadError(null)
+    try {
+      await downloadExportJob(job)
+    } catch {
+      setDownloadError("Download failed. The file may have expired — try again.")
+    }
+  }
+
+  return (
+    <div className="border-b border-stroke py-3 last:border-b-0">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-medium text-fg">
+            {REPORT_TYPE_LABEL[job.report_type] ?? job.report_type}
+            <span className="ml-1 text-fg-muted">&middot; {job.format.toUpperCase()}</span>
+          </p>
+          <p className="text-caption text-fg-muted">{formatRelativeDateTime(job.created_at)}</p>
+        </div>
+        <Badge tone={STATUS_TONE[job.status] ?? "neutral"} variant="subtle">
+          {STATUS_LABEL[job.status] ?? job.status}
+        </Badge>
+      </div>
+
+      {job.status === "completed" ? (
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-caption text-fg-muted">
+            {job.progress_total !== null
+              ? `${new Intl.NumberFormat("en-US").format(job.progress_total)} rows`
+              : null}
+          </span>
+          <Button size="sm" onClick={handleDownload}>
+            <RiDownloadLine size={13} />
+            Download
+          </Button>
+        </div>
+      ) : null}
+
+      {job.status === "failed" ? (
+        <p className="mt-2 flex items-start gap-1.5 text-caption text-danger">
+          <RiAlertLine size={13} className="mt-0.5 shrink-0" />
+          {failureMessage(job.failure_category)}
+        </p>
+      ) : null}
+
+      {job.status === "expired" ? (
+        <p className="mt-2 text-caption text-fg-muted">
+          This export's file has been removed after its 72-hour retention window.
+        </p>
+      ) : null}
+
+      {downloadError ? <p className="mt-2 text-caption text-danger">{downloadError}</p> : null}
+    </div>
+  )
+}
+
+/**
  * A global, persistent tray for async export jobs — mounted once in App.tsx
  * (like MaintenanceNotice/DevPanelTrigger) so a job started on one page keeps
  * polling while the operator navigates elsewhere, and survives a reload.
  *
- * There is no `GET /api/exports/jobs` list route, so "jobs from an earlier
- * session" means jobs *this browser* created (`useExportJobsStore`,
- * localStorage-backed) — not every job the account has ever run from any
- * device. Documented here rather than implied by the UI copy.
+ * `GET /api/exports/jobs` (P21 Step 4) now lists the caller's own jobs
+ * account-wide, so "history" is no longer limited to what this browser's
+ * `useExportJobsStore` happened to track. That local store still drives the
+ * "This session" list (it has live polling and an untrack action neither
+ * makes sense for another device's jobs), but it is no longer the only
+ * source of history.
  */
 export function ExportJobsTray() {
   const jobs = useExportJobsStore((state) => state.jobs)
@@ -191,7 +263,33 @@ export function ExportJobsTray() {
   // fresh when a row is actually visible, not while the tray sits collapsed.
   const now = useNow(isOpen, 5000)
 
-  if (jobs.length === 0) return null
+  const [historyRequested, setHistoryRequested] = useState(false)
+  const [historyOffset, setHistoryOffset] = useState(0)
+  const [historyItems, setHistoryItems] = useState<ExportJobRead[]>([])
+  const [appendedOffset, setAppendedOffset] = useState<number | null>(null)
+
+  const historyQuery = useQuery({
+    queryKey: ["export-jobs-history", historyOffset],
+    queryFn: () => listExportJobs({ limit: HISTORY_PAGE_SIZE, offset: historyOffset }),
+    enabled: historyRequested,
+  })
+
+  // Append each page's items exactly once, during render rather than an
+  // effect -- the same "sync derived state while rendering" idiom
+  // Users.tsx/Detections.tsx already use for query-derived pagination
+  // totals. Converges immediately: appendedOffset catches up to
+  // historyOffset on the next render and stops firing until it changes again.
+  if (historyQuery.data && appendedOffset !== historyOffset) {
+    setHistoryItems((current) => [...current, ...historyQuery.data!.items])
+    setAppendedOffset(historyOffset)
+  }
+
+  // A job started this session already appears in the tracked list above --
+  // don't show it a second time once the account-wide history also returns it.
+  const trackedIds = new Set(jobs.map((tracked) => tracked.jobId))
+  const dedupedHistory = historyItems.filter((item) => !trackedIds.has(item.job_id))
+  const totalFiltered = historyQuery.data?.total_filtered ?? historyItems.length
+  const hasMore = historyRequested && historyItems.length < totalFiltered
 
   return (
     <>
@@ -213,44 +311,81 @@ export function ExportJobsTray() {
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
         title="Export jobs"
-        subtitle="Background exports started from this browser"
+        subtitle="Background exports, this browser and earlier sessions"
       >
-        {jobs.map((tracked) => (
-          <JobRow
-            key={tracked.jobId}
-            tracked={tracked}
-            now={now}
-            onRemove={() => untrack(tracked.jobId)}
-          />
-        ))}
-
-        {/*
-          G2 — GET /api/exports/jobs (a list route) doesn't exist, only
-          single-job GET by id, so "history" here can only ever mean jobs
-          this browser's own useExportJobsStore tracked. States that scope
-          limit outright instead of leaving it implied by what's absent.
-          The button is the seam: the day G2 ships, its onClick becomes a
-          real fetch and disabled goes away -- no structural change to the
-          tray itself.
-        */}
-        <div className="mt-4 space-y-2 border-t border-stroke pt-3">
-          <p className="text-caption text-fg-muted">
-            Showing exports started from this browser only.
+        {jobs.length > 0 ? (
+          <>
+            {historyRequested ? (
+              <h4 className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-fg-muted">
+                This session
+              </h4>
+            ) : null}
+            {jobs.map((tracked) => (
+              <JobRow
+                key={tracked.jobId}
+                tracked={tracked}
+                now={now}
+                onRemove={() => untrack(tracked.jobId)}
+              />
+            ))}
+          </>
+        ) : !historyRequested ? (
+          <p className="py-6 text-center text-caption text-fg-muted">
+            No exports tracked in this browser yet.
           </p>
-          <div className="flex items-center gap-2">
+        ) : null}
+
+        <div
+          className={cn(
+            jobs.length > 0 || historyRequested ? "mt-4 border-t border-stroke pt-3" : "",
+          )}
+        >
+          {!historyRequested ? (
             <Button
               size="sm"
               variant="outline"
-              disabled
-              className="flex-1"
-              title="Not available yet -- no endpoint lists a user's export jobs across sessions (G2)"
+              className="w-full"
+              onClick={() => setHistoryRequested(true)}
             >
               Load history from other sessions
             </Button>
-            <Badge tone="neutral" variant="subtle" uppercase={false} className="shrink-0">
-              Unavailable
-            </Badge>
-          </div>
+          ) : (
+            <>
+              <h4 className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-fg-muted">
+                Earlier sessions
+              </h4>
+
+              {historyQuery.isError ? (
+                <QueryErrorBanner
+                  error={historyQuery.error}
+                  fallback="Unable to load export history."
+                  onRetry={() => historyQuery.refetch()}
+                />
+              ) : null}
+
+              {historyQuery.isLoading ? (
+                <p className="py-4 text-center text-caption text-fg-muted">Loading…</p>
+              ) : dedupedHistory.length === 0 && !historyQuery.isError ? (
+                <p className="py-4 text-center text-caption text-fg-muted">No earlier exports.</p>
+              ) : (
+                dedupedHistory.map((job) => <HistoryJobRow key={job.job_id} job={job} />)
+              )}
+
+              {hasMore ? (
+                <div className="mt-3 flex justify-center">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    isLoading={historyQuery.isFetching}
+                    loadingLabel="Loading…"
+                    onClick={() => setHistoryOffset((current) => current + HISTORY_PAGE_SIZE)}
+                  >
+                    Load more
+                  </Button>
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
       </SidePanel>
     </>

@@ -16,6 +16,31 @@ import { formatHourLabel, truncateLabel } from "@/utils/format"
 import type { AnalyticsFilters } from "@/api/analytics"
 import { RiCarLine, RiCheckboxLine, RiCloseLine, RiRefreshLine } from "@remixicon/react"
 
+/**
+ * `null` means no previous window to compare against (all-time load,
+ * half-open range, or a previous window that was itself zero) -- never
+ * render null as "0%", they're different facts. A real zero renders as a
+ * neutral "0%", not success or danger.
+ */
+function formatDeltaText(value: number): string {
+  if (value === 0) return "0%"
+  const sign = value > 0 ? "+" : "−"
+  return `${sign}${Math.abs(value).toFixed(1)}%`
+}
+
+/**
+ * Sign does not map to colour uniformly across these three KPIs -- more
+ * accidents and more still-ongoing incidents are both a *positive* delta
+ * that reads as bad news; only "more resolved" is a positive delta that's
+ * actually good. `worseWhenPositive` lets one function express both
+ * mappings instead of inlining the flip at each call site.
+ */
+function deltaTone(value: number, worseWhenPositive: boolean): boolean | null {
+  if (value === 0) return null
+  const isGood = worseWhenPositive ? value < 0 : value > 0
+  return isGood
+}
+
 export default function Dashboard() {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
@@ -201,6 +226,16 @@ export default function Dashboard() {
                 value={kpis?.ongoing ?? 0}
                 isLoading={dashboardQuery.isLoading}
                 subtext="Live incident queue"
+                delta={
+                  kpis?.ongoing_delta_pct != null
+                    ? formatDeltaText(kpis.ongoing_delta_pct)
+                    : undefined
+                }
+                deltaPositive={
+                  kpis?.ongoing_delta_pct != null
+                    ? deltaTone(kpis.ongoing_delta_pct, true)
+                    : undefined
+                }
               />
             </div>
             <div className="h-[195px]">
@@ -209,6 +244,16 @@ export default function Dashboard() {
                 title="Total Accidents"
                 value={kpis?.total_accidents ?? 0}
                 isLoading={dashboardQuery.isLoading}
+                delta={
+                  kpis?.total_accidents_delta_pct != null
+                    ? formatDeltaText(kpis.total_accidents_delta_pct)
+                    : undefined
+                }
+                deltaPositive={
+                  kpis?.total_accidents_delta_pct != null
+                    ? deltaTone(kpis.total_accidents_delta_pct, true)
+                    : undefined
+                }
               />
             </div>
             <div className="h-[195px]">
@@ -217,6 +262,16 @@ export default function Dashboard() {
                 title="Total Resolved"
                 value={kpis?.total_resolved ?? 0}
                 isLoading={dashboardQuery.isLoading}
+                delta={
+                  kpis?.total_resolved_delta_pct != null
+                    ? formatDeltaText(kpis.total_resolved_delta_pct)
+                    : undefined
+                }
+                deltaPositive={
+                  kpis?.total_resolved_delta_pct != null
+                    ? deltaTone(kpis.total_resolved_delta_pct, false)
+                    : undefined
+                }
               />
             </div>
           </div>
