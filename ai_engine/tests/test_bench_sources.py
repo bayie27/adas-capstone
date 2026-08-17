@@ -179,6 +179,65 @@ def test_each_publisher_targets_its_own_path():
     ]
 
 
+# --- waiting for publishers ----------------------------------------------
+
+
+def test_published_paths_are_read_from_the_server_log(tmp_path):
+    server = sources.MediaMtxServer(tmp_path, port=8999)
+    (tmp_path / "mediamtx.log").write_text(
+        "INF [RTSP] [session a] is publishing to path 'bench1'\n"
+        "INF [path bench1] stream is available and online, 1 track (H264)\n"
+        "INF [RTSP] [session b] is publishing to path 'bench2'\n",
+        encoding="utf-8",
+    )
+
+    assert server.published_paths() == {"bench1", "bench2"}
+
+
+def test_awaiting_publishers_returns_as_soon_as_every_path_is_live(tmp_path):
+    server = sources.MediaMtxServer(tmp_path, port=8999)
+    (tmp_path / "mediamtx.log").write_text(
+        "is publishing to path 'bench1'\nis publishing to path 'bench2'\n",
+        encoding="utf-8",
+    )
+
+    server.await_publishers(2, timeout=2.0)  # must not raise or stall
+
+
+def test_awaiting_publishers_raises_the_recoverable_error(tmp_path):
+    """StreamsNotReadyError, not a bare BenchSourceError — capacity.py treats
+    the two differently: one fails a run, the other aborts everything."""
+    server = sources.MediaMtxServer(tmp_path, port=8999)
+    (tmp_path / "mediamtx.log").write_text(
+        "is publishing to path 'bench1'\n", encoding="utf-8"
+    )
+
+    with pytest.raises(sources.StreamsNotReadyError) as excinfo:
+        server.await_publishers(3, timeout=0.5)
+
+    assert "bench2" in str(excinfo.value)
+
+
+def test_streams_not_ready_is_recoverable_but_still_a_bench_source_error():
+    """Subclassing matters: existing `except BenchSourceError` handlers must
+    keep catching it, while capacity.py can single out the recoverable case."""
+    assert issubclass(sources.StreamsNotReadyError, sources.BenchSourceError)
+
+
+def test_the_ready_budget_allows_for_the_production_reconnect_backoff():
+    """The bug this fixes: a camera that misses once sleeps
+    config.RECONNECT_INTERVAL_SECONDS (10s) before retrying, so a 30s budget
+    bought only three attempts. Two unlucky cameras out of fourteen killed a
+    run that had already spent minutes on the seed sweep."""
+    import config
+
+    budget = (
+        sources.STREAM_READY_BASE_SECONDS + sources.STREAM_READY_PER_CAMERA_SECONDS * 14
+    )
+
+    assert budget >= config.RECONNECT_INTERVAL_SECONDS * 4
+
+
 # --- mediamtx config -----------------------------------------------------
 
 

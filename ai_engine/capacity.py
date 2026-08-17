@@ -110,9 +110,11 @@ from machine_profile import (
     save_profile,
 )
 from runtime_bench import (
+    FAILURE_STREAMS_NOT_READY,
     MAX_CAMERAS,
     SEED_BACKOFF,
     InstrumentedPipeline,
+    RunSample,
     band_target_fps,
     climb,
     run_window,
@@ -466,7 +468,24 @@ def _measure_at(
             publishers = sources.Publishers(server, clip, n)
             publishers.__enter__()
         cameras = sources.start_cameras(server, n)
+    except sources.StreamsNotReadyError as exc:
+        # Not fatal, and not silently swallowed either. Bringing up N streams at
+        # once is itself part of what is being measured, so this is recorded as
+        # a failed run at this count and the climb walks down — rather than
+        # aborting and discarding a seed sweep that took minutes.
+        print(f"[capacity]   {n} cam  could not start streams: {exc}")
+        if publishers is not None:
+            publishers.__exit__(None, None, None)
+        sources.stop_cameras(cameras)
+        return RunSample(
+            cameras=n,
+            target_fps=target_fps,
+            window_seconds=0.0,
+            passed=False,
+            failure_reason=FAILURE_STREAMS_NOT_READY,
+        )
 
+    try:
         pipeline = InstrumentedPipeline(
             cameras,
             detector,

@@ -55,6 +55,7 @@ FAILURE_STARVED = "starved"
 FAILURE_STREAM_DROPPED = "stream_dropped"
 FAILURE_CONTAMINATED = "contaminated_by_events"
 FAILURE_INFERENCE_FAILED = "inference_failed"
+FAILURE_STREAMS_NOT_READY = "streams_not_ready"
 
 
 class RecordsHandover:
