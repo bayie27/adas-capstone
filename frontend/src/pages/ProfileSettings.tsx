@@ -155,7 +155,7 @@ export default function ProfileSettings() {
   return (
     <div className="mx-auto max-w-3xl p-8">
       <div className="mb-8">
-        <h1 className="mb-1 text-h3 font-semibold text-fg">My Profile</h1>
+        <h1 className="mb-0.5 text-xl font-semibold text-fg">My Profile</h1>
         <p className="text-secondary text-fg-muted">
           Manage your personal information and preferences.
         </p>

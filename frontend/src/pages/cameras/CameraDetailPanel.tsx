@@ -203,11 +203,11 @@ export function CameraDetailPanel({
       </Section>
 
       <Section title="State">
-        <div className="flex items-center justify-between py-1">
+        <div className="flex items-center justify-between py-1.5">
           <span className="text-xs font-medium tracking-[0.08em] text-fg-muted">Connection</span>
           <CameraConnectionText status={camera.connection_status} />
         </div>
-        <div className="flex items-center justify-between py-1">
+        <div className="flex items-center justify-between py-1.5">
           <span className="text-xs font-medium tracking-[0.08em] text-fg-muted">AI detection</span>
           <CameraAiText
             status={camera.ai_status}
