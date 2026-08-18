@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> **Superseded snapshot — not current state.** This file was frozen on 2026-08-14. The live audit is
+> the `ADAS_Paper_Audit` Google Doc, and the live tracker is the `ADAS_Paper_Audit_Tracker` Google
+> Sheet. Do not read this file to decide what the paper says today, and do not add findings to it —
+> see [`paper_sync/PROCEDURE.md`](paper_sync/PROCEDURE.md). Kept for history: the reasoning behind
+> each item is still worth reading, and several entries record mistakes worth not repeating.
+
 # Full-codebase audit → Defence Document edit list (v2)
 
 **Date:** 2026-08-13, augmented 2026-08-14
