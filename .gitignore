@@ -207,10 +207,15 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-# Local agent/skill metadata
-.agents/
+# Local agent/skill metadata. .agents/skills/ is the shared skill directory
+# Codex and Antigravity both read, so it is tracked; everything else here is local.
+.agents/*
+!.agents/skills/
 skills-lock.json
 .uv-cache/
+
+# Manually exported copy of the defense document, for runtimes with no Drive access.
+paper_sync/.local/
 
 # Marimo
 marimo/_static/
@@ -314,3 +319,8 @@ certs/
 # Optional real frames for seeded snapshots (dev_plan/01_PKG_seed_core.md Step 6).
 # Absence is fine - the seeder falls back to an embedded placeholder JPEG.
 backend/app/dev/assets/snapshots/
+
+# Claude Code: share skills with the team, keep everything else local.
+# .claude/worktrees/ holds full repo checkouts and must never be committed.
+.claude/*
+!.claude/skills/
