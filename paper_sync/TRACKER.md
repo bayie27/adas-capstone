@@ -8,9 +8,14 @@ rows reviewable and diffable in the repo.
 
 Rows marked **unsynced** have not been copied into the sheet by anyone yet.
 
-2 finding(s), 2 unsynced.
+7 finding(s), 7 unsynced.
 
 | Section / Chapter | Page Number | Required Revision | Notes | Status | Assigned to | Synced | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Data Dictionary — Table 14 (Audit Log) | unconfirmed | Document that the audit_log `detail` field is redacted before it is written, not just that it holds "context and state diffs | Secondary site is Table 7, NFR-21 (Audit Trail Integrity), which already promises "complete forensic visibility" without saying sensitive values are kept out of the ledger in the first place. | Not started | Daniboy | no | [2026-08-18-audit-log-detail-redaction.md](findings/2026-08-18-audit-log-detail-redaction.md) |
 | Frameworks and Libraries | unconfirmed | Name the daily backup job and the host-level daily restart, not only telemetry aggregation | NFR-16 and NFR-18 requirement text needs no change — both are now implemented and met. Check whether Deployment & Implementation describes the restart mechanism. | Not started | Daniboy | no | [2026-08-18-scheduler-jobs-and-daily-restart.md](findings/2026-08-18-scheduler-jobs-and-daily-restart.md) |
+| Table 10, camera | unconfirmed | Correct AI engine FPS and capacity behavior | Capacity is standalone; runtime inference FPS drives warnings | Not started | Daniboy | no | [2026-08-19-runtime-fps-measured-fps.md](findings/2026-08-19-runtime-fps-measured-fps.md) |
+| NFR-03 Frame Rate Maintenance | unconfirmed | Correct AI engine FPS and capacity behavior | Capacity is standalone; runtime inference FPS drives warnings | Not started | Daniboy | no | [2026-08-19-runtime-fps-nfr03.md](findings/2026-08-19-runtime-fps-nfr03.md) |
+| Scalability and Performance Considerations | unconfirmed | Correct AI engine FPS and capacity behavior | Capacity is inference-only; runtime inference FPS drives warnings | Not started | Daniboy | no | [2026-08-19-runtime-fps-scalability.md](findings/2026-08-19-runtime-fps-scalability.md) |
+| Table 26, TC-AI-402 | unconfirmed | Correct AI engine FPS and capacity behavior | Capacity is standalone; runtime inference FPS drives warnings | Not started | Daniboy | no | [2026-08-19-runtime-fps-tc-ai-402.md](findings/2026-08-19-runtime-fps-tc-ai-402.md) |
+| Table 17, TC-U-301 | unconfirmed | Correct AI engine FPS and capacity behavior | Capacity is standalone; runtime inference FPS drives warnings | Not started | Daniboy | no | [2026-08-19-runtime-fps-tc-u-301.md](findings/2026-08-19-runtime-fps-tc-u-301.md) |

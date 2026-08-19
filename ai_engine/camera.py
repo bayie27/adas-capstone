@@ -5,9 +5,9 @@ from contextlib import suppress
 from dataclasses import dataclass
 
 import cv2
-from config import RECONNECT_INTERVAL_SECONDS, UNRESPONSIVE_AFTER_FAILURES
+from config import FPS_BAND_MIN, RECONNECT_INTERVAL_SECONDS, UNRESPONSIVE_AFTER_FAILURES
 
-_FPS_WINDOW_SECONDS = 5
+_FPS_WINDOW_SECONDS = 5.0
 
 
 @dataclass(frozen=True)
@@ -37,9 +37,8 @@ class CameraStream:
         self.channel_id = channel_id
         self.camera_id = camera_id
         self.url = rtsp_url
-        # A single tuple assignment is atomic under the GIL; the old
-        # frame/flag pair could be read half-updated.
         self._latest: FrameRead | None = None
+        self._latest_lock = threading.Lock()
         self.segment_id = 0
         self.running = True
         self.is_paused = False  # The digital blindfold
@@ -53,8 +52,13 @@ class CameraStream:
         self.error_code = None
         self.error_message = None
 
-        self._frame_times = deque()
-        self.measured_fps = None
+        self._decode_frame_times = deque()
+        self.decoded_fps = None
+        self._inference_frame_times = deque()
+        self._inference_window_started_at = None
+        self._metrics_lock = threading.Lock()
+        self._processing_error_code = None
+        self._processing_error_message = None
         self.inference_latency_ms = None
 
         # Start the background thread immediately
@@ -64,6 +68,9 @@ class CameraStream:
     def pause(self):
         self.is_paused = True
         self.ai_status = "Paused"
+        with self._metrics_lock:
+            self._inference_frame_times.clear()
+            self._inference_window_started_at = None
 
     def resume(self):
         """Bumping the segment here is what neutralises SPEC.md section 6:
@@ -74,6 +81,7 @@ class CameraStream:
         self.is_paused = False
         self.ai_status = "Active"
         self.segment_id += 1
+        self.start_inference_measurement()
 
     def _record_failure(self, error_code, error_message):
         self.consecutive_failures += 1
@@ -92,13 +100,48 @@ class CameraStream:
 
     def _record_frame_decoded(self):
         now = time.monotonic()
-        self._frame_times.append(now)
-        cutoff = now - _FPS_WINDOW_SECONDS
-        while self._frame_times and self._frame_times[0] < cutoff:
-            self._frame_times.popleft()
-        if len(self._frame_times) >= 2:
-            span = self._frame_times[-1] - self._frame_times[0]
-            self.measured_fps = (len(self._frame_times) - 1) / span if span > 0 else 0.0
+        with self._metrics_lock:
+            self._decode_frame_times.append(now)
+            cutoff = now - _FPS_WINDOW_SECONDS
+            while self._decode_frame_times and self._decode_frame_times[0] < cutoff:
+                self._decode_frame_times.popleft()
+            if len(self._decode_frame_times) >= 2:
+                span = self._decode_frame_times[-1] - self._decode_frame_times[0]
+                self.decoded_fps = (
+                    (len(self._decode_frame_times) - 1) / span if span > 0 else 0.0
+                )
+
+    def start_inference_measurement(self, now: float | None = None) -> None:
+        timestamp = time.monotonic() if now is None else now
+        with self._metrics_lock:
+            self._inference_frame_times.clear()
+            self._inference_window_started_at = timestamp
+
+    def record_inference(self, now: float | None = None) -> None:
+        timestamp = time.monotonic() if now is None else now
+        with self._metrics_lock:
+            if self._inference_window_started_at is None:
+                self._inference_window_started_at = timestamp
+            self._inference_frame_times.append(timestamp)
+            self._prune_inference_times(timestamp)
+
+    def current_inference_fps(self, now: float | None = None) -> float | None:
+        timestamp = time.monotonic() if now is None else now
+        with self._metrics_lock:
+            started = self._inference_window_started_at
+            if started is None or timestamp - started < _FPS_WINDOW_SECONDS:
+                return None
+            self._prune_inference_times(timestamp)
+            return len(self._inference_frame_times) / _FPS_WINDOW_SECONDS
+
+    def _prune_inference_times(self, timestamp: float) -> None:
+        cutoff = timestamp - _FPS_WINDOW_SECONDS
+        while self._inference_frame_times and self._inference_frame_times[0] < cutoff:
+            self._inference_frame_times.popleft()
+
+    def record_inference_failure(self, code: str, message: str) -> None:
+        self._processing_error_code = code
+        self._processing_error_message = message
 
     def _update(self):
         """This function runs infinitely in the background."""
@@ -123,6 +166,8 @@ class CameraStream:
                     self._record_success()
                     self.connection_status = "Connected"
                     self.ai_status = "Paused" if self.is_paused else "Active"
+                    if not self.is_paused:
+                        self.start_inference_measurement()
                     # Reconnected: dt across the outage is meaningless.
                     self.segment_id += 1
 
@@ -146,8 +191,10 @@ class CameraStream:
             # 3. Read Loop
             success, frame = self.cap.read()
             if success:
-                self._latest = FrameRead(
-                    frame=frame, t=time.monotonic(), segment_id=self.segment_id
+                self._publish_latest(
+                    FrameRead(
+                        frame=frame, t=time.monotonic(), segment_id=self.segment_id
+                    )
                 )
                 self._record_frame_decoded()
                 self._record_success()
@@ -161,6 +208,10 @@ class CameraStream:
                 self._record_failure("STREAM_DROPPED", "Stream dropped during read")
                 time.sleep(1)
 
+    def _publish_latest(self, read: FrameRead) -> None:
+        with self._latest_lock:
+            self._latest = read
+
     def read(self):
         """Returns the newest unconsumed FrameRead, or None.
 
@@ -168,28 +219,53 @@ class CameraStream:
         slower than the tick rate simply contributes fewer samples, which the
         accumulator handles correctly because it integrates over elapsed time.
         """
-        latest = self._latest
-        if latest is None:
-            return None
-        self._latest = None
-        return latest
+        with self._latest_lock:
+            latest = self._latest
+            self._latest = None
+            return latest
 
     def observed_state(self):
         """Matches HeartbeatCameraReport (01_CONTRACTS.md §6.2)."""
+        is_active = (
+            self.connection_status == "Connected"
+            and self.ai_status == "Active"
+            and not self.is_paused
+        )
+        measured_fps = self.current_inference_fps() if is_active else None
+
+        error_code = self.error_code
+        error_message = self.error_message
+        if error_code is None and self._processing_error_code is not None:
+            error_code = self._processing_error_code
+            error_message = self._processing_error_message
+        if (
+            error_code is None
+            and measured_fps is not None
+            and measured_fps < FPS_BAND_MIN
+        ):
+            error_code = "INFERENCE_FPS_BELOW_MIN"
+            error_message = (
+                f"Successful inference rate {measured_fps:g} FPS is below the minimum "
+                f"{FPS_BAND_MIN:.0f} FPS"
+            )
+
         return {
             "camera_id": self.camera_id,
             "connection_status": self.connection_status,
             "ai_status": self.ai_status,
             "applied_config_version": self.applied_config_version,
-            "measured_fps": self.measured_fps,
+            "measured_fps": measured_fps,
             "inference_latency_ms": self.inference_latency_ms,
-            "error_code": self.error_code,
-            "error_message": self.error_message,
+            "error_code": error_code,
+            "error_message": error_message,
         }
 
     def stop(self):
         """Safely shuts down the thread and connection."""
         self.running = False
         self.thread.join()
+        with self._metrics_lock:
+            self._inference_frame_times.clear()
+            self._inference_window_started_at = None
         if self.cap:
             self.cap.release()

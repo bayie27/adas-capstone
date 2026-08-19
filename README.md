@@ -24,8 +24,7 @@ adas-capstone/
 │   ├── camera.py            # Threaded RTSP stream reader with auto-reconnect
 │   ├── accident.py          # Event → annotated snapshot → outbox entry
 │   ├── supervisor.py        # Reconciles engine state against the backend
-│   ├── capacity.py          # How many cameras can this machine run?
-│   ├── machine_profile.py   # Read/write/validate machine_profile.json
+│   ├── capacity.py          # Optional inference-only capacity diagnostic
 │   ├── config.py            # AI engine configuration (thresholds, endpoints)
 │   ├── epoch50.pt           # YOLO weights (the adopted checkpoint)
 │   ├── eval/                # Measurement harness — see eval/README.md
@@ -158,7 +157,7 @@ uv sync --extra ai-cpu
 
 The two are mutually exclusive; pick one. `ai-cpu` resolves torch from PyTorch's CPU index, so it pulls **no** `nvidia-*` packages at all. (Simply omitting the CUDA index would not be enough — on Linux the default PyPI torch wheel bundles the CUDA runtime anyway.) It also resolves a newer torch than the CUDA extra, since the two indexes carry different builds; that is fine precisely because no measured claim may come from a CPU machine.
 
-The engine detects the absence of a GPU and falls back automatically. It will run and connect, which is useful for integration work, but it is not a detection platform — run `uv run python ai_engine/capacity.py` and it will tell you so.
+The engine detects the absence of a GPU and falls back automatically. It will run and connect, which is useful for integration work, but it is not a detection platform. Use the optional `uv run python ai_engine/capacity.py` diagnostic when you need a rough inference estimate; it never configures production.
 
 TensorRT is a further optional extra for NVIDIA machines that want a faster inference backend. It is **not** required — the engine runs on the PyTorch checkpoint either way, and the GPU is used regardless, since CUDA comes from torch:
 
@@ -205,7 +204,7 @@ No switches starts the everyday case — backend + frontend, each in its own tit
 | `-Reseed <profile>`  | Reseeds the dev DB **before** anything starts, via `backend/scripts/reseed_dev.py --profile <value>`. Fails the whole script (nothing starts) on a bad profile name — see [Seed profiles](#seed-profiles) |
 | `-NoNewWindow`       | Runs a single requested component in the current terminal instead of a new window; errors if combined with more than one component                                                                        |
 
-Preflights fail fast with an actionable message rather than a cryptic crash three steps later: missing `.env` (offers to copy `.env.example`), `uv`/`pnpm` not on PATH, missing `frontend/node_modules`, and — for `-Ai` — a reminder about `--extra ai`/GPU, that `ai_engine/epoch50.pt` has no fallback and is a hard failure if missing, and that a missing `machine_profile.json` is expected (not an error) until you run `ai_engine/capacity.py`. `-Lan` adds two more, both for failures that are otherwise completely silent at runtime: a missing certificate pair, and a `.env` without the LAN keys (which produces a 403 on every write and a WebSocket that closes the instant it opens, with nothing in either log naming the cause). It then prints the certificate's SANs and expiry plus every address a client could reach the dashboard on, flagging any interface whose firewall profile would block it.
+Preflights fail fast with an actionable message rather than a cryptic crash three steps later: missing `.env` (offers to copy `.env.example`), `uv`/`pnpm` not on PATH, missing `frontend/node_modules`, and — for `-Ai` — a reminder about `--extra ai`/GPU and that `ai_engine/epoch50.pt` has no fallback and is a hard failure if missing. Capacity measurement is optional and never read at startup. `-Lan` adds two more, both for failures that are otherwise completely silent at runtime: a missing certificate pair, and a `.env` without the LAN keys (which produces a 403 on every write and a WebSocket that closes the instant it opens, with nothing in either log naming the cause). It then prints the certificate's SANs and expiry plus every address a client could reach the dashboard on, flagging any interface whose firewall profile would block it.
 
 Tear everything down with:
 
@@ -260,7 +259,8 @@ cp .env.example .env                            # then fill in all 10 keys
 Populate `ai_engine/eval/clips/` — no video ships in a clone. See [Obtaining the clips](#obtaining-the-clips).
 
 ```bash
-uv run python ai_engine/capacity.py             # once per machine
+# Optional: measure this machine; does not configure the production engine.
+uv run python ai_engine/capacity.py
 ```
 
 **Then one command:**
@@ -386,17 +386,13 @@ AI_MODEL_PATH=ai_engine/epoch50.engine
 
 The lesson from `best.engine` is kept rather than undone: the path is **fatal if it does not exist** — never a silent fall back to the checkpoint — and `main.py` prints which artifact it loaded on every start. Relative paths resolve from the repo root, not the working directory.
 
-Before running it on a new machine, calibrate:
+Optionally measure a specific machine and model:
 
 ```bash
 uv run python ai_engine/capacity.py
 ```
 
-This brings up N real cameras against real RTSP, runs the engine for a timed window, and reports how many cameras the machine actually sustained at 10 and at 15 FPS, writing a gitignored `machine_profile.json`.
-
-It needs `mediamtx` and `ffmpeg` on PATH — on Linux, take the `linux_amd64` tarball from the [releases page](https://github.com/bluenviron/mediamtx/releases) and `install -m 755 mediamtx ~/.local/bin/mediamtx` (the MediaMTX notes under [Prerequisites](#prerequisites) and `scripts/start-sim.ps1` are Windows-only). To skip that and measure against a server already running — or against the real VMS, which gives the truest figure — pass `--source rtsp://host:8554/channel{n}`. `--mode inference` falls back to the old batched-inference sweep, which needs neither binary but times one stage rather than the system.
-
-Pass `--model ai_engine/epoch50.engine` to measure a built artifact instead of the checkpoint; the profile records whichever was benchmarked, and `main.py` warns at startup when that is not the one being loaded. See [`ai_engine/eval/README.md`](ai_engine/eval/README.md).
+This runs an inference-only batch sweep and prints rough 15/10 FPS estimates. It starts no camera streams, MediaMTX, or ffmpeg; writes no report; and does not configure startup or change the fixed production scheduler. Pass `--model ai_engine/epoch50.engine` to measure a built artifact instead of the checkpoint, or `--sample-frame <image-or-video>` to time one representative frame. See [`ai_engine/README.md`](ai_engine/README.md#measure-standalone-capacity).
 
 #### Camera and seed-data behaviour — what to expect
 

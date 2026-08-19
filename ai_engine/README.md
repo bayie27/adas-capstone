@@ -40,12 +40,16 @@ Optionally, to run a TensorRT build on an NVIDIA machine. Not required — the e
 uv sync --extra ai --extra ai-trt
 ```
 
-Then measure this machine's capacity once, and start the engine:
+Start the engine:
 
 ```bash
-uv run python ai_engine/capacity.py
 uv run python ai_engine/main.py
 ```
+
+Capacity measurement is optional and completely standalone; it is not a
+startup prerequisite and production never reads its result. See
+[Measure standalone capacity](#measure-standalone-capacity) when you need an
+auditable result for a specific machine and model.
 
 **The engine holds no camera configuration.** It heartbeats the backend and is told which cameras exist and where to reach them; the address is built backend-side from `RTSP_URL_TEMPLATE`. It therefore **cannot run without the backend** — start that first.
 
@@ -67,7 +71,9 @@ AI_MODEL_PATH=ai_engine/epoch50.engine
 
 Unset or commented out, it is the checkpoint. Ultralytics loads `.pt`, `.engine` and `.onnx` through the same interface, so nothing downstream changes. Relative paths resolve from the repo root, never the working directory.
 
-`main.py` prints which artifact it loaded on every start, and warns when `machine_profile.json` was measured against a different one — capacity measured on the checkpoint describes neither build once an engine is loaded.
+`main.py` prints which artifact it loaded on every start. A capacity report is
+evidence for the model and machine that produced it only; it never configures
+or changes the production engine.
 
 Nothing here builds an engine; export is out of band. Build one, then measure it:
 
@@ -76,7 +82,35 @@ uv run yolo export model=ai_engine/epoch50.pt format=engine imgsz=640 dynamic=Tr
 uv run python ai_engine/capacity.py --model ai_engine/epoch50.engine
 ```
 
-`dynamic=True` is not optional if you intend to measure it: an engine built for a fixed batch size runs at exactly that size, so `capacity.py`'s batch sweep dies on its second step.
+`dynamic=True` lets the diagnostic sweep test several batch sizes. A fixed
+batch engine stops the sweep when it reaches an unsupported size.
+
+### Measure standalone capacity
+
+Run this only when you want to measure a particular machine and model; the
+normal production command above does not need it:
+
+```bash
+uv run python ai_engine/capacity.py
+```
+
+The command is an inference-only diagnostic: it batches a blank 720p frame by
+default, or one frame from `--sample-frame`, and prints rough estimates at 15
+and 10 FPS. It starts no RTSP streams, MediaMTX, or ffmpeg; writes no report;
+and never affects the production scheduler. Treat the blank-frame result as
+optimistic—decode, stream contention, and real image content are outside this
+sweep.
+
+## Runtime FPS and heartbeat health
+
+Production schedules batched inference at a fixed 15 FPS target. For each
+active camera, `measured_fps` in the existing heartbeat is the rolling
+five-second cadence of successful inference, not the RTSP decoder rate. After
+that rolling window is established, a value below 10 FPS carries the existing
+`INFERENCE_FPS_BELOW_MIN` diagnostic in the heartbeat. This keeps the AI engine
+independent of the frontend while allowing the current operator UI to surface a
+warning. Decoded FPS remains an internal reader metric and is not reported as
+inference throughput.
 
 ---
 
@@ -84,25 +118,23 @@ uv run python ai_engine/capacity.py --model ai_engine/epoch50.engine
 
 The important structural line is **which modules import `cv2`**. Everything that touches OpenCV or the model is isolated, so the scheduling and evidence logic stays testable in CI on a machine with no GPU and no `ai` extra installed. It mirrors the pure/impure seam already used in `supervisor.py`, where the decision is side-effect-free and only its application touches streams.
 
-| Module               | Responsibility                                                            | cv2 |
-| -------------------- | ------------------------------------------------------------------------- | --- |
-| `main.py`            | Wire-up only — builds the collaborators and starts the loop               | No  |
-| `pipeline.py`        | Tick loop, accumulator lifecycle, fault isolation, staleness, capacity    | No  |
-| `detector.py`        | Model ownership, grayscale, class filtering, device resolution, batching  | Yes |
-| `accumulate.py`      | Spatial-temporal evidence accumulator — the thing that fires an event     | No  |
-| `camera.py`          | Threaded RTSP reader, auto-reconnect, decode timestamps, segment counter  | Yes |
-| `accident.py`        | Fired event → annotated snapshot → outbox entry                           | Yes |
-| `outbox.py`          | Directory-backed durable outbox for detection events                      | No  |
-| `supervisor.py`      | Reconciles local camera runtimes against the backend's heartbeat snapshot | No  |
-| `backend_client.py`  | HTTP transport to the backend, and response classification                | No  |
-| `events.py`          | Event construction: UUIDs, snapshot keys, the v2 payload                  | No  |
-| `config.py`          | Constants, band bounds, paths, model resolution                           | No  |
-| `machine_profile.py` | Read/write/validate `machine_profile.json`                                | No  |
-| `runtime_bench.py`   | Closed-loop capacity: instrumentation, pass criterion, the climb          | No  |
-| `bench_sources.py`   | RTSP sources for the bench: MediaMTX, ffmpeg publishers, clip metadata    | Yes |
-| `capacity.py`        | How many cameras can this machine run? Writes the profile                 | Yes |
+| Module              | Responsibility                                                            | cv2 |
+| ------------------- | ------------------------------------------------------------------------- | --- |
+| `main.py`           | Wire-up only — builds the collaborators and starts the loop               | No  |
+| `pipeline.py`       | Fixed-15-FPS tick loop, accumulator lifecycle, fault isolation, staleness | No  |
+| `detector.py`       | Model ownership, grayscale, class filtering, device resolution, batching  | Yes |
+| `accumulate.py`     | Spatial-temporal evidence accumulator — the thing that fires an event     | No  |
+| `camera.py`         | Threaded RTSP reader, auto-reconnect, decode timestamps, segment counter  | Yes |
+| `accident.py`       | Fired event → annotated snapshot → outbox entry                           | Yes |
+| `outbox.py`         | Directory-backed durable outbox for detection events                      | No  |
+| `supervisor.py`     | Reconciles local camera runtimes against the backend's heartbeat snapshot | No  |
+| `backend_client.py` | HTTP transport to the backend, and response classification                | No  |
+| `events.py`         | Event construction: UUIDs, snapshot keys, the v2 payload                  | No  |
+| `config.py`         | Constants, fixed target and health threshold, paths, model resolution     | No  |
+| `capacity.py`       | Optional batched-inference diagnostic; prints a rough estimate            | Yes |
 
-`eval/` holds the measurement harness — see [`eval/README.md`](eval/README.md).
+`eval/` holds evaluation assets and capacity-diagnostic notes — see
+[`eval/README.md`](eval/README.md).
 
 ---
 
@@ -116,24 +148,10 @@ The important structural line is **which modules import `cv2`**. Everything that
 - **The fourth seam is a long frame gap, and it has no `segment_id` bump behind it.** The other three all involve the stream _dropping_; a stream that merely stalls keeps its segment. `accumulate.py` creates a new region with `score = conf * dt` and tests it for firing on that same frame, so a gap longer than `ACC_THRESHOLD / conf` fires a single frame with no corroboration at all — observed live as `peak 0.54, 0.0s of evidence`. `config.MAX_FRAME_GAP_SECONDS` (0.5 s) resets the camera instead. Removing it reopens that hole, and the hole is worst where it hurts most: the gap needed shrinks as confidence rises, and this model's false positives score higher than its genuine detections.
 - **Never quote validation mAP.** It is leaked; a model already known to be broken scored 0.986 by the same measure.
 - **`adas_transfer/` is frozen.** Excluded from Ruff and Prettier. It is the reference the parity gate diffs against — never edit or reformat it.
-- **Capacity is measured, not assumed.** `capacity.py` writes a gitignored `machine_profile.json`. Its absence is not an error; the engine falls back to a conservative default of one camera.
-
-  **The default mode runs the real engine against real RTSP** and reports the frame rate each camera achieved, so decode, thread contention and `run()`'s scheduler are inside the measurement. `--mode inference` still gives the old batched-inference sweep, which is retained as the seed for the closed-loop climb and written to the profile beside it as the burst figure.
-
-  Measured on a GTX 1650, blank-frame **inference sweep only**, 2026-08-16:
-
-  | build                             | @ 15 FPS   | @ 10 FPS |
-  | --------------------------------- | ---------- | -------- |
-  | `epoch50.pt`                      | 8 cameras  | 13       |
-  | `epoch50.engine` (TensorRT, FP32) | 14 cameras | ≥ 15     |
-
-  The engine's 10 FPS figure is a floor, not a measurement: the sweep stopped at batch 15 because the engine was built for that maximum, not because the machine ran out.
-
-  **Those are sweep numbers and read high.** The sweep benchmarks a 1280×720 frame with no decode and no reader threads, while the clips are 2304×1296 and 2560×1440, and `to_gray()` runs two full-resolution `cvtColor` passes before YOLO downscales to 640. On the CPU-only development machine the sweep predicted 1 camera at 15 FPS where running the engine gave 0. Neither GTX 1650 row above has been re-measured closed-loop.
-
-- **A capacity at 10 FPS below the one at 15 FPS means the measurement is noise, not a result.** A longer tick is strictly more headroom, so the reverse cannot happen on a stable machine. `capacity.py` reports it rather than clamping it — a clamped number would be one no run ever observed.
-
-  **The engine's detection behaviour was verified against the checkpoint on 2026-08-16**: `pytest -m clips` passed all 17 clips clip-by-clip and held false positives within the recorded baseline of 3, with the parity gate green on the checkpoint in the same run. So the speed figure and the accuracy figure describe the same artifact — capacity alone measures speed, and quoting it beside a detection claim is only honest once this has been run against the build in question.
+- **Capacity is measured, not configured.** `capacity.py` is an optional,
+  inference-only diagnostic. It prints a rough estimate and never changes the
+  production engine, whose scheduler remains fixed at 15 FPS. Do not treat its
+  result as a full-system camera-capacity guarantee.
 
 - **A TensorRT engine is not portable.** It is tied to the GPU, driver and TensorRT version that built it, so it must be rebuilt on every machine that runs it. There is no fallback: a missing or invalid model stops the process rather than quietly reverting to the checkpoint. That is deliberate — `main.py` once _preferred_ a stale `best.engine` and silently ran the wrong model.
 - **FP16 is not free speed.** Measured 1.00× against FP32 on a GTX 1650 (batch 15: 92.0 ms against 91.6 ms). The GTX 16-series has no tensor cores despite reporting compute capability 7.5, so `half=True` costs precision and returns nothing. Export with `half=False` unless a card with tensor cores is measured to disagree.

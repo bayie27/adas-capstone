@@ -16,19 +16,6 @@ from accumulate import Accumulator
 logger = logging.getLogger("ai_engine")
 
 
-def target_fps(capacity: int, active_count: int) -> float:
-    """Pick a per-camera frame rate inside the paper's 10-15 FPS band.
-
-    Per-camera frame rate is the FIXED quantity and camera count the free
-    one. Letting cadence sag as cameras are added would degrade detection
-    for every camera at once, invisibly — the failure mode hardest to
-    notice and hardest to explain afterwards.
-    """
-    if active_count <= capacity:
-        return config.FPS_BAND_MAX
-    return config.FPS_BAND_MIN
-
-
 class AccumulatorRegistry:
     """One Accumulator per camera, reset whenever its stream discontinues.
 
@@ -99,13 +86,22 @@ class InferencePipeline:
     frame from every eligible camera.
     """
 
-    def __init__(self, cameras: dict, detector, on_event, *, capacity: int):
+    def __init__(
+        self,
+        cameras: dict,
+        detector,
+        on_event,
+        *,
+        target_fps: float = config.FPS_BAND_MAX,
+    ):
+        if target_fps <= 0:
+            raise ValueError("target_fps must be positive")
         self.cameras = cameras
         self.detector = detector
         self.on_event = on_event
-        self.capacity = capacity
+        self.target_fps = target_fps
+        self.period_seconds = 1.0 / target_fps
         self.registry = AccumulatorRegistry()
-        self.degraded = False
         self.last_batch_latency_ms: float | None = None
         self._isolated: set[int] = set()
         self._running = False
@@ -158,8 +154,9 @@ class InferencePipeline:
                 logger.exception(
                     "Inference failed for camera %s; excluding it", camera.camera_id
                 )
-                camera.error_code = "INFERENCE_FAILED"
-                camera.error_message = "Inference raised on this camera's frame"
+                camera.record_inference_failure(
+                    "INFERENCE_FAILED", "Inference raised on this camera's frame"
+                )
                 self._isolated.add(camera.camera_id)
                 continue
             paired.append(((camera, read), detections[0]))
@@ -174,8 +171,6 @@ class InferencePipeline:
         if not collected:
             return
 
-        self.degraded = len(collected) > self.capacity
-
         inferred = self._infer(collected)
 
         if self.last_batch_latency_ms is not None and collected:
@@ -187,6 +182,7 @@ class InferencePipeline:
                 camera.inference_latency_ms = per_camera
 
         for (camera, read), detection in inferred:
+            camera.record_inference()
             accumulator = self.registry.resolve(
                 camera.camera_id, camera, read.segment_id, read.t
             )
@@ -216,12 +212,7 @@ class InferencePipeline:
         self._running = True
         next_tick = time.monotonic()
         while self._running:
-            active = sum(
-                1
-                for c in list(self.cameras.values())
-                if not c.is_paused and c.camera_id not in self._isolated
-            )
-            period = 1.0 / target_fps(self.capacity, active)
+            period = self.period_seconds
 
             self.tick_once()
 

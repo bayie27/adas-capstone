@@ -279,11 +279,14 @@ playwright-report/
 !e2e/visual.spec.ts-snapshots/*.png
 .playwright/
 
-# Written by ai_engine/capacity.py. Machine-specific, like a TensorRT engine.
+# Local artifacts from retired capacity implementations. Nothing reads these.
+ai_engine/capacity_report.json
 ai_engine/machine_profile.json
-# Scratch for the closed-loop benchmark: the generated MediaMTX config and its
-# log, rewritten on every run.
 ai_engine/_bench/
+
+# Disposable pytest base-temp directories used for isolated test artifacts.
+.pytest-tmp-*/
+
 ai_engine/*.engine
 # Build artifacts, not sources: both are exported from epoch50.pt, which IS
 # tracked. The .engine is tied to the GPU, driver and TensorRT version that
@@ -324,3 +327,6 @@ backend/app/dev/assets/snapshots/
 # .claude/worktrees/ holds full repo checkouts and must never be committed.
 .claude/*
 !.claude/skills/
+
+# Local isolated agent worktrees.
+.worktrees/

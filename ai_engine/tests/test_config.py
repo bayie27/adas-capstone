@@ -84,10 +84,7 @@ def test_resolve_falls_through_to_the_configured_model_when_given_nothing():
 
 
 def test_a_relative_path_means_the_same_file_from_any_directory(monkeypatch, tmp_path):
-    """Regression. A machine profile records model_path as whatever string it
-    was given, so `ai_engine/epoch50.engine` is common. Interpreting that
-    against the CWD made it resolve to ai_engine/ai_engine/... when read from
-    inside ai_engine/, so main.py warned that a model did not match itself."""
+    """A common CLI/env path must not change meaning with the working directory."""
     monkeypatch.chdir(tmp_path)
     from_elsewhere = config.under_repo_root("ai_engine/epoch50.engine")
 

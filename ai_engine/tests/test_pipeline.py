@@ -13,7 +13,8 @@ import math
 import time
 
 import config
-from pipeline import AccumulatorRegistry, InferencePipeline, target_fps
+import pytest
+from pipeline import AccumulatorRegistry, InferencePipeline
 
 BOX = (100.0, 100.0, 200.0, 200.0)
 
@@ -36,6 +37,9 @@ class FakeCamera:
         self.paused_calls = 0
         self.error_code = None
         self.error_message = None
+        self.inference_completions = 0
+        self.processing_error_code = None
+        self.processing_error_message = None
         self.segment_id = 0
 
     def read(self):
@@ -44,6 +48,13 @@ class FakeCamera:
     def pause(self):
         self.is_paused = True
         self.paused_calls += 1
+
+    def record_inference(self):
+        self.inference_completions += 1
+
+    def record_inference_failure(self, code, message):
+        self.processing_error_code = code
+        self.processing_error_message = message
 
 
 class FakeDetection:
@@ -67,6 +78,11 @@ class FakeDetector:
         if self.fail_for_frame is not None and self.fail_for_frame in frames:
             raise RuntimeError("CUDA error: injected")
         return [FakeDetection([BOX], [self.conf]) for _ in frames]
+
+
+class CameraTwoFailsDetector(FakeDetector):
+    def __init__(self):
+        super().__init__(fail_for_frame=2)
 
 
 def _collect(events):
@@ -218,23 +234,53 @@ def test_pruning_drops_accumulators_for_stopped_cameras():
     assert set(registry.camera_ids()) == {1}
 
 
-# --- target_fps ----------------------------------------------------------
+# --- fixed target --------------------------------------------------------
 
 
-def test_within_capacity_runs_at_the_top_of_the_band():
-    assert target_fps(capacity=8, active_count=4) == config.FPS_BAND_MAX
+def test_pipeline_defaults_to_the_top_of_the_supported_band():
+    pipeline = InferencePipeline({}, FakeDetector(), lambda *args: None)
+    assert pipeline.target_fps == config.FPS_BAND_MAX
 
 
-def test_at_exactly_capacity_still_runs_at_the_top_of_the_band():
-    assert target_fps(capacity=4, active_count=4) == config.FPS_BAND_MAX
+def test_scheduler_period_does_not_change_with_camera_count(monkeypatch):
+    cameras = {index: FakeCamera(index) for index in range(1, 7)}
+    pipeline = InferencePipeline(cameras, FakeDetector(), lambda *args: None)
+    assert pipeline.period_seconds == pytest.approx(1.0 / 15.0)
 
 
-def test_over_capacity_drops_to_the_band_floor():
-    assert target_fps(capacity=2, active_count=6) == config.FPS_BAND_MIN
+@pytest.mark.parametrize("target_fps", [0.0, -1.0])
+def test_pipeline_rejects_non_positive_target_fps(target_fps):
+    with pytest.raises(ValueError, match="target_fps must be positive"):
+        InferencePipeline({}, FakeDetector(), lambda *args: None, target_fps=target_fps)
 
 
-def test_no_active_cameras_is_not_a_division_by_zero():
-    assert target_fps(capacity=4, active_count=0) == config.FPS_BAND_MAX
+def test_successful_batch_records_one_completion_per_inferred_camera():
+    now = time.monotonic()
+    cameras = {
+        1: FakeCamera(1, [FakeFrameRead(now, 0, frame=1)]),
+        2: FakeCamera(2, [FakeFrameRead(now, 0, frame=2)]),
+    }
+    pipeline = InferencePipeline(cameras, FakeDetector(), lambda *args: None)
+
+    pipeline.tick_once()
+
+    assert cameras[1].inference_completions == 1
+    assert cameras[2].inference_completions == 1
+
+
+def test_isolated_failure_is_not_recorded_as_a_completion():
+    now = time.monotonic()
+    cameras = {
+        1: FakeCamera(1, [FakeFrameRead(now, 0, frame=1)]),
+        2: FakeCamera(2, [FakeFrameRead(now, 0, frame=2)]),
+    }
+    pipeline = InferencePipeline(cameras, CameraTwoFailsDetector(), lambda *args: None)
+
+    pipeline.tick_once()
+
+    assert cameras[1].inference_completions == 1
+    assert cameras[2].inference_completions == 0
+    assert cameras[2].processing_error_code == "INFERENCE_FAILED"
 
 
 # --- InferencePipeline ---------------------------------------------------
@@ -248,7 +294,7 @@ def test_paused_cameras_are_excluded_from_the_batch():
         1: FakeCamera(1, [FakeFrameRead(now, 0)]),
         2: FakeCamera(2, [FakeFrameRead(now, 0)], is_paused=True),
     }
-    pipeline = InferencePipeline(cameras, detector, lambda *a: None, capacity=8)
+    pipeline = InferencePipeline(cameras, detector, lambda *a: None)
     pipeline.tick_once()
     assert detector.batch_sizes == [1]
 
@@ -256,7 +302,7 @@ def test_paused_cameras_are_excluded_from_the_batch():
 def test_a_camera_with_no_new_frame_is_skipped():
     detector = FakeDetector()
     cameras = {1: FakeCamera(1, [])}
-    pipeline = InferencePipeline(cameras, detector, lambda *a: None, capacity=8)
+    pipeline = InferencePipeline(cameras, detector, lambda *a: None)
     pipeline.tick_once()
     assert detector.batch_sizes == []
 
@@ -267,7 +313,7 @@ def test_a_stale_frame_is_skipped():
     detector = FakeDetector()
     stale_t = time.monotonic() - config.MAX_FRAME_AGE_SECONDS * 10
     cameras = {1: FakeCamera(1, [FakeFrameRead(stale_t, 0)])}
-    pipeline = InferencePipeline(cameras, detector, lambda *a: None, capacity=8)
+    pipeline = InferencePipeline(cameras, detector, lambda *a: None)
     pipeline.tick_once()
     assert detector.batch_sizes == []
 
@@ -282,7 +328,7 @@ def test_an_event_pauses_the_camera_before_the_callback_runs():
     def on_event(camera, frame, event):
         seen.append(camera.is_paused)
 
-    pipeline = InferencePipeline(cameras, FakeDetector(), on_event, capacity=8)
+    pipeline = InferencePipeline(cameras, FakeDetector(), on_event)
     t0 = time.monotonic()
     for i in range(120):
         cam.reads.append(FakeFrameRead(t0 + i * (1 / 30), 0))
@@ -312,9 +358,7 @@ def test_only_one_incident_is_emitted_per_camera_per_tick():
                 for _ in frames
             ]
 
-    pipeline = InferencePipeline(
-        cameras, TwoRegionDetector(), _collect(events), capacity=8
-    )
+    pipeline = InferencePipeline(cameras, TwoRegionDetector(), _collect(events))
     t0 = time.monotonic()
     for i in range(120):
         cam.reads.append(FakeFrameRead(t0 + i * (1 / 30), 0))
@@ -337,12 +381,12 @@ def test_a_failing_batch_isolates_the_offending_camera():
         2: FakeCamera(2, [FakeFrameRead(now, 0, frame="GOOD")]),
     }
     detector = FakeDetector(fail_for_frame=bad_frame)
-    pipeline = InferencePipeline(cameras, detector, _collect(events), capacity=8)
+    pipeline = InferencePipeline(cameras, detector, _collect(events))
 
     pipeline.tick_once()
 
-    assert cameras[1].error_code == "INFERENCE_FAILED"
-    assert cameras[2].error_code is None
+    assert cameras[1].processing_error_code == "INFERENCE_FAILED"
+    assert cameras[2].processing_error_code is None
 
 
 def test_an_isolated_camera_is_excluded_from_later_batches():
@@ -353,7 +397,7 @@ def test_an_isolated_camera_is_excluded_from_later_batches():
         2: FakeCamera(2, [FakeFrameRead(now, 0, frame="GOOD")]),
     }
     detector = FakeDetector(fail_for_frame=bad_frame)
-    pipeline = InferencePipeline(cameras, detector, lambda *a: None, capacity=8)
+    pipeline = InferencePipeline(cameras, detector, lambda *a: None)
     pipeline.tick_once()
 
     now2 = time.monotonic()
@@ -382,24 +426,11 @@ def test_a_transient_batch_failure_errors_nobody():
         1: FakeCamera(1, [FakeFrameRead(now, 0)]),
         2: FakeCamera(2, [FakeFrameRead(now, 0)]),
     }
-    pipeline = InferencePipeline(cameras, FlakyDetector(), lambda *a: None, capacity=8)
+    pipeline = InferencePipeline(cameras, FlakyDetector(), lambda *a: None)
     pipeline.tick_once()
 
-    assert cameras[1].error_code is None
-    assert cameras[2].error_code is None
-
-
-def test_over_capacity_marks_the_run_degraded_without_dropping_cameras():
-    """The backend is authoritative over WHICH cameras run. An engine
-    silently ignoring an assigned camera would be an invisible blind spot."""
-    detector = FakeDetector()
-    now = time.monotonic()
-    cameras = {i: FakeCamera(i, [FakeFrameRead(now, 0)]) for i in range(1, 7)}
-    pipeline = InferencePipeline(cameras, detector, lambda *a: None, capacity=2)
-    pipeline.tick_once()
-
-    assert pipeline.degraded is True
-    assert detector.batch_sizes == [6]
+    assert cameras[1].processing_error_code is None
+    assert cameras[2].processing_error_code is None
 
 
 def test_a_stalled_camera_does_not_alert_from_a_single_frame():
@@ -413,9 +444,7 @@ def test_a_stalled_camera_does_not_alert_from_a_single_frame():
     """
     events = []
     cam = FakeCamera(1)
-    pipeline = InferencePipeline(
-        {1: cam}, FakeDetector(conf=0.9), _collect(events), capacity=8
-    )
+    pipeline = InferencePipeline({1: cam}, FakeDetector(conf=0.9), _collect(events))
 
     now = time.monotonic()
     cam.reads.append(FakeFrameRead(now, 0))
@@ -436,7 +465,7 @@ def test_accumulators_are_pruned_when_a_camera_is_stopped():
         1: FakeCamera(1, [FakeFrameRead(now, 0)]),
         2: FakeCamera(2, [FakeFrameRead(now, 0)]),
     }
-    pipeline = InferencePipeline(cameras, detector, lambda *a: None, capacity=8)
+    pipeline = InferencePipeline(cameras, detector, lambda *a: None)
     pipeline.tick_once()
     del cameras[2]
     cameras[1].reads.append(FakeFrameRead(time.monotonic(), 0))
@@ -466,7 +495,7 @@ def test_reported_latency_is_the_per_camera_share_of_the_batch():
     cameras = {
         i: FakeCamera(i, [FakeFrameRead(now, 0)]) for i in range(1, camera_count + 1)
     }
-    pipeline = InferencePipeline(cameras, SlowDetector(), lambda *a: None, capacity=8)
+    pipeline = InferencePipeline(cameras, SlowDetector(), lambda *a: None)
     pipeline.tick_once()
 
     batch_ms = pipeline.last_batch_latency_ms
@@ -504,9 +533,7 @@ def test_a_fully_failed_batch_leaves_no_stale_batch_latency():
 
     now = time.monotonic()
     cameras = {1: FakeCamera(1, [FakeFrameRead(now, 0)])}
-    pipeline = InferencePipeline(
-        cameras, AlwaysFailingDetector(), lambda *a: None, capacity=8
-    )
+    pipeline = InferencePipeline(cameras, AlwaysFailingDetector(), lambda *a: None)
     pipeline.tick_once()
 
     assert pipeline.last_batch_latency_ms is None

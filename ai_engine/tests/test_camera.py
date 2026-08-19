@@ -11,7 +11,7 @@ cv2 = pytest.importorskip("cv2")
 np = pytest.importorskip("numpy")
 
 import camera  # noqa: E402
-from camera import CameraStream  # noqa: E402
+from camera import CameraStream, FrameRead  # noqa: E402
 
 
 class FakeCapture:
@@ -48,6 +48,14 @@ class FakeCapture:
         self.released = True
 
 
+class FakeThread:
+    def __init__(self):
+        self.join_called = False
+
+    def join(self):
+        self.join_called = True
+
+
 def _make_stream(monkeypatch, script, *, opens=True):
     captures = []
 
@@ -59,6 +67,56 @@ def _make_stream(monkeypatch, script, *, opens=True):
     monkeypatch.setattr(camera.cv2, "VideoCapture", fake_video_capture)
     stream = CameraStream(channel_id=1, camera_id=1, rtsp_url="rtsp://fake/1")
     return stream, captures
+
+
+@pytest.fixture
+def stream_without_thread():
+    stream = CameraStream.__new__(CameraStream)
+    stream.channel_id = 1
+    stream.camera_id = 1
+    stream.url = "rtsp://fake/1"
+    stream._latest = None
+    stream._latest_lock = camera.threading.Lock()
+    stream.segment_id = 1
+    stream.running = False
+    stream.is_paused = False
+    stream.connection_status = "Connected"
+    stream.ai_status = "Active"
+    stream.applied_config_version = None
+    stream.error_code = None
+    stream.error_message = None
+    stream._decode_frame_times = camera.deque()
+    stream.decoded_fps = None
+    stream._inference_frame_times = camera.deque()
+    stream._inference_window_started_at = None
+    stream._metrics_lock = camera.threading.Lock()
+    stream._processing_error_code = None
+    stream._processing_error_message = None
+    stream.inference_latency_ms = None
+    stream.thread = FakeThread()
+    stream.cap = None
+    return stream
+
+
+def test_latest_frame_exchange_is_atomic(stream_without_thread):
+    first = FrameRead(frame="first", t=1.0, segment_id=1)
+    second = FrameRead(frame="second", t=2.0, segment_id=1)
+
+    stream_without_thread._publish_latest(first)
+    assert stream_without_thread.read() is first
+    stream_without_thread._publish_latest(second)
+    assert stream_without_thread.read() is second
+
+
+def test_latest_frame_wins_before_a_consumer_takes_it(stream_without_thread):
+    first = FrameRead(frame="first", t=1.0, segment_id=1)
+    second = FrameRead(frame="second", t=2.0, segment_id=1)
+
+    stream_without_thread._publish_latest(first)
+    stream_without_thread._publish_latest(second)
+
+    assert stream_without_thread.read() is second
+    assert stream_without_thread.read() is None
 
 
 def test_read_returns_none_when_no_new_frame_is_available(monkeypatch):
@@ -139,3 +197,127 @@ def test_stream_buffer_is_limited_to_one_frame(monkeypatch):
         assert captures[0].buffersize == 1
     finally:
         stream.stop()
+
+
+def test_inference_fps_is_hidden_during_startup_window(stream_without_thread):
+    stream_without_thread.start_inference_measurement(now=100.0)
+    stream_without_thread.record_inference(now=101.0)
+    assert stream_without_thread.current_inference_fps(now=104.99) is None
+
+
+def test_inference_fps_counts_successes_in_the_last_five_seconds(
+    stream_without_thread,
+):
+    stream_without_thread.start_inference_measurement(now=100.0)
+    for index in range(50):
+        stream_without_thread.record_inference(now=100.0 + index / 10)
+    assert stream_without_thread.current_inference_fps(now=105.0) == 10.0
+
+
+def test_initialized_inference_fps_can_decay_to_zero(stream_without_thread):
+    stream_without_thread.start_inference_measurement(now=100.0)
+    stream_without_thread.record_inference(now=100.5)
+    assert stream_without_thread.current_inference_fps(now=106.0) == 0.0
+
+
+def test_decoded_fps_is_independent_from_successful_inference_fps(
+    stream_without_thread, monkeypatch
+):
+    stream_without_thread.start_inference_measurement(now=200.0)
+    stream_without_thread.record_inference(now=201.0)
+    decode_times = iter([100.0, 101.0, 102.0])
+    monkeypatch.setattr(camera.time, "monotonic", decode_times.__next__)
+
+    for _ in range(3):
+        stream_without_thread._record_frame_decoded()
+
+    monkeypatch.setattr(camera.time, "monotonic", lambda: 204.99)
+    report = stream_without_thread.observed_state()
+
+    assert stream_without_thread.decoded_fps == 1.0
+    assert report["measured_fps"] is None
+    assert stream_without_thread.current_inference_fps(now=205.0) == 0.2
+
+
+def test_low_inference_rate_uses_existing_heartbeat_error_fields(
+    stream_without_thread, monkeypatch
+):
+    stream_without_thread.connection_status = "Connected"
+    stream_without_thread.ai_status = "Active"
+    stream_without_thread.is_paused = False
+    stream_without_thread.start_inference_measurement(now=100.0)
+    stream_without_thread.record_inference(now=100.0)
+    monkeypatch.setattr(camera.time, "monotonic", lambda: 105.0)
+
+    report = stream_without_thread.observed_state()
+
+    assert report["measured_fps"] == 0.2
+    assert report["error_code"] == "INFERENCE_FPS_BELOW_MIN"
+    assert "0.2 FPS" in report["error_message"]
+    assert "10 FPS" in report["error_message"]
+
+
+def test_specific_processing_error_wins_over_low_fps(
+    stream_without_thread, monkeypatch
+):
+    stream_without_thread.connection_status = "Connected"
+    stream_without_thread.ai_status = "Active"
+    stream_without_thread.is_paused = False
+    stream_without_thread.start_inference_measurement(now=100.0)
+    stream_without_thread.record_inference_failure(
+        "INFERENCE_FAILED", "Inference raised on this camera's frame"
+    )
+    monkeypatch.setattr(camera.time, "monotonic", lambda: 105.0)
+
+    report = stream_without_thread.observed_state()
+
+    assert report["error_code"] == "INFERENCE_FAILED"
+
+
+def test_pause_clears_inference_samples_and_suppresses_warning(
+    stream_without_thread, monkeypatch
+):
+    stream_without_thread.start_inference_measurement(now=100.0)
+    stream_without_thread.record_inference(now=101.0)
+    monkeypatch.setattr(camera.time, "monotonic", lambda: 105.0)
+
+    stream_without_thread.pause()
+
+    report = stream_without_thread.observed_state()
+
+    assert list(stream_without_thread._inference_frame_times) == []
+    assert stream_without_thread._inference_window_started_at is None
+    assert report["measured_fps"] is None
+    assert report["error_code"] is None
+
+
+def test_resume_restarts_inference_window_without_stale_samples(
+    stream_without_thread, monkeypatch
+):
+    stream_without_thread.is_paused = True
+    stream_without_thread.ai_status = "Paused"
+    stream_without_thread.start_inference_measurement(now=100.0)
+    stream_without_thread.record_inference(now=101.0)
+    monkeypatch.setattr(camera.time, "monotonic", lambda: 200.0)
+
+    stream_without_thread.resume()
+
+    assert list(stream_without_thread._inference_frame_times) == []
+    assert stream_without_thread._inference_window_started_at == 200.0
+    assert stream_without_thread.current_inference_fps(now=204.99) is None
+    assert stream_without_thread.current_inference_fps(now=205.0) == 0.0
+
+
+def test_stop_clears_inference_window_without_a_reader_thread(
+    stream_without_thread,
+):
+    stream_without_thread.running = True
+    stream_without_thread.start_inference_measurement(now=100.0)
+    stream_without_thread.record_inference(now=101.0)
+
+    stream_without_thread.stop()
+
+    assert stream_without_thread.running is False
+    assert stream_without_thread.thread.join_called is True
+    assert list(stream_without_thread._inference_frame_times) == []
+    assert stream_without_thread._inference_window_started_at is None

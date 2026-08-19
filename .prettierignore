@@ -25,6 +25,10 @@ ai_engine/adas_transfer/
 # Markdown exclusion in pyproject.toml.
 .superpowers/
 
+# Disposable pytest base-temp directories. These can contain generated reports
+# and inherited worktree files, neither of which is repository source.
+.pytest-tmp-*/
+
 # Untracked team working docs — never touch these
 *.pdf
 final_paper_text.txt

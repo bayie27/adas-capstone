@@ -51,11 +51,10 @@ def under_repo_root(path) -> Path:
     """Any model path as an absolute one, relative values taken from the repo
     root rather than the working directory.
 
-    Used everywhere a model path is interpreted — the env var, the CLI
-    argument, and the path recorded in a machine profile — so that the same
-    string always means the same file. Resolving relative paths against the
-    CWD instead produced a live bug: a profile recording `ai_engine/x.engine`
-    compared unequal to itself when read from inside ai_engine/.
+    Used everywhere a model path is interpreted — the environment variable
+    and the CLI argument — so that the same string always means the same file.
+    Resolving relative paths against the CWD instead would make
+    `ai_engine/x.engine` mean a different file when run inside ai_engine/.
     """
     path = Path(path)
     return path if path.is_absolute() else REPO_ROOT / path
@@ -91,8 +90,8 @@ def resolve_model_path(candidate=None) -> Path:
     over the adopted weights and ran the wrong model with no error at all, so
     a run must load the model it was told to load or refuse to start.
     """
-    # Absolute, so whatever is handed on — in particular the model_path a
-    # machine profile records — is unambiguous rather than CWD-dependent.
+    # Absolute, so every configured or CLI-supplied model is unambiguous rather
+    # than CWD-dependent.
     path = under_repo_root(candidate) if candidate else WEIGHTS_PATH
     if not path.exists():
         raise SystemExit(
@@ -102,9 +101,6 @@ def resolve_model_path(candidate=None) -> Path:
         )
     return path
 
-
-# Written by capacity.py; machine-specific and gitignored.
-PROFILE_PATH = Path(__file__).resolve().parent / "machine_profile.json"
 
 ACCIDENT_CLASS_ID = 0  # class 1 `vehicle` is a training foil, discarded at inference
 
@@ -129,10 +125,6 @@ ACC_EMA = 0.5  # box smoothing
 # unknown until the cadence sweep runs — see the design doc section 9.
 FPS_BAND_MIN = 10.0
 FPS_BAND_MAX = 15.0
-
-# Used only when no machine profile exists. Deliberately pessimistic: one camera
-# is the smallest claim that still runs.
-FALLBACK_CAMERA_CAPACITY = 1
 
 # A stream can stay connected while delivering frames far too slowly. Past this
 # age a frame is skipped rather than treated as current.
