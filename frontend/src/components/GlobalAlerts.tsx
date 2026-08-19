@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { RiCloseLine } from "@remixicon/react"
+import { BellRing, BellOff } from "lucide-react"
 
-import { Button, focusRing } from "@/components/ui/Button"
+import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
@@ -16,12 +16,7 @@ import {
 } from "@/api/alerts"
 import { IncidentHandledNotice } from "@/components/ui/IncidentHandledNotice"
 import type { IncidentHandledInfo } from "@/api/alerts"
-import {
-  formatAlertCode,
-  formatAlertConfidence,
-  getAlertBadgeClass,
-  getAlertBorderClass,
-} from "@/utils/format"
+import { formatAlertCode, formatAlertConfidence, getAlertBadgeClass } from "@/utils/format"
 import { formatFullDateTime } from "@/utils/datetime"
 import { getApiErrorMessage } from "@/api/client"
 import { cn } from "@/utils/cn"
@@ -37,12 +32,8 @@ import { cn } from "@/utils/cn"
  * take from `Modal`. The backdrop is not clickable, so a stray keypress cannot
  * silence a live alert.
  *
- * The 'X' button lets an operator review and close the modal without executing
- * any backend state change (no dismiss, confirm, or resolve). The alert is NOT
- * removed from the store — it stays queued — but the modal is visually hidden
- * via a local `closedLogId` state. If a different alert arrives the modal
- * reappears, and a WebSocket update that changes the *same* alert's status
- * will also clear the local hide because the store-level alert is removed.
+ * Standard top-right window controls (X button) are strictly omitted from this
+ * modal to enforce the HITL (Human-in-the-Loop) workflow.
  */
 export function GlobalAlerts() {
   const queryClient = useQueryClient()
@@ -54,11 +45,6 @@ export function GlobalAlerts() {
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<IncidentHandledInfo | null>(null)
-  // Tracks which alert the operator has visually closed via the X button
-  // without performing any backend state mutation. The alert remains in the
-  // store; only this tab's rendering is suppressed until a different alert
-  // arrives or the same alert is removed by an action from another source.
-  const [closedLogId, setClosedLogId] = useState<number | null>(null)
 
   // Snoozed incidents (FR-07) mute the alarm modal for that incident until
   // the shared deadline expires or a RE_ALARM event reactivates it.
@@ -68,9 +54,6 @@ export function GlobalAlerts() {
   const noop = useCallback(() => {}, [])
 
   if (!alert) return null
-
-  // If this specific alert was closed via X, suppress the modal.
-  if (closedLogId === alert.log_id) return null
 
   const busy = loadingId === alert.log_id
   const isUnverified = alert.detection_status === "Unverified"
@@ -155,167 +138,159 @@ export function GlobalAlerts() {
       // incident modal open must land on top of it, not behind it.
       overlayClassName="z-9999"
       backdropClassName="bg-backdrop-alert"
-      className={cn(
-        "max-w-md overflow-hidden p-0 border-t-4",
-        getAlertBorderClass(alert.detection_status),
-      )}
+      className="max-w-md overflow-hidden p-0"
     >
       <div className="-mx-6 -mb-6">
         {/* ── Section 1: Header ─────────────────────────────────────────────
-            Thin top accent border is on the Modal container above. The banner
-            is now a compact header row: title left, X button right.
-            The X button hides the modal without any backend state mutation. */}
-        <div className="flex items-center justify-between border-b border-stroke px-6 py-4">
-          <div>
-            <p className="text-base font-bold uppercase tracking-widest text-fg">
-              Accident Details
+            Edge-to-edge solid background header enforcing urgency. */}
+        <div className="w-full bg-danger px-6 py-4">
+          <h2 className="text-center text-2xl font-bold uppercase tracking-widest text-black">
+            Accident Detected
+          </h2>
+          {activeAlerts.length > 1 && (
+            <p className="mt-1 text-center text-xs font-medium text-black/70">
+              +{activeAlerts.length - 1} more alert
+              {activeAlerts.length > 2 ? "s" : ""} queued
             </p>
-            {activeAlerts.length > 1 && (
-              <p className="mt-0.5 text-xs text-fg-muted">
-                +{activeAlerts.length - 1} more alert
-                {activeAlerts.length > 2 ? "s" : ""} queued
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => setClosedLogId(alert.log_id)}
-            aria-label="Close accident details"
-            className={cn(
-              "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
-              focusRing,
-            )}
-          >
-            <RiCloseLine size={20} />
-          </button>
-        </div>
-
-        {/* ── Section 2a: Snapshot image ────────────────────────────────── */}
-        <div className="flex min-h-[220px] items-center justify-center bg-surface-3 p-6">
-          <SnapshotImage
-            snapshotUrl={alert.snapshot_url}
-            alt={`Accident snapshot for log ${alert.log_id}`}
-            className="max-h-52 w-auto rounded border-2 border-stroke object-contain"
-            fallbackClassName="h-40 w-full rounded"
-          />
-        </div>
-
-        {/* ── Section 2b: Accident ID + Status Badge ────────────────────── */}
-        <div className="flex items-center justify-between bg-surface-1 px-6 py-3">
-          <span className="text-2xl font-semibold text-fg">{formatAlertCode(alert.log_id)}</span>
-          <span
-            className={cn(
-              "rounded-full px-3 py-1 text-xs font-semibold",
-              getAlertBadgeClass(alert.detection_status),
-            )}
-          >
-            {alert.detection_status.toUpperCase()}
-          </span>
-        </div>
-
-        {/* ── Section 3: Core Telemetry ─────────────────────────────────── */}
-        <div className="space-y-3 bg-surface-1 px-6 pb-4">
-          <div className="flex items-start justify-between">
-            <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-              Timestamp
-            </span>
-            <span className="text-right text-sm tabular-nums text-fg">
-              {formatFullDateTime(alert.detected_at)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-              Camera Name
-            </span>
-            <span className="text-sm font-bold uppercase text-fg">
-              {alert.camera_name ?? `Camera ${alert.camera_id}`}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-              AI-Confidence Score
-            </span>
-            {/*
-              Red when the AI confidence is below 75 % — a low score means the
-              detection is less certain and warrants closer operator scrutiny.
-              Green (success) at 75 % and above signals a high-confidence event.
-            */}
-            <span
-              className={cn(
-                "text-sm font-bold",
-                alert.confidence_score * 100 < 75 ? "text-danger" : "text-success",
-              )}
-            >
-              {formatAlertConfidence(alert.confidence_score)}
-            </span>
-          </div>
-
-          {/* ── Section 4: Audit Trail ──────────────────────────────────────
-              Only rendered when a verification record is present. For fresh
-              Unverified incidents both fields are null, so this section stays
-              hidden until an operator has confirmed the incident. */}
-          {hasAuditTrail && (
-            <>
-              <hr className="border-border my-[14px]" />
-              <div className="grid grid-cols-2 gap-4 mt-2">
-                <div>
-                  <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                    Verified By
-                  </p>
-                  <p className="mt-1 text-sm text-fg">{alert.verified_by_name ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                    Time Verified
-                  </p>
-                  <p className="mt-1 text-sm text-fg">{formatFullDateTime(alert.verified_at)}</p>
-                </div>
-              </div>
-            </>
           )}
         </div>
 
-        {conflict ? (
-          <div className="bg-surface-1 px-6 pb-1 pt-1">
-            <IncidentHandledNotice info={conflict} />
-            <Button
-              variant="outline"
-              size="sm"
-              className="mb-3 w-full"
-              onClick={() => {
-                setConflict(null)
-                removeAlert(alert.log_id)
-              }}
-            >
-              Dismiss this notice
-            </Button>
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="bg-surface-1 px-6 pb-3">
-            <p className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
-              {error}
-            </p>
-          </div>
-        ) : null}
-
-        {/* ── Section 5: Footer Action Buttons ──────────────────────────────
-            Full-width flex row with equal-width buttons (flex-1). Snooze is
-            only available for Unverified incidents — the backend 400s a snooze
-            on any other state. All onClick handlers and disabled logic are
-            unchanged from the original. */}
-        <div className="flex w-full gap-4 border-t border-stroke bg-surface-1 p-4">
+        {/* ── Core Telemetry Section Wrapper ──────────────────────────────
+            Relative positioning anchors the absolutely positioned Snooze button. */}
+        <div className="relative">
+          {/* Snooze Button placed top right in the telemetry section. */}
           {isUnverified ? (
             <Button
-              variant="secondary"
-              className="flex-1 rounded-md py-3 text-xs font-medium uppercase tracking-[0.08em]"
+              variant="ghost"
+              size="icon"
+              className="absolute right-4 top-4 z-10 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+              title="Snooze Alarm"
               disabled={busy}
               onClick={handleSnooze}
             >
-              {busy ? "…" : "Snooze"}
+              {isSnoozedNow(alert.log_id, snoozedUntil) ? (
+                <BellOff size={20} />
+              ) : (
+                <BellRing size={20} />
+              )}
             </Button>
           ) : null}
+
+          {/* ── Section 2a: Snapshot image ────────────────────────────────── */}
+          <div className="flex min-h-[220px] items-center justify-center bg-surface-3 p-6">
+            <SnapshotImage
+              snapshotUrl={alert.snapshot_url}
+              alt={`Accident snapshot for log ${alert.log_id}`}
+              className="max-h-52 w-auto rounded border-2 border-stroke object-contain"
+              fallbackClassName="h-40 w-full rounded"
+            />
+          </div>
+
+          {/* ── Section 2b: Accident ID + Status Badge ────────────────────── */}
+          <div className="flex items-center justify-between bg-surface-1 px-6 py-3">
+            <span className="text-2xl font-semibold text-fg">{formatAlertCode(alert.log_id)}</span>
+            <span
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-semibold",
+                getAlertBadgeClass(alert.detection_status),
+              )}
+            >
+              {alert.detection_status.toUpperCase()}
+            </span>
+          </div>
+
+          {/* ── Section 3: Core Telemetry ─────────────────────────────────── */}
+          <div className="space-y-3 bg-surface-1 px-6 pb-4">
+            <div className="flex items-start justify-between">
+              <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                Timestamp
+              </span>
+              <span className="text-right text-sm tabular-nums text-fg">
+                {formatFullDateTime(alert.detected_at)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                Camera Name
+              </span>
+              <span className="text-sm font-bold uppercase text-fg">
+                {alert.camera_name ?? `Camera ${alert.camera_id}`}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                AI-Confidence Score
+              </span>
+              {/*
+                Red when the AI confidence is below 75 % — a low score means the
+                detection is less certain and warrants closer operator scrutiny.
+                Green (success) at 75 % and above signals a high-confidence event.
+              */}
+              <span
+                className={cn(
+                  "text-sm font-bold",
+                  alert.confidence_score * 100 < 75 ? "text-danger" : "text-success",
+                )}
+              >
+                {formatAlertConfidence(alert.confidence_score)}
+              </span>
+            </div>
+
+            {/* ── Section 4: Audit Trail ──────────────────────────────────────
+                Only rendered when a verification record is present. For fresh
+                Unverified incidents both fields are null, so this section stays
+                hidden until an operator has confirmed the incident. */}
+            {hasAuditTrail && (
+              <>
+                <hr className="my-[14px] border-border" />
+                <div className="mt-2 grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                      Verified By
+                    </p>
+                    <p className="mt-1 text-sm text-fg">{alert.verified_by_name ?? "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                      Time Verified
+                    </p>
+                    <p className="mt-1 text-sm text-fg">{formatFullDateTime(alert.verified_at)}</p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {conflict ? (
+            <div className="bg-surface-1 px-6 pb-1 pt-1">
+              <IncidentHandledNotice info={conflict} />
+              <Button
+                variant="outline"
+                size="sm"
+                className="mb-3 w-full"
+                onClick={() => {
+                  setConflict(null)
+                  removeAlert(alert.log_id)
+                }}
+              >
+                Dismiss this notice
+              </Button>
+            </div>
+          ) : null}
+
+          {error ? (
+            <div className="bg-surface-1 px-6 pb-3">
+              <p className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
+                {error}
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        {/* ── Section 5: Footer Action Buttons ──────────────────────────────
+            Full-width flex row with equal-width buttons (flex-1). All onClick
+            handlers and disabled logic are unchanged from the original. */}
+        <div className="flex w-full gap-4 border-t border-stroke bg-surface-1 p-4">
           <Button
             variant="secondary"
             className="flex-1 rounded-md bg-surface-3 py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
