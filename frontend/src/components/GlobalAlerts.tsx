@@ -1,12 +1,12 @@
 import { useCallback, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { RiCloseLine } from "@remixicon/react"
 
-import { Button } from "@/components/ui/Button"
+import { Button, focusRing } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
-import { useNow } from "@/hooks/useNow"
 import {
   confirmAlert,
   dismissAlert,
@@ -16,17 +16,15 @@ import {
 } from "@/api/alerts"
 import { IncidentHandledNotice } from "@/components/ui/IncidentHandledNotice"
 import type { IncidentHandledInfo } from "@/api/alerts"
-import { formatAlertConfidence } from "@/utils/format"
-import { formatDuration, formatFullDateTime, secondsSince } from "@/utils/datetime"
+import {
+  formatAlertCode,
+  formatAlertConfidence,
+  getAlertBadgeClass,
+  getAlertBorderClass,
+} from "@/utils/format"
+import { formatFullDateTime } from "@/utils/datetime"
 import { getApiErrorMessage } from "@/api/client"
 import { cn } from "@/utils/cn"
-
-/**
- * Above this age, a detection is presented as delayed rather than current.
- * 90s comfortably clears the sub-second happy path and the outbox's first
- * two retries (2s, 4s), so it only fires on a genuine delivery delay.
- */
-const STALE_DETECTION_SECONDS = 90
 
 /**
  * The alarm dialog — the product's reason for existing.
@@ -41,6 +39,11 @@ const STALE_DETECTION_SECONDS = 90
  * records. `onClose` is a no-op and the backdrop is not clickable, so a stray
  * keypress cannot silence a live alert. (Closing it would not even work: the
  * incident stays in the store, so the dialog would immediately re-render.)
+ *
+ * The 'X' button in the header is rendered per spec for visual completeness
+ * but is also wired to `noop` for the same reason — it does not dismiss the
+ * live alarm. Action buttons (Dismiss / Confirm / Resolve / Snooze) remain the
+ * only exits that record a HITL decision.
  */
 export function GlobalAlerts() {
   const queryClient = useQueryClient()
@@ -53,11 +56,6 @@ export function GlobalAlerts() {
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<IncidentHandledInfo | null>(null)
 
-  // Ticked at 30s because the only thing it drives is a minutes-resolution
-  // age line. A per-second interval on a dialog an operator stares at during
-  // an incident buys nothing and re-renders the snapshot.
-  const now = useNow(true, 30_000)
-
   // Snoozed incidents (FR-07) mute the alarm modal for that incident until
   // the shared deadline expires or a RE_ALARM event reactivates it.
   const activeAlerts = alerts.filter((a) => !isSnoozedNow(a.log_id, snoozedUntil))
@@ -67,10 +65,10 @@ export function GlobalAlerts() {
 
   if (!alert) return null
 
-  const detectionAgeSeconds = secondsSince(alert.detected_at, now)
   const busy = loadingId === alert.log_id
   const isUnverified = alert.detection_status === "Unverified"
   const isOngoing = alert.detection_status === "Ongoing"
+  const hasAuditTrail = Boolean(alert.verified_by_name || alert.verified_at)
 
   function invalidateAlerts() {
     queryClient.invalidateQueries({ queryKey: ["alerts"] })
@@ -150,21 +148,44 @@ export function GlobalAlerts() {
       // incident modal open must land on top of it, not behind it.
       overlayClassName="z-9999"
       backdropClassName="bg-backdrop-alert"
-      className="max-w-md overflow-hidden p-0"
+      className={cn(
+        "max-w-md overflow-hidden p-0 border-t-4",
+        getAlertBorderClass(alert.detection_status),
+      )}
     >
       <div className="-mx-6 -mb-6">
-        {/* header banner — danger for Unverified, warning for Ongoing */}
-        <div className={`px-6 py-4 text-center ${isOngoing ? "bg-warning" : "bg-danger"}`}>
-          <p className="text-xl font-black uppercase tracking-[0.08em] text-fg-on-primary">
-            {isOngoing ? "Ongoing Accident" : "Accident Detected"}
-          </p>
-          {activeAlerts.length > 1 && (
-            <p className="mt-1 text-xs font-semibold text-fg-on-primary/70">
-              +{activeAlerts.length - 1} more alert{activeAlerts.length > 2 ? "s" : ""} queued
+        {/* ── Section 1: Header ─────────────────────────────────────────────
+            Thin top accent border is on the Modal container above. The banner
+            is now a compact header row: title left, X button right.
+            The X button is visually present per spec but inert by design —
+            see the component docstring above for rationale. */}
+        <div className="flex items-center justify-between border-b border-stroke px-6 py-4">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-widest text-fg">
+              Accident Details
             </p>
-          )}
+            {activeAlerts.length > 1 && (
+              <p className="mt-0.5 text-xs text-fg-muted">
+                +{activeAlerts.length - 1} more alert
+                {activeAlerts.length > 2 ? "s" : ""} queued
+              </p>
+            )}
+          </div>
+          {/* Inert — see docstring. Wired to noop, not a real close action. */}
+          <button
+            type="button"
+            onClick={noop}
+            aria-label="Close dialog (review only — use action buttons to respond)"
+            className={cn(
+              "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+              focusRing,
+            )}
+          >
+            <RiCloseLine size={20} />
+          </button>
         </div>
 
+        {/* ── Section 2a: Snapshot image ────────────────────────────────── */}
         <div className="flex min-h-[220px] items-center justify-center bg-surface-3 p-6">
           <SnapshotImage
             snapshotUrl={alert.snapshot_url}
@@ -174,36 +195,36 @@ export function GlobalAlerts() {
           />
         </div>
 
-        <div className="space-y-3 bg-surface-1 px-6 py-4">
+        {/* ── Section 2b: Accident ID + Status Badge ────────────────────── */}
+        <div className="flex items-center justify-between bg-surface-1 px-6 py-3">
+          <span className="text-2xl font-semibold text-success">
+            {formatAlertCode(alert.log_id)}
+          </span>
+          <span
+            className={cn(
+              "rounded-full px-3 py-1 text-xs font-bold",
+              getAlertBadgeClass(alert.detection_status),
+            )}
+          >
+            {alert.detection_status.toUpperCase()}
+          </span>
+        </div>
+
+        {/* ── Section 3: Core Telemetry ─────────────────────────────────── */}
+        <div className="space-y-3 bg-surface-1 px-6 pb-4">
           <div className="flex items-start justify-between">
             <span className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
               Timestamp
             </span>
-            <span className="text-right">
-              <span className="block text-sm font-semibold tabular-nums text-fg">
-                {formatFullDateTime(alert.detected_at)}
-              </span>
-              {/*
-                An alarm that fires now is not necessarily an accident that
-                happened now. The AI engine's durable outbox retries with capped
-                exponential backoff (2s, doubling to 300s + jitter), so a
-                detection made while the backend was down is delivered late
-                carrying its ORIGINAL detected_at. Without this line the
-                operator reads "ACCIDENT DETECTED" and a wall-clock time and
-                reasonably assumes both are current.
-              */}
-              {detectionAgeSeconds !== null && detectionAgeSeconds >= STALE_DETECTION_SECONDS ? (
-                <span className="mt-0.5 block text-[10px] font-medium text-warning">
-                  Detected {formatDuration(detectionAgeSeconds)} ago — delivered late
-                </span>
-              ) : null}
+            <span className="text-right text-base font-semibold tabular-nums text-fg">
+              {formatFullDateTime(alert.detected_at)}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
               Camera Name
             </span>
-            <span className="text-sm font-bold uppercase text-fg">
+            <span className="text-base font-bold uppercase text-fg">
               {alert.camera_name ?? `Camera ${alert.camera_id}`}
             </span>
           </div>
@@ -211,10 +232,48 @@ export function GlobalAlerts() {
             <span className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
               AI-Confidence Score
             </span>
-            <span className="text-sm font-bold text-danger">
+            {/*
+              Red when the AI confidence is below 75 % — a low score means the
+              detection is less certain and warrants closer operator scrutiny.
+              Green (success) at 75 % and above signals a high-confidence event.
+            */}
+            <span
+              className={cn(
+                "text-base font-bold",
+                alert.confidence_score * 100 < 75 ? "text-danger" : "text-success",
+              )}
+            >
               {formatAlertConfidence(alert.confidence_score)}
             </span>
           </div>
+
+          {/* ── Section 4: Audit Trail ──────────────────────────────────────
+              Only rendered when a verification record is present. For fresh
+              Unverified incidents both fields are null, so this section stays
+              hidden until an operator has confirmed the incident. */}
+          {hasAuditTrail && (
+            <>
+              <hr className="border-border my-1" />
+              <div className="grid grid-cols-2 gap-4 pt-1">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
+                    Verified By
+                  </p>
+                  <p className="mt-1 text-base font-semibold text-fg">
+                    {alert.verified_by_name ?? "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
+                    Time Verified
+                  </p>
+                  <p className="mt-1 text-base font-semibold text-fg">
+                    {formatFullDateTime(alert.verified_at)}
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {conflict ? (
@@ -242,22 +301,16 @@ export function GlobalAlerts() {
           </div>
         ) : null}
 
-        <div
-          className={cn(
-            "grid gap-px border-t border-stroke bg-stroke",
-            isUnverified ? "grid-cols-3" : "grid-cols-2",
-          )}
-        >
-          {/*
-            Snooze only exists for Unverified — the backend 400s a snooze on
-            anything else (a terminal or Ongoing incident can't become
-            Unverified again) — so it has no button on the Ongoing variant at
-            all rather than one that can only fail.
-          */}
+        {/* ── Section 5: Footer Action Buttons ──────────────────────────────
+            Full-width flex row with equal-width buttons (flex-1). Snooze is
+            only available for Unverified incidents — the backend 400s a snooze
+            on any other state. All onClick handlers and disabled logic are
+            unchanged from the original. */}
+        <div className="flex w-full gap-4 border-t border-stroke bg-surface-1 p-4">
           {isUnverified ? (
             <Button
               variant="secondary"
-              className="rounded-none py-4 text-xs font-black uppercase tracking-[0.08em]"
+              className="flex-1 rounded-md py-3 text-xs font-black uppercase tracking-[0.08em]"
               disabled={busy}
               onClick={handleSnooze}
             >
@@ -266,15 +319,14 @@ export function GlobalAlerts() {
           ) : null}
           <Button
             variant="secondary"
-            className="rounded-none py-4 text-xs font-black uppercase tracking-[0.08em]"
+            className="flex-1 rounded-md bg-surface-3 py-3 text-xs font-black uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
             disabled={busy}
             onClick={() => runAction(dismissAlert, "Failed to dismiss alert.")}
           >
             {busy ? "…" : "Dismiss Accident"}
           </Button>
           <Button
-            variant="primary"
-            className="rounded-none py-4 text-xs font-black uppercase tracking-[0.08em]"
+            className="flex-1 rounded-md bg-primary py-3 text-xs font-black uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
             disabled={busy}
             onClick={() =>
               isUnverified
