@@ -167,7 +167,9 @@ export function GlobalAlerts() {
             The X button hides the modal without any backend state mutation. */}
         <div className="flex items-center justify-between border-b border-stroke px-6 py-4">
           <div>
-            <p className="text-xl font-bold uppercase tracking-widest text-fg">Accident Details</p>
+            <p className="text-base font-bold uppercase tracking-widest text-fg">
+              Accident Details
+            </p>
             {activeAlerts.length > 1 && (
               <p className="mt-0.5 text-xs text-fg-muted">
                 +{activeAlerts.length - 1} more alert
@@ -203,7 +205,7 @@ export function GlobalAlerts() {
           <span className="text-2xl font-semibold text-fg">{formatAlertCode(alert.log_id)}</span>
           <span
             className={cn(
-              "rounded-full px-3 py-1 text-xs font-normal",
+              "rounded-full px-3 py-1 text-xs font-semibold",
               getAlertBadgeClass(alert.detection_status),
             )}
           >
@@ -254,8 +256,8 @@ export function GlobalAlerts() {
               hidden until an operator has confirmed the incident. */}
           {hasAuditTrail && (
             <>
-              <hr className="border-border my-2.5" />
-              <div className="grid grid-cols-2 gap-4">
+              <hr className="border-border my-[14px]" />
+              <div className="grid grid-cols-2 gap-4 mt-2">
                 <div>
                   <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
                     Verified By
@@ -307,7 +309,7 @@ export function GlobalAlerts() {
           {isUnverified ? (
             <Button
               variant="secondary"
-              className="flex-1 rounded-md py-3 text-xs font-black uppercase tracking-[0.08em]"
+              className="flex-1 rounded-md py-3 text-xs font-medium uppercase tracking-[0.08em]"
               disabled={busy}
               onClick={handleSnooze}
             >
@@ -316,14 +318,14 @@ export function GlobalAlerts() {
           ) : null}
           <Button
             variant="secondary"
-            className="flex-1 rounded-md bg-surface-3 py-3 text-xs font-black uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
+            className="flex-1 rounded-md bg-surface-3 py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
             disabled={busy}
             onClick={() => runAction(dismissAlert, "Failed to dismiss alert.")}
           >
             {busy ? "…" : "Dismiss Accident"}
           </Button>
           <Button
-            className="flex-1 rounded-md bg-primary py-3 text-xs font-black uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
+            className="flex-1 rounded-md bg-primary py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
             disabled={busy}
             onClick={() =>
               isUnverified
