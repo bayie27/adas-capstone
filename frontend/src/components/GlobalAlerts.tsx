@@ -34,16 +34,15 @@ import { cn } from "@/utils/cn"
  * own fixed overlay, on the single most important dialog in the app.
  *
  * **Escape is deliberately inert here**, which is the one thing it does not
- * take from `Modal`. There is no "close" for an accident alarm — the only ways
- * out are Dismiss, Confirm or Resolve, each a real HITL decision the backend
- * records. `onClose` is a no-op and the backdrop is not clickable, so a stray
- * keypress cannot silence a live alert. (Closing it would not even work: the
- * incident stays in the store, so the dialog would immediately re-render.)
+ * take from `Modal`. The backdrop is not clickable, so a stray keypress cannot
+ * silence a live alert.
  *
- * The 'X' button in the header is rendered per spec for visual completeness
- * but is also wired to `noop` for the same reason — it does not dismiss the
- * live alarm. Action buttons (Dismiss / Confirm / Resolve / Snooze) remain the
- * only exits that record a HITL decision.
+ * The 'X' button lets an operator review and close the modal without executing
+ * any backend state change (no dismiss, confirm, or resolve). The alert is NOT
+ * removed from the store — it stays queued — but the modal is visually hidden
+ * via a local `closedLogId` state. If a different alert arrives the modal
+ * reappears, and a WebSocket update that changes the *same* alert's status
+ * will also clear the local hide because the store-level alert is removed.
  */
 export function GlobalAlerts() {
   const queryClient = useQueryClient()
@@ -55,6 +54,11 @@ export function GlobalAlerts() {
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<IncidentHandledInfo | null>(null)
+  // Tracks which alert the operator has visually closed via the X button
+  // without performing any backend state mutation. The alert remains in the
+  // store; only this tab's rendering is suppressed until a different alert
+  // arrives or the same alert is removed by an action from another source.
+  const [closedLogId, setClosedLogId] = useState<number | null>(null)
 
   // Snoozed incidents (FR-07) mute the alarm modal for that incident until
   // the shared deadline expires or a RE_ALARM event reactivates it.
@@ -64,6 +68,9 @@ export function GlobalAlerts() {
   const noop = useCallback(() => {}, [])
 
   if (!alert) return null
+
+  // If this specific alert was closed via X, suppress the modal.
+  if (closedLogId === alert.log_id) return null
 
   const busy = loadingId === alert.log_id
   const isUnverified = alert.detection_status === "Unverified"
@@ -157,13 +164,10 @@ export function GlobalAlerts() {
         {/* ── Section 1: Header ─────────────────────────────────────────────
             Thin top accent border is on the Modal container above. The banner
             is now a compact header row: title left, X button right.
-            The X button is visually present per spec but inert by design —
-            see the component docstring above for rationale. */}
+            The X button hides the modal without any backend state mutation. */}
         <div className="flex items-center justify-between border-b border-stroke px-6 py-4">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-widest text-fg">
-              Accident Details
-            </p>
+            <p className="text-xl font-bold uppercase tracking-widest text-fg">Accident Details</p>
             {activeAlerts.length > 1 && (
               <p className="mt-0.5 text-xs text-fg-muted">
                 +{activeAlerts.length - 1} more alert
@@ -171,11 +175,10 @@ export function GlobalAlerts() {
               </p>
             )}
           </div>
-          {/* Inert — see docstring. Wired to noop, not a real close action. */}
           <button
             type="button"
-            onClick={noop}
-            aria-label="Close dialog (review only — use action buttons to respond)"
+            onClick={() => setClosedLogId(alert.log_id)}
+            aria-label="Close accident details"
             className={cn(
               "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
               focusRing,
@@ -197,12 +200,10 @@ export function GlobalAlerts() {
 
         {/* ── Section 2b: Accident ID + Status Badge ────────────────────── */}
         <div className="flex items-center justify-between bg-surface-1 px-6 py-3">
-          <span className="text-2xl font-semibold text-success">
-            {formatAlertCode(alert.log_id)}
-          </span>
+          <span className="text-2xl font-semibold text-fg">{formatAlertCode(alert.log_id)}</span>
           <span
             className={cn(
-              "rounded-full px-3 py-1 text-xs font-bold",
+              "rounded-full px-3 py-1 text-xs font-normal",
               getAlertBadgeClass(alert.detection_status),
             )}
           >
@@ -213,23 +214,23 @@ export function GlobalAlerts() {
         {/* ── Section 3: Core Telemetry ─────────────────────────────────── */}
         <div className="space-y-3 bg-surface-1 px-6 pb-4">
           <div className="flex items-start justify-between">
-            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
+            <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
               Timestamp
             </span>
-            <span className="text-right text-base font-semibold tabular-nums text-fg">
+            <span className="text-right text-sm tabular-nums text-fg">
               {formatFullDateTime(alert.detected_at)}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
+            <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
               Camera Name
             </span>
-            <span className="text-base font-bold uppercase text-fg">
+            <span className="text-sm font-bold uppercase text-fg">
               {alert.camera_name ?? `Camera ${alert.camera_id}`}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
+            <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
               AI-Confidence Score
             </span>
             {/*
@@ -239,7 +240,7 @@ export function GlobalAlerts() {
             */}
             <span
               className={cn(
-                "text-base font-bold",
+                "text-sm font-bold",
                 alert.confidence_score * 100 < 75 ? "text-danger" : "text-success",
               )}
             >
@@ -253,23 +254,19 @@ export function GlobalAlerts() {
               hidden until an operator has confirmed the incident. */}
           {hasAuditTrail && (
             <>
-              <hr className="border-border my-1" />
-              <div className="grid grid-cols-2 gap-4 pt-1">
+              <hr className="border-border my-2.5" />
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
+                  <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
                     Verified By
                   </p>
-                  <p className="mt-1 text-base font-semibold text-fg">
-                    {alert.verified_by_name ?? "—"}
-                  </p>
+                  <p className="mt-1 text-sm text-fg">{alert.verified_by_name ?? "—"}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-muted">
+                  <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
                     Time Verified
                   </p>
-                  <p className="mt-1 text-base font-semibold text-fg">
-                    {formatFullDateTime(alert.verified_at)}
-                  </p>
+                  <p className="mt-1 text-sm text-fg">{formatFullDateTime(alert.verified_at)}</p>
                 </div>
               </div>
             </>
