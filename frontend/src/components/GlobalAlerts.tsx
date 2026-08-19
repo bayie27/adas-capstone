@@ -16,7 +16,7 @@ import {
 } from "@/api/alerts"
 import { IncidentHandledNotice } from "@/components/ui/IncidentHandledNotice"
 import type { IncidentHandledInfo } from "@/api/alerts"
-import { formatAlertCode, formatAlertConfidence, getAlertBadgeClass } from "@/utils/format"
+import { formatAlertConfidence } from "@/utils/format"
 import { formatFullDateTime } from "@/utils/datetime"
 import { getApiErrorMessage } from "@/api/client"
 import { cn } from "@/utils/cn"
@@ -186,21 +186,8 @@ export function GlobalAlerts() {
             />
           </div>
 
-          {/* ── Section 2b: Accident ID + Status Badge ────────────────────── */}
-          <div className="flex items-center justify-between bg-surface-1 px-6 py-3">
-            <span className="text-2xl font-semibold text-fg">{formatAlertCode(alert.log_id)}</span>
-            <span
-              className={cn(
-                "rounded-full px-3 py-1 text-xs font-semibold",
-                getAlertBadgeClass(alert.detection_status),
-              )}
-            >
-              {alert.detection_status.toUpperCase()}
-            </span>
-          </div>
-
           {/* ── Section 3: Core Telemetry ─────────────────────────────────── */}
-          <div className="space-y-3 bg-surface-1 px-6 pb-4">
+          <div className="space-y-3 bg-surface-1 px-6 py-4">
             <div className="flex items-start justify-between">
               <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
                 Timestamp
