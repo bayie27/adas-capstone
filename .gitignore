@@ -330,3 +330,4 @@ backend/app/dev/assets/snapshots/
 
 # Local isolated agent worktrees.
 .worktrees/
+.logs/
