@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 
 import { Badge } from "@/components/ui/Badge"
 import { Button, focusRing } from "@/components/ui/Button"
+import { ClearFiltersButton } from "@/components/ui/ClearFiltersButton"
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
@@ -110,6 +111,14 @@ export default function Cameras() {
   const [detailCameraId, setDetailCameraId] = useState<number | null>(null)
 
   const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
+
+  const hasFilters =
+    searchTerm.trim() !== "" ||
+    connectionFilter !== "all" ||
+    aiFilter !== "all" ||
+    isEnabledFilter !== "all" ||
+    activeFilter !== "active"
+
   // See Users.tsx: mirror the query total into state so usePagination can clamp
   // the page at read time without an effect.
   const [seenTotal, setSeenTotal] = useState(0)
@@ -392,6 +401,18 @@ export default function Cameras() {
               setActiveFilter(value)
             }}
           />
+          {hasFilters ? (
+            <ClearFiltersButton
+              onClick={() => {
+                reset()
+                setSearchTerm("")
+                setConnectionFilter("all")
+                setAiFilter("all")
+                setIsEnabledFilter("all")
+                setActiveFilter("active")
+              }}
+            />
+          ) : null}
         </div>
 
         <Button
