@@ -6,7 +6,7 @@ import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { AreaChartCard } from "@/components/charts/AreaChartCard"
 import { BarChartCard } from "@/components/charts/BarChartCard"
-import { Button } from "@/components/ui/Button"
+import { ClearFiltersButton } from "@/components/ui/ClearFiltersButton"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
 import { ExportButton, type ExportFormat } from "@/components/ui/ExportButton"
 import { FilterSelect } from "@/components/ui/FilterSelect"
@@ -14,7 +14,7 @@ import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { formatHourLabel, truncateLabel } from "@/utils/format"
 import type { AnalyticsFilters } from "@/api/analytics"
-import { RiCarLine, RiCheckboxLine, RiCloseLine, RiRefreshLine } from "@remixicon/react"
+import { RiCarLine, RiCheckboxLine, RiRefreshLine } from "@remixicon/react"
 
 /**
  * `null` means no previous window to compare against (all-time load,
@@ -127,18 +127,13 @@ export default function Dashboard() {
             />
             <FilterSelect value={cameraId} options={cameraOptions} onChange={setCameraId} />
             {hasFilters ? (
-              <Button
-                variant="outline"
-                size="sm"
+              <ClearFiltersButton
                 onClick={() => {
                   setStartDate("")
                   setEndDate("")
                   setCameraId("")
                 }}
-              >
-                <RiCloseLine size={13} />
-                Clear
-              </Button>
+              />
             ) : null}
           </div>
           {/*
