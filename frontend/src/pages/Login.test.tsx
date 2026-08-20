@@ -98,12 +98,22 @@ describe("Login rate-limit countdown", () => {
 
     await submitLogin(user)
     const before = await screen.findByRole("button", { name: /try again in \d+s/i })
-    const textBefore = before.textContent
+    // A count, not the exact string -- shouldAdvanceTime ties the fake clock
+    // to wall time, and findByRole's own polling plus user.type()'s
+    // simulated keystrokes below both consume an uncontrolled amount of it,
+    // so asserting the text is byte-identical is exactly the kind of
+    // flake that produced a real CI failure here (31s -> 30s between the
+    // two reads). What this test actually guards against is a *reset* --
+    // editing a field re-deriving a fresh ~30s deadline instead of the
+    // countdown continuing to tick down.
+    const secondsBefore = Number(before.textContent?.match(/(\d+)s/)?.[1])
+    expect(Number.isNaN(secondsBefore)).toBe(false)
 
     await user.type(screen.getByLabelText("Username"), "x")
     const after = screen.getByRole("button", { name: /try again in \d+s/i })
     expect(after).toBeDisabled()
-    expect(after.textContent).toBe(textBefore)
+    const secondsAfter = Number(after.textContent?.match(/(\d+)s/)?.[1])
+    expect(secondsAfter).toBeLessThanOrEqual(secondsBefore)
     vi.useRealTimers()
   })
 })

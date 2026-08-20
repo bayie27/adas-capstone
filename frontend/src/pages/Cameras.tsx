@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
 
+import { Badge } from "@/components/ui/Badge"
 import { Button, focusRing } from "@/components/ui/Button"
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
 import { FilterSelect } from "@/components/ui/FilterSelect"
@@ -24,7 +25,7 @@ import {
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { useNow } from "@/hooks/useNow"
 import { usePagination } from "@/hooks/usePagination"
-import { deleteCamera, getCameras, updateCamera } from "@/api/cameras"
+import { deleteCamera, getCameras, restoreCamera, updateCamera } from "@/api/cameras"
 import type {
   CameraAiStatus,
   CameraConnectionStatus,
@@ -46,6 +47,7 @@ import { CameraDetailPanel } from "@/pages/cameras/CameraDetailPanel"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"
 import {
   RiAddLine,
+  RiArrowGoBackLine,
   RiCameraLine,
   RiDeleteBinLine,
   RiOrganizationChart,
@@ -96,6 +98,10 @@ export default function Cameras() {
   const [connectionFilter, setConnectionFilter] = useState<CameraConnectionStatus | "all">("all")
   const [aiFilter, setAiFilter] = useState<CameraAiStatus | "all">("all")
   const [isEnabledFilter, setIsEnabledFilter] = useState<"all" | "true" | "false">("all")
+  // "active" is a sentinel for "omit the param" — GET /api/cameras/ already
+  // defaults to active-only when is_active is absent, so this preserves
+  // today's behavior exactly rather than sending an explicit "true".
+  const [activeFilter, setActiveFilter] = useState<"active" | "false" | "null">("active")
   const [notice, setNotice] = useState<NoticeState | null>(null)
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
   // An id, not the row itself — so the panel re-derives against the live
@@ -128,6 +134,7 @@ export default function Cameras() {
       connectionFilter,
       aiFilter,
       isEnabledFilter,
+      activeFilter,
       pageSize,
       offset,
     ],
@@ -137,6 +144,7 @@ export default function Cameras() {
         connection_status: connectionFilter === "all" ? undefined : [connectionFilter],
         ai_status: aiFilter === "all" ? undefined : [aiFilter],
         is_enabled: isEnabledFilter === "all" ? undefined : isEnabledFilter === "true",
+        is_active: activeFilter === "active" ? undefined : activeFilter,
         limit: pageSize,
         offset,
       }),
@@ -225,6 +233,32 @@ export default function Cameras() {
 
       setModal({ kind: "closed" })
       invalidateCameraQueries()
+    },
+  })
+
+  /**
+   * P23 — the counterpart to deleteCameraMutation. Not optimistic (unlike
+   * the enable/disable toggle): restoring is rare enough that the round
+   * trip isn't worth the complexity, and a restore can fail with a 409 the
+   * operator needs to read (a live camera already holds the name/channel).
+   */
+  const restoreCameraMutation = useMutation({
+    mutationFn: restoreCamera,
+    onSuccess: (updated) => {
+      setNotice({
+        tone: "success",
+        message: `${updated.camera_name} was restored.`,
+      })
+      invalidateCameraQueries()
+    },
+    onError: (error) => {
+      setNotice({
+        tone: "error",
+        message:
+          getApiError(error)?.code === "CONFLICT_DUPLICATE"
+            ? "A camera with that name or channel already exists. Rename the live camera, or rename this one, then try restoring again."
+            : getApiErrorMessage(error, "Unable to restore this camera."),
+      })
     },
   })
 
@@ -344,6 +378,20 @@ export default function Cameras() {
               setIsEnabledFilter(value as "all" | "true" | "false")
             }}
           />
+
+          <FilterSelect
+            value={activeFilter}
+            options={[
+              { value: "active", label: "Active only" },
+              { value: "false", label: "Deleted only" },
+              { value: "null", label: "All" },
+            ]}
+            onChange={(value) => {
+              setNotice(null)
+              reset()
+              setActiveFilter(value)
+            }}
+          />
         </div>
 
         <Button
@@ -393,69 +441,107 @@ export default function Cameras() {
                 No cameras found for the current filters.
               </TableStateRow>
             ) : (
-              cameras.map((camera) => (
-                <TableRow
-                  key={camera.camera_id}
-                  className="cursor-pointer"
-                  onClick={() => setDetailCameraId(camera.camera_id)}
-                >
-                  <TableCell className="font-medium text-fg">{camera.camera_name}</TableCell>
-                  <TableCell className="text-fg-muted">{camera.channel_id}</TableCell>
-                  <TableCell>
-                    <CameraConnectionText status={camera.connection_status} />
-                  </TableCell>
-                  <TableCell>
-                    <CameraAiText
-                      status={camera.ai_status}
-                      description={describeCameraDesiredState(camera, now)}
-                    />
-                  </TableCell>
-                  <TableCell className="w-[133px]" onClick={(event) => event.stopPropagation()}>
-                    <div className="flex items-center gap-3">
-                      <Switch
-                        checked={camera.is_enabled}
-                        label={`${camera.is_enabled ? "Disable" : "Enable"} ${camera.camera_name}`}
-                        disabled={pendingToggleCameraId === camera.camera_id}
-                        onChange={() => {
-                          setNotice(null)
-                          toggleEnabledMutation.mutate({
-                            camera,
-                            nextEnabled: !camera.is_enabled,
-                          })
-                        }}
+              cameras.map((camera) => {
+                // GET /api/cameras/{id} (what the detail panel fetches)
+                // stays active-only, same as before P23 — a soft-deleted
+                // row has nothing there to open.
+                const isRestoring =
+                  restoreCameraMutation.isPending &&
+                  restoreCameraMutation.variables === camera.camera_id
+
+                return (
+                  <TableRow
+                    key={camera.camera_id}
+                    className={camera.is_active ? "cursor-pointer" : undefined}
+                    onClick={() => {
+                      if (camera.is_active) setDetailCameraId(camera.camera_id)
+                    }}
+                  >
+                    <TableCell className="font-medium text-fg">
+                      {camera.camera_name}
+                      {!camera.is_active ? (
+                        <Badge variant="subtle" tone="neutral" uppercase={false} className="ml-2">
+                          Deleted
+                        </Badge>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="text-fg-muted">{camera.channel_id}</TableCell>
+                    <TableCell>
+                      <CameraConnectionText status={camera.connection_status} />
+                    </TableCell>
+                    <TableCell>
+                      <CameraAiText
+                        status={camera.ai_status}
+                        description={describeCameraDesiredState(camera, now)}
                       />
-                      <button
-                        type="button"
-                        aria-label={`Edit ${camera.camera_name}`}
-                        onClick={() => {
-                          setNotice(null)
-                          setModal({ kind: "edit", camera })
-                        }}
-                        className={cn(
-                          "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
-                          focusRing,
-                        )}
-                      >
-                        <RiPencilLine size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Delete ${camera.camera_name}`}
-                        onClick={() => {
-                          setNotice(null)
-                          setModal({ kind: "delete", camera })
-                        }}
-                        className={cn(
-                          "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
-                          focusRing,
-                        )}
-                      >
-                        <RiDeleteBinLine size={16} />
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+                    </TableCell>
+                    <TableCell className="w-[133px]" onClick={(event) => event.stopPropagation()}>
+                      {camera.is_active ? (
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            checked={camera.is_enabled}
+                            label={`${camera.is_enabled ? "Disable" : "Enable"} ${camera.camera_name}`}
+                            disabled={pendingToggleCameraId === camera.camera_id}
+                            onChange={() => {
+                              setNotice(null)
+                              toggleEnabledMutation.mutate({
+                                camera,
+                                nextEnabled: !camera.is_enabled,
+                              })
+                            }}
+                          />
+                          <button
+                            type="button"
+                            aria-label={`Edit ${camera.camera_name}`}
+                            onClick={() => {
+                              setNotice(null)
+                              setModal({ kind: "edit", camera })
+                            }}
+                            className={cn(
+                              "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+                              focusRing,
+                            )}
+                          >
+                            <RiPencilLine size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Delete ${camera.camera_name}`}
+                            onClick={() => {
+                              setNotice(null)
+                              setModal({ kind: "delete", camera })
+                            }}
+                            className={cn(
+                              "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+                              focusRing,
+                            )}
+                          >
+                            <RiDeleteBinLine size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label={`Restore ${camera.camera_name}`}
+                          disabled={isRestoring}
+                          onClick={() => {
+                            setNotice(null)
+                            restoreCameraMutation.mutate(camera.camera_id)
+                          }}
+                          className={cn(
+                            "flex items-center gap-1.5 rounded-sm text-xs text-fg-muted transition-colors duration-150 hover:text-fg",
+                            "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-fg-muted",
+                            focusRing,
+                          )}
+                        >
+                          <RiArrowGoBackLine size={16} />
+                          {isRestoring ? "Restoring…" : "Restore"}
+                        </button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })
             )}
           </TableBody>
         </Table>
