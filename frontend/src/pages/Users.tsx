@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { RiAddLine, RiPencilLine, RiKey2Line, RiDeleteBinLine } from "@remixicon/react"
 import { Badge } from "@/components/ui/Badge"
 import { Button, focusRing } from "@/components/ui/Button"
+import { ClearFiltersButton } from "@/components/ui/ClearFiltersButton"
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
@@ -51,6 +52,8 @@ export default function Users() {
   // defaults to active-only when is_active is absent, so this preserves
   // today's behavior exactly rather than sending an explicit "true".
   const [activeFilter, setActiveFilter] = useState<"active" | "false" | "null">("active")
+
+  const hasFilters = searchTerm.trim() !== "" || activeFilter !== "active"
 
   // usePagination derives `page`/`offset` from the total, but the query supplies
   // the total — so mirror it into state and sync during render (placeholderData
@@ -132,6 +135,15 @@ export default function Users() {
               setActiveFilter(value)
             }}
           />
+          {hasFilters ? (
+            <ClearFiltersButton
+              onClick={() => {
+                reset()
+                setSearchTerm("")
+                setActiveFilter("active")
+              }}
+            />
+          ) : null}
         </div>
         <Button
           size="sm"
