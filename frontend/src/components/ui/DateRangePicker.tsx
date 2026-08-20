@@ -1,4 +1,4 @@
-import { useId } from "react"
+import { useId, useRef } from "react"
 import { RiCalendarLine } from "@remixicon/react"
 
 import { cn } from "@/utils/cn"
@@ -38,9 +38,13 @@ export function DateRangePicker({
   className?: string
 }) {
   const id = useId()
+  const startRef = useRef<HTMLInputElement>(null)
+  const endRef = useRef<HTMLInputElement>(null)
+
   const fieldClass = cn(
-    "bg-transparent text-xs font-normal text-fg [color-scheme:dark] focus:outline-none",
+    "bg-transparent text-xs font-normal text-fg [color-scheme:dark] outline-none",
     "disabled:cursor-not-allowed",
+    "[&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none",
     focusRing,
   )
 
@@ -55,8 +59,8 @@ export function DateRangePicker({
         className,
       )}
     >
-      <RiCalendarLine size={16} className="shrink-0 text-fg" aria-hidden="true" />
       <input
+        ref={startRef}
         id={`${id}-start`}
         type="date"
         value={start}
@@ -66,10 +70,19 @@ export function DateRangePicker({
         aria-label={`${label} start`}
         className={fieldClass}
       />
+      <RiCalendarLine
+        size={16}
+        className={cn("shrink-0 text-fg", !disabled && "cursor-pointer hover:text-fg-body")}
+        onClick={() => startRef.current?.showPicker()}
+        aria-hidden="true"
+      />
+
       <span aria-hidden="true" className="text-xs font-normal text-fg">
         –
       </span>
+
       <input
+        ref={endRef}
         id={`${id}-end`}
         type="date"
         value={end}
@@ -78,6 +91,12 @@ export function DateRangePicker({
         onChange={(event) => onEndChange(event.target.value)}
         aria-label={`${label} end`}
         className={fieldClass}
+      />
+      <RiCalendarLine
+        size={16}
+        className={cn("shrink-0 text-fg", !disabled && "cursor-pointer hover:text-fg-body")}
+        onClick={() => endRef.current?.showPicker()}
+        aria-hidden="true"
       />
     </div>
   )
