@@ -16,8 +16,8 @@ export const focusRing =
 /** §2.8 — opacity only, no colour change, consistent across the app. */
 export const disabledTreatment = "disabled:cursor-not-allowed disabled:opacity-60"
 
-export type ButtonVariant = "primary" | "secondary" | "outline" | "destructive"
-export type ButtonSize = "sm" | "md"
+export type ButtonVariant = "primary" | "secondary" | "outline" | "destructive" | "ghost"
+export type ButtonSize = "sm" | "md" | "icon"
 
 const VARIANTS: Record<ButtonVariant, string> = {
   // §2.2 — the near-white action: Add Camera, Add User, Login, Confirm/Resolve.
@@ -26,12 +26,14 @@ const VARIANTS: Record<ButtonVariant, string> = {
   secondary: "bg-surface-3 text-fg hover:bg-surface-2",
   outline: "border border-border bg-transparent text-fg hover:bg-surface-2",
   destructive: "bg-danger text-fg-on-primary hover:bg-danger/90",
+  ghost: "bg-transparent text-fg hover:bg-surface-2",
 }
 
 const SIZES: Record<ButtonSize, string> = {
   // §2.3 — 40px is the toolbar control height.
   md: "h-10 px-4 text-secondary",
   sm: "h-8 px-3 text-caption",
+  icon: "h-10 w-10",
 }
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
