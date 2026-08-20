@@ -95,7 +95,14 @@ export function BarChartCard({
                   )
                 })}
               </defs>
-              <XAxis type="number" {...AXIS_PROPS} hide />
+              <XAxis
+                type="number"
+                orientation="bottom"
+                domain={[0, "auto"]}
+                allowDecimals={false}
+                {...AXIS_PROPS}
+                tick={{ fill: "var(--color-fg-muted)", fontSize: 12 }}
+              />
               <YAxis
                 type="category"
                 dataKey={labelKey}
