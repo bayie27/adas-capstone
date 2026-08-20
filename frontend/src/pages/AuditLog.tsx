@@ -11,7 +11,7 @@ import {
 } from "@/api/audit"
 import type { AuditLogEntry, AuditSortField, SortOrder } from "@/api/audit"
 import { Badge } from "@/components/ui/Badge"
-import { Button } from "@/components/ui/Button"
+import { ClearFiltersButton } from "@/components/ui/ClearFiltersButton"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
 import { ExportButton, type ExportFormat } from "@/components/ui/ExportButton"
 import { FilterSelect } from "@/components/ui/FilterSelect"
@@ -286,11 +286,7 @@ export default function AuditLog() {
               setTargetType(value)
             }}
           />
-          {hasFilters ? (
-            <Button variant="outline" size="sm" onClick={clearFilters}>
-              Clear
-            </Button>
-          ) : null}
+          {hasFilters ? <ClearFiltersButton onClick={clearFilters} /> : null}
         </div>
         {/*
           total_filtered is already on this query, so the pre-flight count

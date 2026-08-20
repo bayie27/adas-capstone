@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/Button"
+import { ClearFiltersButton } from "@/components/ui/ClearFiltersButton"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
 import { ExportButton } from "@/components/ui/ExportButton"
 import { FilterSelect } from "@/components/ui/FilterSelect"
@@ -51,7 +52,7 @@ import {
 } from "@/utils/format"
 import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
-import { RiCloseLine, RiEyeLine } from "@remixicon/react"
+import { RiEyeLine } from "@remixicon/react"
 
 // Starting page size. PAGE_SIZE_OPTIONS in PaginationFooter is
 // [10, 25, 50, 100], so the default must be one of them or the selector
@@ -473,9 +474,7 @@ export default function Detections() {
               />
             ) : null}
             {hasFilters ? (
-              <Button
-                variant="outline"
-                size="sm"
+              <ClearFiltersButton
                 onClick={() => {
                   setStartDate("")
                   setEndDate("")
@@ -483,10 +482,7 @@ export default function Detections() {
                   setUserId("")
                   logsPagination.reset()
                 }}
-              >
-                <RiCloseLine size={13} />
-                Clear
-              </Button>
+              />
             ) : null}
           </div>
           {/*

@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
 import { exportPerformanceAnalytics, getPerformanceAnalytics } from "@/api/analytics"
-import { Button } from "@/components/ui/Button"
+import { ClearFiltersButton } from "@/components/ui/ClearFiltersButton"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
 import { ExportButton, type ExportFormat } from "@/components/ui/ExportButton"
 import { FilterSelect } from "@/components/ui/FilterSelect"
@@ -18,13 +18,7 @@ import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { useAuthStore } from "@/store/useAuthStore"
 import { RetrainingExportPanel } from "@/pages/ai-performance/RetrainingExportPanel"
 import { formatPercent } from "@/utils/format"
-import {
-  RiCarLine,
-  RiCloseCircleLine,
-  RiCloseLine,
-  RiDashboard3Line,
-  RiFocus3Line,
-} from "@remixicon/react"
+import { RiCarLine, RiCloseCircleLine, RiDashboard3Line, RiFocus3Line } from "@remixicon/react"
 
 const PERFORMANCE_QUERY_KEY = ["performance-analytics"] as const
 const ITEMS_PER_PAGE = 10
@@ -190,19 +184,14 @@ export default function AiPerformance() {
             }}
           />
           {hasDateFilter ? (
-            <Button
-              variant="outline"
-              size="sm"
+            <ClearFiltersButton
               onClick={() => {
                 setStartDate("")
                 setEndDate("")
                 setCameraId("")
                 reset()
               }}
-            >
-              <RiCloseLine size={13} />
-              Clear
-            </Button>
+            />
           ) : null}
         </div>
         {/*
