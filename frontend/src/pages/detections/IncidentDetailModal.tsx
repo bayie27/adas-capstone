@@ -1,10 +1,15 @@
 import type { ReactNode } from "react"
 
-import { Button } from "@/components/ui/Button"
+import { Button, focusRing } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
-import type { AlertLog, AlertStatus } from "@/api/alerts"
-import { formatAlertCode, formatAlertConfidence } from "@/utils/format"
+import type { AlertLog } from "@/api/alerts"
+import {
+  formatAlertCode,
+  formatAlertConfidence,
+  getAlertBadgeClass,
+  getAlertBorderClass,
+} from "@/utils/format"
 import { formatDuration, formatFullDateTime, secondsSince } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
 import { RiCloseLine } from "@remixicon/react"
@@ -32,64 +37,6 @@ const STALE_DETECTION_SECONDS = 90
  * decide is the point. Camera telemetry (Phase 19) is a reference surface and
  * gets `SidePanel` instead.
  */
-
-type Accent = "danger" | "warning" | "neutral"
-
-const ACCENT_BORDER: Record<Accent, string> = {
-  danger: "border-t-danger",
-  warning: "border-t-warning",
-  neutral: "border-t-stroke-strong",
-}
-
-const BADGE_CLASS: Record<Accent, string> = {
-  danger: "bg-danger-subtle text-danger border border-danger-border",
-  warning: "bg-warning-subtle text-warning border border-warning-border",
-  neutral: "bg-surface-3 text-fg-muted border border-stroke",
-}
-
-function accentFor(status: AlertStatus): Accent {
-  if (status === "Unverified") return "danger"
-  if (status === "Ongoing") return "warning"
-  return "neutral"
-}
-
-function MetaRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between text-xs">
-      <span className="font-medium tracking-[0.08em] text-fg-muted">{label}</span>
-      <span className="font-medium text-fg-body">{value}</span>
-    </div>
-  )
-}
-
-function AttributionBlock({
-  leftLabel,
-  leftValue,
-  rightLabel,
-  rightValue,
-}: {
-  leftLabel: string
-  leftValue: ReactNode
-  rightLabel: string
-  rightValue: ReactNode
-}) {
-  return (
-    <div className="flex items-start justify-between">
-      <div>
-        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-fg-muted">
-          {leftLabel}
-        </div>
-        <div className="text-xs font-medium text-fg-body">{leftValue}</div>
-      </div>
-      <div className="text-right">
-        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-fg-muted">
-          {rightLabel}
-        </div>
-        <div className="text-xs text-fg-body">{rightValue}</div>
-      </div>
-    </div>
-  )
-}
 
 export interface IncidentDetailModalProps {
   alert: AlertLog | null
@@ -135,7 +82,6 @@ export function IncidentDetailModal({
   const ageSeconds = alert ? secondsSince(alert.detected_at, now) : null
   const isDelayed = ageSeconds !== null && ageSeconds >= STALE_DETECTION_SECONDS
 
-  const accent: Accent = alert ? accentFor(alert.detection_status) : "neutral"
   const isTerminal =
     alert?.detection_status === "Dismissed" || alert?.detection_status === "Resolved"
 
@@ -148,166 +94,200 @@ export function IncidentDetailModal({
       isOpen={isOpen}
       onClose={onClose}
       hideClose
-      className={cn("max-w-lg overflow-hidden border-t-4 p-0", ACCENT_BORDER[accent])}
+      className={cn(
+        "max-w-md overflow-hidden p-0 border-t-4",
+        alert ? getAlertBorderClass(alert.detection_status) : "border-t-stroke-strong",
+      )}
     >
-      <div className="flex flex-col bg-surface-2">
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-fg">
-            {alert?.detection_status === "Unverified" ? "Accident Detected" : "Accident Details"}
-          </h2>
+      <div className="-mx-6 -mb-6">
+        {/* ── Section 1: Header ───────────────────────────────────────────── */}
+        <div className="flex items-center justify-between border-b border-stroke px-6 py-4">
+          <div>
+            <p className="text-base font-bold uppercase tracking-widest text-fg">
+              {alert?.detection_status === "Unverified" ? "Accident Detected" : "Accident Details"}
+            </p>
+          </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close incident details"
-            className="text-fg-muted transition-colors hover:text-fg"
+            className={cn(
+              "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+              focusRing,
+            )}
           >
-            <RiCloseLine size={18} />
+            <RiCloseLine size={20} />
           </button>
         </div>
 
-        <div className="flex aspect-video w-full items-center justify-center border-b border-stroke bg-surface-1">
+        {/* ── Section 2a: Snapshot image ────────────────────────────────── */}
+        <div className="flex min-h-[220px] items-center justify-center bg-surface-3 p-6">
           {alert ? (
             <SnapshotImage
               snapshotUrl={alert.snapshot_url}
-              alt={`${formatAlertCode(alert.log_id)} snapshot`}
-              className="h-full w-full object-contain"
-              fallbackClassName="h-32 w-48 border border-stroke-strong bg-surface-1 text-fg-muted"
+              alt={`Accident snapshot for log ${alert.log_id}`}
+              className="max-h-52 w-auto rounded border-2 border-stroke object-contain"
+              fallbackClassName="h-40 w-full rounded"
             />
           ) : (
             <div className="text-xs text-fg-muted">Loading preview…</div>
           )}
         </div>
 
-        <div className="p-6">
-          {alert ? (
-            <>
-              <div className="mb-5 flex items-center gap-3">
-                <span className="text-xl font-semibold text-fg">
-                  {formatAlertCode(alert.log_id)}
+        {alert ? (
+          <>
+            {/* ── Section 2b: Accident ID + Status Badge ────────────────────── */}
+            <div className="flex items-center justify-between bg-surface-1 px-6 py-3">
+              <span className="text-2xl font-semibold text-fg">
+                {formatAlertCode(alert.log_id)}
+              </span>
+              <span
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-semibold",
+                  getAlertBadgeClass(alert.detection_status),
+                )}
+              >
+                {alert.detection_status.toUpperCase()}
+              </span>
+            </div>
+
+            {/* ── Section 3: Core Telemetry ─────────────────────────────────── */}
+            <div className="space-y-3 bg-surface-1 px-6 pb-4">
+              <div className="flex items-start justify-between">
+                <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                  Timestamp
+                </span>
+                <span className="text-right text-sm tabular-nums text-fg">
+                  <span className="block">{formatFullDateTime(alert.detected_at)}</span>
+                  {isDelayed && alert.detection_status === "Unverified" ? (
+                    <span className="mt-0.5 block text-[10px] font-medium text-warning">
+                      {formatDuration(ageSeconds)} ago — delivered late
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                  Camera Name
+                </span>
+                <span className="text-sm font-bold uppercase text-fg">
+                  {alert.camera_name ?? `Camera ${alert.camera_id}`}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                  AI-Confidence Score
                 </span>
                 <span
                   className={cn(
-                    "rounded-sm px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em]",
-                    BADGE_CLASS[accent],
+                    "text-sm font-bold",
+                    alert.confidence_score * 100 < 75 ? "text-danger" : "text-success",
                   )}
                 >
-                  {alert.detection_status}
+                  {formatAlertConfidence(alert.confidence_score)}
                 </span>
               </div>
 
-              <div className="mb-6 space-y-3.5">
-                <MetaRow
-                  label="TIMESTAMP"
-                  value={
-                    <span className="text-right">
-                      <span className="block">{formatFullDateTime(alert.detected_at)}</span>
-                      {isDelayed && alert.detection_status === "Unverified" ? (
-                        <span className="mt-0.5 block text-[10px] font-medium text-warning">
-                          {formatDuration(ageSeconds)} ago — delivered late
-                        </span>
-                      ) : null}
-                    </span>
-                  }
-                />
-                <MetaRow label="CAMERA NAME" value={alert.camera_name ?? "Unknown Camera"} />
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium tracking-[0.08em] text-fg-muted">
-                    AI-CONFIDENCE SCORE
-                  </span>
-                  <span className="rounded bg-danger-subtle px-1.5 py-0.5 font-bold text-danger">
-                    {formatAlertConfidence(alert.confidence_score)}
-                  </span>
-                </div>
+              {alert.detection_status !== "Unverified" && (
+                <>
+                  <hr className="border-border my-[14px]" />
+                  <div className="mt-2 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                        Verified By
+                      </p>
+                      <p className="mt-1 text-sm text-fg">{alert.verified_by_name ?? "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                        Time Verified
+                      </p>
+                      <p className="mt-1 text-sm text-fg">
+                        {formatFullDateTime(alert.verified_at)}
+                      </p>
+                    </div>
+                  </div>
+                  {isTerminal && (
+                    <div className="mt-4 grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                          Closed By
+                        </p>
+                        <p className="mt-1 text-sm text-fg">{alert.closed_by_name ?? "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                          {closedTimeLabel}
+                        </p>
+                        <p className="mt-1 text-sm text-fg">
+                          {formatFullDateTime(alert.closed_at)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {notice ? <div className="bg-surface-1 px-6 pb-1 pt-1">{notice}</div> : null}
+
+            {/* ── Section 5: Footer Action Buttons ────────────────────────────── */}
+            {!isTerminal && (
+              <div className="flex w-full gap-4 border-t border-stroke bg-surface-1 p-4">
+                {alert.detection_status === "Unverified" ? (
+                  <>
+                    {snoozeAction}
+                    <Button
+                      variant="secondary"
+                      className="flex-1 rounded-md bg-surface-3 py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
+                      disabled={isTransitionPending}
+                      isLoading={isDismissing}
+                      loadingLabel="…"
+                      onClick={() => onDismiss(alert.log_id)}
+                    >
+                      Dismiss Accident
+                    </Button>
+                    <Button
+                      className="flex-1 rounded-md bg-primary py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
+                      disabled={isTransitionPending}
+                      isLoading={isConfirming}
+                      loadingLabel="…"
+                      onClick={() => onConfirm(alert.log_id)}
+                    >
+                      Confirm Accident
+                    </Button>
+                  </>
+                ) : alert.detection_status === "Ongoing" ? (
+                  <>
+                    <Button
+                      variant="secondary"
+                      className="flex-1 rounded-md bg-surface-3 py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
+                      disabled={isTransitionPending}
+                      isLoading={isDismissing}
+                      loadingLabel="…"
+                      onClick={() => onDismiss(alert.log_id)}
+                    >
+                      Dismiss Accident
+                    </Button>
+                    <Button
+                      className="flex-1 rounded-md bg-primary py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
+                      disabled={isTransitionPending}
+                      isLoading={isResolving}
+                      loadingLabel="…"
+                      onClick={() => onResolve(alert.log_id)}
+                    >
+                      Resolve Accident
+                    </Button>
+                  </>
+                ) : null}
               </div>
-
-              {/*
-                The unverified variant has nothing to attribute yet — nobody has
-                verified or closed it — so the whole block is omitted rather
-                than rendered full of dashes.
-              */}
-              {alert.detection_status !== "Unverified" ? (
-                <div className="mb-6 space-y-4 border-t border-border pt-5">
-                  <AttributionBlock
-                    leftLabel="VERIFIED BY"
-                    leftValue={alert.verified_by_name ?? "-"}
-                    rightLabel="TIME VERIFIED"
-                    rightValue={formatFullDateTime(alert.verified_at)}
-                  />
-                  {isTerminal ? (
-                    <AttributionBlock
-                      leftLabel="CLOSED BY"
-                      leftValue={alert.closed_by_name ?? "-"}
-                      rightLabel={closedTimeLabel}
-                      rightValue={formatFullDateTime(alert.closed_at)}
-                    />
-                  ) : null}
-                </div>
-              ) : null}
-
-              {notice}
-
-              {alert.detection_status === "Unverified" ? (
-                <div className="flex items-center gap-3">
-                  {snoozeAction}
-                  <Button
-                    variant="outline"
-                    className="flex-1 uppercase tracking-[0.08em]"
-                    disabled={isTransitionPending}
-                    isLoading={isDismissing}
-                    loadingLabel="Dismissing…"
-                    onClick={() => onDismiss(alert.log_id)}
-                  >
-                    Dismiss Accident
-                  </Button>
-                  <Button
-                    variant="primary"
-                    className="flex-1 uppercase tracking-[0.08em]"
-                    disabled={isTransitionPending}
-                    isLoading={isConfirming}
-                    loadingLabel="Confirming…"
-                    onClick={() => onConfirm(alert.log_id)}
-                  >
-                    Confirm Accident
-                  </Button>
-                </div>
-              ) : null}
-
-              {alert.detection_status === "Ongoing" ? (
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    className="flex-1 uppercase tracking-[0.08em]"
-                    disabled={isTransitionPending}
-                    isLoading={isDismissing}
-                    loadingLabel="Dismissing…"
-                    onClick={() => onDismiss(alert.log_id)}
-                  >
-                    Dismiss Accident
-                  </Button>
-                  <Button
-                    variant="primary"
-                    className="flex-1 uppercase tracking-[0.08em]"
-                    disabled={isTransitionPending}
-                    isLoading={isResolving}
-                    loadingLabel="Resolving…"
-                    onClick={() => onResolve(alert.log_id)}
-                  >
-                    Resolve Accident
-                  </Button>
-                </div>
-              ) : null}
-
-              {/*
-                124:9186 draws no action buttons on a terminal incident, and
-                that is a contract statement rather than a layout choice: the
-                backend rejects every transition out of Dismissed or Resolved,
-                so offering one would be a button that can only fail.
-              */}
-            </>
-          ) : (
-            <div className="py-12 text-center text-sm text-fg-muted">Loading alert details…</div>
-          )}
-        </div>
+            )}
+          </>
+        ) : (
+          <div className="bg-surface-1 py-12 text-center text-sm text-fg-muted">
+            Loading alert details…
+          </div>
+        )}
       </div>
     </Modal>
   )
