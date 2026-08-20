@@ -112,6 +112,7 @@ export default function Cameras() {
     aiFilter !== "all" ||
     isEnabledFilter !== "all" ||
     activeFilter !== "active"
+
   // See Users.tsx: mirror the query total into state so usePagination can clamp
   // the page at read time without an effect.
   const [seenTotal, setSeenTotal] = useState(0)
