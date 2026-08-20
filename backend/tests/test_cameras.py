@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from app.core.config import settings
-from app.models import AIStatus, Camera, ConnectionStatus, DetectionStatus
+from app.models import AIStatus, AuditLog, Camera, ConnectionStatus, DetectionStatus
 from app.services.cameras import (
     presented_ai_status_expr,
     presented_connection_status_expr,
@@ -781,3 +781,280 @@ class TestDeleteCamera:
         headers = _headers(client, session)
         resp = client.delete("/api/cameras/99999", headers=headers)
         assert resp.status_code == 404
+
+
+class TestGetAllCamerasIsActiveFilter:
+    """P23 — mirrors P19 §3's is_active tri-state for Users. Camera
+    soft-delete had no reactivation path (PR #126) because there was no way
+    to even list, let alone restore, a deleted row."""
+
+    def test_default_omits_soft_deleted_cameras(
+        self, client: TestClient, session: Session
+    ):
+        """Pins today's behaviour: a caller that passes nothing must see
+        exactly what it saw before this change."""
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Keep Me", channel_id=400)
+        deleted = make_camera(session, name="Delete Me", channel_id=401)
+        client.delete(f"/api/cameras/{deleted.camera_id}", headers=headers)
+
+        resp = client.get("/api/cameras/", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert body["cameras"][0]["camera_id"] == cam.camera_id
+
+    def test_is_active_false_returns_only_soft_deleted(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        make_camera(session, name="Keep Me 2", channel_id=402)
+        deleted = make_camera(session, name="Delete Me 2", channel_id=403)
+        client.delete(f"/api/cameras/{deleted.camera_id}", headers=headers)
+
+        resp = client.get("/api/cameras/?is_active=false", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_filtered"] == 1
+        assert body["cameras"][0]["camera_id"] == deleted.camera_id
+        assert body["cameras"][0]["is_active"] is False
+
+    def test_is_active_null_returns_both(self, client: TestClient, session: Session):
+        headers = _headers(client, session)
+        make_camera(session, name="Keep Me 3", channel_id=404)
+        deleted = make_camera(session, name="Delete Me 3", channel_id=405)
+        client.delete(f"/api/cameras/{deleted.camera_id}", headers=headers)
+
+        resp = client.get("/api/cameras/?is_active=null", headers=headers)
+        assert resp.status_code == 200
+        assert resp.json()["total_filtered"] == 2
+
+    def test_invalid_is_active_value_is_422(self, client: TestClient, session: Session):
+        headers = _headers(client, session)
+        resp = client.get("/api/cameras/?is_active=maybe", headers=headers)
+        assert resp.status_code == 422
+
+    def test_kpis_and_breakdowns_unaffected_by_is_active_filter(
+        self, client: TestClient, session: Session
+    ):
+        """01_CONTRACTS.md §5.9 — kpis/breakdowns deliberately stay the
+        unfiltered is_active=1 population no matter what the list filter
+        shows; a soft-deleted camera is not part of the fleet being
+        monitored."""
+        headers = _headers(client, session)
+        make_camera(session, name="Keep Me 4", channel_id=406)
+        deleted = make_camera(session, name="Delete Me 4", channel_id=407)
+        client.delete(f"/api/cameras/{deleted.camera_id}", headers=headers)
+
+        default_body = client.get("/api/cameras/", headers=headers).json()
+        deleted_body = client.get(
+            "/api/cameras/?is_active=false", headers=headers
+        ).json()
+        both_body = client.get("/api/cameras/?is_active=null", headers=headers).json()
+
+        assert default_body["kpis"] == deleted_body["kpis"] == both_body["kpis"]
+        assert (
+            default_body["breakdowns"]
+            == deleted_body["breakdowns"]
+            == both_body["breakdowns"]
+        )
+        assert default_body["kpis"]["total"] == 1
+
+
+class TestCameraRestore:
+    """P23 — the reactivation path DELETE never had (PR #126)."""
+
+    def test_round_trip_restore(self, client: TestClient, session: Session):
+        headers = _headers(client, session)
+        cam = make_camera(
+            session, name="Round Trip Cam", channel_id=410, desired_ai_state="Active"
+        )
+        client.delete(f"/api/cameras/{cam.camera_id}", headers=headers)
+        deleted_version = session.exec(
+            select(Camera.config_version).where(Camera.camera_id == cam.camera_id)
+        ).one()
+
+        listed = client.get("/api/cameras/?is_active=false", headers=headers).json()
+        assert cam.camera_id in {c["camera_id"] for c in listed["cameras"]}
+
+        with client.websocket_connect("/ws/alerts", headers=headers) as websocket:
+            websocket.receive_json()  # CONNECTION_READY
+
+            resp = client.patch(
+                f"/api/cameras/{cam.camera_id}",
+                headers=headers,
+                json={"is_active": True},
+            )
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert body["is_active"] is True
+            assert body["config_version"] == deleted_version + 1
+            assert body["desired_ai_state"] == "Active"
+
+            envelope = websocket.receive_json()
+            assert envelope["type"] == "CAMERA_STATUS_UPDATE"
+            assert envelope["data"]["camera_id"] == cam.camera_id
+
+        actions = session.exec(
+            select(AuditLog.action).where(AuditLog.target_ref == str(cam.camera_id))
+        ).all()
+        assert actions.count("CAMERA_RESTORE") == 1
+
+    def test_restore_collision_on_taken_name_is_409(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        make_camera(session, name="Taken Restore Name", channel_id=411)
+        deleted = make_camera(session, name="Old Name", channel_id=412)
+        client.delete(f"/api/cameras/{deleted.camera_id}", headers=headers)
+
+        resp = client.patch(
+            f"/api/cameras/{deleted.camera_id}",
+            headers=headers,
+            json={"is_active": True, "camera_name": "Taken Restore Name"},
+        )
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "CONFLICT_DUPLICATE"
+
+    def test_restore_collision_on_taken_name_case_insensitive_is_409(
+        self, client: TestClient, session: Session
+    ):
+        """The unique index is on lower(camera_name) — "Case Cam" and
+        "case cam" collide even though neither string matches exactly.
+        The soft-deleted camera is seeded directly with is_active=False
+        (rather than created-then-deleted) — creating it active first would
+        itself collide with the live "Case Cam" at insert time, since the
+        partial index only exempts rows that are already inactive."""
+        headers = _headers(client, session)
+        make_camera(session, name="Case Cam", channel_id=413)
+        deleted = make_camera(session, name="case cam", channel_id=414, is_active=False)
+
+        resp = client.patch(
+            f"/api/cameras/{deleted.camera_id}",
+            headers=headers,
+            json={"is_active": True},
+        )
+        assert resp.status_code == 409, resp.text
+
+    def test_restore_collision_on_taken_channel_id_is_409(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        make_camera(session, name="Chan Holder", channel_id=415)
+        deleted = make_camera(session, name="Chan Deleted", channel_id=416)
+        client.delete(f"/api/cameras/{deleted.camera_id}", headers=headers)
+
+        resp = client.patch(
+            f"/api/cameras/{deleted.camera_id}",
+            headers=headers,
+            json={"is_active": True, "channel_id": 415},
+        )
+        assert resp.status_code == 409, resp.text
+
+    def test_patch_cannot_deactivate_an_active_camera(
+        self, client: TestClient, session: Session
+    ):
+        """PATCH's is_active is one-directional (restore only) — the
+        True -> False transition stays DELETE's job, since only DELETE
+        checks for an open incident first."""
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Guard Cam", channel_id=417)
+
+        resp = client.patch(
+            f"/api/cameras/{cam.camera_id}",
+            headers=headers,
+            json={"is_active": False},
+        )
+        assert resp.status_code == 400, resp.text
+
+        session.refresh(cam)
+        assert cam.is_active is True
+
+    def test_delete_still_404s_on_an_already_soft_deleted_camera(
+        self, client: TestClient, session: Session
+    ):
+        """Lookup split — DELETE stays on the active-only lookup; only
+        PATCH can reach a soft-deleted row."""
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Double Delete Cam", channel_id=418)
+        client.delete(f"/api/cameras/{cam.camera_id}", headers=headers)
+
+        resp = client.delete(f"/api/cameras/{cam.camera_id}", headers=headers)
+        assert resp.status_code == 404
+
+    def test_only_patch_reaches_a_soft_deleted_camera(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Reach Cam", channel_id=419)
+        client.delete(f"/api/cameras/{cam.camera_id}", headers=headers)
+
+        get_resp = client.get(f"/api/cameras/{cam.camera_id}", headers=headers)
+        assert get_resp.status_code == 404
+
+        patch_resp = client.patch(
+            f"/api/cameras/{cam.camera_id}",
+            headers=headers,
+            json={"is_active": True},
+        )
+        assert patch_resp.status_code == 200, patch_resp.text
+
+    def test_restored_cameras_detections_stay_linked(
+        self, client: TestClient, session: Session
+    ):
+        """The whole point of a soft delete — a restored camera's incident
+        history was never orphaned."""
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Detections Cam", channel_id=420)
+        detection = make_detection(session, cam, status=DetectionStatus.RESOLVED)
+        client.delete(f"/api/cameras/{cam.camera_id}", headers=headers)
+
+        resp = client.patch(
+            f"/api/cameras/{cam.camera_id}",
+            headers=headers,
+            json={"is_active": True},
+        )
+        assert resp.status_code == 200, resp.text
+
+        session.refresh(detection)
+        assert detection.camera_id == cam.camera_id
+
+    def test_restore_and_rename_in_same_request_produces_both_actions(
+        self, client: TestClient, session: Session
+    ):
+        """D-007 multi-action semantics — restoring and renaming together
+        produce both CAMERA_RESTORE and CAMERA_UPDATE, same transaction."""
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Combo Cam", channel_id=421)
+        client.delete(f"/api/cameras/{cam.camera_id}", headers=headers)
+
+        resp = client.patch(
+            f"/api/cameras/{cam.camera_id}",
+            headers=headers,
+            json={"is_active": True, "camera_name": "Combo Cam Renamed"},
+        )
+        assert resp.status_code == 200, resp.text
+
+        actions = session.exec(
+            select(AuditLog.action).where(AuditLog.target_ref == str(cam.camera_id))
+        ).all()
+        assert actions.count("CAMERA_RESTORE") == 1
+        assert actions.count("CAMERA_UPDATE") == 1
+
+    def test_is_active_true_on_an_already_active_camera_is_not_audited_as_restore(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Already Active Cam", channel_id=422)
+
+        resp = client.patch(
+            f"/api/cameras/{cam.camera_id}",
+            headers=headers,
+            json={"is_active": True},
+        )
+        assert resp.status_code == 200, resp.text
+
+        actions = session.exec(
+            select(AuditLog.action).where(AuditLog.target_ref == str(cam.camera_id))
+        ).all()
+        assert "CAMERA_RESTORE" not in actions
