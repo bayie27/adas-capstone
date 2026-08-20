@@ -5,15 +5,20 @@ table for audit coupling, redaction, multi-action, and the viewer.
 """
 
 import csv
+from datetime import UTC, datetime
 from io import StringIO
 
 import pytest
-from app.core.config import settings
+from alembic import command
+from app.core.config import Settings, settings
+from app.core.db import create_db_engine
+from app.core.migrations import get_alembic_config
 from app.core.security import create_session_token
 from app.models import AuditLog, AuditResult, Camera
 from app.services import audit
 from app.services.sessions import create_session
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -523,3 +528,82 @@ class TestAuditExport:
         rows = list(csv.DictReader(StringIO(export_resp.text[1:])))
         export_ids = [int(row["Audit ID"]) for row in rows]
         assert list_ids == export_ids
+
+
+class TestMigratedAuditLogImmutability:
+    """P23 Step 1 — adding CAMERA_RESTORE to ck_audit_action_valid needs a
+    SQLite batch_alter_table move-and-copy rebuild of audit_log, which
+    means trg_audit_log_no_update/trg_audit_log_no_delete get dropped and
+    recreated around it. Every other test in this file runs against the
+    create_all() fixture (conftest.py's `session`), which builds straight
+    from the current models and would pass even if the migration itself
+    forgot to recreate a trigger or silently dropped an index — only
+    replaying the actual Alembic migration chain proves the rebuild left
+    the trail intact."""
+
+    @pytest.fixture()
+    def migrated_engine(self, tmp_path):
+        db_path = tmp_path / "p23-migrated.db"
+        migration_settings = Settings(
+            _env_file=None,
+            SECRET_KEY="test-migration-secret",
+            INTERNAL_API_KEY="test-migration-key",
+            DEFAULT_ADMIN_PASSWORD="test-migration-pw",
+            DATABASE_URL=f"sqlite:///{db_path}",
+        )
+        command.upgrade(get_alembic_config(migration_settings), "head")
+        engine = create_db_engine(migration_settings)
+        yield engine
+        engine.dispose()
+
+    @staticmethod
+    def _insert_row(engine, action: str) -> None:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO audit_log (actor_type, action, result, created_at) "
+                    "VALUES ('system', :action, 'success', :created_at)"
+                ),
+                {"action": action, "created_at": datetime.now(UTC).isoformat()},
+            )
+
+    def test_update_raises_after_migration(self, migrated_engine):
+        self._insert_row(migrated_engine, "LOGIN_SUCCESS")
+        with (
+            pytest.raises(Exception, match="audit_log is append-only"),
+            migrated_engine.begin() as conn,
+        ):
+            conn.execute(text("UPDATE audit_log SET action = 'LOGOUT'"))
+
+    def test_delete_raises_after_migration(self, migrated_engine):
+        self._insert_row(migrated_engine, "LOGIN_SUCCESS")
+        with (
+            pytest.raises(Exception, match="audit_log is append-only"),
+            migrated_engine.begin() as conn,
+        ):
+            conn.execute(text("DELETE FROM audit_log"))
+
+    def test_camera_restore_is_accepted_after_migration(self, migrated_engine):
+        self._insert_row(migrated_engine, "CAMERA_RESTORE")  # must not raise
+
+    def test_unknown_action_still_rejected_after_migration(self, migrated_engine):
+        with pytest.raises(Exception):  # noqa: B017 — raw IntegrityError from SQLite
+            self._insert_row(migrated_engine, "NOT_A_REAL_ACTION")
+
+    def test_all_four_audit_indexes_survive_the_rebuild(self, migrated_engine):
+        with migrated_engine.connect() as conn:
+            names = {
+                row[0]
+                for row in conn.execute(
+                    text(
+                        "SELECT name FROM sqlite_master "
+                        "WHERE type = 'index' AND tbl_name = 'audit_log'"
+                    )
+                ).fetchall()
+            }
+        assert names == {
+            "ix_audit_created_at",
+            "ix_audit_action_created_at",
+            "ix_audit_user_created_at",
+            "ix_audit_target",
+        }
