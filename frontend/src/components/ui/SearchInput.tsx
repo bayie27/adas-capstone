@@ -1,6 +1,5 @@
 import { RiSearchLine } from "@remixicon/react"
 import { cn } from "@/utils/cn"
-import { focusRing } from "@/components/ui/Button"
 
 export function SearchInput({
   value,
@@ -12,19 +11,20 @@ export function SearchInput({
   placeholder?: string
 }) {
   return (
-    <div className="relative">
-      <RiSearchLine size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" />
+    <div
+      className={cn(
+        "flex items-center h-9 px-4 py-2 gap-2 bg-canvas border border-stroke rounded shadow-md",
+        "focus-within:ring-1 focus-within:ring-stroke-strong",
+        "transition-colors duration-150 w-60",
+      )}
+    >
+      <RiSearchLine className="w-4 h-4 text-fg-muted shrink-0" />
       <input
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className={cn(
-          "w-60 rounded-md border border-stroke bg-surface-1 py-1.5 pl-8 pr-4 text-xs text-fg",
-          "transition-colors duration-150 placeholder:text-fg-muted focus:border-stroke-strong",
-          "disabled:cursor-not-allowed disabled:opacity-60",
-          focusRing,
-        )}
+        className="bg-transparent outline-none w-full text-xs font-normal text-fg placeholder:text-fg-muted disabled:cursor-not-allowed disabled:opacity-60"
       />
     </div>
   )
