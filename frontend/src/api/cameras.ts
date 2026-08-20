@@ -62,6 +62,15 @@ export interface GetCamerasParams {
   connection_status?: CameraConnectionStatus[]
   ai_status?: CameraAiStatus[]
   is_enabled?: boolean
+  /**
+   * String-typed to match the backend's own three-value parse exactly
+   * (`_parse_is_active_filter`, `routes/cameras.py`) — the identical design
+   * already shipped for `GetUsersParams` (P19 §3, `api/users.ts`). Omitted
+   * entirely preserves today's default (active-only) behavior byte-for-byte.
+   * `"false"` surfaces soft-deleted cameras so they can be found and
+   * restored; `"null"` lists both.
+   */
+  is_active?: "true" | "false" | "null"
   search?: string
   limit?: number
   offset?: number
@@ -106,6 +115,14 @@ export interface UpdateCameraInput {
   camera_name?: string
   channel_id?: number
   is_enabled?: boolean
+  /**
+   * `false` -> `true` restores a soft-deleted camera. `true` -> `false`
+   * (i.e. sending `is_active: false`) is rejected by the backend with a
+   * plain 400 — DELETE stays the only path for deactivating, since it's the
+   * only one that checks for an open incident first. Never send
+   * `is_active: false` here; call `deleteCamera` instead.
+   */
+  is_active?: boolean
 }
 
 export async function getCameras(params: GetCamerasParams) {
@@ -128,4 +145,10 @@ export async function updateCamera(cameraId: number, input: UpdateCameraInput) {
 
 export async function deleteCamera(cameraId: number) {
   await api.delete(`/cameras/${cameraId}`)
+}
+
+/** The counterpart to `deleteCamera` — a thin wrapper over `updateCamera`
+ * so call sites don't construct the `{ is_active: true }` payload inline. */
+export async function restoreCamera(cameraId: number) {
+  return updateCamera(cameraId, { is_active: true })
 }
