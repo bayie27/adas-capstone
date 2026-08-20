@@ -1,8 +1,9 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
 
 import { Badge } from "@/components/ui/Badge"
 import { Button, focusRing } from "@/components/ui/Button"
+import { ClearFiltersButton } from "@/components/ui/ClearFiltersButton"
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
@@ -34,15 +35,9 @@ import type {
 } from "@/api/cameras"
 import { getApiError, getApiErrorMessage } from "@/api/client"
 import { shouldApplyCameraEvent } from "@/utils/merge"
-import {
-  CAMERA_AI_STATUS_OPTIONS,
-  CAMERA_CONNECTION_STATUS_OPTIONS,
-  describeCameraDesiredState,
-  isCameraInCooldown,
-} from "@/utils/format"
+import { describeCameraDesiredState, isCameraInCooldown } from "@/utils/format"
 import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
-import { CameraBreakdownBar } from "@/pages/cameras/CameraBreakdownBar"
 import { CameraDetailPanel } from "@/pages/cameras/CameraDetailPanel"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"
 import {
@@ -110,6 +105,13 @@ export default function Cameras() {
   const [detailCameraId, setDetailCameraId] = useState<number | null>(null)
 
   const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
+
+  const hasFilters =
+    searchTerm.trim() !== "" ||
+    connectionFilter !== "all" ||
+    aiFilter !== "all" ||
+    isEnabledFilter !== "all" ||
+    activeFilter !== "active"
   // See Users.tsx: mirror the query total into state so usePagination can clamp
   // the page at read time without an effect.
   const [seenTotal, setSeenTotal] = useState(0)
@@ -263,6 +265,28 @@ export default function Cameras() {
   })
 
   const cameras = camerasQuery.data?.cameras ?? []
+
+  const connectionOptions = useMemo(() => {
+    const c = camerasQuery.data?.breakdowns?.connection
+    return [
+      { label: "All Connections", value: "all" as const },
+      { label: `Connected (${c?.connected ?? 0})`, value: "Connected" as const },
+      { label: `Reconnecting (${c?.reconnecting ?? 0})`, value: "Reconnecting" as const },
+      { label: `Disconnected (${c?.disconnected ?? 0})`, value: "Disconnected" as const },
+      { label: `Unresponsive (${c?.unresponsive ?? 0})`, value: "Unresponsive" as const },
+    ]
+  }, [camerasQuery.data?.breakdowns?.connection])
+
+  const aiOptions = useMemo(() => {
+    const a = camerasQuery.data?.breakdowns?.ai
+    return [
+      { label: "All AI States", value: "all" as const },
+      { label: `Active (${a?.active ?? 0})`, value: "Active" as const },
+      { label: `Paused (${a?.paused ?? 0})`, value: "Paused" as const },
+      { label: `Inactive (${a?.inactive ?? 0})`, value: "Inactive" as const },
+      { label: `Unresponsive (${a?.unresponsive ?? 0})`, value: "Unresponsive" as const },
+    ]
+  }, [camerasQuery.data?.breakdowns?.ai])
   // §5.9 — kpis describe the whole active population, not the filtered page,
   // so they are read straight off the response and never derived from
   // `cameras`. Deriving them is what made all three cards read 0.
@@ -315,20 +339,6 @@ export default function Cameras() {
         />
       </div>
 
-      <CameraBreakdownBar
-        breakdowns={camerasQuery.data?.breakdowns}
-        activeConnectionStatus={connectionFilter === "all" ? null : connectionFilter}
-        activeAiStatus={aiFilter === "all" ? null : aiFilter}
-        onSelectConnectionStatus={(status) => {
-          reset()
-          setConnectionFilter((current) => (current === status ? "all" : status))
-        }}
-        onSelectAiStatus={(status) => {
-          reset()
-          setAiFilter((current) => (current === status ? "all" : status))
-        }}
-      />
-
       {camerasQuery.isError ? (
         <QueryErrorBanner
           error={camerasQuery.error}
@@ -350,7 +360,7 @@ export default function Cameras() {
 
           <FilterSelect
             value={connectionFilter}
-            options={CAMERA_CONNECTION_STATUS_OPTIONS}
+            options={connectionOptions}
             onChange={(value) => {
               reset()
               setConnectionFilter(value)
@@ -359,7 +369,7 @@ export default function Cameras() {
 
           <FilterSelect
             value={aiFilter}
-            options={CAMERA_AI_STATUS_OPTIONS}
+            options={aiOptions}
             onChange={(value) => {
               reset()
               setAiFilter(value)
@@ -392,6 +402,18 @@ export default function Cameras() {
               setActiveFilter(value)
             }}
           />
+          {hasFilters ? (
+            <ClearFiltersButton
+              onClick={() => {
+                reset()
+                setSearchTerm("")
+                setConnectionFilter("all")
+                setAiFilter("all")
+                setIsEnabledFilter("all")
+                setActiveFilter("active")
+              }}
+            />
+          ) : null}
         </div>
 
         <Button
