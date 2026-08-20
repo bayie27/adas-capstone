@@ -39,8 +39,8 @@ export function DateRangePicker({
 }) {
   const id = useId()
   const fieldClass = cn(
-    "bg-transparent text-caption text-fg-body [color-scheme:dark]",
-    "rounded-sm disabled:cursor-not-allowed",
+    "bg-transparent text-xs font-normal text-fg [color-scheme:dark] focus:outline-none",
+    "disabled:cursor-not-allowed",
     focusRing,
   )
 
@@ -49,13 +49,13 @@ export function DateRangePicker({
       role="group"
       aria-label={label}
       className={cn(
-        "inline-flex items-center gap-2 rounded-md border border-stroke bg-surface-1 px-3 py-1.5",
-        "transition-colors duration-150",
+        "inline-flex h-9 items-center gap-2 rounded border border-stroke bg-canvas px-4 py-2 shadow-md",
+        "transition-colors duration-150 text-xs font-normal text-fg",
         disabled ? "cursor-not-allowed opacity-60" : "hover:border-stroke-strong",
         className,
       )}
     >
-      <RiCalendarLine size={13} className="shrink-0 text-fg-muted" aria-hidden="true" />
+      <RiCalendarLine size={16} className="shrink-0 text-fg" aria-hidden="true" />
       <input
         id={`${id}-start`}
         type="date"
@@ -66,7 +66,7 @@ export function DateRangePicker({
         aria-label={`${label} start`}
         className={fieldClass}
       />
-      <span aria-hidden="true" className="text-caption text-fg-muted">
+      <span aria-hidden="true" className="text-xs font-normal text-fg">
         –
       </span>
       <input
