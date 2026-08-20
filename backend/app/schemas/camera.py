@@ -84,6 +84,10 @@ class CameraUpdate(SQLModel):
     camera_name: str | None = Field(default=None, min_length=1, max_length=100)
     channel_id: int | None = Field(default=None, gt=0)
     is_enabled: bool | None = None
+    # P23 — false -> true restores a soft-deleted camera (the counterpart
+    # to DELETE /api/cameras/{camera_id}). true -> false is rejected by the
+    # route itself; DELETE stays the one guarded path for deactivating.
+    is_active: bool | None = None
 
     @field_validator("camera_name", mode="before")
     @classmethod

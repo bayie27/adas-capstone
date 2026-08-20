@@ -52,9 +52,50 @@ router = APIRouter(
 
 _OPEN_STATUSES = (DetectionStatus.UNVERIFIED.value, DetectionStatus.ONGOING.value)
 
+# P19 §3's is_active tri-state, mirrored here (routes/users.py) rather than
+# shared — a plain bool | None query param can't express three states over
+# HTTP: with a non-None default, an *omitted* param and an *explicit* null
+# are indistinguishable to FastAPI's query binding, and axios's own
+# paramsSerializer silently drops null-valued params before the request is
+# even sent. Accepting the raw string and treating the literal `null` as
+# its own value keeps all three states reachable over the wire.
+_IS_ACTIVE_FILTER_VALUES = {"true": True, "false": False, "null": None}
+
+
+def _parse_is_active_filter(raw: str | None) -> bool | None:
+    if raw is None:
+        return True
+    try:
+        return _IS_ACTIVE_FILTER_VALUES[raw.strip().lower()]
+    except KeyError:
+        raise HTTPException(
+            status_code=422,
+            detail="is_active must be 'true', 'false', or 'null'.",
+        ) from None
+
 
 def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
+
+
+def _get_camera_or_404(camera_id: int, session: Session) -> Camera:
+    """Like _get_active_camera_or_404, but does not require is_active — the
+    counterpart to routes/users.py's _get_user_or_404 (P19 §3). Used only by
+    update_camera (P23), the sole route that must be able to reach a
+    soft-deleted row: it's the only way back from false to true. GET detail
+    and DELETE keep requiring an active target, since neither makes sense on
+    an already-deleted camera."""
+    camera = session.get(Camera, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    return camera
+
+
+def _get_active_camera_or_404(camera_id: int, session: Session) -> Camera:
+    camera = session.get(Camera, camera_id)
+    if not camera or not camera.is_active:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    return camera
 
 
 def _has_open_incident(session: Session, camera_id: int) -> bool:
@@ -118,6 +159,11 @@ def get_all_cameras(
         description="Filter by one or more AI statuses, e.g. ?ai_status=Active&ai_status=Paused",
     ),
     is_enabled: bool | None = Query(default=None),
+    is_active: str | None = Query(
+        default=None,
+        description="'true' (default when omitted) lists active cameras"
+        " only; 'false' lists soft-deleted cameras; 'null' lists both.",
+    ),
     search: str | None = Query(default=None, min_length=1, max_length=100),
     limit: int = Query(default=5, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -135,11 +181,21 @@ def get_all_cameras(
     Filters compare against the same staleness-aware *presented* status the
     rows and `breakdowns` show (P19 §2), so filtering by "Unresponsive"
     returns exactly the cameras that display it.
+
+    is_active defaults to active-only (P23), pinning today's behaviour
+    byte-for-byte for a caller that passes nothing. ?is_active=false
+    surfaces soft-deleted cameras so they can be found and restored;
+    ?is_active=null lists both. `kpis`/`breakdowns` are unaffected by this
+    filter either way — they stay the unfiltered is_active=1 population
+    (§5.9), never the soft-deleted population.
     """
     now = datetime.now(UTC)
     kpis, breakdowns = compute_kpis_and_breakdowns(session, now=now)
 
-    query = select(Camera).where(col(Camera.is_active).is_(True))
+    is_active_filter = _parse_is_active_filter(is_active)
+    query = select(Camera)
+    if is_active_filter is not None:
+        query = query.where(col(Camera.is_active).is_(is_active_filter))
     query = _apply_camera_filters(
         query,
         now=now,
@@ -178,9 +234,7 @@ def get_camera_detail(
     `rtsp_url_redacted` is admin-only *within* this route, not a reason to
     gate the whole thing to Admin — an Operator gets 200 with that one
     field null. Not audited — routine viewing, per D-007."""
-    db_camera = session.get(Camera, camera_id)
-    if not db_camera or not db_camera.is_active:
-        raise HTTPException(status_code=404, detail="Camera not found")
+    db_camera = _get_active_camera_or_404(camera_id, session)
 
     now = datetime.now(UTC)
     base = _to_camera_read(db_camera, now=now)
@@ -256,23 +310,44 @@ def update_camera(
     current_user: User = Depends(get_current_user),
     manager: RealtimeManager = Depends(get_realtime_manager),
 ):
-    db_camera = session.get(Camera, camera_id)
-    if not db_camera or not db_camera.is_active:
-        raise HTTPException(status_code=404, detail="Camera not found")
+    # P23 — the only camera route that must be able to reach a soft-deleted
+    # row, since it's also how one gets restored (mirrors routes/users.py's
+    # _get_user_or_404 vs _get_active_user_or_404, P19 §3).
+    db_camera = _get_camera_or_404(camera_id, session)
 
     update_data = camera_update.model_dump(exclude_unset=True)
+
+    # PATCH's is_active is one-directional: false -> true restores. true ->
+    # false is DELETE's job, which additionally guards against deleting a
+    # camera with an open incident (see delete_camera below) — accepting it
+    # here too would silently duplicate that endpoint while bypassing its
+    # precondition.
+    if update_data.get("is_active") is False:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot deactivate a camera via PATCH — use DELETE /api/cameras/{camera_id}.",
+        )
+
     source_ip = _client_ip(request)
     now = datetime.now(UTC)
 
     # D-007 multi-action semantics: is_enabled toggling gets its own
-    # CAMERA_ENABLE/CAMERA_DISABLE row; any other changed field gets
-    # CAMERA_UPDATE. Renaming and disabling in the same request produces
-    # both, same transaction; disabling alone produces only CAMERA_DISABLE.
+    # CAMERA_ENABLE/CAMERA_DISABLE row, is_active going false->true gets its
+    # own CAMERA_RESTORE row, and any other changed field gets CAMERA_UPDATE.
+    # Renaming and disabling in the same request produces both, same
+    # transaction; disabling alone produces only CAMERA_DISABLE.
     is_enabled_changed = (
         "is_enabled" in update_data
         and update_data["is_enabled"] != db_camera.is_enabled
     )
-    other_changed_fields = {k: v for k, v in update_data.items() if k != "is_enabled"}
+    is_being_restored = (
+        "is_active" in update_data
+        and update_data["is_active"] is True
+        and db_camera.is_active is False
+    )
+    other_changed_fields = {
+        k: v for k, v in update_data.items() if k not in ("is_enabled", "is_active")
+    }
     new_is_enabled = update_data.get("is_enabled")
 
     # Computed *before* any mutation below — querying after would
@@ -329,6 +404,16 @@ def update_camera(
             target_ref=str(camera_id),
             source_ip=source_ip,
         )
+    if is_being_restored:
+        audit.record(
+            session,
+            action="CAMERA_RESTORE",
+            result=AuditResult.SUCCESS,
+            actor=current_user,
+            target_type="camera",
+            target_ref=str(camera_id),
+            source_ip=source_ip,
+        )
 
     try:
         session.add(db_camera)
@@ -356,9 +441,7 @@ def delete_camera(
     current_user: User = Depends(get_current_user),
     manager: RealtimeManager = Depends(get_realtime_manager),
 ):
-    db_camera = session.get(Camera, camera_id)
-    if not db_camera or not db_camera.is_active:
-        raise HTTPException(status_code=404, detail="Camera not found")
+    db_camera = _get_active_camera_or_404(camera_id, session)
 
     if _has_open_incident(session, camera_id):
         raise AppHTTPException(
