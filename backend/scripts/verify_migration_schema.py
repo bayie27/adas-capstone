@@ -36,11 +36,20 @@ from sqlmodel import SQLModel  # noqa: E402
 
 
 def _normalize(sql: str) -> str:
-    """Collapses whitespace and reorders comma-separated CHECK/FK/UNIQUE
-    clauses so autogenerate's nondeterministic constraint ordering (a
-    known, harmless artifact — see the initial migration's docstring)
-    doesn't register as drift."""
-    collapsed = re.sub(r"\s+", " ", sql).strip()
+    """Collapses whitespace, drops identifier quoting, and reorders
+    comma-separated CHECK/FK/UNIQUE clauses so autogenerate's
+    nondeterministic constraint ordering (a known, harmless artifact — see
+    the initial migration's docstring) doesn't register as drift.
+
+    Double-quote stripping specifically covers `op.batch_alter_table`'s
+    SQLite rebuild path (P23's audit_log CHECK-constraint change is the
+    first migration to exercise it): the reflected copy table it builds
+    always renders `CREATE TABLE "audit_log" (...)`, while
+    `create_all()`'s modeled schema renders the same table unquoted — a
+    cosmetic difference in every case here, since none of this schema's SQL
+    text uses double quotes for anything but identifiers."""
+    unquoted = sql.replace('"', "")
+    collapsed = re.sub(r"\s+", " ", unquoted).strip()
     # Split the column/constraint list inside the outermost parens and
     # sort it, so ordering differences don't matter while still catching
     # a genuinely added/removed/changed clause. Table name is one token
