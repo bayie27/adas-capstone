@@ -83,20 +83,22 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
     (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to create user.") : null)
 
   return (
-    <Modal
-      isOpen
-      onClose={onClose}
-      title="Add User"
-      subtitle="Create a new user & assign an access role"
-      icon={
-        <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
-          <RiUser3Line size={28} className="text-fg" />
-        </div>
-      }
-      className="bg-surface-1 sm:max-w-[700px]"
-    >
+    <Modal isOpen onClose={onClose} className="bg-surface-2 p-1 pt-7 sm:max-w-[700px]">
       <form onSubmit={handleSubmit} className="flex flex-col">
-        <hr className="border-t border-stroke mb-6 -mx-6" />
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-stroke-strong">
+              <RiUser3Line size={28} className="text-fg-body" />
+            </div>
+            <div className="flex flex-col">
+              <h3 className="text-[20px] font-semibold text-fg-body leading-[32px]">Add User</h3>
+              <p className="text-[14px] font-normal text-fg-muted leading-[28px]">
+                Create a new user & assign an access role
+              </p>
+            </div>
+          </div>
+        </div>
+        <hr className="border-t border-stroke-strong mb-6 -mx-7" />
 
         <div className="grid grid-cols-[150px_1fr] gap-x-8 gap-y-6">
           <div className="text-base font-medium text-fg">User</div>
@@ -145,8 +147,8 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
               value={form.first_name}
               disabled={mutation.isPending}
               onChange={(event) => updateField("first_name", event.target.value)}
-              className="text-sm text-fg"
-              labelClassName="text-sm font-medium text-fg"
+              className="border-stroke-strong bg-transparent text-fg-muted text-[14px] h-10"
+              labelClassName="text-[14px] font-medium text-fg leading-[28px]"
             />
             <Input
               label="Last Name"
@@ -154,8 +156,8 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
               value={form.last_name}
               disabled={mutation.isPending}
               onChange={(event) => updateField("last_name", event.target.value)}
-              className="text-sm text-fg"
-              labelClassName="text-sm font-medium text-fg"
+              className="border-stroke-strong bg-transparent text-fg-muted text-[14px] h-10"
+              labelClassName="text-[14px] font-medium text-fg leading-[28px]"
             />
             <Input
               label="Username"
@@ -163,13 +165,13 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
               value={form.username}
               disabled={mutation.isPending}
               onChange={(event) => updateField("username", event.target.value)}
-              className="text-sm text-fg"
-              labelClassName="text-sm font-medium text-fg"
+              className="border-stroke-strong bg-transparent text-fg-muted text-[14px] h-10"
+              labelClassName="text-[14px] font-medium text-fg leading-[28px]"
             />
           </div>
         </div>
 
-        <hr className="border-t border-stroke my-6 -mx-6" />
+        <hr className="border-t border-stroke-strong my-6 -mx-7" />
 
         <div className="grid grid-cols-[150px_1fr] gap-x-8 gap-y-6">
           <div className="text-base font-medium text-fg">Enter Password</div>
@@ -180,19 +182,19 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
                 value={form.password}
                 disabled={mutation.isPending}
                 onChange={(value) => updateField("password", value)}
-                inputClassName="text-sm text-fg"
-                labelClassName="text-sm font-medium text-fg"
+                inputClassName="border-stroke-strong bg-transparent text-fg-muted text-[14px] h-10"
+                labelClassName="text-[14px] font-medium text-fg leading-[28px]"
               />
               <PasswordInput
                 label="Confirm Password"
                 value={form.confirm_password}
                 disabled={mutation.isPending}
                 onChange={(value) => updateField("confirm_password", value)}
-                inputClassName="text-sm text-fg"
-                labelClassName="text-sm font-medium text-fg"
+                inputClassName="border-stroke-strong bg-transparent text-fg-muted text-[14px] h-10"
+                labelClassName="text-[14px] font-medium text-fg leading-[28px]"
               />
             </div>
-            <div className="text-sm font-normal text-fg-muted">
+            <div className="text-[14px] font-normal text-fg-muted leading-[28px]">
               Must be at least 8 characters long and contain at least 1 number.
             </div>
           </div>
@@ -200,12 +202,12 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
 
         {errorMessage ? <p className="mt-4 text-xs text-danger">{errorMessage}</p> : null}
 
-        <hr className="border-t border-stroke my-6 -mx-6" />
+        <hr className="border-t border-stroke-strong my-6 -mx-7" />
 
         <div className="flex justify-end gap-2">
           <Button
             variant="outline"
-            className="border-stroke-strong"
+            className="border-stroke-strong text-[14px] font-medium text-fg px-4 py-2"
             onClick={onClose}
             disabled={mutation.isPending}
           >
@@ -214,6 +216,7 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
           <Button
             type="submit"
             variant="primary"
+            className="bg-fg-body text-surface-2 hover:opacity-90 text-[14px] font-medium px-4 py-2"
             isLoading={mutation.isPending}
             loadingLabel="Saving…"
           >

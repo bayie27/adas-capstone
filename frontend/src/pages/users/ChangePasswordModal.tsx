@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react"
+import { RiLockPasswordLine } from "@remixicon/react"
+
 import { useMutation } from "@tanstack/react-query"
-import { RiLockLine } from "@remixicon/react"
 
 import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
@@ -71,73 +72,73 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
     (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to reset password.") : null)
 
   return (
-    <Modal
-      isOpen
-      onClose={onClose}
-      title="Change User Password"
-      subtitle="Update a user's password"
-      icon={
-        <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
-          <RiLockLine size={28} className="text-fg" />
-        </div>
-      }
-      className="bg-surface-1 sm:max-w-[700px]"
-    >
+    <Modal isOpen onClose={onClose} className="bg-surface-2 p-1">
       <form onSubmit={handleSubmit} className="flex flex-col">
-        <hr className="border-t border-stroke mb-6 -mx-6" />
-
-        <div className="mb-6">
-          <p className="text-sm font-normal text-fg">
-            Changing {getUserFullName(user)}'s account's password...
-          </p>
-        </div>
-
-        <div className="grid grid-cols-[150px_1fr] gap-x-8 gap-y-6">
-          <div className="text-base font-medium text-fg">Enter Password</div>
-          <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              <PasswordInput
-                label="New Password"
-                value={form.new_password}
-                disabled={mutation.isPending}
-                onChange={(value) => updateField("new_password", value)}
-                inputClassName="text-sm text-fg"
-                labelClassName="text-sm font-medium text-fg"
-              />
-              <PasswordInput
-                label="Confirm New Password"
-                value={form.confirm_password}
-                disabled={mutation.isPending}
-                onChange={(value) => updateField("confirm_password", value)}
-                inputClassName="text-sm text-fg"
-                labelClassName="text-sm font-medium text-fg"
-              />
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-stroke-strong">
+              <RiLockPasswordLine size={28} className="text-fg-body" />
             </div>
-            <div className="text-sm font-normal text-fg-muted">
-              Must be at least 8 characters long and contain at least 1 number.
-            </div>
-
-            <div className="mt-2">
-              <p className="rounded-md border border-warning-border bg-warning-subtle px-4 py-3 text-sm font-medium text-warning">
-                Resetting this password will sign {getUserFullName(user)} out of every active
-                session immediately.
+            <div className="flex flex-col">
+              <h3 className="text-[20px] font-semibold text-fg-body leading-[32px]">
+                Change User Password
+              </h3>
+              <p className="text-[14px] font-normal text-fg-muted leading-[28px]">
+                Update a user's password
               </p>
             </div>
+          </div>
+        </div>
+        <hr className="border-t border-stroke-strong mb-6 -mx-7" />
+
+        <div className="flex flex-col gap-4">
+          <p className="text-[14px] font-normal text-fg-body leading-[28px] mb-2">
+            Changing {getUserFullName(user)}'s account's password...
+          </p>
+
+          <div className="flex flex-col gap-4">
+            <PasswordInput
+              label="New Password"
+              value={form.new_password}
+              disabled={mutation.isPending}
+              onChange={(value) => updateField("new_password", value)}
+              inputClassName="border-stroke-strong bg-transparent text-fg-muted text-[14px] h-10"
+              labelClassName="text-[14px] font-medium text-fg leading-[28px] mb-2"
+            />
+            <PasswordInput
+              label="Confirm New Password"
+              value={form.confirm_password}
+              disabled={mutation.isPending}
+              onChange={(value) => updateField("confirm_password", value)}
+              inputClassName="border-stroke-strong bg-transparent text-fg-muted text-[14px] h-10"
+              labelClassName="text-[14px] font-medium text-fg leading-[28px] mb-2"
+            />
+          </div>
+
+          <div className="text-[14px] font-normal text-fg-muted leading-[28px] mt-2">
+            Must be at least 8 characters long and contain at least 1 number.
+          </div>
+
+          <div className="mt-2">
+            <p className="rounded-md border border-warning-border bg-warning-subtle px-4 py-3 text-sm font-medium text-warning">
+              Resetting this password will sign {getUserFullName(user)} out of every active session
+              immediately.
+            </p>
           </div>
         </div>
 
         {errorMessage ? <p className="mt-4 text-sm text-danger">{errorMessage}</p> : null}
 
-        <hr className="border-t border-stroke my-6 -mx-6" />
+        <hr className="border-t border-stroke-strong my-6 -mx-7" />
 
         <div className="flex items-center justify-between">
-          <div className="text-sm font-medium text-fg-muted">
+          <div className="text-[12px] font-normal text-fg-muted leading-[28px]">
             Last Changes: {formatShortDateTime(user.password_changed_at ?? null)}
           </div>
           <div className="flex justify-end gap-2">
             <Button
               variant="outline"
-              className="border-stroke-strong"
+              className="border-stroke-strong text-[14px] font-medium text-fg px-4 py-2"
               onClick={onClose}
               disabled={mutation.isPending}
             >
@@ -146,6 +147,7 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
             <Button
               type="submit"
               variant="primary"
+              className="bg-fg-body text-surface-2 hover:opacity-90 text-[14px] font-medium px-4 py-2"
               isLoading={mutation.isPending}
               loadingLabel="Saving…"
             >

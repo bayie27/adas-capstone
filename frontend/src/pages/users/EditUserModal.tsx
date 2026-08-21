@@ -183,7 +183,7 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
         <hr className="border-t border-stroke my-6 -mx-6" />
 
         <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-1 text-sm font-medium text-fg-muted">
+          <div className="flex flex-col text-[12px] font-normal text-fg-muted leading-[28px]">
             <div>Date Added: {formatShortDateTime(user.created_at ?? null)}</div>
             <div>Last Changes: {formatShortDateTime(user.updated_at ?? null)}</div>
           </div>
