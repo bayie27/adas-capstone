@@ -42,7 +42,7 @@ export function DateRangePicker({
   const endRef = useRef<HTMLInputElement>(null)
 
   const fieldClass = cn(
-    "bg-transparent text-xs font-normal text-fg [color-scheme:dark] outline-none",
+    "bg-transparent text-sm font-normal text-fg [color-scheme:dark] outline-none",
     "disabled:cursor-not-allowed",
     "[&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none",
     focusRing,
@@ -54,7 +54,7 @@ export function DateRangePicker({
       aria-label={label}
       className={cn(
         "inline-flex h-9 items-center gap-2 rounded border border-stroke bg-canvas px-4 py-2 shadow-md",
-        "transition-colors duration-150 text-xs font-normal text-fg",
+        "transition-colors duration-150 text-sm font-normal text-fg",
         disabled ? "cursor-not-allowed opacity-60" : "hover:border-stroke-strong",
         className,
       )}
@@ -77,7 +77,7 @@ export function DateRangePicker({
         aria-hidden="true"
       />
 
-      <span aria-hidden="true" className="text-xs font-normal text-fg">
+      <span aria-hidden="true" className="text-sm font-normal text-fg">
         –
       </span>
 

@@ -611,9 +611,15 @@ export default function Cameras() {
         isOpen={modal.kind === "delete"}
         title="Are you absolutely sure?"
         description={
-          modal.kind === "delete"
-            ? `This action will deactivate camera "${modal.camera.camera_name}" and remove it from the active camera list.`
-            : ""
+          modal.kind === "delete" ? (
+            <>
+              This action will deactivate camera{" "}
+              <span className="italic">"{modal.camera.camera_name}"</span> and remove it from the
+              active camera list.
+            </>
+          ) : (
+            ""
+          )
         }
         isPending={deleteCameraMutation.isPending}
         error={deleteCameraMutation.error}

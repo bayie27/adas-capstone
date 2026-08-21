@@ -1,10 +1,18 @@
 import { useState } from "react"
+import { useRef, useEffect } from "react"
+import { getAlerts } from "@/api/alerts"
+import { createRetrainingExport, type RetrainingExportParams } from "@/api/exports"
+import { useExportJobsStore } from "@/store/useExportJobsStore"
+import { Modal } from "@/components/ui/Modal"
+import { Button } from "@/components/ui/Button"
+import type { ExportFormat } from "@/components/ui/ExportButton"
+import { RiArrowDownSLine, RiDownloadLine, RiAlertLine } from "@remixicon/react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
 import { exportPerformanceAnalytics, getPerformanceAnalytics } from "@/api/analytics"
 import { ClearFiltersButton } from "@/components/ui/ClearFiltersButton"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
-import { ExportButton, type ExportFormat } from "@/components/ui/ExportButton"
+
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
@@ -16,7 +24,6 @@ import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { useAuthStore } from "@/store/useAuthStore"
-import { RetrainingExportPanel } from "@/pages/ai-performance/RetrainingExportPanel"
 import { formatPercent } from "@/utils/format"
 import { RiCarLine, RiCloseCircleLine, RiDashboard3Line, RiFocus3Line } from "@remixicon/react"
 
@@ -79,6 +86,66 @@ export default function AiPerformance() {
   })
 
   const exportJobMutation = useExportJobSubmit()
+
+  const [showWarningModal, setShowWarningModal] = useState(false)
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false)
+  const menuContainerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isExportMenuOpen) return
+    const handleClick = (e: MouseEvent) => {
+      if (!menuContainerRef.current?.contains(e.target as Node)) {
+        setIsExportMenuOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [isExportMenuOpen])
+
+  const track = useExportJobsStore((state) => state.track)
+
+  const labelledCountQuery = useQuery({
+    queryKey: ["retraining-labelled-count", startDate, endDate, cameraId],
+    queryFn: () =>
+      getAlerts({
+        status: ["Resolved", "Dismissed"],
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        camera_id: cameraId ? [Number(cameraId)] : undefined,
+        limit: 1,
+      }),
+  })
+  const labelledCount = labelledCountQuery.data?.total_filtered
+
+  const retrainingJobMutation = useMutation({
+    mutationFn: (params: RetrainingExportParams) => createRetrainingExport(params),
+    onSuccess: (response) => {
+      track({
+        jobId: response.job_id,
+        reportType: "retraining",
+        format: "zip",
+        createdAt: new Date().toISOString(),
+      })
+    },
+  })
+
+  function handleRetrainingExportClick() {
+    setIsExportMenuOpen(false)
+    if (labelledCount !== undefined && labelledCount < 50) {
+      setShowWarningModal(true)
+    } else {
+      executeRetrainingExport()
+    }
+  }
+
+  function executeRetrainingExport() {
+    setShowWarningModal(false)
+    retrainingJobMutation.mutate({
+      start_date: startDate || undefined,
+      end_date: endDate || undefined,
+      camera_id: cameraId ? [Number(cameraId)] : undefined,
+    })
+  }
 
   const globalKpis = performanceQuery.data?.global_kpis
   const perCamera = performanceQuery.data?.per_camera ?? []
@@ -200,23 +267,68 @@ export default function AiPerformance() {
           needs the real filtered count across every page, not just the one
           currently on screen.
         */}
-        <ExportButton
-          rowCount={totalFiltered}
-          isExporting={exportMutation.isPending}
-          exportHasError={exportMutation.isError}
-          onExport={(format) => exportMutation.mutate(format)}
-          isSubmittingJob={exportJobMutation.isPending}
-          onExportJob={(format) =>
-            exportJobMutation.mutateAsync({
-              report_type: "performance",
-              format,
-              search: debouncedSearchTerm || undefined,
-              start_date: startDate || undefined,
-              end_date: endDate || undefined,
-              camera_id: cameraId ? [Number(cameraId)] : undefined,
-            })
-          }
-        />
+
+        <div className="relative" ref={menuContainerRef}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+            isLoading={
+              exportMutation.isPending ||
+              exportJobMutation.isPending ||
+              retrainingJobMutation.isPending
+            }
+            loadingLabel="Exporting..."
+          >
+            <RiDownloadLine size={13} />
+            Export
+            <RiArrowDownSLine size={14} />
+          </Button>
+
+          {isExportMenuOpen && (
+            <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded-md border border-stroke bg-surface-1 py-1 shadow-overlay">
+              <div className="px-3 py-1.5 text-xs font-semibold text-fg-muted">
+                Performance Report
+              </div>
+              <button
+                type="button"
+                className="w-full px-3 py-2 text-left text-xs text-fg-body hover:bg-surface-2"
+                onClick={() => {
+                  setIsExportMenuOpen(false)
+                  exportMutation.mutate("csv")
+                }}
+              >
+                Export as CSV
+              </button>
+              <button
+                type="button"
+                className="w-full px-3 py-2 text-left text-xs text-fg-body hover:bg-surface-2"
+                onClick={() => {
+                  setIsExportMenuOpen(false)
+                  exportMutation.mutate("pdf")
+                }}
+              >
+                Export as PDF
+              </button>
+
+              {role === "Admin" && (
+                <>
+                  <div className="my-1 border-t border-stroke" />
+                  <div className="px-3 py-1.5 text-xs font-semibold text-fg-muted">
+                    Training Data
+                  </div>
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-xs text-fg-body hover:bg-surface-2"
+                    onClick={handleRetrainingExportClick}
+                  >
+                    Export Retraining Dataset (ZIP)
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {exportMutation.isError ? (
@@ -230,6 +342,13 @@ export default function AiPerformance() {
         <QueryErrorBanner
           error={exportJobMutation.error}
           fallback="Unable to start the background export job."
+        />
+      ) : null}
+
+      {retrainingJobMutation.isError ? (
+        <QueryErrorBanner
+          error={retrainingJobMutation.error}
+          fallback="Unable to start the retraining export job."
         />
       ) : null}
 
@@ -312,7 +431,34 @@ export default function AiPerformance() {
         />
       </div>
 
-      {role === "Admin" ? <RetrainingExportPanel /> : null}
+      <Modal
+        isOpen={showWarningModal}
+        onClose={() => setShowWarningModal(false)}
+        className="max-w-[512px]"
+        hideClose
+      >
+        <div className="flex flex-col items-center pt-6 text-center">
+          <div className="flex h-[58px] w-[58px] items-center justify-center relative overflow-hidden mb-4">
+            <RiAlertLine size={44} className="text-warning z-10" />
+          </div>
+          <div className="flex flex-col items-center text-center w-full space-y-2 mb-4">
+            <h3 className="text-lg font-semibold text-fg leading-[28px]">Dataset Too Small</h3>
+            <div className="text-sm font-normal leading-[20px] text-fg-muted">
+              {new Intl.NumberFormat("en-US").format(labelledCount ?? 0)} labelled incident
+              {(labelledCount ?? 0) === 1 ? "" : "s"} in this range. Exporting fewer than 50 wastes
+              a training run — widen the range or camera filter first.
+            </div>
+          </div>
+          <div className="flex w-full items-center justify-end gap-2 mt-2">
+            <Button variant="outline" size="md" onClick={() => setShowWarningModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="md" onClick={executeRetrainingExport}>
+              Export Anyway
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
