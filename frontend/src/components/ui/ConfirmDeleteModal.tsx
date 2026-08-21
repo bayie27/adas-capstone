@@ -1,7 +1,7 @@
 import { Modal } from "@/components/ui/Modal"
 import { getApiErrorMessage } from "@/api/client"
 import { RiAlertLine } from "@remixicon/react"
-import { Button } from "@/components/ui/Button"
+import { Button, type ButtonVariant } from "@/components/ui/Button"
 import type { ReactNode } from "react"
 
 interface ConfirmDeleteModalProps {
@@ -11,6 +11,7 @@ interface ConfirmDeleteModalProps {
   isPending: boolean
   error: unknown
   confirmText?: string
+  confirmVariant?: ButtonVariant
   /**
    * Overrides what `error` would render. For a failure the caller can explain
    * better than the envelope can — a 400 that means "something else has to
@@ -29,6 +30,7 @@ export function ConfirmDeleteModal({
   error,
   errorMessage,
   confirmText = "Continue",
+  confirmVariant = "primary",
   onClose,
   onConfirm,
 }: ConfirmDeleteModalProps) {
@@ -55,7 +57,7 @@ export function ConfirmDeleteModal({
           </Button>
           <Button
             type="button"
-            variant="destructive"
+            variant={confirmVariant}
             size="md"
             isLoading={isPending}
             loadingLabel="Deleting..."
