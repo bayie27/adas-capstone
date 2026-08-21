@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
+import { RiLockLine } from "@remixicon/react"
 
 import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
@@ -75,44 +76,53 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
       onClose={onClose}
       title="Change User Password"
       subtitle="Update a user's password"
-      className="bg-surface-1"
+      icon={
+        <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
+          <RiLockLine size={28} className="text-fg" />
+        </div>
+      }
+      className="bg-surface-1 sm:max-w-[700px]"
     >
       <form onSubmit={handleSubmit} className="flex flex-col">
         <hr className="border-t border-stroke mb-6 -mx-6" />
 
-        <div className="flex flex-col gap-6">
-          <p className="text-base font-normal text-fg">
+        <div className="mb-6">
+          <p className="text-sm font-normal text-fg">
             Changing {getUserFullName(user)}'s account's password...
           </p>
+        </div>
 
+        <div className="grid grid-cols-[150px_1fr] gap-x-8 gap-y-6">
+          <div className="text-base font-medium text-fg">Enter Password</div>
           <div className="flex flex-col gap-4">
-            <PasswordInput
-              label="New Password"
-              value={form.new_password}
-              disabled={mutation.isPending}
-              onChange={(value) => updateField("new_password", value)}
-              inputClassName="text-base text-fg-muted"
-              labelClassName="text-base font-medium text-fg"
-            />
-            <PasswordInput
-              label="Confirm New Password"
-              value={form.confirm_password}
-              disabled={mutation.isPending}
-              onChange={(value) => updateField("confirm_password", value)}
-              inputClassName="text-base text-fg-muted"
-              labelClassName="text-base font-medium text-fg"
-            />
-          </div>
+            <div className="grid grid-cols-2 gap-4">
+              <PasswordInput
+                label="New Password"
+                value={form.new_password}
+                disabled={mutation.isPending}
+                onChange={(value) => updateField("new_password", value)}
+                inputClassName="text-sm text-fg"
+                labelClassName="text-sm font-medium text-fg"
+              />
+              <PasswordInput
+                label="Confirm New Password"
+                value={form.confirm_password}
+                disabled={mutation.isPending}
+                onChange={(value) => updateField("confirm_password", value)}
+                inputClassName="text-sm text-fg"
+                labelClassName="text-sm font-medium text-fg"
+              />
+            </div>
+            <div className="text-sm font-normal text-fg-muted">
+              Must be at least 8 characters long and contain at least 1 number.
+            </div>
 
-          <div className="text-base font-normal text-fg-muted">
-            Must be at least 8 characters long and contain at least 1 number.
-          </div>
-
-          <div className="mt-2">
-            <p className="rounded-md border border-warning-border bg-warning-subtle px-4 py-3 text-sm font-medium text-warning">
-              Resetting this password will sign {getUserFullName(user)} out of every active session
-              immediately.
-            </p>
+            <div className="mt-2">
+              <p className="rounded-md border border-warning-border bg-warning-subtle px-4 py-3 text-sm font-medium text-warning">
+                Resetting this password will sign {getUserFullName(user)} out of every active
+                session immediately.
+              </p>
+            </div>
           </div>
         </div>
 
