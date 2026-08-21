@@ -24,7 +24,7 @@ export function SearchInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="bg-transparent outline-none w-full text-xs font-normal text-fg placeholder:text-fg-muted disabled:cursor-not-allowed disabled:opacity-60"
+        className="bg-transparent outline-none w-full text-sm font-normal text-fg placeholder:text-fg-muted disabled:cursor-not-allowed disabled:opacity-60"
       />
     </div>
   )
