@@ -535,7 +535,7 @@ export default function Cameras() {
                               setModal({ kind: "delete", camera })
                             }}
                             className={cn(
-                              "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+                              "rounded-sm text-fg-muted transition-colors duration-150 hover:text-danger",
                               focusRing,
                             )}
                           >

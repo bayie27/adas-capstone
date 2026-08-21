@@ -245,7 +245,7 @@ export default function Users() {
                               setNotice(null)
                               setModal({ kind: "delete", user })
                             }}
-                            className={iconButtonClass}
+                            className={cn(iconButtonClass, "hover:text-danger")}
                           >
                             <RiDeleteBinLine size={14} />
                           </button>
