@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
+import { RiUser3Line } from "@remixicon/react"
 
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -87,7 +88,12 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
       onClose={onClose}
       title="Add User"
       subtitle="Create a new user & assign an access role"
-      className="bg-surface-2 sm:max-w-3xl"
+      icon={
+        <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
+          <RiUser3Line size={28} className="text-fg" />
+        </div>
+      }
+      className="bg-surface-2 sm:max-w-[700px]"
     >
       <form onSubmit={handleSubmit} className="flex flex-col">
         <hr className="border-t border-stroke mb-6 -mx-6" />
@@ -95,64 +101,70 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
         <div className="grid grid-cols-[150px_1fr] gap-x-8 gap-y-6">
           <div className="text-base font-medium text-fg">User</div>
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-8 mb-2">
-              <label
-                className={cn(
-                  "flex cursor-pointer items-center gap-2 text-base font-normal text-fg",
-                  mutation.isPending && "cursor-not-allowed opacity-60",
-                )}
-              >
-                <input
-                  type="radio"
-                  name="role"
-                  className="accent-white h-4 w-4 border-fg"
-                  checked={form.role === "Admin"}
-                  disabled={mutation.isPending}
-                  onChange={() => updateField("role", "Admin")}
-                />
-                Administrator
-              </label>
-              <label
-                className={cn(
-                  "flex cursor-pointer items-center gap-2 text-base font-normal text-fg",
-                  mutation.isPending && "cursor-not-allowed opacity-60",
-                )}
-              >
-                <input
-                  type="radio"
-                  name="role"
-                  className="accent-white h-4 w-4 border-fg"
-                  checked={form.role === "Operator"}
-                  disabled={mutation.isPending}
-                  onChange={() => updateField("role", "Operator")}
-                />
-                Operator
-              </label>
+            <div className="flex flex-col gap-[20px] mb-2">
+              <div className="text-sm font-medium text-fg">Role</div>
+              <div className="flex justify-between items-start">
+                <label
+                  className={cn(
+                    "flex flex-1 cursor-pointer items-center gap-2 text-sm font-normal text-fg",
+                    mutation.isPending && "cursor-not-allowed opacity-60",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="role"
+                    className="accent-white h-4 w-4 border-fg"
+                    checked={form.role === "Admin"}
+                    disabled={mutation.isPending}
+                    onChange={() => updateField("role", "Admin")}
+                  />
+                  Administrator
+                </label>
+                <label
+                  className={cn(
+                    "flex flex-1 cursor-pointer items-center gap-2 text-sm font-normal text-fg",
+                    mutation.isPending && "cursor-not-allowed opacity-60",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="role"
+                    className="accent-white h-4 w-4 border-fg"
+                    checked={form.role === "Operator"}
+                    disabled={mutation.isPending}
+                    onChange={() => updateField("role", "Operator")}
+                  />
+                  Operator
+                </label>
+              </div>
             </div>
 
             <Input
               label="First Name"
+              placeholder="John"
               value={form.first_name}
               disabled={mutation.isPending}
               onChange={(event) => updateField("first_name", event.target.value)}
-              className="text-base text-fg-muted"
-              labelClassName="text-base font-medium text-fg"
+              className="text-sm text-fg"
+              labelClassName="text-sm font-medium text-fg"
             />
             <Input
               label="Last Name"
+              placeholder="Doe"
               value={form.last_name}
               disabled={mutation.isPending}
               onChange={(event) => updateField("last_name", event.target.value)}
-              className="text-base text-fg-muted"
-              labelClassName="text-base font-medium text-fg"
+              className="text-sm text-fg"
+              labelClassName="text-sm font-medium text-fg"
             />
             <Input
               label="Username"
+              placeholder="jdoe"
               value={form.username}
               disabled={mutation.isPending}
               onChange={(event) => updateField("username", event.target.value)}
-              className="text-base text-fg-muted"
-              labelClassName="text-base font-medium text-fg"
+              className="text-sm text-fg"
+              labelClassName="text-sm font-medium text-fg"
             />
           </div>
         </div>
@@ -168,19 +180,19 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
                 value={form.password}
                 disabled={mutation.isPending}
                 onChange={(value) => updateField("password", value)}
-                className="text-base text-fg-muted"
-                labelClassName="text-base font-medium text-fg"
+                inputClassName="text-sm text-fg"
+                labelClassName="text-sm font-medium text-fg"
               />
               <PasswordInput
                 label="Confirm Password"
                 value={form.confirm_password}
                 disabled={mutation.isPending}
                 onChange={(value) => updateField("confirm_password", value)}
-                className="text-base text-fg-muted"
-                labelClassName="text-base font-medium text-fg"
+                inputClassName="text-sm text-fg"
+                labelClassName="text-sm font-medium text-fg"
               />
             </div>
-            <div className="text-base font-normal text-fg-muted">
+            <div className="text-sm font-normal text-fg-muted">
               Must be at least 8 characters long and contain at least 1 number.
             </div>
           </div>

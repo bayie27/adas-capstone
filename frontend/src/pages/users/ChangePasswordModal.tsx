@@ -91,7 +91,7 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
               value={form.new_password}
               disabled={mutation.isPending}
               onChange={(value) => updateField("new_password", value)}
-              className="text-base text-fg-muted"
+              inputClassName="text-base text-fg-muted"
               labelClassName="text-base font-medium text-fg"
             />
             <PasswordInput
@@ -99,7 +99,7 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
               value={form.confirm_password}
               disabled={mutation.isPending}
               onChange={(value) => updateField("confirm_password", value)}
-              className="text-base text-fg-muted"
+              inputClassName="text-base text-fg-muted"
               labelClassName="text-base font-medium text-fg"
             />
           </div>
