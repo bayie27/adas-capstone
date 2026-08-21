@@ -5,6 +5,7 @@ import { createRetrainingExport, type RetrainingExportParams } from "@/api/expor
 import { useExportJobsStore } from "@/store/useExportJobsStore"
 import { Modal } from "@/components/ui/Modal"
 import { Button } from "@/components/ui/Button"
+import type { ExportFormat } from "@/components/ui/ExportButton"
 import { RiArrowDownSLine, RiDownloadLine, RiAlertLine } from "@remixicon/react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 
@@ -430,25 +431,32 @@ export default function AiPerformance() {
         />
       </div>
 
-      <Modal isOpen={showWarningModal} onClose={() => setShowWarningModal(false)}>
-        <div className="flex flex-col items-center gap-4 text-center">
-          <RiAlertLine size={48} className="text-warning" />
-          <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-fg">Dataset Too Small</h3>
-            <p className="text-sm font-normal leading-relaxed text-fg-muted">
+      <Modal
+        isOpen={showWarningModal}
+        onClose={() => setShowWarningModal(false)}
+        className="max-w-[512px] !rounded-lg !p-0"
+        hideClose
+      >
+        <div className="flex flex-col items-center p-6 bg-surface-1">
+          <div className="flex h-[58px] w-[58px] items-center justify-center relative overflow-hidden mb-4">
+            <RiAlertLine size={44} className="text-warning z-10" />
+          </div>
+          <div className="flex flex-col items-center text-center w-full space-y-2 mb-4">
+            <h3 className="text-lg font-semibold text-fg leading-[28px]">Dataset Too Small</h3>
+            <div className="text-sm font-normal leading-[20px] text-fg-muted">
               {new Intl.NumberFormat("en-US").format(labelledCount ?? 0)} labelled incident
               {(labelledCount ?? 0) === 1 ? "" : "s"} in this range. Exporting fewer than 50 wastes
               a training run — widen the range or camera filter first.
-            </p>
+            </div>
           </div>
-        </div>
-        <div className="flex w-full justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={() => setShowWarningModal(false)}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={executeRetrainingExport}>
-            Export Anyway
-          </Button>
+          <div className="flex w-full items-center justify-end gap-2 mt-2">
+            <Button variant="outline" size="md" onClick={() => setShowWarningModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="md" onClick={executeRetrainingExport}>
+              Export Anyway
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>

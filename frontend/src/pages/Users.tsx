@@ -348,9 +348,15 @@ export default function Users() {
         isOpen={modal.kind === "delete"}
         title="Are you absolutely sure?"
         description={
-          modal.kind === "delete"
-            ? `This action will deactivate account "${getUserFullName(modal.user)}" and remove it from the active user list.`
-            : ""
+          modal.kind === "delete" ? (
+            <>
+              This action will deactivate account{" "}
+              <span className="italic">"{getUserFullName(modal.user)}"</span> and remove it from the
+              active user list.
+            </>
+          ) : (
+            ""
+          )
         }
         isPending={deleteUserMutation.isPending}
         error={deleteUserMutation.error}

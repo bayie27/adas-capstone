@@ -2,11 +2,12 @@ import { Modal } from "@/components/ui/Modal"
 import { getApiErrorMessage } from "@/api/client"
 import { RiAlertLine } from "@remixicon/react"
 import { Button } from "@/components/ui/Button"
+import type { ReactNode } from "react"
 
 interface ConfirmDeleteModalProps {
   isOpen: boolean
   title: string
-  description: string
+  description: ReactNode
   isPending: boolean
   error: unknown
   /**
@@ -32,24 +33,28 @@ export function ConfirmDeleteModal({
   if (!isOpen) return null
 
   return (
-    <Modal isOpen onClose={onClose} hideClose>
-      <div className="flex flex-col items-center pt-6 text-center">
-        <RiAlertLine size={36} className="mb-4 text-danger" />
-        <h3 className="mb-2 text-[15px] font-bold text-fg">{title}</h3>
-        <p className="mb-6 px-4 text-[11px] leading-relaxed text-fg-muted">{description}</p>
+    <Modal isOpen onClose={onClose} hideClose className="max-w-[512px] !rounded-lg !p-0">
+      <div className="flex flex-col items-center p-6 bg-surface-1">
+        <div className="flex h-[58px] w-[58px] items-center justify-center relative overflow-hidden mb-4">
+          <RiAlertLine size={44} className="text-danger z-10" />
+        </div>
+        <div className="flex flex-col items-center text-center w-full space-y-2 mb-4">
+          <h3 className="text-lg font-semibold text-fg leading-[28px]">{title}</h3>
+          <div className="text-sm font-normal leading-[20px] text-fg-muted">{description}</div>
+        </div>
         {error ? (
-          <p className="mb-4 text-xs text-danger">
+          <p className="mb-4 text-sm text-danger text-center">
             {errorMessage ?? getApiErrorMessage(error, "Action failed.")}
           </p>
         ) : null}
-        <div className="flex w-full items-center justify-end gap-3">
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+        <div className="flex w-full items-center justify-end gap-2 mt-2">
+          <Button type="button" variant="outline" size="md" onClick={onClose}>
             Cancel
           </Button>
           <Button
             type="button"
-            variant="primary"
-            size="sm"
+            variant="destructive"
+            size="md"
             isLoading={isPending}
             loadingLabel="Deleting..."
             onClick={onConfirm}
