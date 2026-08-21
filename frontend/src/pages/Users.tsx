@@ -23,7 +23,7 @@ import { formatRelativeDateTime } from "@/utils/datetime"
 import { formatUserRole, getUserFullName } from "@/utils/format"
 import { AddUserModal } from "@/pages/users/AddUserModal"
 import { EditUserModal } from "@/pages/users/EditUserModal"
-import { ResetPasswordModal } from "@/pages/users/ResetPasswordModal"
+import { ChangePasswordModal } from "@/pages/users/ChangePasswordModal"
 
 const USERS_QUERY_KEY = ["users"] as const
 const USERS_PAGE_SIZE = 10
@@ -330,7 +330,7 @@ export default function Users() {
       )}
 
       {modal.kind === "password" && (
-        <ResetPasswordModal
+        <ChangePasswordModal
           user={modal.user}
           onClose={() => setModal({ kind: "closed" })}
           onSuccess={() => {
@@ -348,10 +348,17 @@ export default function Users() {
         isOpen={modal.kind === "delete"}
         title="Are you absolutely sure?"
         description={
-          modal.kind === "delete"
-            ? `This action will deactivate account "${getUserFullName(modal.user)}" and remove it from the active user list.`
-            : ""
+          modal.kind === "delete" ? (
+            <>
+              This action will deactivate account{" "}
+              <span className="italic">"{getUserFullName(modal.user)}"</span> and remove it from the
+              active user list.
+            </>
+          ) : (
+            ""
+          )
         }
+        confirmText="Yes, deactivate user"
         isPending={deleteUserMutation.isPending}
         error={deleteUserMutation.error}
         onClose={() => setModal({ kind: "closed" })}
