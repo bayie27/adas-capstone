@@ -75,7 +75,7 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
       onClose={onClose}
       title="Change User Password"
       subtitle="Update a user's password"
-      className="bg-surface-2"
+      className="bg-surface-1"
     >
       <form onSubmit={handleSubmit} className="flex flex-col">
         <hr className="border-t border-stroke mb-6 -mx-6" />
@@ -125,7 +125,12 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
             Last Changes: {formatShortDateTime(user.password_changed_at ?? null)}
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
+            <Button
+              variant="outline"
+              className="border-stroke-strong"
+              onClick={onClose}
+              disabled={mutation.isPending}
+            >
               Cancel
             </Button>
             <Button

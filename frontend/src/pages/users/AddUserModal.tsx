@@ -93,7 +93,7 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
           <RiUser3Line size={28} className="text-fg" />
         </div>
       }
-      className="bg-surface-2 sm:max-w-[700px]"
+      className="bg-surface-1 sm:max-w-[700px]"
     >
       <form onSubmit={handleSubmit} className="flex flex-col">
         <hr className="border-t border-stroke mb-6 -mx-6" />
@@ -203,7 +203,12 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
         <hr className="border-t border-stroke my-6 -mx-6" />
 
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
+          <Button
+            variant="outline"
+            className="border-stroke-strong"
+            onClick={onClose}
+            disabled={mutation.isPending}
+          >
             Cancel
           </Button>
           <Button
