@@ -97,7 +97,7 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
           <RiPencilLine size={28} className="text-fg" />
         </div>
       }
-      className="bg-surface-1 sm:max-w-[700px]"
+      className="bg-surface-1 sm:max-w-[590px]"
     >
       <form onSubmit={handleSubmit} className="flex flex-col">
         <hr className="border-t border-stroke mb-6 -mx-6" />
