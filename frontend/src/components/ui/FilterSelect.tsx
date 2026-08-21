@@ -61,7 +61,7 @@ export function FilterSelect<T extends string>({
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
           "inline-flex h-9 items-center justify-between gap-2 rounded border border-stroke bg-canvas px-4 py-2 shadow-md",
-          "text-xs font-normal text-fg transition-colors duration-150",
+          "text-sm font-normal text-fg transition-colors duration-150",
           disabled
             ? "cursor-not-allowed opacity-60"
             : "hover:border-stroke-strong focus:outline-none focus-visible:ring-1 focus-visible:ring-fg",
@@ -84,7 +84,7 @@ export function FilterSelect<T extends string>({
               filteredOptions.map((option) => (
                 <li
                   key={option.value}
-                  className="flex items-center justify-between px-4 py-2 cursor-pointer text-xs text-fg hover:bg-surface-1"
+                  className="flex items-center justify-between px-4 py-2 cursor-pointer text-sm text-fg hover:bg-surface-1"
                   onClick={() => {
                     onChange(option.value)
                     setIsOpen(false)
@@ -98,7 +98,7 @@ export function FilterSelect<T extends string>({
                 </li>
               ))
             ) : (
-              <li className="px-4 py-3 text-center text-xs text-fg-muted">No results found</li>
+              <li className="px-4 py-3 text-center text-sm text-fg-muted">No results found</li>
             )}
           </ul>
         </div>

@@ -79,6 +79,35 @@ function ResultBadge({ result }: { result: string }) {
  * toolbar with the full filter set, a sortable table, pagination and export
  * — so this screen follows that shape rather than inventing a new one.
  */
+const AUDIT_ACTION_MAP: Record<string, string> = {
+  LOGIN_SUCCESS: "Successful Login",
+  LOGIN_FAILURE: "Failed Login",
+  LOGOUT: "Logged Out",
+  ALERT_CONFIRM: "Confirmed Alert",
+  ALERT_DISMISS: "Dismissed Alert",
+  ALERT_RESOLVE: "Resolved Alert",
+  ALERT_CORRECTION: "Corrected Alert",
+  ALERT_SNOOZE: "Snoozed Alert",
+  CAMERA_CREATE: "Created Camera",
+  CAMERA_UPDATE: "Updated Camera",
+  CAMERA_ENABLE: "Enabled Camera",
+  CAMERA_DISABLE: "Disabled Camera",
+  CAMERA_DELETE: "Deleted Camera",
+  REPORT_EXPORT: "Exported Report",
+  AUDIT_EXPORT: "Exported Audit Log",
+  USER_CREATE: "Created User",
+  USER_UPDATE: "Updated User",
+  USER_ENABLE: "Enabled User",
+  USER_DISABLE: "Disabled User",
+  USER_ROLE_CHANGE: "Changed User Role",
+  USER_PASSWORD_RESET: "Reset User Password",
+  USER_PROFILE_UPDATE: "Updated User Profile",
+  USER_PASSWORD_CHANGE: "Changed Password",
+  ALARM_SETTINGS_UPDATE: "Updated Alarm Settings",
+  BACKUP_TRIGGER: "Triggered Backup",
+  RESTORE_TRIGGER: "Triggered Restore",
+}
+
 export default function AuditLog() {
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearch = useDebouncedValue(searchTerm.trim(), 300)
@@ -408,7 +437,7 @@ function AuditRow({
             <span className="ml-1 text-caption text-fg-muted">({entry.role})</span>
           ) : null}
         </TableCell>
-        <TableCell className="font-mono text-caption">{entry.action}</TableCell>
+        <TableCell>{AUDIT_ACTION_MAP[entry.action] || entry.action}</TableCell>
         <TableCell className="text-fg-muted">
           {entry.target_type
             ? `${entry.target_type}${entry.target_ref ? ` · ${entry.target_ref}` : ""}`
@@ -437,19 +466,26 @@ function AuditRow({
               which is the only reason the field exists, so both live in
               the expanded view rather than the row.
             */}
-            <div className="grid grid-cols-1 gap-4 py-2 md:grid-cols-[1fr_auto]">
-              <pre className="overflow-x-auto rounded-md border border-stroke bg-surface-1 p-3 text-caption text-fg-body">
-                {entry.detail ? JSON.stringify(entry.detail, null, 2) : "No detail recorded."}
-              </pre>
+            <div className="grid grid-cols-1 gap-6 py-2 md:grid-cols-[1fr_auto]">
+              <div>
+                <h4 className="mb-2 text-xs font-semibold text-fg-muted">Action Details</h4>
+                {entry.detail && Object.keys(entry.detail).length > 0 ? (
+                  <div className="flex flex-col gap-1.5 text-sm">
+                    {Object.entries(entry.detail).map(([key, value]) => (
+                      <div key={key} className="flex gap-2">
+                        <span className="text-fg-muted capitalize">{key.replace(/_/g, " ")}:</span>
+                        <span className="font-medium text-fg">{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-fg-muted">No detail recorded.</div>
+                )}
+              </div>
               <div className="space-y-1 text-caption text-fg-muted">
-                <div>
-                  <span className="font-semibold text-fg-body">Request ID:</span>{" "}
-                  {entry.request_id ?? "-"}
-                </div>
-                <div>
-                  <span className="font-semibold text-fg-body">Source IP:</span>{" "}
-                  {entry.source_ip ?? "-"}
-                </div>
+                <h4 className="mb-2 text-xs font-semibold text-fg-muted">Diagnostic Data</h4>
+                <div>Request ID: {entry.request_id ?? "-"}</div>
+                <div>Source IP: {entry.source_ip ?? "-"}</div>
               </div>
             </div>
           </TableCell>

@@ -415,7 +415,7 @@ export default function Detections() {
         </p>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-5">
         <Tabs
           items={TAB_ITEMS}
           value={activeTab}
@@ -512,16 +512,7 @@ export default function Detections() {
             }
           />
         </div>
-      ) : (
-        <div className="mb-6 flex flex-wrap items-center gap-2.5">
-          <span className="rounded-md border border-stroke bg-surface-1 px-3 py-1.5 text-caption text-fg-body">
-            Unverified &amp; Ongoing
-          </span>
-          <span className="rounded-md border border-stroke bg-surface-1 px-3 py-1.5 text-caption text-fg-body">
-            Live queue
-          </span>
-        </div>
-      )}
+      ) : null}
 
       {/*
         A 413 can still arrive despite the pre-flight — the row count is read
