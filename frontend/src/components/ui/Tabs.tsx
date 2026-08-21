@@ -54,7 +54,12 @@ export function Tabs<T extends string>({
       role="tablist"
       aria-label={label}
       onKeyDown={onKeyDown}
-      className={cn("flex items-center gap-2", className)}
+      className={cn(
+        variant === "chip"
+          ? "inline-flex items-center justify-start bg-surface-2 p-1 rounded-md"
+          : "flex items-center gap-2",
+        className,
+      )}
     >
       {items.map((item) => {
         const selected = item.value === value
@@ -67,11 +72,16 @@ export function Tabs<T extends string>({
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(item.value)}
             className={cn(
-              "px-4 py-1.5 text-caption font-medium transition-colors duration-150",
-              variant === "pill" ? "rounded-full" : "rounded-md",
-              selected
-                ? "border border-stroke bg-surface-2 text-fg"
-                : "border border-transparent text-fg-muted hover:text-fg-body",
+              variant === "chip"
+                ? "flex items-center justify-center rounded px-4 py-2 text-base font-medium transition-all duration-150"
+                : "px-4 py-1.5 text-caption font-medium transition-colors duration-150 rounded-full",
+              variant === "chip"
+                ? selected
+                  ? "bg-canvas text-fg shadow-sm"
+                  : "bg-transparent text-fg-muted"
+                : selected
+                  ? "border border-stroke bg-surface-2 text-fg"
+                  : "border border-transparent text-fg-muted hover:text-fg-body",
               focusRing,
             )}
           >
