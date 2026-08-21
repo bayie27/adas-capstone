@@ -77,78 +77,57 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
       title="Change Password"
       subtitle="Update a user's password"
       icon={
-        <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
-          <RiLockLine size={28} className="text-fg" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-strong bg-transparent">
+          <RiLockLine size={20} className="text-fg" />
         </div>
       }
-      className="bg-surface-1 sm:max-w-[700px]"
     >
-      <form onSubmit={handleSubmit} className="flex flex-col">
-        <hr className="border-t border-stroke mb-6 -mx-6" />
-
-        <div className="mb-6">
-          <p className="text-sm font-normal text-fg">
+      <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-6">
+        <div className="h-px w-full bg-surface-3" />
+        <div className="space-y-4">
+          <p className="mb-4 text-xs text-fg-muted">
             Changing {getUserFullName(user)}'s account password...
           </p>
-        </div>
-
-        <div className="grid grid-cols-[150px_1fr] gap-x-8 gap-y-6">
-          <div className="text-base font-medium text-fg">Enter Password</div>
-          <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              <PasswordInput
-                label="New Password"
-                value={form.new_password}
-                disabled={mutation.isPending}
-                onChange={(value) => updateField("new_password", value)}
-                inputClassName="text-sm text-fg"
-                labelClassName="text-sm font-medium text-fg"
-              />
-              <PasswordInput
-                label="Confirm New Password"
-                value={form.confirm_password}
-                disabled={mutation.isPending}
-                onChange={(value) => updateField("confirm_password", value)}
-                inputClassName="text-sm text-fg"
-                labelClassName="text-sm font-medium text-fg"
-              />
-            </div>
-            <div className="text-sm font-normal text-fg-muted">
-              Must be at least 8 characters long and contain at least 1 number.
-            </div>
-
-            <div className="mt-2">
-              <p className="rounded-md border border-warning-border bg-warning-subtle px-4 py-3 text-sm font-medium text-warning">
-                Resetting this password will sign {getUserFullName(user)} out of every active
-                session immediately.
-              </p>
-            </div>
+          <PasswordInput
+            label="New Password"
+            value={form.new_password}
+            disabled={mutation.isPending}
+            onChange={(value) => updateField("new_password", value)}
+          />
+          <PasswordInput
+            label="Confirm New Password"
+            value={form.confirm_password}
+            disabled={mutation.isPending}
+            onChange={(value) => updateField("confirm_password", value)}
+          />
+          <div className="mt-2 mb-2 text-[10px] text-fg-muted">
+            Must be at least 8 characters long and contain at least 1 number.
           </div>
         </div>
 
-        {errorMessage ? <p className="mt-4 text-sm text-danger">{errorMessage}</p> : null}
+        {/*
+          POST /api/users/{id}/reset-password revokes every session the
+          target holds unconditionally — there is no reset that keeps them
+          signed in. Shown before the click, not discovered after it.
+        */}
+        <p className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-caption text-warning">
+          Resetting this password will sign {getUserFullName(user)} out of every active session
+          immediately.
+        </p>
 
-        <hr className="border-t border-stroke my-6 -mx-6" />
+        {errorMessage ? <p className="text-xs text-danger">{errorMessage}</p> : null}
+
+        <div className="h-px w-full bg-surface-3" />
 
         <div className="flex items-center justify-between">
-          <div className="text-sm font-medium text-fg-muted">
-            Last Changes: {formatShortDateTime(user.password_changed_at ?? null)}
+          <div className="text-[10px] text-fg-muted">
+            <div>Last Changes: {formatShortDateTime(user.password_changed_at ?? null)}</div>
           </div>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              className="border-stroke-strong"
-              onClick={onClose}
-              disabled={mutation.isPending}
-            >
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              isLoading={mutation.isPending}
-              loadingLabel="Saving…"
-            >
+            <Button type="submit" isLoading={mutation.isPending} loadingLabel="Saving…">
               Save Changes
             </Button>
           </div>
