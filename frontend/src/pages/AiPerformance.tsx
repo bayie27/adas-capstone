@@ -434,10 +434,10 @@ export default function AiPerformance() {
       <Modal
         isOpen={showWarningModal}
         onClose={() => setShowWarningModal(false)}
-        className="max-w-[512px] !rounded-lg !p-0"
+        className="max-w-[512px]"
         hideClose
       >
-        <div className="flex flex-col items-center p-6 bg-surface-1">
+        <div className="flex flex-col items-center pt-6 text-center">
           <div className="flex h-[58px] w-[58px] items-center justify-center relative overflow-hidden mb-4">
             <RiAlertLine size={44} className="text-warning z-10" />
           </div>

@@ -33,8 +33,8 @@ export function ConfirmDeleteModal({
   if (!isOpen) return null
 
   return (
-    <Modal isOpen onClose={onClose} hideClose className="max-w-[512px] !rounded-lg !p-0">
-      <div className="flex flex-col items-center p-6 bg-surface-1">
+    <Modal isOpen onClose={onClose} hideClose className="max-w-[512px]">
+      <div className="flex flex-col items-center pt-6 text-center">
         <div className="flex h-[58px] w-[58px] items-center justify-center relative overflow-hidden mb-4">
           <RiAlertLine size={44} className="text-danger z-10" />
         </div>
