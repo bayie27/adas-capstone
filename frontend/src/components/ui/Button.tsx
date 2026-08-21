@@ -31,8 +31,8 @@ const VARIANTS: Record<ButtonVariant, string> = {
 
 const SIZES: Record<ButtonSize, string> = {
   // §2.3 — 40px is the toolbar control height.
-  md: "h-10 px-4 text-secondary",
-  sm: "h-8 px-3 text-caption",
+  md: "h-10 px-4 text-sm",
+  sm: "h-8 px-3 text-xs",
   icon: "h-10 w-10",
 }
 
