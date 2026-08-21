@@ -1,11 +1,10 @@
 import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
-import { RiUser3Line } from "@remixicon/react"
+import { RiPencilLine } from "@remixicon/react"
 
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Modal } from "@/components/ui/Modal"
-import { Switch } from "@/components/ui/Switch"
 import { updateUser } from "@/api/users"
 import type { ApiUserRole } from "@/api/auth"
 import type { UpdateUserInput, UserRecord } from "@/api/users"
@@ -95,7 +94,7 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
       subtitle="Update the user's account details and access role"
       icon={
         <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
-          <RiUser3Line size={28} className="text-fg" />
+          <RiPencilLine size={28} className="text-fg" />
         </div>
       }
       className="bg-surface-1 sm:max-w-[700px]"
@@ -146,7 +145,6 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
 
             <Input
               label="First Name"
-              placeholder="John"
               value={form.first_name}
               disabled={mutation.isPending}
               onChange={(event) => updateField("first_name", event.target.value)}
@@ -155,7 +153,6 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
             />
             <Input
               label="Last Name"
-              placeholder="Doe"
               value={form.last_name}
               disabled={mutation.isPending}
               onChange={(event) => updateField("last_name", event.target.value)}
@@ -164,32 +161,19 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
             />
             <Input
               label="Username"
-              placeholder="jdoe"
               value={form.username}
               disabled={mutation.isPending}
               onChange={(event) => updateField("username", event.target.value)}
               className="text-sm text-fg"
               labelClassName="text-sm font-medium text-fg"
             />
-
-            <div className="flex items-center justify-between mt-2">
-              <span className="text-sm font-medium text-fg">Active</span>
-              <Switch
-                checked={form.is_active}
-                disabled={mutation.isPending}
-                label={form.is_active ? "Deactivate account" : "Activate account"}
-                onChange={() => updateField("is_active", !form.is_active)}
-              />
-            </div>
           </div>
         </div>
 
-        {form.role !== user.role || (user.is_active && !form.is_active) ? (
+        {form.role !== user.role ? (
           <div className="mt-6">
             <p className="rounded-md border border-warning-border bg-warning-subtle px-4 py-3 text-sm text-warning font-medium">
-              {form.role !== user.role
-                ? "Changing this user's role will sign them out of every active session immediately."
-                : "Deactivating this account will sign it out of every active session immediately."}
+              Changing this user's role will sign them out of every active session immediately.
             </p>
           </div>
         ) : null}
