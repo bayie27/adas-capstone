@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/Badge"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { Tabs } from "@/components/ui/Tabs"
-import { getSystemHealth, getSystemHealthHistory, getSystemHealthLive } from "@/api/health"
+import { getSystemHealthHistory, getSystemHealthLive } from "@/api/health"
 import type {
   GpuRead,
   HealthWarning,
@@ -116,13 +116,11 @@ function formatSampleStatus(live: SystemHealthLiveResponse | undefined): ReactNo
   if (live.stale) {
     return (
       <span className="text-warning">
-        Stale — last sample {formatRelativeDateTime(live.collected_at)}
+        Data stale — last refreshed {formatRelativeDateTime(live.collected_at)}
       </span>
     )
   }
-  return (
-    <span className="text-fg-muted">Last sample {formatRelativeDateTime(live.collected_at)}</span>
-  )
+  return <span className="text-fg-muted">Data refreshed: Just now</span>
 }
 
 /**
@@ -174,21 +172,6 @@ const RANGE_TABS = [
   { value: "48h" as const, label: "Last 48 Hours" },
   { value: "30d" as const, label: "30-Day Trend" },
 ]
-
-/**
- * `state` is `_compute_state(warnings)` on the backend — derivable from
- * `warnings[]` alone — but it's rendered anyway, beside the title, as the
- * one fact a passing operator needs and the four KPI cards can't give: a
- * single verdict rather than four numbers to individually judge.
- */
-const STATE_BADGE: Record<
-  SystemHealthLiveResponse["state"],
-  { label: string; tone: "success" | "warning" | "danger" }
-> = {
-  healthy: { label: "Healthy", tone: "success" },
-  degraded: { label: "Degraded", tone: "warning" },
-  critical: { label: "Critical", tone: "danger" },
-}
 
 /**
  * `warnings[]` carries no presentation strings by design — see
@@ -512,12 +495,6 @@ function DualHealthChart({
 export default function SystemHealth() {
   const [activeTab, setActiveTab] = useState<"48h" | "30d">("48h")
 
-  const onlineQuery = useQuery({
-    queryKey: ["system-online"],
-    queryFn: getSystemHealth,
-    refetchInterval: 30_000,
-  })
-
   const liveQuery = useQuery({
     queryKey: ["system-health-live"],
     queryFn: getSystemHealthLive,
@@ -535,41 +512,25 @@ export default function SystemHealth() {
 
   const live = liveQuery.data
   const historyData = historyQuery.data?.points ?? []
-  const isOnline = onlineQuery.data ?? null
 
   return (
     <div className="mx-auto max-w-[1400px] p-8">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-start justify-between">
         <div>
-          <div className="mb-0.5 flex items-center gap-2.5">
-            <h1 className="text-xl font-semibold text-fg">System Health</h1>
-            {live ? (
-              <Badge variant="subtle" tone={STATE_BADGE[live.state].tone}>
-                {STATE_BADGE[live.state].label}
-              </Badge>
-            ) : null}
-          </div>
+          <h1 className="mb-0.5 text-xl font-semibold text-fg">System Health</h1>
           <p className="text-xs text-fg-muted">
             Oversee system diagnostics and hardware performance
           </p>
-          <p className="mt-1 text-caption">{formatSampleStatus(live)}</p>
         </div>
-        <div className="flex items-center gap-2">
-          {isOnline === null ? (
-            <span className="text-xs text-fg-muted">Checking status...</span>
-          ) : isOnline ? (
-            <div className="flex items-center gap-2 rounded-full border border-success-border bg-success-subtle px-3 py-1 text-xs font-medium text-success">
-              <span className="h-2 w-2 rounded-full bg-success" />
-              Online
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 rounded-full border border-danger-border bg-danger-subtle px-3 py-1 text-xs font-medium text-danger">
-              <span className="h-2 w-2 rounded-full bg-danger" />
-              Offline / Unreachable
-            </div>
-          )}
-        </div>
+        <div className="text-caption mt-1">{formatSampleStatus(live)}</div>
       </div>
+
+      {live?.stale ? (
+        <div className="mb-6 flex items-center gap-2 rounded-md border border-warning-border bg-warning-subtle px-4 py-2.5 text-caption text-warning">
+          <RiAlertLine size={15} className="shrink-0" aria-hidden="true" />
+          Warning: System telemetry is stale. Hardware and AI metrics may not be accurate.
+        </div>
+      ) : null}
 
       {liveQuery.isError ? (
         <QueryErrorBanner
