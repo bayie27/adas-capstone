@@ -1,11 +1,6 @@
 import { useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import {
-  RiArrowDownSLine,
-  RiArrowRightSLine,
-  RiFileCopyLine,
-  RiFileHistoryLine,
-} from "@remixicon/react"
+import { RiArrowDownSLine, RiArrowRightSLine, RiFileCopyLine } from "@remixicon/react"
 
 import {
   formatChangedFields,
@@ -257,15 +252,12 @@ export default function AuditLog() {
 
   return (
     <div className="mx-auto max-w-[1400px] p-8">
-      <div className="mb-6 flex items-center gap-2.5">
-        <RiFileHistoryLine size={18} className="text-fg-muted" />
-        <div>
-          <h1 className="mb-0.5 text-xl font-semibold text-fg">Audit Log</h1>
-          <p className="text-xs text-fg-muted">
-            Every audited state change in the system — logins, HITL transitions, camera and user
-            mutations, exports and backups
-          </p>
-        </div>
+      <div className="mb-6">
+        <h1 className="mb-0.5 text-xl font-semibold text-fg">Audit Log</h1>
+        <p className="text-xs text-fg-muted">
+          Every audited state change in the system — logins, HITL transitions, camera and user
+          mutations, exports and backups
+        </p>
       </div>
 
       {auditQuery.isError ? (
