@@ -487,7 +487,7 @@ function DetailValue({ detailKey, value }: { detailKey: string; value: unknown }
         return <span className="text-caption text-fg-muted">No check detail recorded.</span>
       }
       return (
-        <div className="flex flex-wrap gap-2 py-0.5">
+        <div className="flex flex-wrap items-center gap-2">
           {checkEntries.map(([name, ok]) => {
             const passed = Boolean(ok)
             return (
@@ -631,7 +631,7 @@ function AuditRow({
                 {entry.detail && Object.keys(entry.detail).length > 0 ? (
                   <div className="flex flex-col gap-2 text-sm">
                     {Object.entries(entry.detail).map(([key, value]) => (
-                      <div key={key} className="flex items-start gap-2">
+                      <div key={key} className="flex flex-wrap items-center gap-2">
                         <span className="shrink-0 text-fg-muted">{humanizeDetailKey(key)}:</span>
                         <DetailValue detailKey={key} value={value} />
                       </div>
