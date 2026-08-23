@@ -379,29 +379,6 @@ function HardwareHealthCard({ live }: { live: SystemHealthLiveResponse | undefin
 // ─── KPI card helpers ────────────────────────────────────────────────────────
 
 /**
- * Small colored dot + subtext row used by Inference Latency and Processing
- * Speed to signal whether cameras are actually reporting to the AI system.
- * Uses live.sample_camera_count from the existing payload — no new fields.
- */
-function CameraStatusSubtext({
-  live,
-  baseSubtext,
-}: {
-  live: SystemHealthLiveResponse | undefined
-  baseSubtext: string | undefined
-}) {
-  if (!live) return null
-  const reporting = live.sample_camera_count > 0
-
-  return (
-    <div className="flex items-center gap-1.5">
-      <BadgeDot tone={reporting ? "success" : "danger"} />
-      <span>{baseSubtext}</span>
-    </div>
-  )
-}
-
-/**
  * Disk storage dot — tone driven by presence of DISK_CRITICAL / DISK_WARNING
  * in live.warnings (matching the thresholds the backend already evaluates)
  * rather than duplicating threshold constants in the frontend.
@@ -762,34 +739,43 @@ export default function SystemHealth() {
         <StatCard
           icon={RiTimerLine}
           title="Inference Latency"
-          value={formatMs(live?.avg_inference_latency_ms)}
-          isLoading={liveQuery.isLoading}
-          subtext={
+          value={
             live ? (
-              // CameraStatusSubtext is a ReactNode — StatCard.subtext accepts ReactNode
-              <CameraStatusSubtext live={live} baseSubtext={formatSampleCameraSubtext(live)} />
-            ) : undefined
+              <span className="inline-flex items-center gap-2">
+                {formatMs(live.avg_inference_latency_ms)}
+                <BadgeDot tone={live.sample_camera_count > 0 ? "success" : "danger"} />
+              </span>
+            ) : (
+              formatMs(undefined)
+            )
           }
+          isLoading={liveQuery.isLoading}
+          subtext={formatSampleCameraSubtext(live)}
         />
         <StatCard
           icon={RiDashboard3Line}
           title="Processing Speed"
-          value={formatFps(live?.avg_fps)}
-          isLoading={liveQuery.isLoading}
-          subtext={
+          value={
             live ? (
-              <CameraStatusSubtext live={live} baseSubtext={formatSampleCameraSubtext(live)} />
-            ) : undefined
+              <span className="inline-flex items-center gap-2">
+                {formatFps(live.avg_fps)}
+                <BadgeDot tone={live.sample_camera_count > 0 ? "success" : "danger"} />
+              </span>
+            ) : (
+              formatFps(undefined)
+            )
           }
+          isLoading={liveQuery.isLoading}
+          subtext={formatSampleCameraSubtext(live)}
         />
         <StatCard
           icon={RiHardDrive2Line}
           title="Disk Storage Usage"
           value={
             live ? (
-              <span className="flex items-center gap-2">
-                <BadgeDot tone={diskTone} />
+              <span className="inline-flex items-center gap-2">
                 {formatPercent(live.disk_percent)}
+                <BadgeDot tone={diskTone} />
               </span>
             ) : (
               formatPercent(undefined)
