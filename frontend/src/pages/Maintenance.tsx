@@ -4,6 +4,7 @@ import {
   RiArrowDownSLine,
   RiArrowRightSLine,
   RiHardDrive2Line,
+  RiInformationLine,
   RiRefreshLine,
 } from "@remixicon/react"
 
@@ -197,11 +198,7 @@ export default function Maintenance() {
           <div>
             <h1 className="mb-0.5 text-xl font-semibold text-fg">Maintenance</h1>
             <p className="text-xs text-fg-muted">
-              Database backups and the restore request flow — never a filesystem path
-            </p>
-            <p className="mt-0.5 text-caption text-fg-muted">
-              Up to {BACKUP_DAILY_RETENTION} daily / {BACKUP_MANUAL_RETENTION} manual backups are
-              kept — older ones are pruned automatically.
+              Manage system database backups and safe point-in-time restoration.
             </p>
           </div>
         </div>
@@ -224,7 +221,7 @@ export default function Maintenance() {
               triggerMutation.mutate()
             }}
           >
-            Trigger Backup
+            Create Backup
           </Button>
         </div>
       </div>
@@ -238,6 +235,12 @@ export default function Maintenance() {
           onRetry={() => backupsQuery.refetch()}
         />
       ) : null}
+
+      <p className="mb-3 flex items-center gap-1.5 text-sm italic text-fg-muted">
+        <RiInformationLine size={14} className="shrink-0" />
+        The system safely retains up to {BACKUP_DAILY_RETENTION} daily and {BACKUP_MANUAL_RETENTION}{" "}
+        manual backups. Older records are deleted automatically.
+      </p>
 
       <TableContainer>
         <Table>
