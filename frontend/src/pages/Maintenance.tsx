@@ -47,6 +47,31 @@ const RESTORE_STATUS_LABEL: Record<string, string> = {
   rolled_back: "Rolled back",
 }
 
+/**
+ * Display-layer mapping from raw backup.checks keys (set by the backend) to
+ * plain-language labels for operations staff. Covers all current check names;
+ * unknown future keys fall back to formatCheckLabel below so they never
+ * silently disappear from the UI.
+ */
+const CHECK_LABELS: Record<string, string> = {
+  checksum: "File Integrity",
+  quick_check: "Database Structure",
+  foreign_key_check: "Data Links",
+}
+
+/**
+ * Returns the friendly label for a check key, or a lightly formatted version
+ * of the raw key (title-case, underscores → spaces) for any unmapped key
+ * added later on the backend.
+ */
+function formatCheckLabel(key: string): string {
+  if (CHECK_LABELS[key]) return CHECK_LABELS[key]
+  return key
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+}
+
 function ValidityBadge({ valid }: { valid: boolean }) {
   return (
     <Badge variant="subtle" tone={valid ? "success" : "danger"}>
@@ -105,7 +130,7 @@ function BackupRow({
                       tone={ok ? "success" : "danger"}
                       uppercase={false}
                     >
-                      {name}: {ok ? "OK" : "Failed"}
+                      {formatCheckLabel(name)}: {ok ? "Passed" : "Failed"}
                     </Badge>
                   ))
                 )}
