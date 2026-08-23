@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   RiArrowDownSLine,
@@ -179,6 +179,13 @@ export default function Maintenance() {
   const [notice, setNotice] = useState<NoticeState | null>(null)
   const [restoreTargetId, setRestoreTargetId] = useState<string | null>(null)
 
+  /**
+   * Snapshot of backup IDs that existed before a Create Backup was triggered.
+   * Used after the 4-second delayed refetch to detect whether a new row
+   * appeared — if so, the background task finished within the window.
+   */
+  const preBackupIdsRef = useRef<Set<string>>(new Set())
+
   const backupsQuery = useQuery({
     queryKey: BACKUPS_QUERY_KEY,
     queryFn: getBackups,
@@ -192,15 +199,43 @@ export default function Maintenance() {
   /**
    * POST /api/system/backups returns 202 immediately — the actual write
    * runs in a background task. There is nothing to poll for completion (no
-   * job id), so this refetches the list once after a short delay to have a
-   * decent chance of showing the new row, and the operator can always hit
-   * Refresh themselves; a 409 means one is already running.
+   * job id). We snapshot the current backup IDs at trigger time, then after a
+   * short delay fetch the list again and compare: if a new row appeared the
+   * task finished within that window and we update the banner accordingly;
+   * if not, we prompt the operator to refresh manually. A 409 means one is
+   * already running.
    */
   const triggerMutation = useMutation({
     mutationFn: triggerBackup,
     onSuccess: () => {
-      setNotice({ tone: "success", message: "Backup started." })
-      window.setTimeout(() => queryClient.invalidateQueries({ queryKey: BACKUPS_QUERY_KEY }), 4000)
+      // Capture what already exists before the new backup lands
+      preBackupIdsRef.current = new Set(
+        (
+          queryClient.getQueryData<Awaited<ReturnType<typeof getBackups>>>(BACKUPS_QUERY_KEY)
+            ?.items ?? []
+        ).map((b) => b.backup_id),
+      )
+      setNotice({ tone: "success", message: "Backup started. Please wait…" })
+      window.setTimeout(async () => {
+        const result = await queryClient.fetchQuery({
+          queryKey: BACKUPS_QUERY_KEY,
+          queryFn: getBackups,
+          staleTime: 0,
+        })
+        const hasNew = result.items.some((b) => !preBackupIdsRef.current.has(b.backup_id))
+        setNotice(
+          hasNew
+            ? {
+                tone: "success",
+                message: "Backup complete. The new backup is now available in the list.",
+              }
+            : {
+                tone: "success",
+                message:
+                  "Backup started. It is still running in the background — click Refresh to check when it's ready.",
+              },
+        )
+      }, 4000)
     },
     onError: (error) => {
       const isBusy = getApiError(error)?.code === "CONFLICT_BUSY"
