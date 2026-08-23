@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   RiArrowDownSLine,
   RiArrowRightSLine,
-  RiHardDrive2Line,
   RiInformationLine,
   RiRefreshLine,
 } from "@remixicon/react"
@@ -254,14 +253,11 @@ export default function Maintenance() {
   return (
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <RiHardDrive2Line size={18} className="text-fg-muted" />
-          <div>
-            <h1 className="mb-0.5 text-xl font-semibold text-fg">Maintenance</h1>
-            <p className="text-xs text-fg-muted">
-              Manage system database backups and safe point-in-time restoration.
-            </p>
-          </div>
+        <div>
+          <h1 className="mb-0.5 text-xl font-semibold text-fg">Maintenance</h1>
+          <p className="text-xs text-fg-muted">
+            Manage system database backups and safe point-in-time restoration.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
