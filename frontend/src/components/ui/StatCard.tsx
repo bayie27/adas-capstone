@@ -23,7 +23,9 @@ interface StatCardProps {
   icon: ElementType
   title: string
   value: ReactNode
-  subtext?: string
+  /** Optional subtext below the value. Accepts a string or any ReactNode
+   * (e.g. a BadgeDot + label row for live status indicators). */
+  subtext?: ReactNode
   delta?: string
   /** `true`/`false` pick the success/danger tone. `null` is a distinct third
    * state -- a real, present delta that is exactly zero -- rendered neutral
