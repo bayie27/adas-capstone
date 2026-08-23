@@ -809,7 +809,7 @@ export default function SystemHealth() {
         className="rounded-xl border border-stroke bg-surface-1"
       >
         <summary className="flex cursor-pointer select-none items-center justify-between px-5 py-4 text-sm font-medium text-fg hover:bg-surface-2 rounded-xl transition-colors duration-150 [&::-webkit-details-marker]:hidden list-none">
-          <span>Technical details</span>
+          <span>Advance details</span>
           <span
             className={cn(
               "text-fg-muted transition-transform duration-200",
