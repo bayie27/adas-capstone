@@ -1,6 +1,21 @@
 import { useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { RiArrowDownSLine, RiArrowRightSLine, RiFileHistoryLine } from "@remixicon/react"
+import {
+  RiArrowDownSLine,
+  RiArrowRightSLine,
+  RiFileCopyLine,
+  RiFileHistoryLine,
+} from "@remixicon/react"
+
+import {
+  formatChangedFields,
+  humanizeDetailKey,
+  humanizeReasonValue,
+  isOpaqueIdKey,
+  isPlainObject,
+  isUuid,
+  truncateId,
+} from "@/utils/auditFormat"
 
 import {
   AUDIT_ACTIONS,
@@ -106,6 +121,7 @@ const AUDIT_ACTION_MAP: Record<string, string> = {
   ALARM_SETTINGS_UPDATE: "Updated Alarm Settings",
   BACKUP_TRIGGER: "Triggered Backup",
   RESTORE_TRIGGER: "Triggered Restore",
+  CAMERA_RESTORE: "Restored Camera",
 }
 
 export default function AuditLog() {
@@ -418,6 +434,126 @@ export default function AuditLog() {
   )
 }
 
+/**
+ * Renders a truncated ID with a copy-to-clipboard button. The full value is
+ * available on hover via a title attribute.
+ */
+function CopyableId({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false)
+  const display = truncateId(value)
+  const isLong = display !== value
+
+  function handleCopy(e: React.MouseEvent) {
+    e.stopPropagation()
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span title={isLong ? value : undefined} className="font-mono text-xs">
+        {display}
+      </span>
+      {isLong ? (
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex items-center rounded p-0.5 text-fg-muted transition-colors hover:text-fg"
+          title={copied ? "Copied!" : "Copy full ID"}
+        >
+          <RiFileCopyLine size={12} />
+        </button>
+      ) : null}
+    </span>
+  )
+}
+
+/**
+ * Renders a single detail value. Handles nested objects, arrays, UUIDs,
+ * opaque numeric IDs, and reason codes — never lets a raw object hit the
+ * DOM as `[object Object]`.
+ */
+function DetailValue({ detailKey, value }: { detailKey: string; value: unknown }) {
+  // Null / undefined
+  if (value === null || value === undefined) {
+    return <span className="text-fg-muted">—</span>
+  }
+
+  // Arrays (e.g. changed_fields: ["camera_name", "channel_id"])
+  if (Array.isArray(value)) {
+    return <span className="font-medium text-fg">{formatChangedFields(value)}</span>
+  }
+
+  // Nested objects (e.g. checks: { sha256: true, integrity: true })
+  if (isPlainObject(value)) {
+    return (
+      <div className="flex flex-col gap-1 rounded border border-stroke bg-surface-2 px-3 py-2">
+        {Object.entries(value).map(([subKey, subVal]) => (
+          <div key={subKey} className="flex items-center gap-2 text-xs">
+            <span className="text-fg-muted">{humanizeDetailKey(subKey)}:</span>
+            {typeof subVal === "boolean" ? (
+              <span className={subVal ? "text-success" : "text-danger"}>
+                {subVal ? "✓ Passed" : "✗ Failed"}
+              </span>
+            ) : (
+              <span className="font-medium text-fg">{String(subVal)}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  const strValue = String(value)
+
+  // Known reason codes (e.g. "self_delete" → "Cannot delete own account")
+  if (detailKey === "reason") {
+    const humanized = humanizeReasonValue(strValue)
+    if (humanized) {
+      return (
+        <span className="font-medium text-fg" title={strValue}>
+          {humanized}
+        </span>
+      )
+    }
+  }
+
+  // UUID-shaped strings get truncated with copy button
+  if (isUuid(strValue)) {
+    return <CopyableId value={strValue} />
+  }
+
+  // Long hex strings (e.g. non-hyphenated backup IDs)
+  if (/^[0-9a-f]{24,}$/i.test(strValue)) {
+    return <CopyableId value={strValue} />
+  }
+
+  // Opaque numeric IDs — append a clarifying suffix
+  if (isOpaqueIdKey(detailKey) && /^\d+$/.test(strValue)) {
+    return (
+      <span className="font-medium text-fg">
+        {strValue} <span className="text-caption text-fg-muted">(internal reference)</span>
+      </span>
+    )
+  }
+
+  // Default: plain string
+  return <span className="font-medium text-fg">{strValue}</span>
+}
+
+/**
+ * Formats a target_ref for display in the main table row. Truncates UUIDs
+ * and clarifies bare numeric IDs.
+ */
+function formatTargetRef(targetType: string | null, targetRef: string | null): string {
+  void targetType
+  if (!targetRef) return ""
+  if (isUuid(targetRef)) return truncateId(targetRef)
+  return targetRef
+}
+
 function AuditRow({
   entry,
   expanded,
@@ -427,6 +563,10 @@ function AuditRow({
   expanded: boolean
   onToggle: () => void
 }) {
+  const hasRequestId = entry.request_id && entry.request_id !== "-"
+  const hasSourceIp = entry.source_ip && entry.source_ip !== "-"
+  const hasDiagnostics = hasRequestId || hasSourceIp
+
   return (
     <>
       <TableRow className="cursor-pointer" onClick={onToggle}>
@@ -439,9 +579,14 @@ function AuditRow({
         </TableCell>
         <TableCell>{AUDIT_ACTION_MAP[entry.action] || entry.action}</TableCell>
         <TableCell className="text-fg-muted">
-          {entry.target_type
-            ? `${entry.target_type}${entry.target_ref ? ` · ${entry.target_ref}` : ""}`
-            : "-"}
+          {entry.target_type ? (
+            <span title={entry.target_ref ?? undefined}>
+              {entry.target_type}
+              {entry.target_ref ? ` · ${formatTargetRef(entry.target_type, entry.target_ref)}` : ""}
+            </span>
+          ) : (
+            <span className="text-caption italic text-fg-muted">Not applicable</span>
+          )}
         </TableCell>
         <TableCell>
           <ResultBadge result={entry.result} />
@@ -461,20 +606,17 @@ function AuditRow({
               detail is stored as a JSON string backend-side and exposed as
               a parsed object by a field_validator — it arrives as real
               structure and must not be re-parsed as a string here.
-              source_ip and request_id are the forensic columns; request_id
-              is what correlates this row with a line in the backend log,
-              which is the only reason the field exists, so both live in
-              the expanded view rather than the row.
             */}
-            <div className="grid grid-cols-1 gap-6 py-2 md:grid-cols-[1fr_auto]">
+            <div className="space-y-4 py-2">
+              {/* — Action Details (operational, always visible) — */}
               <div>
                 <h4 className="mb-2 text-xs font-semibold text-fg-muted">Action Details</h4>
                 {entry.detail && Object.keys(entry.detail).length > 0 ? (
-                  <div className="flex flex-col gap-1.5 text-sm">
+                  <div className="flex flex-col gap-2 text-sm">
                     {Object.entries(entry.detail).map(([key, value]) => (
-                      <div key={key} className="flex gap-2">
-                        <span className="text-fg-muted capitalize">{key.replace(/_/g, " ")}:</span>
-                        <span className="font-medium text-fg">{String(value)}</span>
+                      <div key={key} className="flex items-start gap-2">
+                        <span className="shrink-0 text-fg-muted">{humanizeDetailKey(key)}:</span>
+                        <DetailValue detailKey={key} value={value} />
                       </div>
                     ))}
                   </div>
@@ -482,11 +624,33 @@ function AuditRow({
                   <div className="text-sm text-fg-muted">No detail recorded.</div>
                 )}
               </div>
-              <div className="space-y-1 text-caption text-fg-muted">
-                <h4 className="mb-2 text-xs font-semibold text-fg-muted">Diagnostic Data</h4>
-                <div>Request ID: {entry.request_id ?? "-"}</div>
-                <div>Source IP: {entry.source_ip ?? "-"}</div>
-              </div>
+
+              {/* — Technical Details (diagnostic, collapsible) — */}
+              <details className="group">
+                <summary className="cursor-pointer select-none text-caption text-fg-muted transition-colors hover:text-fg">
+                  <span className="ml-1">Technical Details</span>
+                </summary>
+                <div className="mt-2 space-y-1 pl-4 text-caption text-fg-muted">
+                  <div>
+                    Request ID:{" "}
+                    {hasRequestId ? (
+                      <CopyableId value={entry.request_id!} />
+                    ) : (
+                      <span className="italic">N/A (system-initiated)</span>
+                    )}
+                  </div>
+                  <div>
+                    Source IP:{" "}
+                    {hasSourceIp ? (
+                      <span>{entry.source_ip}</span>
+                    ) : (
+                      <span className="italic">
+                        {hasDiagnostics ? "N/A" : "N/A (system-initiated)"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </details>
             </div>
           </TableCell>
         </TableRow>
