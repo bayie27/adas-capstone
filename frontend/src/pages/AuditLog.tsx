@@ -4,6 +4,7 @@ import { RiArrowDownSLine, RiArrowRightSLine, RiFileCopyLine } from "@remixicon/
 
 import {
   formatChangedFields,
+  formatCheckLabel,
   humanizeDetailKey,
   humanizeReasonValue,
   isOpaqueIdKey,
@@ -478,8 +479,32 @@ function DetailValue({ detailKey, value }: { detailKey: string; value: unknown }
     return <span className="font-medium text-fg">{formatChangedFields(value)}</span>
   }
 
-  // Nested objects (e.g. checks: { sha256: true, integrity: true })
+  // Nested objects (e.g. checks: { checksum: true, quick_check: true, foreign_key_check: true })
   if (isPlainObject(value)) {
+    if (detailKey === "checks") {
+      const checkEntries = Object.entries(value)
+      if (checkEntries.length === 0) {
+        return <span className="text-caption text-fg-muted">No check detail recorded.</span>
+      }
+      return (
+        <div className="flex flex-wrap gap-2 py-0.5">
+          {checkEntries.map(([name, ok]) => {
+            const passed = Boolean(ok)
+            return (
+              <Badge
+                key={name}
+                variant="outline"
+                tone={passed ? "success" : "danger"}
+                uppercase={false}
+              >
+                {formatCheckLabel(name)}: {passed ? "Passed" : "Failed"}
+              </Badge>
+            )
+          })}
+        </div>
+      )
+    }
+
     return (
       <div className="flex flex-col gap-1 rounded border border-stroke bg-surface-2 px-3 py-2">
         {Object.entries(value).map(([subKey, subVal]) => (
