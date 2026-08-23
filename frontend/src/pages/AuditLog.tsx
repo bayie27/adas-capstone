@@ -4,6 +4,7 @@ import { RiArrowDownSLine, RiArrowRightSLine, RiFileCopyLine } from "@remixicon/
 
 import {
   formatChangedFields,
+  formatCheckLabel,
   humanizeDetailKey,
   humanizeReasonValue,
   isOpaqueIdKey,
@@ -478,8 +479,32 @@ function DetailValue({ detailKey, value }: { detailKey: string; value: unknown }
     return <span className="font-medium text-fg">{formatChangedFields(value)}</span>
   }
 
-  // Nested objects (e.g. checks: { sha256: true, integrity: true })
+  // Nested objects (e.g. checks: { checksum: true, quick_check: true, foreign_key_check: true })
   if (isPlainObject(value)) {
+    if (detailKey === "checks") {
+      const checkEntries = Object.entries(value)
+      if (checkEntries.length === 0) {
+        return <span className="text-caption text-fg-muted">No check detail recorded.</span>
+      }
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          {checkEntries.map(([name, ok]) => {
+            const passed = Boolean(ok)
+            return (
+              <Badge
+                key={name}
+                variant="outline"
+                tone={passed ? "success" : "danger"}
+                uppercase={false}
+              >
+                {formatCheckLabel(name)}: {passed ? "Passed" : "Failed"}
+              </Badge>
+            )
+          })}
+        </div>
+      )
+    }
+
     return (
       <div className="flex flex-col gap-1 rounded border border-stroke bg-surface-2 px-3 py-2">
         {Object.entries(value).map(([subKey, subVal]) => (
@@ -606,7 +631,7 @@ function AuditRow({
                 {entry.detail && Object.keys(entry.detail).length > 0 ? (
                   <div className="flex flex-col gap-2 text-sm">
                     {Object.entries(entry.detail).map(([key, value]) => (
-                      <div key={key} className="flex items-start gap-2">
+                      <div key={key} className="flex flex-wrap items-center gap-2">
                         <span className="shrink-0 text-fg-muted">{humanizeDetailKey(key)}:</span>
                         <DetailValue detailKey={key} value={value} />
                       </div>

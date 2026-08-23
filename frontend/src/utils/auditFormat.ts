@@ -42,6 +42,28 @@ export function humanizeDetailKey(key: string): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+/**
+ * Display-layer mapping for validation check keys (e.g. backup checks).
+ * Matches the Maintenance page labels for consistent terminology across the system.
+ */
+const CHECK_LABELS: Record<string, string> = {
+  checksum: "File Integrity",
+  quick_check: "Database Structure",
+  foreign_key_check: "Data Links",
+}
+
+/**
+ * Returns the friendly label for a check key (e.g. "checksum" -> "File Integrity"),
+ * or a formatted version of the key as fallback.
+ */
+export function formatCheckLabel(key: string): string {
+  if (CHECK_LABELS[key]) return CHECK_LABELS[key]
+  return key
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+}
+
 // ---------------------------------------------------------------------------
 // 2. UUID / long-ID helpers
 // ---------------------------------------------------------------------------
