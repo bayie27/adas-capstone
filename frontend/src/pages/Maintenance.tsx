@@ -215,7 +215,7 @@ export default function Maintenance() {
             ?.items ?? []
         ).map((b) => b.backup_id),
       )
-      setNotice({ tone: "success", message: "Backup started. Please wait…" })
+      setNotice({ tone: "warning", message: "Backup started. Please wait…" })
       window.setTimeout(async () => {
         const result = await queryClient.fetchQuery({
           queryKey: BACKUPS_QUERY_KEY,
@@ -230,7 +230,7 @@ export default function Maintenance() {
                 message: "Backup complete. The new backup is now available in the list.",
               }
             : {
-                tone: "success",
+                tone: "warning",
                 message:
                   "Backup started. It is still running in the background — click Refresh to check when it's ready.",
               },
