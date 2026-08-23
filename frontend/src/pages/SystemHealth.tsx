@@ -107,16 +107,29 @@ function formatTemp(value: number | null | undefined): string {
 function formatSampleStatus(live: SystemHealthLiveResponse | undefined): ReactNode {
   if (!live) return null
   if (live.collected_at === null) {
-    return <span className="text-fg-muted">Collecting the first sample…</span>
+    return (
+      <div className="text-right">
+        <div className="text-[12px] text-fg-muted">Data refreshed</div>
+        <div className="text-[14px] font-medium text-fg-muted">Collecting sample…</div>
+      </div>
+    )
   }
   if (live.stale) {
     return (
-      <span className="text-warning">
-        Data stale — last refreshed {formatRelativeDateTime(live.collected_at)}
-      </span>
+      <div className="text-right">
+        <div className="text-[12px] text-warning">Data refreshed</div>
+        <div className="text-[14px] font-medium text-warning">
+          {formatRelativeDateTime(live.collected_at)}
+        </div>
+      </div>
     )
   }
-  return <span className="text-fg-muted">Data refreshed: Just now</span>
+  return (
+    <div className="text-right">
+      <div className="text-[12px] text-fg-muted">Data refreshed</div>
+      <div className="text-[14px] font-medium text-fg">Just now</div>
+    </div>
+  )
 }
 
 /**
@@ -712,7 +725,7 @@ export default function SystemHealth() {
             Oversee system diagnostics and hardware performance
           </p>
         </div>
-        <div className="text-caption mt-1">{formatSampleStatus(live)}</div>
+        <div>{formatSampleStatus(live)}</div>
       </div>
 
       {/* ── Live query error ────────────────────────────────────────────── */}
