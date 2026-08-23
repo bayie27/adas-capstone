@@ -235,6 +235,7 @@ export default function Maintenance() {
                   "Backup started. It is still running in the background — click Refresh to check when it's ready.",
               },
         )
+        window.setTimeout(() => setNotice(null), 5000)
       }, 4000)
     },
     onError: (error) => {
