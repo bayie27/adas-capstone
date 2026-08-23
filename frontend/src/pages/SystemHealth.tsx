@@ -12,23 +12,19 @@ import {
 
 import { AreaChartCard, ChartMessage } from "@/components/charts/AreaChartCard"
 import { AXIS_PROPS, CHART, TOOLTIP_PROPS } from "@/components/charts/chartTheme"
-import { Badge } from "@/components/ui/Badge"
+import { Badge, BadgeDot } from "@/components/ui/Badge"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { Tabs } from "@/components/ui/Tabs"
 import { getSystemHealthHistory, getSystemHealthLive } from "@/api/health"
-import type {
-  GpuRead,
-  HealthWarning,
-  SystemHealthDataPoint,
-  SystemHealthLiveResponse,
-} from "@/api/health"
-import { describeWarning } from "@/utils/healthWarnings"
+import type { GpuRead, SystemHealthDataPoint, SystemHealthLiveResponse } from "@/api/health"
+import { getOperatorWarningEntry } from "@/utils/warningCopy"
 import { formatRelativeDateTime } from "@/utils/datetime"
 import { truncateLabel } from "@/utils/format"
 import { cn } from "@/utils/cn"
 import {
   RiAlertLine,
+  RiCheckboxCircleLine,
   RiCpuLine,
   RiDashboard3Line,
   RiHardDrive2Line,
@@ -111,16 +107,29 @@ function formatTemp(value: number | null | undefined): string {
 function formatSampleStatus(live: SystemHealthLiveResponse | undefined): ReactNode {
   if (!live) return null
   if (live.collected_at === null) {
-    return <span className="text-fg-muted">Collecting the first sample…</span>
+    return (
+      <div className="text-right">
+        <div className="text-[12px] text-fg-muted">Data refreshed</div>
+        <div className="text-[14px] font-medium text-fg-muted">Collecting sample…</div>
+      </div>
+    )
   }
   if (live.stale) {
     return (
-      <span className="text-warning">
-        Data stale — last refreshed {formatRelativeDateTime(live.collected_at)}
-      </span>
+      <div className="text-right">
+        <div className="text-[12px] text-warning">Data refreshed</div>
+        <div className="text-[14px] font-medium text-warning">
+          {formatRelativeDateTime(live.collected_at)}
+        </div>
+      </div>
     )
   }
-  return <span className="text-fg-muted">Data refreshed: Just now</span>
+  return (
+    <div className="text-right">
+      <div className="text-[12px] text-fg-muted">Data refreshed</div>
+      <div className="text-[14px] font-medium text-fg">Just now</div>
+    </div>
+  )
 }
 
 /**
@@ -173,40 +182,229 @@ const RANGE_TABS = [
   { value: "30d" as const, label: "30-Day Trend" },
 ]
 
+// ─── Operational Banner ──────────────────────────────────────────────────────
+
 /**
- * `warnings[]` carries no presentation strings by design — see
- * utils/healthWarnings.ts for the copy table and its open fallback. This is
- * the strip Figma doesn't draw at all: the backend computes threshold
- * breaches and, before this, nothing showed them — including
- * AI_HEARTBEAT_STALE, arguably the single most important signal on this page.
+ * Top-level status banner for DRRMO operators and the Head of Operations.
+ *
+ * Three mutually exclusive states (evaluated in priority order):
+ *   1. Stale / no sample — amber, "data may be out of date"
+ *   2. Active warnings — highest-severity warning headlined, "+N more" expander
+ *   3. All clear — green, fps + camera count context
+ *
+ * Warning copy is sourced exclusively from warningCopy.ts — never inlined here.
  */
-function WarningsStrip({ warnings }: { warnings: HealthWarning[] }) {
-  if (warnings.length === 0) return null
+function OperationalBanner({ live }: { live: SystemHealthLiveResponse | undefined }) {
+  const [warningsExpanded, setWarningsExpanded] = useState(false)
+
+  // ── State 1: stale or no sample yet ──────────────────────────────────────
+  const isStale = !live || live.collected_at === null || live.stale
+  if (isStale) {
+    return (
+      <div className="mb-6 flex items-center gap-3 rounded-xl border border-warning-border bg-warning-subtle px-5 py-4">
+        <RiAlertLine size={18} className="shrink-0 text-warning" aria-hidden="true" />
+        <div>
+          <p className="text-sm font-medium text-warning">
+            System data may be slightly out of date
+          </p>
+          <p className="mt-0.5 text-xs text-warning opacity-80">
+            Recent changes may not be visible yet. The dashboard refreshes automatically.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  const warnings = live.warnings ?? []
+
+  // ── State 2: active warnings ──────────────────────────────────────────────
+  if (warnings.length > 0) {
+    // Sort: critical first, then warning — server may already do this but
+    // we enforce it here for display safety.
+    const sorted = [...warnings].sort((a, b) => {
+      if (a.severity === b.severity) return 0
+      return a.severity === "critical" ? -1 : 1
+    })
+    const primary = sorted[0]
+    const rest = sorted.slice(1)
+    const primaryEntry = getOperatorWarningEntry(primary)
+    const isBad = primaryEntry.tone === "bad"
+
+    return (
+      <div
+        className={cn(
+          "mb-6 rounded-xl border px-5 py-4",
+          isBad
+            ? "border-danger-border bg-danger-subtle"
+            : "border-warning-border bg-warning-subtle",
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <RiAlertLine
+            size={18}
+            className={cn("shrink-0", isBad ? "text-danger" : "text-warning")}
+            aria-hidden="true"
+          />
+          <div className="flex-1 min-w-0">
+            <p className={cn("text-sm font-medium", isBad ? "text-danger" : "text-warning")}>
+              {primaryEntry.text}
+            </p>
+            <p className={cn("mt-0.5 text-xs opacity-80", isBad ? "text-danger" : "text-warning")}>
+              {primaryEntry.detail}
+            </p>
+
+            {rest.length > 0 && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setWarningsExpanded((v) => !v)}
+                  className={cn(
+                    "text-xs font-medium underline-offset-2 hover:underline focus:outline-none",
+                    isBad ? "text-danger" : "text-warning",
+                  )}
+                >
+                  {warningsExpanded
+                    ? "Show less"
+                    : `+${rest.length} more issue${rest.length > 1 ? "s" : ""}`}
+                </button>
+
+                {warningsExpanded && (
+                  <ul className="mt-2 flex flex-col gap-1.5">
+                    {rest.map((w, i) => {
+                      const entry = getOperatorWarningEntry(w)
+                      return (
+                        <li
+                          key={`${w.code}-${i}`}
+                          className={cn(
+                            "text-xs opacity-90",
+                            entry.tone === "bad" ? "text-danger" : "text-warning",
+                          )}
+                        >
+                          <span className="font-medium">{entry.text}</span>
+                          {" — "}
+                          {entry.detail}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── State 3: all clear ────────────────────────────────────────────────────
+  const fpsText = live.avg_fps != null ? `Processing at ${live.avg_fps.toFixed(1)} fps` : null
+  const cameraText =
+    live.sample_camera_count === 0
+      ? "No cameras currently reporting"
+      : live.sample_camera_count === 1
+        ? "1 camera currently reporting"
+        : `${live.sample_camera_count} cameras currently reporting`
+
+  const contextParts = [fpsText, cameraText].filter(Boolean).join(" · ")
 
   return (
-    <div className="mb-6 flex flex-col gap-2">
-      {warnings.map((warning, index) => {
-        const described = describeWarning(warning)
-        return (
-          <div
-            key={`${warning.code}-${index}`}
-            className={cn(
-              "flex items-center gap-2 rounded-md border px-4 py-2.5 text-caption",
-              described.tone === "danger"
-                ? "border-danger-border bg-danger-subtle text-danger"
-                : described.tone === "warning"
-                  ? "border-warning-border bg-warning-subtle text-warning"
-                  : "border-stroke bg-surface-1 text-fg-muted",
-            )}
-          >
-            <RiAlertLine size={15} className="shrink-0" aria-hidden="true" />
-            {described.message}
-          </div>
-        )
-      })}
+    <div className="mb-6 flex items-center gap-3 rounded-xl border border-success-border bg-success-subtle px-5 py-4">
+      <RiCheckboxCircleLine size={18} className="shrink-0 text-success" aria-hidden="true" />
+      <div>
+        <p className="text-sm font-medium text-success">All systems normal</p>
+        {contextParts && <p className="mt-0.5 text-xs text-success opacity-80">{contextParts}</p>}
+      </div>
     </div>
   )
 }
+
+// ─── Hardware health card ────────────────────────────────────────────────────
+
+/**
+ * Compact operator-facing hardware status card with two rows.
+ * Derives plain-language status from existing live fields and warning codes —
+ * no new API fields needed. Placed above the technical accordion so operators
+ * see hardware status without needing to expand technical details.
+ */
+function HardwareHealthRow({
+  label,
+  tone,
+  statusText,
+}: {
+  label: string
+  tone: "success" | "warning" | "danger" | "neutral"
+  statusText: string
+}) {
+  return (
+    <div className="flex items-center justify-between py-2.5 border-b border-stroke last:border-b-0">
+      <span className="text-xs font-medium text-fg-muted uppercase tracking-[0.08em]">{label}</span>
+      <div className="flex items-center gap-2">
+        <BadgeDot tone={tone} />
+        <span className="text-xs text-fg-body">{statusText}</span>
+      </div>
+    </div>
+  )
+}
+
+function HardwareHealthCard({ live }: { live: SystemHealthLiveResponse | undefined }) {
+  if (!live) return null
+
+  const hasGpuTempCritical = (live.warnings ?? []).some((w) => w.code === "GPU_TEMP_CRITICAL")
+  const hasRamCritical = (live.warnings ?? []).some((w) => w.code === "RAM_CRITICAL")
+
+  // GPU row
+  let gpuTone: "success" | "warning" | "danger" | "neutral"
+  let gpuText: string
+  if (live.gpus.length === 0) {
+    gpuTone = "neutral"
+    gpuText = "No graphics processor detected"
+  } else if (hasGpuTempCritical) {
+    gpuTone = "danger"
+    gpuText = `Overheating${live.gpu_temp_max != null ? ` (${live.gpu_temp_max.toFixed(0)}°C)` : ""}`
+  } else {
+    gpuTone = "success"
+    gpuText = `Working normally${live.gpu_temp_max != null ? ` (${live.gpu_temp_max.toFixed(0)}°C)` : ""}`
+  }
+
+  // CPU / memory row
+  let memTone: "success" | "warning" | "danger" | "neutral"
+  let memText: string
+  if (hasRamCritical) {
+    memTone = "danger"
+    memText = `Memory almost full${live.ram_usage != null ? ` (${live.ram_usage.toFixed(0)}%)` : ""}`
+  } else {
+    memTone = "success"
+    memText = `Running normally${live.cpu_usage != null ? ` · CPU ${live.cpu_usage.toFixed(0)}%` : ""}`
+  }
+
+  return (
+    <div className="mb-8 rounded-xl border border-stroke bg-surface-1 p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <RiCpuLine size={16} className="text-fg-muted" />
+        <h3 className="text-xs font-medium text-fg-body">Hardware Health</h3>
+      </div>
+      <HardwareHealthRow label="Graphics processor" tone={gpuTone} statusText={gpuText} />
+      <HardwareHealthRow label="Processor & memory" tone={memTone} statusText={memText} />
+    </div>
+  )
+}
+
+// ─── KPI card helpers ────────────────────────────────────────────────────────
+
+/**
+ * Disk storage dot — tone driven by presence of DISK_CRITICAL / DISK_WARNING
+ * in live.warnings (matching the thresholds the backend already evaluates)
+ * rather than duplicating threshold constants in the frontend.
+ */
+function diskDotTone(live: SystemHealthLiveResponse | undefined): "success" | "warning" | "danger" {
+  if (!live) return "success"
+  const codes = (live.warnings ?? []).map((w) => w.code)
+  if (codes.includes("DISK_CRITICAL")) return "danger"
+  if (codes.includes("DISK_WARNING")) return "warning"
+  return "success"
+}
+
+// ─── GPU section ─────────────────────────────────────────────────────────────
 
 function GpuStat({ label, value }: { label: string; value: string }) {
   return (
@@ -494,6 +692,7 @@ function DualHealthChart({
 
 export default function SystemHealth() {
   const [activeTab, setActiveTab] = useState<"48h" | "30d">("48h")
+  const [techDetailsOpen, setTechDetailsOpen] = useState(false)
 
   const liveQuery = useQuery({
     queryKey: ["system-health-live"],
@@ -513,8 +712,12 @@ export default function SystemHealth() {
   const live = liveQuery.data
   const historyData = historyQuery.data?.points ?? []
 
+  // Disk dot tone — derived from warning presence, not hardcoded thresholds
+  const diskTone = diskDotTone(live)
+
   return (
     <div className="mx-auto max-w-[1400px] p-8">
+      {/* ── Page header ────────────────────────────────────────────────── */}
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="mb-0.5 text-xl font-semibold text-fg">System Health</h1>
@@ -522,16 +725,10 @@ export default function SystemHealth() {
             Oversee system diagnostics and hardware performance
           </p>
         </div>
-        <div className="text-caption mt-1">{formatSampleStatus(live)}</div>
+        <div>{formatSampleStatus(live)}</div>
       </div>
 
-      {live?.stale ? (
-        <div className="mb-6 flex items-center gap-2 rounded-md border border-warning-border bg-warning-subtle px-4 py-2.5 text-caption text-warning">
-          <RiAlertLine size={15} className="shrink-0" aria-hidden="true" />
-          Warning: System telemetry is stale. Hardware and AI metrics may not be accurate.
-        </div>
-      ) : null}
-
+      {/* ── Live query error ────────────────────────────────────────────── */}
       {liveQuery.isError ? (
         <QueryErrorBanner
           error={liveQuery.error}
@@ -540,8 +737,10 @@ export default function SystemHealth() {
         />
       ) : null}
 
-      <WarningsStrip warnings={live?.warnings ?? []} />
+      {/* ── Operational status banner ───────────────────────────────────── */}
+      {!liveQuery.isError && <OperationalBanner live={live} />}
 
+      {/* ── KPI stat cards ─────────────────────────────────────────────── */}
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={RiServerLine}
@@ -553,144 +752,212 @@ export default function SystemHealth() {
         <StatCard
           icon={RiTimerLine}
           title="Inference Latency"
-          value={formatMs(live?.avg_inference_latency_ms)}
+          value={
+            live ? (
+              <span className="inline-flex items-center gap-[14px]">
+                {formatMs(live.avg_inference_latency_ms)}
+                <BadgeDot tone={live.sample_camera_count > 0 ? "success" : "danger"} />
+              </span>
+            ) : (
+              formatMs(undefined)
+            )
+          }
           isLoading={liveQuery.isLoading}
           subtext={formatSampleCameraSubtext(live)}
         />
         <StatCard
           icon={RiDashboard3Line}
           title="Processing Speed"
-          value={formatFps(live?.avg_fps)}
+          value={
+            live ? (
+              <span className="inline-flex items-center gap-[14px]">
+                {formatFps(live.avg_fps)}
+                <BadgeDot tone={live.sample_camera_count > 0 ? "success" : "danger"} />
+              </span>
+            ) : (
+              formatFps(undefined)
+            )
+          }
           isLoading={liveQuery.isLoading}
           subtext={formatSampleCameraSubtext(live)}
         />
         <StatCard
           icon={RiHardDrive2Line}
           title="Disk Storage Usage"
-          value={formatPercent(live?.disk_percent)}
+          value={
+            live ? (
+              <span className="inline-flex items-center gap-[14px]">
+                {formatPercent(live.disk_percent)}
+                <BadgeDot tone={diskTone} />
+              </span>
+            ) : (
+              formatPercent(undefined)
+            )
+          }
           isLoading={liveQuery.isLoading}
           subtext={formatDiskSubtext(live)}
         />
       </div>
 
-      <GpuSection live={live} />
+      {/* ── Hardware health summary card ────────────────────────────────── */}
+      <HardwareHealthCard live={live} />
 
-      <EngineDiagnosticsSection />
+      {/* ── Technical details accordion ─────────────────────────────────── */}
+      <details
+        open={techDetailsOpen}
+        onToggle={(e) => setTechDetailsOpen((e.currentTarget as HTMLDetailsElement).open)}
+        className="rounded-xl border border-stroke bg-surface-1"
+      >
+        <summary className="flex cursor-pointer select-none items-center justify-between px-5 py-4 text-sm font-medium text-fg hover:bg-surface-2 rounded-xl transition-colors duration-150 [&::-webkit-details-marker]:hidden list-none">
+          <span>Advance details</span>
+          <span
+            className={cn(
+              "text-fg-muted transition-transform duration-200",
+              techDetailsOpen ? "rotate-180" : "rotate-0",
+            )}
+            aria-hidden="true"
+          >
+            ▾
+          </span>
+        </summary>
 
-      <MachineCapacitySection />
+        <div className="px-5 pb-5 pt-2">
+          {/* GPU table — existing component, moved here unchanged */}
+          <GpuSection live={live} />
 
-      <div className="mb-5">
-        <Tabs
-          items={RANGE_TABS}
-          value={activeTab}
-          onChange={setActiveTab}
-          variant="pill"
-          label="History range"
-        />
-      </div>
+          {/* Engine Diagnostics — existing component, verbatim copy */}
+          <EngineDiagnosticsSection />
 
-      {historyQuery.isError ? (
-        <QueryErrorBanner
-          error={historyQuery.error}
-          fallback="Historical health data unavailable."
-          onRetry={() => historyQuery.refetch()}
-        />
-      ) : null}
+          {/* Machine Capacity — existing component, verbatim copy */}
+          <MachineCapacitySection />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <AreaChartCard
-          title="CPU Utilization"
-          data={toChartData(historyData, "cpu_usage", activeTab)}
-          dataKey="value"
-          xKey="time"
-          height={260}
-          isLoading={historyQuery.isLoading}
-          allowDecimals={false}
-          yDomain={[0, 100]}
-          unit="%"
-          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "CPU Utilization"]}
-          action={
-            live ? (
-              <LiveReading value={live.cpu_usage} available={live.cpu_usage_available} unit="%" />
-            ) : null
-          }
-        />
-        <AreaChartCard
-          title="GPU Utilization"
-          data={toChartData(historyData, "gpu_usage", activeTab)}
-          dataKey="value"
-          xKey="time"
-          height={260}
-          isLoading={historyQuery.isLoading}
-          allowDecimals={false}
-          yDomain={[0, 100]}
-          unit="%"
-          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "GPU Utilization"]}
-        />
-        {/*
-          Figma's fourth chart is "Core Temperature". The history points carry
-          cpu_temp_avg/peak and gpu_temp_peak — all null on Windows for CPU.
-          Wired to gpu_temp_peak and labelled GPU Temperature; recorded as a
-          design/backend mismatch rather than silently relabelled.
-        */}
-        <AreaChartCard
-          title="GPU Temperature"
-          data={toChartData(historyData, "gpu_temp_peak", activeTab)}
-          dataKey="value"
-          xKey="time"
-          height={260}
-          isLoading={historyQuery.isLoading}
-          allowDecimals={false}
-          unit="°C"
-          stroke={CHART.danger}
-          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}°C`, "GPU Temperature"]}
-        />
-        <AreaChartCard
-          title="RAM Utilization"
-          data={toChartData(historyData, "ram_usage", activeTab)}
-          dataKey="value"
-          xKey="time"
-          height={260}
-          isLoading={historyQuery.isLoading}
-          allowDecimals={false}
-          yDomain={[0, 100]}
-          unit="%"
-          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "RAM Utilization"]}
-          action={
-            live ? (
-              <LiveReading value={live.ram_usage} available={live.ram_usage_available} unit="%" />
-            ) : null
-          }
-        />
-        {/*
-          cpu_temp_avg/peak — null on Windows for CPU, per the plan's own
-          note — and gpu_mem_pct_avg/peak were both carried by the history
-          endpoint and plotted nowhere. Two more chart cards than Figma
-          draws; no frame for these, so genuinely unavailable (Windows CPU
-          temp) renders as an honest gap rather than a fabricated flat line.
-        */}
-        <DualHealthChart
-          title="CPU Temperature"
-          data={historyData}
-          avgKey="cpu_temp_avg"
-          peakKey="cpu_temp_peak"
-          unit="°C"
-          isLoading={historyQuery.isLoading}
-          action={
-            live ? (
-              <LiveReading value={live.cpu_temp} available={live.cpu_temp_available} unit="°C" />
-            ) : null
-          }
-        />
-        <DualHealthChart
-          title="GPU Memory"
-          data={historyData}
-          avgKey="gpu_mem_pct_avg"
-          peakKey="gpu_mem_pct_peak"
-          unit="%"
-          isLoading={historyQuery.isLoading}
-        />
-      </div>
+          {/* History range tabs + 6 charts */}
+          <div className="mb-5">
+            <Tabs
+              items={RANGE_TABS}
+              value={activeTab}
+              onChange={setActiveTab}
+              variant="pill"
+              label="History range"
+            />
+          </div>
+
+          {historyQuery.isError ? (
+            <QueryErrorBanner
+              error={historyQuery.error}
+              fallback="Historical health data unavailable."
+              onRetry={() => historyQuery.refetch()}
+            />
+          ) : null}
+
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <AreaChartCard
+              title="CPU Utilization"
+              data={toChartData(historyData, "cpu_usage", activeTab)}
+              dataKey="value"
+              xKey="time"
+              height={260}
+              isLoading={historyQuery.isLoading}
+              allowDecimals={false}
+              yDomain={[0, 100]}
+              unit="%"
+              tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "CPU Utilization"]}
+              action={
+                live ? (
+                  <LiveReading
+                    value={live.cpu_usage}
+                    available={live.cpu_usage_available}
+                    unit="%"
+                  />
+                ) : null
+              }
+            />
+            <AreaChartCard
+              title="GPU Utilization"
+              data={toChartData(historyData, "gpu_usage", activeTab)}
+              dataKey="value"
+              xKey="time"
+              height={260}
+              isLoading={historyQuery.isLoading}
+              allowDecimals={false}
+              yDomain={[0, 100]}
+              unit="%"
+              tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "GPU Utilization"]}
+            />
+            {/*
+              Figma's fourth chart is "Core Temperature". The history points carry
+              cpu_temp_avg/peak and gpu_temp_peak — all null on Windows for CPU.
+              Wired to gpu_temp_peak and labelled GPU Temperature; recorded as a
+              design/backend mismatch rather than silently relabelled.
+            */}
+            <AreaChartCard
+              title="GPU Temperature"
+              data={toChartData(historyData, "gpu_temp_peak", activeTab)}
+              dataKey="value"
+              xKey="time"
+              height={260}
+              isLoading={historyQuery.isLoading}
+              allowDecimals={false}
+              unit="°C"
+              stroke={CHART.danger}
+              tooltipFormatter={(v) => [`${Number(v).toFixed(1)}°C`, "GPU Temperature"]}
+            />
+            <AreaChartCard
+              title="RAM Utilization"
+              data={toChartData(historyData, "ram_usage", activeTab)}
+              dataKey="value"
+              xKey="time"
+              height={260}
+              isLoading={historyQuery.isLoading}
+              allowDecimals={false}
+              yDomain={[0, 100]}
+              unit="%"
+              tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "RAM Utilization"]}
+              action={
+                live ? (
+                  <LiveReading
+                    value={live.ram_usage}
+                    available={live.ram_usage_available}
+                    unit="%"
+                  />
+                ) : null
+              }
+            />
+            {/*
+              cpu_temp_avg/peak — null on Windows for CPU, per the plan's own
+              note — and gpu_mem_pct_avg/peak were both carried by the history
+              endpoint and plotted nowhere. Two more chart cards than Figma
+              draws; no frame for these, so genuinely unavailable (Windows CPU
+              temp) renders as an honest gap rather than a fabricated flat line.
+            */}
+            <DualHealthChart
+              title="CPU Temperature"
+              data={historyData}
+              avgKey="cpu_temp_avg"
+              peakKey="cpu_temp_peak"
+              unit="°C"
+              isLoading={historyQuery.isLoading}
+              action={
+                live ? (
+                  <LiveReading
+                    value={live.cpu_temp}
+                    available={live.cpu_temp_available}
+                    unit="°C"
+                  />
+                ) : null
+              }
+            />
+            <DualHealthChart
+              title="GPU Memory"
+              data={historyData}
+              avgKey="gpu_mem_pct_avg"
+              peakKey="gpu_mem_pct_peak"
+              unit="%"
+              isLoading={historyQuery.isLoading}
+            />
+          </div>
+        </div>
+      </details>
     </div>
   )
 }
