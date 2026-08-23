@@ -188,8 +188,8 @@ function OperationalBanner({ live }: { live: SystemHealthLiveResponse | undefine
   const isStale = !live || live.collected_at === null || live.stale
   if (isStale) {
     return (
-      <div className="mb-6 flex items-start gap-3 rounded-xl border border-warning-border bg-warning-subtle px-5 py-4">
-        <RiAlertLine size={18} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+      <div className="mb-6 flex items-center gap-3 rounded-xl border border-warning-border bg-warning-subtle px-5 py-4">
+        <RiAlertLine size={18} className="shrink-0 text-warning" aria-hidden="true" />
         <div>
           <p className="text-sm font-medium text-warning">
             System data may be slightly out of date
@@ -226,10 +226,10 @@ function OperationalBanner({ live }: { live: SystemHealthLiveResponse | undefine
             : "border-warning-border bg-warning-subtle",
         )}
       >
-        <div className="flex items-start gap-3">
+        <div className="flex items-center gap-3">
           <RiAlertLine
             size={18}
-            className={cn("mt-0.5 shrink-0", isBad ? "text-danger" : "text-warning")}
+            className={cn("shrink-0", isBad ? "text-danger" : "text-warning")}
             aria-hidden="true"
           />
           <div className="flex-1 min-w-0">
@@ -295,8 +295,8 @@ function OperationalBanner({ live }: { live: SystemHealthLiveResponse | undefine
   const contextParts = [fpsText, cameraText].filter(Boolean).join(" · ")
 
   return (
-    <div className="mb-6 flex items-start gap-3 rounded-xl border border-success-border bg-success-subtle px-5 py-4">
-      <RiCheckboxCircleLine size={18} className="mt-0.5 shrink-0 text-success" aria-hidden="true" />
+    <div className="mb-6 flex items-center gap-3 rounded-xl border border-success-border bg-success-subtle px-5 py-4">
+      <RiCheckboxCircleLine size={18} className="shrink-0 text-success" aria-hidden="true" />
       <div>
         <p className="text-sm font-medium text-success">All systems normal</p>
         {contextParts && <p className="mt-0.5 text-xs text-success opacity-80">{contextParts}</p>}

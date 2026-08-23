@@ -57,17 +57,25 @@ export const OPERATOR_WARNING_COPY: Record<string, OperatorWarningEntry> = {
 }
 
 /**
+ * Resolved operator warning — detail is already a string, not a function.
+ */
+export interface ResolvedOperatorWarning {
+  tone: "bad" | "warn"
+  text: string
+  detail: string
+}
+
+/**
  * Returns the operator-facing entry for a given warning, falling back to a
  * humanised version of the raw code for any future codes the backend adds
  * before the frontend is updated.
  */
-export function getOperatorWarningEntry(warning: HealthWarning): OperatorWarningEntry & {
-  detail: string
-} {
+export function getOperatorWarningEntry(warning: HealthWarning): ResolvedOperatorWarning {
   const entry = OPERATOR_WARNING_COPY[warning.code]
   if (entry) {
     return {
-      ...entry,
+      tone: entry.tone,
+      text: entry.text,
       detail: entry.detail(warning.measurement, warning.threshold),
     }
   }
