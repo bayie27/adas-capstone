@@ -741,7 +741,7 @@ export default function SystemHealth() {
           title="Inference Latency"
           value={
             live ? (
-              <span className="inline-flex items-center gap-2">
+              <span className="inline-flex items-center gap-[14px]">
                 {formatMs(live.avg_inference_latency_ms)}
                 <BadgeDot tone={live.sample_camera_count > 0 ? "success" : "danger"} />
               </span>
@@ -757,7 +757,7 @@ export default function SystemHealth() {
           title="Processing Speed"
           value={
             live ? (
-              <span className="inline-flex items-center gap-2">
+              <span className="inline-flex items-center gap-[14px]">
                 {formatFps(live.avg_fps)}
                 <BadgeDot tone={live.sample_camera_count > 0 ? "success" : "danger"} />
               </span>
@@ -773,7 +773,7 @@ export default function SystemHealth() {
           title="Disk Storage Usage"
           value={
             live ? (
-              <span className="inline-flex items-center gap-2">
+              <span className="inline-flex items-center gap-[14px]">
                 {formatPercent(live.disk_percent)}
                 <BadgeDot tone={diskTone} />
               </span>
