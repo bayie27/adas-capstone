@@ -1,9 +1,9 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   RiArrowDownSLine,
   RiArrowRightSLine,
-  RiHardDrive2Line,
+  RiInformationLine,
   RiRefreshLine,
 } from "@remixicon/react"
 
@@ -44,6 +44,31 @@ const RESTORE_STATUS_LABEL: Record<string, string> = {
   completed: "Completed",
   failed: "Failed",
   rolled_back: "Rolled back",
+}
+
+/**
+ * Display-layer mapping from raw backup.checks keys (set by the backend) to
+ * plain-language labels for operations staff. Covers all current check names;
+ * unknown future keys fall back to formatCheckLabel below so they never
+ * silently disappear from the UI.
+ */
+const CHECK_LABELS: Record<string, string> = {
+  checksum: "File Integrity",
+  quick_check: "Database Structure",
+  foreign_key_check: "Data Links",
+}
+
+/**
+ * Returns the friendly label for a check key, or a lightly formatted version
+ * of the raw key (title-case, underscores → spaces) for any unmapped key
+ * added later on the backend.
+ */
+function formatCheckLabel(key: string): string {
+  if (CHECK_LABELS[key]) return CHECK_LABELS[key]
+  return key
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
 }
 
 function ValidityBadge({ valid }: { valid: boolean }) {
@@ -104,7 +129,7 @@ function BackupRow({
                       tone={ok ? "success" : "danger"}
                       uppercase={false}
                     >
-                      {name}: {ok ? "OK" : "Failed"}
+                      {formatCheckLabel(name)}: {ok ? "Passed" : "Failed"}
                     </Badge>
                   ))
                 )}
@@ -153,6 +178,13 @@ export default function Maintenance() {
   const [notice, setNotice] = useState<NoticeState | null>(null)
   const [restoreTargetId, setRestoreTargetId] = useState<string | null>(null)
 
+  /**
+   * Snapshot of backup IDs that existed before a Create Backup was triggered.
+   * Used after the 4-second delayed refetch to detect whether a new row
+   * appeared — if so, the background task finished within the window.
+   */
+  const preBackupIdsRef = useRef<Set<string>>(new Set())
+
   const backupsQuery = useQuery({
     queryKey: BACKUPS_QUERY_KEY,
     queryFn: getBackups,
@@ -166,15 +198,44 @@ export default function Maintenance() {
   /**
    * POST /api/system/backups returns 202 immediately — the actual write
    * runs in a background task. There is nothing to poll for completion (no
-   * job id), so this refetches the list once after a short delay to have a
-   * decent chance of showing the new row, and the operator can always hit
-   * Refresh themselves; a 409 means one is already running.
+   * job id). We snapshot the current backup IDs at trigger time, then after a
+   * short delay fetch the list again and compare: if a new row appeared the
+   * task finished within that window and we update the banner accordingly;
+   * if not, we prompt the operator to refresh manually. A 409 means one is
+   * already running.
    */
   const triggerMutation = useMutation({
     mutationFn: triggerBackup,
     onSuccess: () => {
-      setNotice({ tone: "success", message: "Backup started." })
-      window.setTimeout(() => queryClient.invalidateQueries({ queryKey: BACKUPS_QUERY_KEY }), 4000)
+      // Capture what already exists before the new backup lands
+      preBackupIdsRef.current = new Set(
+        (
+          queryClient.getQueryData<Awaited<ReturnType<typeof getBackups>>>(BACKUPS_QUERY_KEY)
+            ?.items ?? []
+        ).map((b) => b.backup_id),
+      )
+      setNotice({ tone: "warning", message: "Backup started. Please wait…" })
+      window.setTimeout(async () => {
+        const result = await queryClient.fetchQuery({
+          queryKey: BACKUPS_QUERY_KEY,
+          queryFn: getBackups,
+          staleTime: 0,
+        })
+        const hasNew = result.items.some((b) => !preBackupIdsRef.current.has(b.backup_id))
+        setNotice(
+          hasNew
+            ? {
+                tone: "success",
+                message: "Backup complete. The new backup is now available in the list.",
+              }
+            : {
+                tone: "warning",
+                message:
+                  "Backup started. It is still running in the background — click Refresh to check when it's ready.",
+              },
+        )
+        window.setTimeout(() => setNotice(null), 5000)
+      }, 4000)
     },
     onError: (error) => {
       const isBusy = getApiError(error)?.code === "CONFLICT_BUSY"
@@ -192,18 +253,11 @@ export default function Maintenance() {
   return (
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <RiHardDrive2Line size={18} className="text-fg-muted" />
-          <div>
-            <h1 className="mb-0.5 text-xl font-semibold text-fg">Maintenance</h1>
-            <p className="text-xs text-fg-muted">
-              Database backups and the restore request flow — never a filesystem path
-            </p>
-            <p className="mt-0.5 text-caption text-fg-muted">
-              Up to {BACKUP_DAILY_RETENTION} daily / {BACKUP_MANUAL_RETENTION} manual backups are
-              kept — older ones are pruned automatically.
-            </p>
-          </div>
+        <div>
+          <h1 className="mb-0.5 text-xl font-semibold text-fg">Maintenance</h1>
+          <p className="text-xs text-fg-muted">
+            Manage system database backups and safe point-in-time restoration.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -224,7 +278,7 @@ export default function Maintenance() {
               triggerMutation.mutate()
             }}
           >
-            Trigger Backup
+            Create Backup
           </Button>
         </div>
       </div>
@@ -238,6 +292,12 @@ export default function Maintenance() {
           onRetry={() => backupsQuery.refetch()}
         />
       ) : null}
+
+      <p className="mb-3 flex items-center gap-1.5 text-sm italic text-fg-muted">
+        <RiInformationLine size={14} className="shrink-0" />
+        The system safely retains up to {BACKUP_DAILY_RETENTION} daily and {BACKUP_MANUAL_RETENTION}{" "}
+        manual backups. Older records are deleted automatically.
+      </p>
 
       <TableContainer>
         <Table>
