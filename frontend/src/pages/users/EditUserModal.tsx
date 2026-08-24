@@ -52,26 +52,23 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
     event.preventDefault()
     setValidationError(null)
 
-    const payload: EditUserFormState = {
-      first_name: form.first_name.trim(),
-      last_name: form.last_name.trim(),
-      username: form.username.trim(),
-      role: form.role,
-      is_active: form.is_active,
-    }
+    const nextFirstName = form.first_name.trim()
+    const nextLastName = form.last_name.trim()
+    const nextUsername = form.username.trim()
 
-    if (!payload.first_name || !payload.last_name || !payload.username) {
+    if (!nextFirstName || !nextLastName || !nextUsername) {
       setValidationError("All user fields are required.")
       return
     }
 
-    if (
-      payload.first_name === user.first_name &&
-      payload.last_name === user.last_name &&
-      payload.username === user.username &&
-      payload.role === user.role &&
-      payload.is_active === user.is_active
-    ) {
+    const payload: UpdateUserInput = {}
+    if (nextFirstName !== user.first_name) payload.first_name = nextFirstName
+    if (nextLastName !== user.last_name) payload.last_name = nextLastName
+    if (nextUsername !== user.username) payload.username = nextUsername
+    if (form.role !== user.role) payload.role = form.role
+    if (form.is_active !== user.is_active) payload.is_active = form.is_active
+
+    if (Object.keys(payload).length === 0) {
       setValidationError("No user changes to save.")
       return
     }

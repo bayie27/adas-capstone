@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
-import { getMyProfile, updateMyProfile } from "@/api/users"
+import { getMyProfile, updateMyProfile, type UpdateMyProfileInput } from "@/api/users"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getApiErrorMessage } from "@/api/client"
 import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/format"
@@ -134,17 +134,12 @@ export default function ProfileSettings() {
       return
     }
 
-    const payload: ProfileFormState = {
-      first_name: nextFirstName,
-      last_name: nextLastName,
-      username: nextUsername,
-    }
+    const payload: UpdateMyProfileInput = {}
+    if (nextFirstName !== profile.first_name) payload.first_name = nextFirstName
+    if (nextLastName !== profile.last_name) payload.last_name = nextLastName
+    if (nextUsername !== profile.username) payload.username = nextUsername
 
-    if (
-      payload.first_name === profile.first_name &&
-      payload.last_name === profile.last_name &&
-      payload.username === profile.username
-    ) {
+    if (Object.keys(payload).length === 0) {
       setProfileNotice({ tone: "error", message: "No profile changes to save." })
       return
     }
