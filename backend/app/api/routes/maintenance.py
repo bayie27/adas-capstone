@@ -96,13 +96,20 @@ def _run_manual_backup_job(
     The maintenance lock is already held by the route that scheduled this;
     always released here, and the outcome always audited, regardless of
     success or failure."""
+    backup_id: str | None = None
     try:
         db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
         manifest = perform_backup_assuming_lock_held(
             db_path, settings.BACKUP_DIR, ORIGIN_MANUAL, retention=_retention()
         )
+        backup_id = manifest.backup_id
         result = AuditResult.SUCCESS if manifest.valid else AuditResult.FAILURE
-        detail = {"backup_id": manifest.backup_id, "checks": manifest.checks}
+        detail = {
+            "backup_id": manifest.backup_id,
+            "created_at": manifest.created_at,
+            "origin": manifest.origin,
+            "checks": manifest.checks,
+        }
     except Exception as exc:
         logger.exception("Manual backup failed.")
         result = AuditResult.FAILURE
@@ -118,6 +125,7 @@ def _run_manual_backup_job(
             result=result,
             actor=admin,
             target_type="backup",
+            target_ref=backup_id,
             detail=detail,
             source_ip=source_ip,
         )

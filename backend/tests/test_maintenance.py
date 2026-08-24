@@ -25,6 +25,7 @@ import json
 import sqlite3
 import threading
 import time
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -946,10 +947,19 @@ class TestBackupRoutes:
         headers = auth_headers(client, "admin", "Admin123")
         client.post("/api/system/backups", headers=headers)
 
+        listed = client.get("/api/system/backups", headers=headers).json()
+        backup_id = listed["items"][0]["backup_id"]
+
         rows = _audit_rows_on_disk(client, "BACKUP_TRIGGER")
         assert len(rows) == 1
         assert rows[0].result == "success"
         assert rows[0].actor_type == "system" or rows[0].username == "admin"
+        assert rows[0].target_ref == backup_id
+        detail = json.loads(rows[0].detail)
+        assert datetime.fromisoformat(detail["created_at"]) == datetime.fromisoformat(
+            listed["items"][0]["created_at"].replace("Z", "+00:00")
+        )
+        assert detail["origin"] == "manual"
         serialized = str(rows[0].detail).lower()
         assert "password" not in serialized
         assert str(maintenance_settings.backup_dir).lower() not in serialized
@@ -975,6 +985,9 @@ class TestBackupRoutes:
             if r.result == "denied"
         ]
         assert len(denied_rows) == 1
+        # No backup was created at this site -- a filler target_ref would
+        # assert something untrue, so it must stay NULL, not a lookup gap.
+        assert denied_rows[0].target_ref is None
 
 
 class TestRestoreRoutes:

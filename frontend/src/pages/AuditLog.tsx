@@ -5,9 +5,11 @@ import { RiArrowDownSLine, RiArrowRightSLine, RiFileCopyLine } from "@remixicon/
 import {
   formatChangedFields,
   formatCheckLabel,
+  formatTargetType,
   hasResolvedName,
   humanizeDetailKey,
   humanizeReasonValue,
+  isLongHexId,
   isOpaqueIdKey,
   isPlainObject,
   isUuid,
@@ -161,7 +163,7 @@ export default function AuditLog() {
 
   const targetTypeOptions = [
     { value: "", label: "All target types" },
-    ...AUDIT_TARGET_TYPES.map((t) => ({ value: t, label: t })),
+    ...AUDIT_TARGET_TYPES.map((t) => ({ value: t, label: formatTargetType(t) })),
   ]
 
   // usePagination derives rangeStart/rangeEnd/totalPages from the total it's
@@ -552,7 +554,7 @@ function DetailValue({
   }
 
   // Long hex strings (e.g. non-hyphenated backup IDs)
-  if (/^[0-9a-f]{24,}$/i.test(strValue)) {
+  if (isLongHexId(strValue)) {
     return <CopyableId value={strValue} />
   }
 
@@ -578,7 +580,7 @@ function DetailValue({
 function formatTargetRef(targetType: string | null, targetRef: string | null): string {
   void targetType
   if (!targetRef) return ""
-  if (isUuid(targetRef)) return truncateId(targetRef)
+  if (isUuid(targetRef) || isLongHexId(targetRef)) return truncateId(targetRef)
   return targetRef
 }
 
@@ -609,7 +611,7 @@ function AuditRow({
         <TableCell className="text-fg-muted">
           {entry.target_type ? (
             <span title={entry.target_ref ?? undefined}>
-              {entry.target_type}
+              {formatTargetType(entry.target_type)}
               {entry.target_ref ? ` · ${formatTargetRef(entry.target_type, entry.target_ref)}` : ""}
             </span>
           ) : (

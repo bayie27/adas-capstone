@@ -385,6 +385,44 @@ class TestAuditViewer:
         )
         assert resp.json()["total_filtered"] == 1
 
+    def test_target_ref_alone_correlates_backup_and_restore_rows(
+        self, client: TestClient, session: Session
+    ):
+        """P26 — the reason target_ref was added to BACKUP_TRIGGER rows: a
+        bare `?target_ref=` (no target_type) must surface both "this backup
+        was created" (target_type=backup) and "this backup was restored"
+        (target_type=restore) rows for the same backup id in one query."""
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        backup_id = "a3f9e1c204b84d7a9e6f8b1c2d3e4f50"
+        session.add(
+            AuditLog(
+                actor_type="system",
+                action="BACKUP_TRIGGER",
+                result="success",
+                target_type="backup",
+                target_ref=backup_id,
+            )
+        )
+        session.add(
+            AuditLog(
+                actor_type="user",
+                user_id=admin.user_id,
+                username=admin.username,
+                action="RESTORE_TRIGGER",
+                result="success",
+                target_type="restore",
+                target_ref=backup_id,
+            )
+        )
+        session.commit()
+
+        resp = client.get(f"/api/audit-logs/?target_ref={backup_id}", headers=headers)
+        body = resp.json()
+        assert body["total_filtered"] == 2
+        actions = {item["action"] for item in body["items"]}
+        assert actions == {"BACKUP_TRIGGER", "RESTORE_TRIGGER"}
+
     def test_filter_by_date_range(self, client: TestClient, session: Session):
         from datetime import UTC, datetime, timedelta
 

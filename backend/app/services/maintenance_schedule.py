@@ -136,8 +136,11 @@ def run_daily_backup(engine: Engine, *, trigger: str) -> None:
             result=result,
             actor=None,
             target_type="backup",
+            target_ref=manifest.backup_id,
             detail={
                 "backup_id": manifest.backup_id,
+                "created_at": manifest.created_at,
+                "origin": manifest.origin,
                 "checks": manifest.checks,
                 "trigger": trigger,
             },

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest"
 import {
   formatChangedFields,
   formatCheckLabel,
+  formatTargetType,
   hasResolvedName,
   humanizeDetailKey,
   humanizeReasonValue,
+  isLongHexId,
   isUuid,
   truncateId,
 } from "./auditFormat"
@@ -40,6 +42,31 @@ describe("auditFormat", () => {
       const id = "458f0a83-c7f0-4db5-9876-c5415f7b89f6"
       expect(isUuid(id)).toBe(true)
       expect(truncateId(id)).toBe("458f0a83…7b89f6")
+    })
+  })
+
+  describe("isLongHexId", () => {
+    it("is true for a 32-char uuid4().hex-shaped id", () => {
+      expect(isLongHexId("a3f9e1c204b84d7a9e6f8b1c2d3e4f50")).toBe(true)
+    })
+
+    it("is false for a dashed uuid -- that is isUuid's job", () => {
+      expect(isLongHexId("458f0a83-c7f0-4db5-9876-c5415f7b89f6")).toBe(false)
+    })
+
+    it("is false for a short numeric id", () => {
+      expect(isLongHexId("118")).toBe(false)
+    })
+  })
+
+  describe("formatTargetType", () => {
+    it("maps known target types to human-friendly labels", () => {
+      expect(formatTargetType("restore")).toBe("Restore Point")
+      expect(formatTargetType("backup")).toBe("Backup")
+    })
+
+    it("falls back to title-casing an unknown target type", () => {
+      expect(formatTargetType("maintenance_window")).toBe("Maintenance Window")
     })
   })
 

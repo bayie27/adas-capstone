@@ -64,6 +64,31 @@ export function formatCheckLabel(key: string): string {
     .join(" ")
 }
 
+/**
+ * Maps raw `target_type` values to human-friendly labels. Values not listed
+ * here fall back to title-casing so a new backend-side target type degrades
+ * gracefully instead of rendering lowercase and raw.
+ */
+const TARGET_TYPE_LABELS: Record<string, string> = {
+  backup: "Backup",
+  camera: "Camera",
+  export: "Export",
+  incident: "Incident",
+  restore: "Restore Point",
+  session: "Session",
+  user: "User",
+}
+
+/**
+ * Turn a raw `target_type` value into a display label.
+ * Looks up the curated map first, then falls back to replacing underscores
+ * with spaces and title-casing each word.
+ */
+export function formatTargetType(targetType: string): string {
+  if (TARGET_TYPE_LABELS[targetType]) return TARGET_TYPE_LABELS[targetType]
+  return targetType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 // ---------------------------------------------------------------------------
 // 2. UUID / long-ID helpers
 // ---------------------------------------------------------------------------
@@ -73,6 +98,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** Returns true when `value` matches the 8-4-4-4-12 UUID shape. */
 export function isUuid(value: string): boolean {
   return UUID_RE.test(value)
+}
+
+/** True for a long unbroken hex id — e.g. a non-hyphenated backup id
+ *  (`uuid4().hex`), which `isUuid` deliberately does not match. */
+export function isLongHexId(value: string): boolean {
+  return /^[0-9a-f]{24,}$/i.test(value)
 }
 
 /**
