@@ -13,10 +13,16 @@ import { getUsers } from "@/api/users"
  * `/users/options` route; this hook is the single call site to swap when it
  * lands.
  */
-export function useUserOptions({ enabled = true }: { enabled?: boolean } = {}) {
+export function useUserOptions({
+  enabled = true,
+  isActive,
+}: {
+  enabled?: boolean
+  isActive?: "true" | "false" | "null"
+} = {}) {
   return useQuery({
-    queryKey: ["users", "options"],
-    queryFn: () => getUsers({ limit: 100 }),
+    queryKey: ["users", "options", isActive],
+    queryFn: () => getUsers({ limit: 100, is_active: isActive }),
     staleTime: 5 * 60_000,
     enabled,
   })

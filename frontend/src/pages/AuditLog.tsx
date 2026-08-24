@@ -146,7 +146,7 @@ export default function AuditLog() {
 
   const hasFilters = Boolean(startDate || endDate || action || result || userId || targetType)
 
-  const usersQuery = useUserOptions()
+  const usersQuery = useUserOptions({ isActive: "null" })
   const camerasQuery = useCameraOptions()
 
   const userMap = useMemo(() => {

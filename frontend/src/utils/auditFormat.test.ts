@@ -167,6 +167,16 @@ describe("auditFormat", () => {
       ).toBe("Front Entrance")
     })
 
+    it("resolves username from detail target_username payload", () => {
+      expect(
+        formatTargetDisplayName({
+          targetType: "user",
+          targetRef: "9",
+          detail: { target_username: "jane.doe" },
+        }),
+      ).toBe("jane.doe")
+    })
+
     it("resolves username from detail payload", () => {
       expect(
         formatTargetDisplayName({

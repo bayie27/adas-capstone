@@ -41,6 +41,7 @@ const DETAIL_KEY_LABELS: Record<string, string> = {
   order: "Sort Order",
   target_ref: "Target Reference",
   target_type: "Target Type",
+  target_username: "Target Username",
   user_id: "User ID",
   username: "Username",
   role: "Role",
@@ -238,6 +239,9 @@ export function formatTargetDisplayName({
   }
 
   if (targetType === "user") {
+    if (typeof detail?.target_username === "string" && detail.target_username.trim().length > 0) {
+      return detail.target_username
+    }
     if (typeof detail?.username === "string" && detail.username.trim().length > 0) {
       return detail.username
     }
