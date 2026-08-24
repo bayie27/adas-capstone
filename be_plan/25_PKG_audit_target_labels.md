@@ -60,7 +60,7 @@ uniformity-only, 1 needs normalising, 20 are already correct and must not be tou
 | `user` | users.py:276 (`USER_CREATE`) | ⚠️ has the name under key `username` — **normalise** to `target_username` (Step 4) |
 | `user` | users.py:108, 156; settings.py:81 | ⚠️ self-targeting; actor `username` already covers it — **included for uniformity** (Step 4) |
 | `user` | users.py:326, 341, 384, 395, 406, 416, 465, 498, 515, 533 | ❌ **10 gaps** — see Step 4 |
-| `backup` | maintenance.py:117, maintenance_schedule.py:135 | ✅ `detail.backup_id` is the human identifier |
+| `backup` | maintenance.py:117, maintenance_schedule.py:135 | ~~✅ `detail.backup_id` is the human identifier~~ ❌ **wrong verdict** — this conflated `detail` with the `target_ref` column and assumed `backup_id` was human-readable when it is a bare 32-char hex; `target_ref` was NULL on every row. Corrected in [P26](26_PKG_audit_backup_target.md). |
 | `backup` | maintenance.py:174, maintenance_schedule.py:122 | ✅ failure/denied paths — **no backup exists to name**; correctly absent |
 | `restore` | maintenance.py:216, 234, 251, 270, 286, 302 | ✅ `target_ref = body.backup_id` |
 | `restore` | `maintenance/restore.py:390` (raw `sqlite3` INSERT) | ✅ `target_ref = state.backup_id` |
