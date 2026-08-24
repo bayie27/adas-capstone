@@ -5,6 +5,7 @@ aware) observed status.
 """
 
 import itertools
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -739,6 +740,79 @@ class TestUpdateCamera:
         )
         assert resp.status_code == 409
 
+    def test_rename_records_camera_name_and_previous_camera_name(
+        self, client: TestClient, session: Session
+    ):
+        """P25 Step 3's rename trap: by the time CAMERA_UPDATE is written,
+        db_camera.camera_name is already the *new* name, so the old one
+        must be captured before the mutation loop runs."""
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Old Name", channel_id=74)
+
+        resp = client.patch(
+            f"/api/cameras/{cam.camera_id}",
+            headers=headers,
+            json={"camera_name": "New Name"},
+        )
+        assert resp.status_code == 200
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "CAMERA_UPDATE")
+        ).all()
+        assert len(rows) == 1
+        detail = json.loads(rows[0].detail)
+        assert detail["camera_name"] == "New Name"
+        assert detail["previous_camera_name"] == "Old Name"
+
+    def test_non_rename_update_records_no_previous_camera_name(
+        self, client: TestClient, session: Session
+    ):
+        """A CAMERA_UPDATE row for a field other than camera_name must not
+        gain a previous_camera_name key — that field never changed."""
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Stable Name", channel_id=75)
+
+        resp = client.patch(
+            f"/api/cameras/{cam.camera_id}",
+            headers=headers,
+            json={"channel_id": 999},
+        )
+        assert resp.status_code == 200
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "CAMERA_UPDATE")
+        ).all()
+        assert len(rows) == 1
+        detail = json.loads(rows[0].detail)
+        assert detail["camera_name"] == "Stable Name"
+        assert "previous_camera_name" not in detail
+
+    def test_enable_disable_detail_carries_camera_name(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Toggle Cam", channel_id=76)
+
+        client.patch(
+            f"/api/cameras/{cam.camera_id}",
+            headers=headers,
+            json={"is_enabled": False},
+        )
+        client.patch(
+            f"/api/cameras/{cam.camera_id}",
+            headers=headers,
+            json={"is_enabled": True},
+        )
+
+        disable_row = session.exec(
+            select(AuditLog).where(AuditLog.action == "CAMERA_DISABLE")
+        ).one()
+        enable_row = session.exec(
+            select(AuditLog).where(AuditLog.action == "CAMERA_ENABLE")
+        ).one()
+        assert json.loads(disable_row.detail) == {"camera_name": "Toggle Cam"}
+        assert json.loads(enable_row.detail) == {"camera_name": "Toggle Cam"}
+
 
 class TestDeleteCamera:
     def test_refuses_with_open_incident(self, client: TestClient, session: Session):
@@ -781,6 +855,20 @@ class TestDeleteCamera:
         headers = _headers(client, session)
         resp = client.delete("/api/cameras/99999", headers=headers)
         assert resp.status_code == 404
+
+    def test_delete_detail_carries_camera_name(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Named Delete Cam", channel_id=83)
+
+        resp = client.delete(f"/api/cameras/{cam.camera_id}", headers=headers)
+        assert resp.status_code == 204
+
+        row = session.exec(
+            select(AuditLog).where(AuditLog.action == "CAMERA_DELETE")
+        ).one()
+        assert json.loads(row.detail) == {"camera_name": "Named Delete Cam"}
 
 
 class TestGetAllCamerasIsActiveFilter:
@@ -863,6 +951,25 @@ class TestGetAllCamerasIsActiveFilter:
 
 class TestCameraRestore:
     """P23 — the reactivation path DELETE never had (PR #126)."""
+
+    def test_restore_detail_carries_camera_name(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        cam = make_camera(session, name="Named Restore Cam", channel_id=409)
+        client.delete(f"/api/cameras/{cam.camera_id}", headers=headers)
+
+        resp = client.patch(
+            f"/api/cameras/{cam.camera_id}",
+            headers=headers,
+            json={"is_active": True},
+        )
+        assert resp.status_code == 200
+
+        row = session.exec(
+            select(AuditLog).where(AuditLog.action == "CAMERA_RESTORE")
+        ).one()
+        assert json.loads(row.detail) == {"camera_name": "Named Restore Cam"}
 
     def test_round_trip_restore(self, client: TestClient, session: Session):
         headers = _headers(client, session)
