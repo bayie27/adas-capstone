@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   filterActiveEntries,
+  formatAuditAction,
   formatChangedFields,
   formatCheckLabel,
   formatScalarDetailValue,
@@ -18,6 +19,20 @@ import {
 } from "./auditFormat"
 
 describe("auditFormat", () => {
+  describe("formatAuditAction", () => {
+    it("maps known audit actions to human-friendly labels", () => {
+      expect(formatAuditAction("LOGIN_SUCCESS")).toBe("Successful Login")
+      expect(formatAuditAction("LOGIN_FAILURE")).toBe("Failed Login")
+      expect(formatAuditAction("CAMERA_CREATE")).toBe("Created Camera")
+      expect(formatAuditAction("USER_UPDATE")).toBe("Updated User")
+      expect(formatAuditAction("AUDIT_EXPORT")).toBe("Exported Audit Log")
+    })
+
+    it("falls back to title-casing unmapped action codes", () => {
+      expect(formatAuditAction("CUSTOM_EVENT_TRIGGER")).toBe("Custom Event Trigger")
+    })
+  })
+
   describe("formatCheckLabel", () => {
     it("maps known validation check keys to human-friendly labels", () => {
       expect(formatCheckLabel("checksum")).toBe("File Integrity")

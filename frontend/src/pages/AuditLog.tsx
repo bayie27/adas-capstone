@@ -4,6 +4,7 @@ import { RiArrowDownSLine, RiArrowRightSLine, RiFileCopyLine } from "@remixicon/
 
 import {
   filterActiveEntries,
+  formatAuditAction,
   formatChangedFields,
   formatCheckLabel,
   formatScalarDetailValue,
@@ -91,42 +92,6 @@ function ResultBadge({ result }: { result: string }) {
   )
 }
 
-/**
- * D-1 (settled): third `ADMINISTRATION` nav row. D-4 (design authority, no
- * Figma frame): closest existing precedent is Detections' Logs tab — a
- * toolbar with the full filter set, a sortable table, pagination and export
- * — so this screen follows that shape rather than inventing a new one.
- */
-const AUDIT_ACTION_MAP: Record<string, string> = {
-  LOGIN_SUCCESS: "Successful Login",
-  LOGIN_FAILURE: "Failed Login",
-  LOGOUT: "Logged Out",
-  ALERT_CONFIRM: "Confirmed Alert",
-  ALERT_DISMISS: "Dismissed Alert",
-  ALERT_RESOLVE: "Resolved Alert",
-  ALERT_CORRECTION: "Corrected Alert",
-  ALERT_SNOOZE: "Snoozed Alert",
-  CAMERA_CREATE: "Created Camera",
-  CAMERA_UPDATE: "Updated Camera",
-  CAMERA_ENABLE: "Enabled Camera",
-  CAMERA_DISABLE: "Disabled Camera",
-  CAMERA_DELETE: "Deleted Camera",
-  REPORT_EXPORT: "Exported Report",
-  AUDIT_EXPORT: "Exported Audit Log",
-  USER_CREATE: "Created User",
-  USER_UPDATE: "Updated User",
-  USER_ENABLE: "Enabled User",
-  USER_DISABLE: "Disabled User",
-  USER_ROLE_CHANGE: "Changed User Role",
-  USER_PASSWORD_RESET: "Reset User Password",
-  USER_PROFILE_UPDATE: "Updated User Profile",
-  USER_PASSWORD_CHANGE: "Changed Password",
-  ALARM_SETTINGS_UPDATE: "Updated Alarm Settings",
-  BACKUP_TRIGGER: "Triggered Backup",
-  RESTORE_TRIGGER: "Triggered Restore",
-  CAMERA_RESTORE: "Restored Camera",
-}
-
 export default function AuditLog() {
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearch = useDebouncedValue(searchTerm.trim(), 300)
@@ -175,7 +140,7 @@ export default function AuditLog() {
 
   const actionOptions = [
     { value: "", label: "All actions" },
-    ...AUDIT_ACTIONS.map((a) => ({ value: a, label: a })),
+    ...AUDIT_ACTIONS.map((a) => ({ value: a, label: formatAuditAction(a) })),
   ]
 
   const resultOptions = [
@@ -635,7 +600,7 @@ function AuditRow({
             <span className="ml-1 text-caption text-fg-muted">({entry.role})</span>
           ) : null}
         </TableCell>
-        <TableCell>{AUDIT_ACTION_MAP[entry.action] || entry.action}</TableCell>
+        <TableCell>{formatAuditAction(entry.action)}</TableCell>
         <TableCell className="text-fg-muted">
           {entry.target_type ? (
             <span

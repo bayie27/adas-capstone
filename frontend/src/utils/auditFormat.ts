@@ -109,6 +109,52 @@ export function formatTargetType(targetType: string): string {
   return targetType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+/**
+ * Maps raw audit action codes (e.g. `LOGIN_SUCCESS`, `CAMERA_CREATE`) to
+ * human-readable UI labels used in both the Action filter dropdown and the table column.
+ */
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  LOGIN_SUCCESS: "Successful Login",
+  LOGIN_FAILURE: "Failed Login",
+  LOGOUT: "Logged Out",
+  ALERT_CONFIRM: "Confirmed Alert",
+  ALERT_DISMISS: "Dismissed Alert",
+  ALERT_RESOLVE: "Resolved Alert",
+  ALERT_CORRECTION: "Corrected Alert",
+  ALERT_SNOOZE: "Snoozed Alert",
+  CAMERA_CREATE: "Created Camera",
+  CAMERA_UPDATE: "Updated Camera",
+  CAMERA_ENABLE: "Enabled Camera",
+  CAMERA_DISABLE: "Disabled Camera",
+  CAMERA_DELETE: "Deleted Camera",
+  REPORT_EXPORT: "Exported Report",
+  AUDIT_EXPORT: "Exported Audit Log",
+  USER_CREATE: "Created User",
+  USER_UPDATE: "Updated User",
+  USER_ENABLE: "Enabled User",
+  USER_DISABLE: "Disabled User",
+  USER_ROLE_CHANGE: "Changed User Role",
+  USER_PASSWORD_RESET: "Reset User Password",
+  USER_PROFILE_UPDATE: "Updated User Profile",
+  USER_PASSWORD_CHANGE: "Changed Password",
+  ALARM_SETTINGS_UPDATE: "Updated Alarm Settings",
+  BACKUP_TRIGGER: "Triggered Backup",
+  RESTORE_TRIGGER: "Triggered Restore",
+  CAMERA_RESTORE: "Restored Camera",
+}
+
+/**
+ * Returns the human-friendly display label for an audit action, or a formatted
+ * fallback if an unknown action is encountered.
+ */
+export function formatAuditAction(action: string): string {
+  if (AUDIT_ACTION_LABELS[action]) return AUDIT_ACTION_LABELS[action]
+  return action
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 // ---------------------------------------------------------------------------
 // 2. UUID / long-ID helpers
 // ---------------------------------------------------------------------------
