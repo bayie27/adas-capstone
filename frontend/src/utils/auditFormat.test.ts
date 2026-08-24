@@ -4,6 +4,7 @@ import {
   formatChangedFields,
   formatCheckLabel,
   formatScalarDetailValue,
+  formatTargetDisplayName,
   formatTargetType,
   hasResolvedName,
   humanizeDetailKey,
@@ -138,8 +139,72 @@ describe("auditFormat", () => {
   describe("isOpaqueIdKey", () => {
     it("identifies opaque id keys", () => {
       expect(isOpaqueIdKey("camera_id")).toBe(true)
-      expect(isOpaqueIdKey("channel_id")).toBe(true)
+      expect(isOpaqueIdKey("channel_id")).toBe(false)
       expect(isOpaqueIdKey("user_id")).toBe(false)
+    })
+  })
+
+  describe("formatTargetDisplayName", () => {
+    it("resolves camera name from detail payload", () => {
+      expect(
+        formatTargetDisplayName({
+          targetType: "camera",
+          targetRef: "3",
+          detail: { camera_name: "Front Entrance" },
+        }),
+      ).toBe("Front Entrance")
+    })
+
+    it("resolves camera name from camera map fallback", () => {
+      const cameraMap = new Map([["3", "Front Entrance"]])
+      expect(
+        formatTargetDisplayName({
+          targetType: "camera",
+          targetRef: "3",
+          detail: {},
+          cameraMap,
+        }),
+      ).toBe("Front Entrance")
+    })
+
+    it("resolves username from detail payload", () => {
+      expect(
+        formatTargetDisplayName({
+          targetType: "user",
+          targetRef: "5",
+          detail: { username: "jhon.doe" },
+        }),
+      ).toBe("jhon.doe")
+    })
+
+    it("resolves username from user map fallback", () => {
+      const userMap = new Map([["5", "jhon.doe"]])
+      expect(
+        formatTargetDisplayName({
+          targetType: "user",
+          targetRef: "5",
+          detail: {},
+          userMap,
+        }),
+      ).toBe("jhon.doe")
+    })
+
+    it("truncates long hex/uuid identifiers", () => {
+      expect(
+        formatTargetDisplayName({
+          targetType: "restore",
+          targetRef: "a3f9e1c204b84d7a9e6f8b1c2d3e4f50",
+        }),
+      ).toBe("a3f9e1c2…3e4f50")
+    })
+
+    it("returns raw targetRef when no special resolution applies", () => {
+      expect(
+        formatTargetDisplayName({
+          targetType: "export",
+          targetRef: "audit",
+        }),
+      ).toBe("audit")
     })
   })
 

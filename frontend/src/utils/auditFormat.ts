@@ -178,7 +178,7 @@ export function filterActiveEntries(obj: Record<string, unknown>): Array<[string
  * available in the current payload. The UI should append a clarifying suffix
  * so an operations lead doesn't mistake `2` for something meaningful.
  */
-const OPAQUE_ID_KEYS = new Set(["camera_id", "channel_id"])
+const OPAQUE_ID_KEYS = new Set(["camera_id"])
 
 /** True when this key holds an opaque numeric ID that has no name alongside it. */
 export function isOpaqueIdKey(key: string): boolean {
@@ -205,6 +205,52 @@ export function hasResolvedName(
 ): boolean {
   const nameKey = OPAQUE_ID_NAME_KEYS[detailKey]
   return nameKey !== undefined && typeof detail?.[nameKey] === "string"
+}
+
+/**
+ * Resolves a human-readable display label for a target reference.
+ * If targetType is "camera", resolves to the camera name if available.
+ * If targetType is "user", resolves to the username if available.
+ * Otherwise, truncates UUIDs and long hex IDs.
+ */
+export function formatTargetDisplayName({
+  targetType,
+  targetRef,
+  detail,
+  cameraMap,
+  userMap,
+}: {
+  targetType: string | null
+  targetRef: string | null
+  detail?: Record<string, unknown> | null
+  cameraMap?: Map<string, string>
+  userMap?: Map<string, string>
+}): string {
+  if (!targetRef) return ""
+
+  if (targetType === "camera") {
+    if (typeof detail?.camera_name === "string" && detail.camera_name.trim().length > 0) {
+      return detail.camera_name
+    }
+    if (cameraMap?.has(targetRef)) {
+      return cameraMap.get(targetRef)!
+    }
+  }
+
+  if (targetType === "user") {
+    if (typeof detail?.username === "string" && detail.username.trim().length > 0) {
+      return detail.username
+    }
+    if (userMap?.has(targetRef)) {
+      return userMap.get(targetRef)!
+    }
+  }
+
+  if (isUuid(targetRef) || isLongHexId(targetRef)) {
+    return truncateId(targetRef)
+  }
+
+  return targetRef
 }
 
 // ---------------------------------------------------------------------------

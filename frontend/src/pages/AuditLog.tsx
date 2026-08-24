@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { RiArrowDownSLine, RiArrowRightSLine, RiFileCopyLine } from "@remixicon/react"
 
@@ -7,6 +7,7 @@ import {
   formatChangedFields,
   formatCheckLabel,
   formatScalarDetailValue,
+  formatTargetDisplayName,
   formatTargetType,
   hasResolvedName,
   humanizeDetailKey,
@@ -46,6 +47,7 @@ import {
 } from "@/components/ui/Table"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
+import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useUserOptions } from "@/hooks/useUserOptions"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { formatFullDateTime } from "@/utils/datetime"
@@ -145,6 +147,24 @@ export default function AuditLog() {
   const hasFilters = Boolean(startDate || endDate || action || result || userId || targetType)
 
   const usersQuery = useUserOptions()
+  const camerasQuery = useCameraOptions()
+
+  const userMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const u of usersQuery.data?.users ?? []) {
+      map.set(String(u.user_id), u.username)
+    }
+    return map
+  }, [usersQuery.data?.users])
+
+  const cameraMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const c of camerasQuery.data?.cameras ?? []) {
+      map.set(String(c.camera_id), c.camera_name)
+    }
+    return map
+  }, [camerasQuery.data?.cameras])
+
   const userOptions = [
     { value: "", label: "All actors" },
     ...(usersQuery.data?.users ?? []).map((u) => ({
@@ -422,6 +442,8 @@ export default function AuditLog() {
                   onToggle={() =>
                     setExpandedId((current) => (current === entry.audit_id ? null : entry.audit_id))
                   }
+                  cameraMap={cameraMap}
+                  userMap={userMap}
                 />
               ))
             )}
@@ -578,29 +600,30 @@ function DetailValue({
   return <span className="font-medium text-fg">{formatted}</span>
 }
 
-/**
- * Formats a target_ref for display in the main table row. Truncates UUIDs
- * and clarifies bare numeric IDs.
- */
-function formatTargetRef(targetType: string | null, targetRef: string | null): string {
-  void targetType
-  if (!targetRef) return ""
-  if (isUuid(targetRef) || isLongHexId(targetRef)) return truncateId(targetRef)
-  return targetRef
-}
-
 function AuditRow({
   entry,
   expanded,
   onToggle,
+  cameraMap,
+  userMap,
 }: {
   entry: AuditLogEntry
   expanded: boolean
   onToggle: () => void
+  cameraMap: Map<string, string>
+  userMap: Map<string, string>
 }) {
   const hasRequestId = entry.request_id && entry.request_id !== "-"
   const hasSourceIp = entry.source_ip && entry.source_ip !== "-"
   const hasDiagnostics = hasRequestId || hasSourceIp
+
+  const targetDisplay = formatTargetDisplayName({
+    targetType: entry.target_type,
+    targetRef: entry.target_ref,
+    detail: entry.detail,
+    cameraMap,
+    userMap,
+  })
 
   return (
     <>
@@ -615,9 +638,15 @@ function AuditRow({
         <TableCell>{AUDIT_ACTION_MAP[entry.action] || entry.action}</TableCell>
         <TableCell className="text-fg-muted">
           {entry.target_type ? (
-            <span title={entry.target_ref ?? undefined}>
+            <span
+              title={
+                entry.target_ref && targetDisplay !== entry.target_ref
+                  ? `${formatTargetType(entry.target_type)} ID: ${entry.target_ref}`
+                  : (entry.target_ref ?? undefined)
+              }
+            >
               {formatTargetType(entry.target_type)}
-              {entry.target_ref ? ` · ${formatTargetRef(entry.target_type, entry.target_ref)}` : ""}
+              {targetDisplay ? ` · ${targetDisplay}` : ""}
             </span>
           ) : (
             <span className="text-caption italic text-fg-muted">Not applicable</span>
