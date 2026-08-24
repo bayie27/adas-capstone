@@ -3,15 +3,17 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import { RiArrowDownSLine, RiArrowRightSLine, RiFileCopyLine } from "@remixicon/react"
 
 import {
+  filterActiveEntries,
   formatChangedFields,
   formatCheckLabel,
+  formatScalarDetailValue,
   formatTargetType,
   hasResolvedName,
   humanizeDetailKey,
-  humanizeReasonValue,
   isLongHexId,
   isOpaqueIdKey,
   isPlainObject,
+  isUnsetValue,
   isUuid,
   truncateId,
 } from "@/utils/auditFormat"
@@ -468,8 +470,8 @@ function CopyableId({ value }: { value: string }) {
 
 /**
  * Renders a single detail value. Handles nested objects, arrays, UUIDs,
- * opaque numeric IDs, and reason codes — never lets a raw object hit the
- * DOM as `[object Object]`.
+ * opaque numeric IDs, and enum/reason codes — never lets a raw object hit the
+ * DOM as `[object Object]` or renders literal `null`/`undefined`.
  */
 function DetailValue({
   detailKey,
@@ -480,22 +482,37 @@ function DetailValue({
   value: unknown
   detail?: Record<string, unknown> | null
 }) {
-  // Null / undefined
-  if (value === null || value === undefined) {
-    return <span className="text-fg-muted">—</span>
+  // Null, undefined, empty string, or unset structure
+  if (isUnsetValue(value)) {
+    return <span className="italic text-fg-muted">Not set</span>
   }
 
-  // Arrays (e.g. changed_fields: ["camera_name", "channel_id"])
+  // Boolean
+  if (typeof value === "boolean") {
+    return (
+      <span className={value ? "font-medium text-success" : "font-medium text-danger"}>
+        {value ? "✓ Passed" : "✗ Failed"}
+      </span>
+    )
+  }
+
+  // Arrays (e.g. changed_fields: ["camera_name", "channel_id"] or camera_id: [1, 2])
   if (Array.isArray(value)) {
-    return <span className="font-medium text-fg">{formatChangedFields(value)}</span>
+    if (detailKey === "changed_fields") {
+      return <span className="font-medium text-fg">{formatChangedFields(value)}</span>
+    }
+    const formattedItems = value.map((item) =>
+      isUnsetValue(item) ? "Not set" : formatScalarDetailValue(detailKey, item),
+    )
+    return <span className="font-medium text-fg">{formattedItems.join(", ")}</span>
   }
 
-  // Nested objects (e.g. checks: { checksum: true, quick_check: true, foreign_key_check: true })
+  // Nested objects fallback if rendered directly
   if (isPlainObject(value)) {
     if (detailKey === "checks") {
       const checkEntries = Object.entries(value)
       if (checkEntries.length === 0) {
-        return <span className="text-caption text-fg-muted">No check detail recorded.</span>
+        return <span className="italic text-fg-muted">Not set</span>
       }
       return (
         <div className="flex flex-wrap items-center gap-2">
@@ -516,37 +533,24 @@ function DetailValue({
       )
     }
 
+    const activeEntries = filterActiveEntries(value)
+    if (activeEntries.length === 0) {
+      return <span className="italic text-fg-muted">None</span>
+    }
+
     return (
-      <div className="flex flex-col gap-1 rounded border border-stroke bg-surface-2 px-3 py-2">
-        {Object.entries(value).map(([subKey, subVal]) => (
-          <div key={subKey} className="flex items-center gap-2 text-xs">
+      <div className="flex flex-col gap-1.5 rounded-lg border border-stroke bg-surface-2 p-3">
+        {activeEntries.map(([subKey, subVal]) => (
+          <div key={subKey} className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-fg-muted">{humanizeDetailKey(subKey)}:</span>
-            {typeof subVal === "boolean" ? (
-              <span className={subVal ? "text-success" : "text-danger"}>
-                {subVal ? "✓ Passed" : "✗ Failed"}
-              </span>
-            ) : (
-              <span className="font-medium text-fg">{String(subVal)}</span>
-            )}
+            <DetailValue detailKey={subKey} value={subVal} />
           </div>
         ))}
       </div>
     )
   }
 
-  const strValue = String(value)
-
-  // Known reason codes (e.g. "self_delete" → "Cannot delete own account")
-  if (detailKey === "reason") {
-    const humanized = humanizeReasonValue(strValue)
-    if (humanized) {
-      return (
-        <span className="font-medium text-fg" title={strValue}>
-          {humanized}
-        </span>
-      )
-    }
-  }
+  const strValue = String(value).trim()
 
   // UUID-shaped strings get truncated with copy button
   if (isUuid(strValue)) {
@@ -569,8 +573,9 @@ function DetailValue({
     )
   }
 
-  // Default: plain string
-  return <span className="font-medium text-fg">{strValue}</span>
+  // Default: formatted scalar string
+  const formatted = formatScalarDetailValue(detailKey, value)
+  return <span className="font-medium text-fg">{formatted}</span>
 }
 
 /**
@@ -642,16 +647,89 @@ function AuditRow({
               <div>
                 <h4 className="mb-2 text-xs font-semibold text-fg-muted">Action Details</h4>
                 {entry.detail && Object.keys(entry.detail).length > 0 ? (
-                  <div className="flex flex-col gap-2 text-sm">
-                    {Object.entries(entry.detail).map(([key, value]) => (
-                      <div key={key} className="flex flex-wrap items-center gap-2">
-                        <span className="shrink-0 text-fg-muted">{humanizeDetailKey(key)}:</span>
-                        <DetailValue detailKey={key} value={value} detail={entry.detail} />
-                      </div>
-                    ))}
+                  <div className="flex flex-col gap-2.5 text-xs">
+                    {Object.entries(entry.detail).map(([key, value]) => {
+                      if (isPlainObject(value)) {
+                        if (key === "checks") {
+                          const checkEntries = Object.entries(value)
+                          return (
+                            <div key={key} className="flex flex-col gap-1.5">
+                              <span className="font-medium text-fg-muted">
+                                {humanizeDetailKey(key)}:
+                              </span>
+                              <div className="pl-3">
+                                {checkEntries.length === 0 ? (
+                                  <span className="italic text-fg-muted">Not set</span>
+                                ) : (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {checkEntries.map(([name, ok]) => {
+                                      const passed = Boolean(ok)
+                                      return (
+                                        <Badge
+                                          key={name}
+                                          variant="outline"
+                                          tone={passed ? "success" : "danger"}
+                                          uppercase={false}
+                                        >
+                                          {formatCheckLabel(name)}: {passed ? "Passed" : "Failed"}
+                                        </Badge>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        }
+
+                        const activeEntries = filterActiveEntries(value)
+                        if (activeEntries.length === 0) {
+                          return (
+                            <div key={key} className="flex items-center gap-2">
+                              <span className="text-fg-muted">{humanizeDetailKey(key)}:</span>
+                              <span className="italic text-fg-muted">None</span>
+                            </div>
+                          )
+                        }
+
+                        return (
+                          <div key={key} className="flex flex-col gap-1.5">
+                            <span className="font-medium text-fg-muted">
+                              {humanizeDetailKey(key)}:
+                            </span>
+                            <div className="pl-3">
+                              <div className="flex flex-col gap-1.5 rounded-lg border border-stroke bg-surface-2 p-3">
+                                {activeEntries.map(([subKey, subVal]) => (
+                                  <div
+                                    key={subKey}
+                                    className="flex flex-wrap items-center gap-2 text-xs"
+                                  >
+                                    <span className="text-fg-muted">
+                                      {humanizeDetailKey(subKey)}:
+                                    </span>
+                                    <DetailValue
+                                      detailKey={subKey}
+                                      value={subVal}
+                                      detail={entry.detail}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div key={key} className="flex flex-wrap items-center gap-2">
+                          <span className="text-fg-muted">{humanizeDetailKey(key)}:</span>
+                          <DetailValue detailKey={key} value={value} detail={entry.detail} />
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
-                  <div className="text-sm text-fg-muted">No detail recorded.</div>
+                  <div className="text-xs text-fg-muted">No detail recorded.</div>
                 )}
               </div>
 
