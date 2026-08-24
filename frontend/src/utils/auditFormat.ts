@@ -113,6 +113,28 @@ export function isOpaqueIdKey(key: string): boolean {
   return OPAQUE_ID_KEYS.has(key)
 }
 
+/**
+ * Maps an opaque-id key to the sibling key that, if present in the same
+ * detail payload, already spells out its human-readable name (P25 audit
+ * target labels — e.g. `camera_id` next to `camera_name`).
+ */
+const OPAQUE_ID_NAME_KEYS: Record<string, string> = {
+  camera_id: "camera_name",
+}
+
+/**
+ * True when `detailKey`'s id is already explained by a sibling key in the
+ * same `detail` payload, so appending the opaque-id suffix would just
+ * repeat information the row already shows.
+ */
+export function hasResolvedName(
+  detailKey: string,
+  detail: Record<string, unknown> | null | undefined,
+): boolean {
+  const nameKey = OPAQUE_ID_NAME_KEYS[detailKey]
+  return nameKey !== undefined && typeof detail?.[nameKey] === "string"
+}
+
 // ---------------------------------------------------------------------------
 // 5. Humanise known enum/reason values
 // ---------------------------------------------------------------------------

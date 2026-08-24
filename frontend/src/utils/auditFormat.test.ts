@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   formatChangedFields,
   formatCheckLabel,
+  hasResolvedName,
   humanizeDetailKey,
   humanizeReasonValue,
   isUuid,
@@ -45,6 +46,31 @@ describe("auditFormat", () => {
   describe("formatChangedFields", () => {
     it("formats array of changed fields", () => {
       expect(formatChangedFields(["camera_name", "channel_id"])).toBe("Camera Name, Channel Id")
+    })
+  })
+
+  describe("hasResolvedName", () => {
+    it("is true for camera_id when a sibling camera_name string is present", () => {
+      expect(hasResolvedName("camera_id", { camera_id: 3, camera_name: "Front Entrance" })).toBe(
+        true,
+      )
+    })
+
+    it("is false when the sibling name key is absent", () => {
+      expect(hasResolvedName("camera_id", { camera_id: 3 })).toBe(false)
+    })
+
+    it("is false when the sibling name key is null", () => {
+      expect(hasResolvedName("camera_id", { camera_id: 3, camera_name: null })).toBe(false)
+    })
+
+    it("is false for a key with no known sibling name key", () => {
+      expect(hasResolvedName("channel_id", { channel_id: 5 })).toBe(false)
+    })
+
+    it("is false when detail is undefined or null", () => {
+      expect(hasResolvedName("camera_id", undefined)).toBe(false)
+      expect(hasResolvedName("camera_id", null)).toBe(false)
     })
   })
 })
