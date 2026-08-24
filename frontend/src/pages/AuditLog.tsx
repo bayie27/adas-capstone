@@ -539,7 +539,7 @@ function DetailValue({
     }
 
     return (
-      <div className="flex flex-col gap-1.5 rounded-lg border border-stroke bg-surface-2 p-3">
+      <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 rounded-lg border border-stroke bg-surface-2 p-3 sm:grid-cols-2">
         {activeEntries.map(([subKey, subVal]) => (
           <div key={subKey} className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-fg-muted">{humanizeDetailKey(subKey)}:</span>
@@ -647,13 +647,13 @@ function AuditRow({
               <div>
                 <h4 className="mb-2 text-xs font-semibold text-fg-muted">Action Details</h4>
                 {entry.detail && Object.keys(entry.detail).length > 0 ? (
-                  <div className="flex flex-col gap-2.5 text-xs">
+                  <div className="grid grid-cols-1 gap-x-8 gap-y-2.5 text-xs md:grid-cols-2">
                     {Object.entries(entry.detail).map(([key, value]) => {
                       if (isPlainObject(value)) {
                         if (key === "checks") {
                           const checkEntries = Object.entries(value)
                           return (
-                            <div key={key} className="flex flex-col gap-1.5">
+                            <div key={key} className="col-span-full flex flex-col gap-1.5">
                               <span className="font-medium text-fg-muted">
                                 {humanizeDetailKey(key)}:
                               </span>
@@ -693,12 +693,12 @@ function AuditRow({
                         }
 
                         return (
-                          <div key={key} className="flex flex-col gap-1.5">
+                          <div key={key} className="col-span-full flex flex-col gap-1.5">
                             <span className="font-medium text-fg-muted">
                               {humanizeDetailKey(key)}:
                             </span>
                             <div className="pl-3">
-                              <div className="flex flex-col gap-1.5 rounded-lg border border-stroke bg-surface-2 p-3">
+                              <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 rounded-lg border border-stroke bg-surface-2 p-3 sm:grid-cols-2">
                                 {activeEntries.map(([subKey, subVal]) => (
                                   <div
                                     key={subKey}
