@@ -91,9 +91,13 @@ class TestRunDailyBackup:
         assert len(rows) == 1
         assert rows[0].result == "success"
         assert rows[0].actor_type == "system"
+        manifest_backup_id = json.loads(manifests[0].read_text())["backup_id"]
+        assert rows[0].target_ref == manifest_backup_id
         detail = json.loads(rows[0].detail)
         assert detail["trigger"] == "scheduled"
-        assert "backup_id" in detail
+        assert detail["backup_id"] == manifest_backup_id
+        assert "created_at" in detail
+        assert detail["origin"] == "scheduled"
 
     def test_busy_lock_is_a_logged_noop_not_an_error(self, sched_paths, session):
         engine = session.get_bind()
@@ -125,6 +129,9 @@ class TestRunDailyBackup:
         assert len(rows) == 1
         assert rows[0].result == "failure"
         assert json.loads(rows[0].detail)["trigger"] == "scheduled"
+        # create_backup raised before a manifest ever existed -- no backup
+        # to point at, so target_ref stays NULL rather than a filler value.
+        assert rows[0].target_ref is None
 
 
 # ---------------------------------------------------------------------------
