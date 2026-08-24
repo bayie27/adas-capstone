@@ -5,6 +5,7 @@ import { RiArrowDownSLine, RiArrowRightSLine, RiFileCopyLine } from "@remixicon/
 import {
   formatChangedFields,
   formatCheckLabel,
+  formatTargetType,
   hasResolvedName,
   humanizeDetailKey,
   humanizeReasonValue,
@@ -161,7 +162,7 @@ export default function AuditLog() {
 
   const targetTypeOptions = [
     { value: "", label: "All target types" },
-    ...AUDIT_TARGET_TYPES.map((t) => ({ value: t, label: t })),
+    ...AUDIT_TARGET_TYPES.map((t) => ({ value: t, label: formatTargetType(t) })),
   ]
 
   // usePagination derives rangeStart/rangeEnd/totalPages from the total it's
@@ -609,7 +610,7 @@ function AuditRow({
         <TableCell className="text-fg-muted">
           {entry.target_type ? (
             <span title={entry.target_ref ?? undefined}>
-              {entry.target_type}
+              {formatTargetType(entry.target_type)}
               {entry.target_ref ? ` · ${formatTargetRef(entry.target_type, entry.target_ref)}` : ""}
             </span>
           ) : (
