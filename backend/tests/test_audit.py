@@ -434,6 +434,37 @@ class TestAuditViewer:
         resp = client.get("/api/audit-logs/?search=findme_special", headers=headers)
         assert resp.json()["total_filtered"] == 1
 
+    def test_search_matches_camera_name_snapshotted_in_detail(
+        self, client: TestClient, session: Session
+    ):
+        """P25 — `search` does an `icontains` on the raw `detail` JSON
+        string, so a camera name snapshotted into it (Step 2) is findable
+        with zero route changes. This pins that a future refactor of the
+        filter can't lose it."""
+        import json
+
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        session.add(
+            AuditLog(
+                actor_type="user",
+                username="admin",
+                action="ALERT_CONFIRM",
+                target_type="incident",
+                target_ref="118",
+                result="success",
+                detail=json.dumps({"camera_id": 3, "camera_name": "Findme Camera"}),
+            )
+        )
+        session.commit()
+
+        resp = client.get(
+            "/api/audit-logs/", params={"search": "Findme Camera"}, headers=headers
+        )
+        assert resp.status_code == 200
+        assert resp.json()["total_filtered"] == 1
+        assert resp.json()["items"][0]["action"] == "ALERT_CONFIRM"
+
     def test_no_update_or_delete_route_exists(
         self, client: TestClient, session: Session
     ):
