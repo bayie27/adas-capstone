@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest"
 import {
+  filterActiveEntries,
   formatChangedFields,
   formatCheckLabel,
+  formatScalarDetailValue,
   formatTargetType,
   hasResolvedName,
   humanizeDetailKey,
   humanizeReasonValue,
   isLongHexId,
+  isOpaqueIdKey,
+  isPlainObject,
+  isUnsetValue,
   isUuid,
   truncateId,
 } from "./auditFormat"
@@ -28,12 +33,23 @@ describe("auditFormat", () => {
     it("maps known detail keys", () => {
       expect(humanizeDetailKey("checks")).toBe("Validation Checks")
       expect(humanizeDetailKey("backup_id")).toBe("Backup ID")
+      expect(humanizeDetailKey("report_type")).toBe("Report Type")
+      expect(humanizeDetailKey("row_count")).toBe("Row Count")
+      expect(humanizeDetailKey("filters")).toBe("Filters")
+      expect(humanizeDetailKey("sort")).toBe("Sorting")
+      expect(humanizeDetailKey("start_date")).toBe("Start Date")
+      expect(humanizeDetailKey("end_date")).toBe("End Date")
+    })
+
+    it("falls back to title-casing unmapped keys", () => {
+      expect(humanizeDetailKey("custom_filter_key")).toBe("Custom Filter Key")
     })
   })
 
   describe("humanizeReasonValue", () => {
     it("maps known internal reason codes", () => {
       expect(humanizeReasonValue("self_delete")).toBe("Cannot delete own account")
+      expect(humanizeReasonValue("row_limit_exceeded")).toBe("Row limit exceeded")
     })
   })
 
@@ -42,6 +58,88 @@ describe("auditFormat", () => {
       const id = "458f0a83-c7f0-4db5-9876-c5415f7b89f6"
       expect(isUuid(id)).toBe(true)
       expect(truncateId(id)).toBe("458f0a83…7b89f6")
+    })
+
+    it("returns short IDs unchanged", () => {
+      expect(truncateId("short-id")).toBe("short-id")
+    })
+  })
+
+  describe("isPlainObject", () => {
+    it("identifies plain objects", () => {
+      expect(isPlainObject({})).toBe(true)
+      expect(isPlainObject({ a: 1 })).toBe(true)
+      expect(isPlainObject(null)).toBe(false)
+      expect(isPlainObject([])).toBe(false)
+      expect(isPlainObject("string")).toBe(false)
+    })
+  })
+
+  describe("isUnsetValue", () => {
+    it("identifies null and undefined as unset", () => {
+      expect(isUnsetValue(null)).toBe(true)
+      expect(isUnsetValue(undefined)).toBe(true)
+    })
+
+    it("identifies empty and whitespace strings as unset", () => {
+      expect(isUnsetValue("")).toBe(true)
+      expect(isUnsetValue("   ")).toBe(true)
+      expect(isUnsetValue("valid")).toBe(false)
+    })
+
+    it("identifies empty arrays and arrays of unset values as unset", () => {
+      expect(isUnsetValue([])).toBe(true)
+      expect(isUnsetValue([null, ""])).toBe(true)
+      expect(isUnsetValue(["active"])).toBe(false)
+    })
+
+    it("identifies empty objects and objects with all unset values as unset", () => {
+      expect(isUnsetValue({})).toBe(true)
+      expect(isUnsetValue({ action: null, user_id: null, search: "" })).toBe(true)
+      expect(isUnsetValue({ action: "LOGIN_SUCCESS", user_id: null })).toBe(false)
+    })
+  })
+
+  describe("filterActiveEntries", () => {
+    it("filters out unset key-value pairs", () => {
+      const filters = {
+        action: null,
+        user_id: null,
+        start_date: "2026-08-01",
+        search: "",
+        camera_id: [1, 2],
+      }
+      const active = filterActiveEntries(filters)
+      expect(active).toEqual([
+        ["start_date", "2026-08-01"],
+        ["camera_id", [1, 2]],
+      ])
+    })
+  })
+
+  describe("formatScalarDetailValue", () => {
+    it("formats known enum/mode/format keys", () => {
+      expect(formatScalarDetailValue("mode", "sync")).toBe("Direct Download")
+      expect(formatScalarDetailValue("mode", "job")).toBe("Background Export")
+      expect(formatScalarDetailValue("format", "csv")).toBe("CSV")
+      expect(formatScalarDetailValue("report_type", "audit")).toBe("Audit Log")
+      expect(formatScalarDetailValue("order", "desc")).toBe("Descending")
+      expect(formatScalarDetailValue("field", "created_at")).toBe("Time")
+      expect(formatScalarDetailValue("trigger", "manual")).toBe("Manual")
+      expect(formatScalarDetailValue("row_count", 1250)).toBe("1,250")
+    })
+
+    it("returns Not set for unset values", () => {
+      expect(formatScalarDetailValue("mode", null)).toBe("Not set")
+      expect(formatScalarDetailValue("mode", "")).toBe("Not set")
+    })
+  })
+
+  describe("isOpaqueIdKey", () => {
+    it("identifies opaque id keys", () => {
+      expect(isOpaqueIdKey("camera_id")).toBe(true)
+      expect(isOpaqueIdKey("channel_id")).toBe(true)
+      expect(isOpaqueIdKey("user_id")).toBe(false)
     })
   })
 
@@ -73,6 +171,10 @@ describe("auditFormat", () => {
   describe("formatChangedFields", () => {
     it("formats array of changed fields", () => {
       expect(formatChangedFields(["camera_name", "channel_id"])).toBe("Camera Name, Channel Id")
+    })
+
+    it("handles empty array cleanly", () => {
+      expect(formatChangedFields([])).toBe("None")
     })
   })
 

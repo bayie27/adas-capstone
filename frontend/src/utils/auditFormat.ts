@@ -30,6 +30,25 @@ const DETAIL_KEY_LABELS: Record<string, string> = {
   to: "New Role",
   snoozed_until: "Snoozed Until",
   format: "Export Format",
+  report_type: "Report Type",
+  mode: "Export Mode",
+  row_count: "Row Count",
+  job_id: "Job ID",
+  failure_category: "Failure Category",
+  filters: "Filters",
+  sort: "Sorting",
+  field: "Sort Field",
+  order: "Sort Order",
+  target_ref: "Target Reference",
+  target_type: "Target Type",
+  user_id: "User ID",
+  username: "Username",
+  role: "Role",
+  start_date: "Start Date",
+  end_date: "End Date",
+  search: "Search Query",
+  action: "Action",
+  result: "Result",
 }
 
 /**
@@ -120,12 +139,34 @@ export function truncateId(id: string, maxLen = 16): string {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Value classification helpers
+// 3. Value classification & unset helpers
 // ---------------------------------------------------------------------------
 
 /** True when the value is a non-null, non-array plain object. */
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Identifies null, undefined, blank strings, empty arrays, and objects
+ * where all inner properties are unset.
+ */
+export function isUnsetValue(value: unknown): boolean {
+  if (value === null || value === undefined) return true
+  if (typeof value === "string") return value.trim().length === 0
+  if (Array.isArray(value)) return value.length === 0 || value.every(isUnsetValue)
+  if (isPlainObject(value)) {
+    const keys = Object.keys(value)
+    return keys.length === 0 || Object.values(value).every(isUnsetValue)
+  }
+  return false
+}
+
+/**
+ * Filters a nested record to only key-value pairs that are active (non-unset).
+ */
+export function filterActiveEntries(obj: Record<string, unknown>): Array<[string, unknown]> {
+  return Object.entries(obj).filter(([, val]) => !isUnsetValue(val))
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +208,7 @@ export function hasResolvedName(
 }
 
 // ---------------------------------------------------------------------------
-// 5. Humanise known enum/reason values
+// 5. Humanise known enum/reason values & scalar fields
 // ---------------------------------------------------------------------------
 
 const REASON_LABELS: Record<string, string> = {
@@ -184,6 +225,9 @@ const REASON_LABELS: Record<string, string> = {
   confirmation_mismatch: "Confirmation text does not match",
   invalid_backup_id: "Invalid backup ID",
   not_a_valid_restore_point: "Backup is not a valid restore point",
+  row_limit_exceeded: "Row limit exceeded",
+  generation_failed: "Export generation failed",
+  artifact_write_failed: "Export file write failed",
 }
 
 /**
@@ -195,12 +239,96 @@ export function humanizeReasonValue(value: string): string | null {
   return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+const REPORT_TYPE_LABELS: Record<string, string> = {
+  audit: "Audit Log",
+  incidents: "Incident Log",
+  performance: "AI Performance",
+  dashboard: "Dashboard",
+  retraining: "Retraining Package",
+}
+
+const MODE_LABELS: Record<string, string> = {
+  sync: "Direct Download",
+  job: "Background Export",
+}
+
+const FORMAT_LABELS: Record<string, string> = {
+  csv: "CSV",
+  pdf: "PDF",
+  zip: "ZIP",
+}
+
+const SORT_ORDER_LABELS: Record<string, string> = {
+  asc: "Ascending",
+  desc: "Descending",
+}
+
+const SORT_FIELD_LABELS: Record<string, string> = {
+  created_at: "Time",
+  user_id: "Actor",
+  action: "Action",
+  target_type: "Target Type",
+  result: "Result",
+}
+
+const TRIGGER_LABELS: Record<string, string> = {
+  manual: "Manual",
+  scheduled: "Scheduled",
+}
+
+/**
+ * Formats known scalar detail values (enums, modes, formats, reasons)
+ * into friendly display text.
+ */
+export function formatScalarDetailValue(detailKey: string, value: unknown): string {
+  if (isUnsetValue(value)) return "Not set"
+
+  const strVal = String(value).trim()
+
+  if (detailKey === "reason" || detailKey === "failure_category") {
+    return humanizeReasonValue(strVal) ?? strVal
+  }
+
+  if (detailKey === "report_type") {
+    return REPORT_TYPE_LABELS[strVal.toLowerCase()] ?? humanizeDetailKey(strVal)
+  }
+
+  if (detailKey === "mode") {
+    return MODE_LABELS[strVal.toLowerCase()] ?? humanizeDetailKey(strVal)
+  }
+
+  if (detailKey === "format") {
+    return FORMAT_LABELS[strVal.toLowerCase()] ?? strVal.toUpperCase()
+  }
+
+  if (detailKey === "order") {
+    return SORT_ORDER_LABELS[strVal.toLowerCase()] ?? strVal
+  }
+
+  if (detailKey === "field") {
+    return SORT_FIELD_LABELS[strVal.toLowerCase()] ?? humanizeDetailKey(strVal)
+  }
+
+  if (detailKey === "trigger") {
+    return TRIGGER_LABELS[strVal.toLowerCase()] ?? humanizeDetailKey(strVal)
+  }
+
+  if (detailKey === "row_count" && typeof value === "number") {
+    return new Intl.NumberFormat("en-US").format(value)
+  }
+
+  return strVal
+}
+
 // ---------------------------------------------------------------------------
 // 6. Format a `changed_fields` array into a readable string
 // ---------------------------------------------------------------------------
 
 export function formatChangedFields(fields: unknown[]): string {
-  return fields
+  const filtered = fields.filter((f) => !isUnsetValue(f))
+  if (filtered.length === 0) return "None"
+
+  return filtered
     .map((f) =>
       typeof f === "string"
         ? f.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
