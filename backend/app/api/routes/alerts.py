@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -12,7 +13,12 @@ from app.core.errors import AppHTTPException
 from app.models import AuditResult, Camera, DetectionLog, DetectionStatus, User
 from app.schemas import AlertSnoozeRequest, DetectionLogListResponse, DetectionLogRead
 from app.services import audit
-from app.services.cameras import apply_desired_state, schedule_pending_cooldowns
+from app.services.cameras import (
+    apply_desired_state,
+    format_camera_filter_line,
+    resolve_camera_names,
+    schedule_pending_cooldowns,
+)
 from app.services.events import (
     alert_status_update_event,
     camera_status_update_event,
@@ -139,7 +145,13 @@ def _filters_as_dict(f: IncidentFilters) -> dict:
     }
 
 
-def _filters_summary(f: IncidentFilters, *, sort_by: str, sort_order: str) -> list[str]:
+def _filters_summary(
+    f: IncidentFilters,
+    *,
+    sort_by: str,
+    sort_order: str,
+    camera_names: Mapping[str, str],
+) -> list[str]:
     lines = []
     if f.start_date or f.end_date:
         lines.append(
@@ -149,7 +161,7 @@ def _filters_summary(f: IncidentFilters, *, sort_by: str, sort_order: str) -> li
     if f.statuses:
         lines.append("Status: " + ", ".join(s.value for s in f.statuses))
     if f.camera_ids:
-        lines.append("Camera IDs: " + ", ".join(str(c) for c in f.camera_ids))
+        lines.append(format_camera_filter_line(camera_names, f.camera_ids))
     if f.user_ids:
         lines.append("User IDs: " + ", ".join(str(u) for u in f.user_ids))
     if f.search:
@@ -332,6 +344,10 @@ def export_alerts(
     filters_dict = _filters_as_dict(filters)
     sort_dict = {"sort_by": sort_by, "sort_order": sort_order}
     source_ip = _client_ip(request)
+    # Resolved once and threaded through both the audit row (Step 5) and
+    # the PDF filter-summary header (Step 6) so a camera-filtered export
+    # issues exactly one resolve_camera_names query, not two.
+    camera_names = resolve_camera_names(session, filters.camera_ids)
 
     # A count query, not a materialized id list: `WHERE log_id IN (...)`
     # with tens of thousands of bind parameters exceeds SQLite's default
@@ -356,6 +372,7 @@ def export_alerts(
             result=AuditResult.FAILURE,
             failure_category="row_limit_exceeded",
             source_ip=source_ip,
+            camera_names=camera_names,
         )
         session.commit()
         raise
@@ -371,6 +388,7 @@ def export_alerts(
         row_count=row_count,
         result=AuditResult.SUCCESS,
         source_ip=source_ip,
+        camera_names=camera_names,
     )
     session.commit()
 
@@ -389,7 +407,10 @@ def export_alerts(
         pdf_bytes = build_incident_pdf(
             rows=[_incident_pdf_row(log) for log in logs],
             filters_summary=_filters_summary(
-                filters, sort_by=sort_by, sort_order=sort_order
+                filters,
+                sort_by=sort_by,
+                sort_order=sort_order,
+                camera_names=camera_names,
             ),
             requested_by=format_user_name(current_user) or current_user.username,
             generated_at=datetime.now(UTC),
@@ -481,7 +502,10 @@ def confirm_alert(
         actor=current_user,
         target_type="incident",
         target_ref=str(log_id),
-        detail={"camera_id": log.camera_id},
+        detail={
+            "camera_id": log.camera_id,
+            "camera_name": log.camera.camera_name if log.camera else None,
+        },
         source_ip=_client_ip(request),
     )
     session.commit()
@@ -543,7 +567,10 @@ def dismiss_alert(
         actor=current_user,
         target_type="incident",
         target_ref=str(log_id),
-        detail={"camera_id": log.camera_id},
+        detail={
+            "camera_id": log.camera_id,
+            "camera_name": camera.camera_name if camera is not None else None,
+        },
         source_ip=_client_ip(request),
     )
     session.commit()
@@ -620,7 +647,10 @@ def resolve_alert(
         actor=current_user,
         target_type="incident",
         target_ref=str(log_id),
-        detail={"camera_id": log.camera_id},
+        detail={
+            "camera_id": log.camera_id,
+            "camera_name": camera.camera_name if camera is not None else None,
+        },
         source_ip=_client_ip(request),
     )
     session.commit()
@@ -672,7 +702,11 @@ def snooze_alert(
         actor=current_user,
         target_type="incident",
         target_ref=str(log_id),
-        detail={"snoozed_until": log.snoozed_until.isoformat()},
+        detail={
+            "snoozed_until": log.snoozed_until.isoformat(),
+            "camera_id": log.camera_id,
+            "camera_name": log.camera.camera_name if log.camera else None,
+        },
         source_ip=_client_ip(request),
     )
     session.commit()

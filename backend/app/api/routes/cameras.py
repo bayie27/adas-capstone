@@ -359,6 +359,7 @@ def update_camera(
     # Snapshot before *any* mutation — channel_id/is_enabled are themselves
     # AI-relevant, so the baseline must predate the setattr loop below.
     before = snapshot_ai_relevant_fields(db_camera)
+    old_camera_name = db_camera.camera_name
 
     for key, value in update_data.items():
         setattr(db_camera, key, value)
@@ -384,6 +385,7 @@ def update_camera(
     flag_modified(db_camera, "cooldown_until")
 
     if other_changed_fields:
+        renamed = "camera_name" in other_changed_fields
         audit.record(
             session,
             action="CAMERA_UPDATE",
@@ -391,7 +393,11 @@ def update_camera(
             actor=current_user,
             target_type="camera",
             target_ref=str(camera_id),
-            detail={"changed_fields": sorted(other_changed_fields.keys())},
+            detail={
+                "changed_fields": sorted(other_changed_fields.keys()),
+                "camera_name": db_camera.camera_name,
+                **({"previous_camera_name": old_camera_name} if renamed else {}),
+            },
             source_ip=source_ip,
         )
     if is_enabled_changed:
@@ -402,6 +408,7 @@ def update_camera(
             actor=current_user,
             target_type="camera",
             target_ref=str(camera_id),
+            detail={"camera_name": db_camera.camera_name},
             source_ip=source_ip,
         )
     if is_being_restored:
@@ -412,6 +419,7 @@ def update_camera(
             actor=current_user,
             target_type="camera",
             target_ref=str(camera_id),
+            detail={"camera_name": db_camera.camera_name},
             source_ip=source_ip,
         )
 
@@ -464,6 +472,7 @@ def delete_camera(
         actor=current_user,
         target_type="camera",
         target_ref=str(camera_id),
+        detail={"camera_name": db_camera.camera_name},
         source_ip=_client_ip(request),
     )
     session.commit()

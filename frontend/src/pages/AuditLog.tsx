@@ -5,6 +5,7 @@ import { RiArrowDownSLine, RiArrowRightSLine, RiFileCopyLine } from "@remixicon/
 import {
   formatChangedFields,
   formatCheckLabel,
+  hasResolvedName,
   humanizeDetailKey,
   humanizeReasonValue,
   isOpaqueIdKey,
@@ -468,7 +469,15 @@ function CopyableId({ value }: { value: string }) {
  * opaque numeric IDs, and reason codes — never lets a raw object hit the
  * DOM as `[object Object]`.
  */
-function DetailValue({ detailKey, value }: { detailKey: string; value: unknown }) {
+function DetailValue({
+  detailKey,
+  value,
+  detail,
+}: {
+  detailKey: string
+  value: unknown
+  detail?: Record<string, unknown> | null
+}) {
   // Null / undefined
   if (value === null || value === undefined) {
     return <span className="text-fg-muted">—</span>
@@ -547,8 +556,10 @@ function DetailValue({ detailKey, value }: { detailKey: string; value: unknown }
     return <CopyableId value={strValue} />
   }
 
-  // Opaque numeric IDs — append a clarifying suffix
-  if (isOpaqueIdKey(detailKey) && /^\d+$/.test(strValue)) {
+  // Opaque numeric IDs — append a clarifying suffix, unless a sibling key
+  // in this same detail payload already spells out the name (P25 audit
+  // target labels — e.g. camera_id next to camera_name).
+  if (isOpaqueIdKey(detailKey) && /^\d+$/.test(strValue) && !hasResolvedName(detailKey, detail)) {
     return (
       <span className="font-medium text-fg">
         {strValue} <span className="text-caption text-fg-muted">(internal reference)</span>
@@ -633,7 +644,7 @@ function AuditRow({
                     {Object.entries(entry.detail).map(([key, value]) => (
                       <div key={key} className="flex flex-wrap items-center gap-2">
                         <span className="shrink-0 text-fg-muted">{humanizeDetailKey(key)}:</span>
-                        <DetailValue detailKey={key} value={value} />
+                        <DetailValue detailKey={key} value={value} detail={entry.detail} />
                       </div>
                     ))}
                   </div>

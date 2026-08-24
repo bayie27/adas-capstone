@@ -394,6 +394,15 @@ class TestCreateUser:
         assert body["role"] == "Operator"
         assert "password_hash" not in body
 
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "USER_CREATE")
+        ).all()
+        assert len(rows) == 1
+        assert json.loads(rows[0].detail) == {
+            "target_username": "newop",
+            "role": "Operator",
+        }
+
     def test_duplicate_username_rejected(self, client: TestClient, session: Session):
         """TC-U-101 alt — duplicate username prevention."""
         make_admin(session)
@@ -502,6 +511,29 @@ class TestUpdateUser:
         )
         assert resp.status_code == 400
 
+    def test_cannot_demote_last_admin_is_audited_denied(
+        self, client: TestClient, session: Session
+    ):
+        """P25 — the denied last-admin-demote row goes through
+        record_out_of_band in a separate session and must still carry
+        target_username, not just the numeric target_ref."""
+        admin = make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        client.patch(
+            f"/api/users/{admin.user_id}",
+            json={"role": "Operator"},
+            headers=headers,
+        )
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "USER_ROLE_CHANGE")
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].result == "denied"
+        assert json.loads(rows[0].detail) == {
+            "reason": "last_admin_demote",
+            "target_username": "admin",
+        }
+
     def test_cannot_deactivate_last_admin(self, client: TestClient, session: Session):
         admin = make_admin(session)
         headers = auth_headers(client, "admin", "Admin123")
@@ -531,7 +563,10 @@ class TestUpdateUser:
         ).all()
         assert len(rows) == 1
         assert rows[0].result == "denied"
-        assert json.loads(rows[0].detail) == {"reason": "last_admin_deactivate"}
+        assert json.loads(rows[0].detail) == {
+            "reason": "last_admin_deactivate",
+            "target_username": "admin",
+        }
 
     def test_can_demote_admin_when_another_exists(
         self, client: TestClient, session: Session
@@ -758,6 +793,23 @@ class TestDeleteUser:
         # distinguishable status code.
         assert login.status_code == 401
 
+    def test_delete_is_audited_with_target_username(
+        self, client: TestClient, session: Session
+    ):
+        """P25 — a USER_DISABLE row must identify its target by name, not
+        only by the numeric target_ref."""
+        make_admin(session)
+        op = make_operator(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        client.delete(f"/api/users/{op.user_id}", headers=headers)
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "USER_DISABLE")
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].result == "success"
+        assert json.loads(rows[0].detail) == {"target_username": "operator"}
+
     def test_cannot_delete_last_admin(self, client: TestClient, session: Session):
         """Use Case 2 — last admin lockout guard."""
         admin = make_admin(session)
@@ -788,7 +840,10 @@ class TestDeleteUser:
         ).all()
         assert len(rows) == 1
         assert rows[0].result == "denied"
-        assert json.loads(rows[0].detail) == {"reason": "self_delete"}
+        assert json.loads(rows[0].detail) == {
+            "reason": "self_delete",
+            "target_username": "admin",
+        }
 
     def test_cannot_delete_last_admin_non_self_is_audited_denied(
         self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
@@ -820,7 +875,10 @@ class TestDeleteUser:
         ).all()
         assert len(rows) == 1
         assert rows[0].result == "denied"
-        assert json.loads(rows[0].detail) == {"reason": "last_admin_delete"}
+        assert json.loads(rows[0].detail) == {
+            "reason": "last_admin_delete",
+            "target_username": "admin2",
+        }
 
     def test_delete_is_soft_not_hard(self, client: TestClient, session: Session):
         """Historical audit trail must be preserved — use Case 2 postcondition."""

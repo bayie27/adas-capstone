@@ -83,6 +83,7 @@ def update_alarm_settings(
             actor=current_user,
             target_type="user",
             target_ref=str(current_user.user_id),
+            detail={"target_username": current_user.username},
             source_ip=request.client.host if request.client else None,
         )
 
