@@ -14,10 +14,17 @@ import { getCameras } from "@/api/cameras"
  * `/cameras/options` route; this hook is the single call site to swap when it
  * lands.
  */
-export function useCameraOptions() {
+export function useCameraOptions({
+  enabled = true,
+  isActive,
+}: {
+  enabled?: boolean
+  isActive?: "true" | "false" | "null"
+} = {}) {
   return useQuery({
-    queryKey: ["cameras", "options"],
-    queryFn: () => getCameras({ limit: 100 }),
+    queryKey: ["cameras", "options", isActive],
+    queryFn: () => getCameras({ limit: 100, is_active: isActive }),
     staleTime: 5 * 60_000,
+    enabled,
   })
 }
