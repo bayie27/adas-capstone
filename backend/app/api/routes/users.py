@@ -110,7 +110,10 @@ def update_my_profile(
             actor=current_user,
             target_type="user",
             target_ref=str(current_user.user_id),
-            detail={"changed_fields": sorted(update_data.keys())},
+            detail={
+                "changed_fields": sorted(update_data.keys()),
+                "target_username": current_user.username,
+            },
             source_ip=_client_ip(request),
         )
 
@@ -158,6 +161,7 @@ async def change_my_password(
         actor=current_user,
         target_type="user",
         target_ref=str(current_user.user_id),
+        detail={"target_username": current_user.username},
         source_ip=_client_ip(request),
     )
     session.commit()
@@ -278,7 +282,7 @@ def create_user(
             actor=current_admin,
             target_type="user",
             target_ref=str(new_user.user_id),
-            detail={"username": new_user.username, "role": str(new_user.role)},
+            detail={"target_username": new_user.username, "role": str(new_user.role)},
             source_ip=_client_ip(request),
         )
         session.commit()
@@ -328,7 +332,10 @@ async def update_user(
                 actor=current_admin,
                 target_type="user",
                 target_ref=str(target.user_id),
-                detail={"reason": "last_admin_demote"},
+                detail={
+                    "reason": "last_admin_demote",
+                    "target_username": target.username,
+                },
                 source_ip=source_ip,
             )
             raise HTTPException(
@@ -343,7 +350,10 @@ async def update_user(
                 actor=current_admin,
                 target_type="user",
                 target_ref=str(target.user_id),
-                detail={"reason": "last_admin_deactivate"},
+                detail={
+                    "reason": "last_admin_deactivate",
+                    "target_username": target.username,
+                },
                 source_ip=source_ip,
             )
             raise HTTPException(
@@ -386,7 +396,10 @@ async def update_user(
         actor=current_admin,
         target_type="user",
         target_ref=str(target.user_id),
-        detail={"changed_fields": sorted(update_data.keys())},
+        detail={
+            "changed_fields": sorted(update_data.keys()),
+            "target_username": target.username,
+        },
         source_ip=source_ip,
     )
     if role_changed:
@@ -397,7 +410,11 @@ async def update_user(
             actor=current_admin,
             target_type="user",
             target_ref=str(target.user_id),
-            detail={"from": str(old_role), "to": str(target.role)},
+            detail={
+                "from": str(old_role),
+                "to": str(target.role),
+                "target_username": target.username,
+            },
             source_ip=source_ip,
         )
     if being_deactivated:
@@ -408,6 +425,7 @@ async def update_user(
             actor=current_admin,
             target_type="user",
             target_ref=str(target.user_id),
+            detail={"target_username": target.username},
             source_ip=source_ip,
         )
     elif being_enabled:
@@ -418,6 +436,7 @@ async def update_user(
             actor=current_admin,
             target_type="user",
             target_ref=str(target.user_id),
+            detail={"target_username": target.username},
             source_ip=source_ip,
         )
 
@@ -467,6 +486,7 @@ async def reset_user_password(
         actor=current_admin,
         target_type="user",
         target_ref=str(target.user_id),
+        detail={"target_username": target.username},
         source_ip=_client_ip(request),
     )
     session.commit()
@@ -500,7 +520,7 @@ async def delete_user(
             actor=current_admin,
             target_type="user",
             target_ref=str(target.user_id),
-            detail={"reason": "self_delete"},
+            detail={"reason": "self_delete", "target_username": target.username},
             source_ip=source_ip,
         )
         raise HTTPException(
@@ -517,7 +537,7 @@ async def delete_user(
             actor=current_admin,
             target_type="user",
             target_ref=str(target.user_id),
-            detail={"reason": "last_admin_delete"},
+            detail={"reason": "last_admin_delete", "target_username": target.username},
             source_ip=source_ip,
         )
         raise HTTPException(
@@ -535,6 +555,7 @@ async def delete_user(
         actor=current_admin,
         target_type="user",
         target_ref=str(target.user_id),
+        detail={"target_username": target.username},
         source_ip=source_ip,
     )
     session.commit()
