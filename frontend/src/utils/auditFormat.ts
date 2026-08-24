@@ -100,6 +100,12 @@ export function isUuid(value: string): boolean {
   return UUID_RE.test(value)
 }
 
+/** True for a long unbroken hex id — e.g. a non-hyphenated backup id
+ *  (`uuid4().hex`), which `isUuid` deliberately does not match. */
+export function isLongHexId(value: string): boolean {
+  return /^[0-9a-f]{24,}$/i.test(value)
+}
+
 /**
  * Truncates a long identifier for display while preserving recognisability.
  * Short strings (≤ `maxLen`) are returned unchanged.
