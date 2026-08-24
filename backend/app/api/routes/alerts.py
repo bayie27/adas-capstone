@@ -481,7 +481,10 @@ def confirm_alert(
         actor=current_user,
         target_type="incident",
         target_ref=str(log_id),
-        detail={"camera_id": log.camera_id},
+        detail={
+            "camera_id": log.camera_id,
+            "camera_name": log.camera.camera_name if log.camera else None,
+        },
         source_ip=_client_ip(request),
     )
     session.commit()
@@ -543,7 +546,10 @@ def dismiss_alert(
         actor=current_user,
         target_type="incident",
         target_ref=str(log_id),
-        detail={"camera_id": log.camera_id},
+        detail={
+            "camera_id": log.camera_id,
+            "camera_name": camera.camera_name if camera is not None else None,
+        },
         source_ip=_client_ip(request),
     )
     session.commit()
@@ -620,7 +626,10 @@ def resolve_alert(
         actor=current_user,
         target_type="incident",
         target_ref=str(log_id),
-        detail={"camera_id": log.camera_id},
+        detail={
+            "camera_id": log.camera_id,
+            "camera_name": camera.camera_name if camera is not None else None,
+        },
         source_ip=_client_ip(request),
     )
     session.commit()
@@ -672,7 +681,11 @@ def snooze_alert(
         actor=current_user,
         target_type="incident",
         target_ref=str(log_id),
-        detail={"snoozed_until": log.snoozed_until.isoformat()},
+        detail={
+            "snoozed_until": log.snoozed_until.isoformat(),
+            "camera_id": log.camera_id,
+            "camera_name": log.camera.camera_name if log.camera else None,
+        },
         source_ip=_client_ip(request),
     )
     session.commit()
