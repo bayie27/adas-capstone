@@ -25,6 +25,8 @@ import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { useAuthStore } from "@/store/useAuthStore"
 import { formatPercent } from "@/utils/format"
+import { getApiErrorMessage } from "@/api/client"
+import { toast } from "@/store/useToastStore"
 import { RiCarLine, RiCloseCircleLine, RiDashboard3Line, RiFocus3Line } from "@remixicon/react"
 
 const PERFORMANCE_QUERY_KEY = ["performance-analytics"] as const
@@ -83,6 +85,12 @@ export default function AiPerformance() {
         },
         format,
       ),
+    onSuccess: () => {
+      toast.success("AI performance report downloaded successfully.")
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Failed to export AI performance report."))
+    },
   })
 
   const exportJobMutation = useExportJobSubmit()
@@ -126,6 +134,10 @@ export default function AiPerformance() {
         format: "zip",
         createdAt: new Date().toISOString(),
       })
+      toast.success("Retraining dataset export job added to Export Jobs.")
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Failed to export retraining dataset."))
     },
   })
 
@@ -140,6 +152,7 @@ export default function AiPerformance() {
 
   function executeRetrainingExport() {
     setShowWarningModal(false)
+    toast.info("Preparing retraining dataset export...")
     retrainingJobMutation.mutate({
       start_date: startDate || undefined,
       end_date: endDate || undefined,
