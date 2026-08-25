@@ -89,15 +89,17 @@ describe("SystemHealth page refactored view", () => {
     expect(screen.getByText("Disk Storage Usage")).toBeInTheDocument()
   })
 
-  it("renders advance details with retained performance charts and range tabs", async () => {
+  it("renders retained performance charts and range tabs directly on the page", async () => {
     vi.mocked(getSystemHealthLive).mockResolvedValue(mockLive)
     vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
 
     renderSystemHealth()
 
-    // Retained Advance Details & Tabs
-    expect(await screen.findByText("Advance details")).toBeInTheDocument()
-    expect(screen.getByText("Last 48 Hours")).toBeInTheDocument()
+    // Advance Details accordion is removed
+    expect(screen.queryByText("Advance details")).not.toBeInTheDocument()
+
+    // Retained range tabs
+    expect(await screen.findByText("Last 48 Hours")).toBeInTheDocument()
     expect(screen.getByText("30-Day Trend")).toBeInTheDocument()
 
     // Retained 6 performance charts

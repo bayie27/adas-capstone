@@ -443,7 +443,6 @@ function DualHealthChart({
 
 export default function SystemHealth() {
   const [activeTab, setActiveTab] = useState<"48h" | "30d">("48h")
-  const [techDetailsOpen, setTechDetailsOpen] = useState(false)
 
   const liveQuery = useQuery({
     queryKey: ["system-health-live"],
@@ -550,153 +549,119 @@ export default function SystemHealth() {
         />
       </div>
 
-      {/* ── Technical details accordion ─────────────────────────────────── */}
-      <details
-        open={techDetailsOpen}
-        onToggle={(e) => setTechDetailsOpen((e.currentTarget as HTMLDetailsElement).open)}
-        className="rounded-xl border border-stroke bg-surface-1"
-      >
-        <summary className="flex cursor-pointer select-none items-center justify-between px-5 py-4 text-sm font-medium text-fg hover:bg-surface-2 rounded-xl transition-colors duration-150 [&::-webkit-details-marker]:hidden list-none">
-          <span>Advance details</span>
-          <span
-            className={cn(
-              "text-fg-muted transition-transform duration-200",
-              techDetailsOpen ? "rotate-180" : "rotate-0",
-            )}
-            aria-hidden="true"
-          >
-            ▾
-          </span>
-        </summary>
+      {/* ── History range tabs + 6 charts ──────────────────────────────── */}
+      <div className="mb-5">
+        <Tabs
+          items={RANGE_TABS}
+          value={activeTab}
+          onChange={setActiveTab}
+          variant="pill"
+          label="History range"
+        />
+      </div>
 
-        <div className="px-5 pb-5 pt-2">
-          {/* History range tabs + 6 charts */}
-          <div className="mb-5">
-            <Tabs
-              items={RANGE_TABS}
-              value={activeTab}
-              onChange={setActiveTab}
-              variant="pill"
-              label="History range"
-            />
-          </div>
+      {historyQuery.isError ? (
+        <QueryErrorBanner
+          error={historyQuery.error}
+          fallback="Historical health data unavailable."
+          onRetry={() => historyQuery.refetch()}
+        />
+      ) : null}
 
-          {historyQuery.isError ? (
-            <QueryErrorBanner
-              error={historyQuery.error}
-              fallback="Historical health data unavailable."
-              onRetry={() => historyQuery.refetch()}
-            />
-          ) : null}
-
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <AreaChartCard
-              title="CPU Utilization"
-              data={toChartData(historyData, "cpu_usage", activeTab)}
-              dataKey="value"
-              xKey="time"
-              height={260}
-              isLoading={historyQuery.isLoading}
-              allowDecimals={false}
-              yDomain={[0, 100]}
-              unit="%"
-              tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "CPU Utilization"]}
-              action={
-                live ? (
-                  <LiveReading
-                    value={live.cpu_usage}
-                    available={live.cpu_usage_available}
-                    unit="%"
-                  />
-                ) : null
-              }
-            />
-            <AreaChartCard
-              title="GPU Utilization"
-              data={toChartData(historyData, "gpu_usage", activeTab)}
-              dataKey="value"
-              xKey="time"
-              height={260}
-              isLoading={historyQuery.isLoading}
-              allowDecimals={false}
-              yDomain={[0, 100]}
-              unit="%"
-              tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "GPU Utilization"]}
-            />
-            {/*
-              Figma's fourth chart is "Core Temperature". The history points carry
-              cpu_temp_avg/peak and gpu_temp_peak — all null on Windows for CPU.
-              Wired to gpu_temp_peak and labelled GPU Temperature; recorded as a
-              design/backend mismatch rather than silently relabelled.
-            */}
-            <AreaChartCard
-              title="GPU Temperature"
-              data={toChartData(historyData, "gpu_temp_peak", activeTab)}
-              dataKey="value"
-              xKey="time"
-              height={260}
-              isLoading={historyQuery.isLoading}
-              allowDecimals={false}
-              unit="°C"
-              stroke={CHART.danger}
-              tooltipFormatter={(v) => [`${Number(v).toFixed(1)}°C`, "GPU Temperature"]}
-            />
-            <AreaChartCard
-              title="RAM Utilization"
-              data={toChartData(historyData, "ram_usage", activeTab)}
-              dataKey="value"
-              xKey="time"
-              height={260}
-              isLoading={historyQuery.isLoading}
-              allowDecimals={false}
-              yDomain={[0, 100]}
-              unit="%"
-              tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "RAM Utilization"]}
-              action={
-                live ? (
-                  <LiveReading
-                    value={live.ram_usage}
-                    available={live.ram_usage_available}
-                    unit="%"
-                  />
-                ) : null
-              }
-            />
-            {/*
-              cpu_temp_avg/peak — null on Windows for CPU, per the plan's own
-              note — and gpu_mem_pct_avg/peak were both carried by the history
-              endpoint and plotted nowhere. Two more chart cards than Figma
-              draws; no frame for these, so genuinely unavailable (Windows CPU
-              temp) renders as an honest gap rather than a fabricated flat line.
-            */}
-            <DualHealthChart
-              title="CPU Temperature"
-              data={historyData}
-              avgKey="cpu_temp_avg"
-              peakKey="cpu_temp_peak"
-              unit="°C"
-              isLoading={historyQuery.isLoading}
-              action={
-                live ? (
-                  <LiveReading
-                    value={live.cpu_temp}
-                    available={live.cpu_temp_available}
-                    unit="°C"
-                  />
-                ) : null
-              }
-            />
-            <DualHealthChart
-              title="GPU Memory"
-              data={historyData}
-              avgKey="gpu_mem_pct_avg"
-              peakKey="gpu_mem_pct_peak"
-              unit="%"
-              isLoading={historyQuery.isLoading}
-            />
-          </div>
-        </div>
-      </details>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <AreaChartCard
+          title="CPU Utilization"
+          data={toChartData(historyData, "cpu_usage", activeTab)}
+          dataKey="value"
+          xKey="time"
+          height={260}
+          isLoading={historyQuery.isLoading}
+          allowDecimals={false}
+          yDomain={[0, 100]}
+          unit="%"
+          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "CPU Utilization"]}
+          action={
+            live ? (
+              <LiveReading value={live.cpu_usage} available={live.cpu_usage_available} unit="%" />
+            ) : null
+          }
+        />
+        <AreaChartCard
+          title="GPU Utilization"
+          data={toChartData(historyData, "gpu_usage", activeTab)}
+          dataKey="value"
+          xKey="time"
+          height={260}
+          isLoading={historyQuery.isLoading}
+          allowDecimals={false}
+          yDomain={[0, 100]}
+          unit="%"
+          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "GPU Utilization"]}
+        />
+        {/*
+          Figma's fourth chart is "Core Temperature". The history points carry
+          cpu_temp_avg/peak and gpu_temp_peak — all null on Windows for CPU.
+          Wired to gpu_temp_peak and labelled GPU Temperature; recorded as a
+          design/backend mismatch rather than silently relabelled.
+        */}
+        <AreaChartCard
+          title="GPU Temperature"
+          data={toChartData(historyData, "gpu_temp_peak", activeTab)}
+          dataKey="value"
+          xKey="time"
+          height={260}
+          isLoading={historyQuery.isLoading}
+          allowDecimals={false}
+          unit="°C"
+          stroke={CHART.danger}
+          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}°C`, "GPU Temperature"]}
+        />
+        <AreaChartCard
+          title="RAM Utilization"
+          data={toChartData(historyData, "ram_usage", activeTab)}
+          dataKey="value"
+          xKey="time"
+          height={260}
+          isLoading={historyQuery.isLoading}
+          allowDecimals={false}
+          yDomain={[0, 100]}
+          unit="%"
+          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "RAM Utilization"]}
+          action={
+            live ? (
+              <LiveReading value={live.ram_usage} available={live.ram_usage_available} unit="%" />
+            ) : null
+          }
+        />
+        {/*
+          cpu_temp_avg/peak — null on Windows for CPU, per the plan's own
+          note — and gpu_mem_pct_avg/peak were both carried by the history
+          endpoint and plotted nowhere. Two more chart cards than Figma
+          draws; no frame for these, so genuinely unavailable (Windows CPU
+          temp) renders as an honest gap rather than a fabricated flat line.
+        */}
+        <DualHealthChart
+          title="CPU Temperature"
+          data={historyData}
+          avgKey="cpu_temp_avg"
+          peakKey="cpu_temp_peak"
+          unit="°C"
+          isLoading={historyQuery.isLoading}
+          action={
+            live ? (
+              <LiveReading value={live.cpu_temp} available={live.cpu_temp_available} unit="°C" />
+            ) : null
+          }
+        />
+        <DualHealthChart
+          title="GPU Memory"
+          data={historyData}
+          avgKey="gpu_mem_pct_avg"
+          peakKey="gpu_mem_pct_peak"
+          unit="%"
+          isLoading={historyQuery.isLoading}
+        />
+      </div>
     </div>
   )
 }
