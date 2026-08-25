@@ -9,7 +9,7 @@ if (detectionAudio) {
 export const playDetectionSound = () => {
   if (!detectionAudio) return
   // Browsers require user interaction before playing audio. Catching the error prevents console spam.
-  detectionAudio.play().catch((err) => {
+  detectionAudio.play()?.catch((err) => {
     console.warn("[detectionSound] Autoplay blocked or failed:", err)
   })
 }
@@ -41,7 +41,7 @@ export const previewDetectionSound = (volume: number) => {
   if (typeof Audio === "undefined") return
   const preview = new Audio("/detection_sound.mp3")
   preview.volume = Math.min(100, Math.max(0, volume)) / 100
-  preview.play().catch((err) => {
+  preview.play()?.catch((err) => {
     console.warn("[detectionSound] Preview blocked or failed:", err)
   })
 }

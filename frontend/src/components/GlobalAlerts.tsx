@@ -1,6 +1,11 @@
 import { useCallback, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { BellRing, BellOff } from "lucide-react"
+import {
+  RiArrowLeftSLine,
+  RiArrowRightSLine,
+  RiNotification2Line,
+  RiNotificationOffLine,
+} from "@remixicon/react"
 
 import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
@@ -34,6 +39,11 @@ import { cn } from "@/utils/cn"
  *
  * Standard top-right window controls (X button) are strictly omitted from this
  * modal to enforce the HITL (Human-in-the-Loop) workflow.
+ *
+ * When multiple alerts are queued, Back/Forward chevrons let the operator
+ * browse any alert freely. Navigation is unrestricted — browsing does not
+ * silence the siren; only an explicit snooze does. Actions (confirm/dismiss)
+ * apply to the currently viewed alert and stay at the nearest remaining index.
  */
 export function GlobalAlerts() {
   const queryClient = useQueryClient()
@@ -41,27 +51,56 @@ export function GlobalAlerts() {
   const snoozedUntil = useAlertStore((state) => state.snoozedUntil)
   const removeAlert = useAlertStore((state) => state.removeAlert)
   const activateSnooze = useAlertStore((state) => state.activateSnooze)
+  const clearSnooze = useAlertStore((state) => state.clearSnooze)
   const username = useAuthStore((state) => state.username)
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<IncidentHandledInfo | null>(null)
 
-  // Snoozed incidents (FR-07) mute the alarm modal for that incident until
-  // the shared deadline expires or a RE_ALARM event reactivates it.
-  const activeAlerts = alerts.filter((a) => !isSnoozedNow(a.log_id, snoozedUntil))
-  const alert = activeAlerts[0]
+  // ── Navigation index & transition direction ──────────────────────────────
+  // Clamped on every render, so it self-corrects when an alert is removed.
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [slideDirection, setSlideDirection] = useState<"next" | "prev" | "fade">("fade")
 
   const noop = useCallback(() => {}, [])
 
-  if (!alert) return null
+  if (!alerts.length) return null
+
+  // Clamp to valid range every render — handles the case where the last alert
+  // in the list is confirmed/dismissed while the operator is viewing it.
+  const clampedIndex = Math.min(selectedIndex, alerts.length - 1)
+  const alert = alerts[clampedIndex]
 
   const busy = loadingId === alert.log_id
   const isUnverified = alert.detection_status === "Unverified"
   const isOngoing = alert.detection_status === "Ongoing"
   const hasAuditTrail = Boolean(alert.verified_by_name || alert.verified_at)
+  const isSnoozed = isSnoozedNow(alert.log_id, snoozedUntil)
+
+  const hasMultiple = alerts.length > 1
+  const isFirst = clampedIndex === 0
+  const isLast = clampedIndex === alerts.length - 1
+
+  function navigate(direction: -1 | 1) {
+    const next = clampedIndex + direction
+    if (next < 0 || next >= alerts.length) return
+    setSlideDirection(direction === 1 ? "next" : "prev")
+    setSelectedIndex(next)
+    // Clear stale feedback when the operator navigates away.
+    setError(null)
+    setConflict(null)
+  }
 
   function invalidateAlerts() {
     queryClient.invalidateQueries({ queryKey: ["alerts"] })
+  }
+
+  function handleSnoozeToggle() {
+    if (isSnoozed) {
+      clearSnooze(alert.log_id)
+    } else {
+      void handleSnooze()
+    }
   }
 
   async function runAction(action: (logId: number) => Promise<unknown>, failure: string) {
@@ -72,6 +111,16 @@ export function GlobalAlerts() {
     try {
       await action(logId)
       removeAlert(logId)
+      setSlideDirection("fade")
+      // Stay at the same position; if the tail was removed, clampedIndex will
+      // naturally back up to the new last element on the next render. We only
+      // need to explicitly correct when the raw selectedIndex now overshoots.
+      const newLength = alerts.length - 1
+      if (newLength > 0 && selectedIndex >= newLength) {
+        setSelectedIndex(newLength - 1)
+      } else {
+        setSelectedIndex(clampedIndex)
+      }
       invalidateAlerts()
     } catch (err) {
       // A lost race is not a failure to retry — a colleague already decided.
@@ -127,178 +176,251 @@ export function GlobalAlerts() {
   }
 
   return (
-    <Modal
-      isOpen
-      onClose={noop}
-      hideClose
-      closeOnBackdrop={false}
-      role="alertdialog"
-      ariaLabel={isOngoing ? "Ongoing accident" : "Accident detected"}
-      // Above every other overlay: an alert firing while an operator has an
-      // incident modal open must land on top of it, not behind it.
-      overlayClassName="z-9999"
-      backdropClassName="bg-backdrop-alert"
-      className="max-w-md overflow-hidden p-0"
-    >
-      <div className="-mx-6 -mb-6">
-        {/* ── Section 1: Header ─────────────────────────────────────────────
-            Edge-to-edge solid background header enforcing urgency. */}
-        <div className="w-full bg-danger px-6 py-4">
-          <h2 className="text-center text-2xl font-bold uppercase tracking-widest text-black">
-            Accident Detected
-          </h2>
-          {activeAlerts.length > 1 && (
-            <p className="mt-1 text-center text-xs font-medium text-black/70">
-              +{activeAlerts.length - 1} more alert
-              {activeAlerts.length > 2 ? "s" : ""} queued
-            </p>
+    <>
+      {/* ── Fixed navigation chrome — only rendered when multiple alerts are queued.
+          Lives OUTSIDE the Modal so it sits on top of the backdrop and the
+          modal content, flush with the viewport edges. z-[10000] clears the
+          modal overlay's z-9999. */}
+      {hasMultiple && (
+        <>
+          {/* ── Far-left Back arrow ── */}
+          <button
+            type="button"
+            aria-label="Previous alert"
+            disabled={isFirst}
+            onClick={() => navigate(-1)}
+            className={cn(
+              "fixed left-6 top-1/2 z-[10000] -translate-y-1/2",
+              "flex h-16 w-16 items-center justify-center rounded-full border border-white/20",
+              "bg-black/75 text-white shadow-2xl backdrop-blur-md transition-all",
+              isFirst
+                ? "cursor-not-allowed opacity-20"
+                : "opacity-90 hover:scale-110 hover:bg-black/90 hover:opacity-100 active:scale-95",
+            )}
+          >
+            <RiArrowLeftSLine size={40} aria-hidden />
+          </button>
+
+          {/* ── Far-right Next arrow ── */}
+          <button
+            type="button"
+            aria-label="Next alert"
+            disabled={isLast}
+            onClick={() => navigate(1)}
+            className={cn(
+              "fixed right-6 top-1/2 z-[10000] -translate-y-1/2",
+              "flex h-16 w-16 items-center justify-center rounded-full border border-white/20",
+              "bg-black/75 text-white shadow-2xl backdrop-blur-md transition-all",
+              isLast
+                ? "cursor-not-allowed opacity-20"
+                : "opacity-90 hover:scale-110 hover:bg-black/90 hover:opacity-100 active:scale-95",
+            )}
+          >
+            <RiArrowRightSLine size={40} aria-hidden />
+          </button>
+
+          {/* ── Alert N of M pill badge — centered at bottom of viewport ── */}
+          <div
+            key={`counter-${clampedIndex}`}
+            aria-live="polite"
+            aria-atomic="true"
+            className={cn(
+              "fixed bottom-8 left-1/2 z-[10000] -translate-x-1/2",
+              "flex items-center gap-2 rounded-full border border-white/20",
+              "bg-black/80 px-6 py-2.5 backdrop-blur-md shadow-2xl",
+              "text-sm font-bold tracking-wide tabular-nums text-white",
+              "animate-alert-fade-in",
+            )}
+          >
+            Alert {clampedIndex + 1} of {alerts.length}
+          </div>
+        </>
+      )}
+
+      <Modal
+        isOpen
+        onClose={noop}
+        hideClose
+        closeOnBackdrop={false}
+        role="alertdialog"
+        ariaLabel={isOngoing ? "Ongoing accident" : "Accident detected"}
+        // Above every other overlay: an alert firing while an operator has an
+        // incident modal open must land on top of it, not behind it.
+        overlayClassName="z-9999"
+        backdropClassName="bg-backdrop-alert"
+        className="max-w-md overflow-hidden p-0"
+      >
+        <div
+          key={alert.log_id}
+          className={cn(
+            "-mx-6 -mb-6",
+            slideDirection === "next" && "animate-alert-slide-right",
+            slideDirection === "prev" && "animate-alert-slide-left",
+            slideDirection === "fade" && "animate-alert-fade-in",
           )}
-        </div>
-
-        {/* ── Core Telemetry Section Wrapper ──────────────────────────────
-            Relative positioning anchors the absolutely positioned Snooze button. */}
-        <div className="relative">
-          {/* Snooze Button placed top right in the telemetry section. */}
-          {isUnverified ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-4 top-4 z-10 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
-              title="Snooze Alarm"
-              disabled={busy}
-              onClick={handleSnooze}
-            >
-              {isSnoozedNow(alert.log_id, snoozedUntil) ? (
-                <BellOff size={20} />
-              ) : (
-                <BellRing size={20} />
-              )}
-            </Button>
-          ) : null}
-
-          {/* ── Section 2a: Snapshot image ────────────────────────────────── */}
-          <div className="flex min-h-[220px] items-center justify-center bg-surface-3 p-6">
-            <SnapshotImage
-              snapshotUrl={alert.snapshot_url}
-              alt={`Accident snapshot for log ${alert.log_id}`}
-              className="max-h-52 w-auto rounded border-2 border-stroke object-contain"
-              fallbackClassName="h-40 w-full rounded"
-            />
+        >
+          {/* ── Section 1: Header ─────────────────────────────────────────────
+              Edge-to-edge solid background header enforcing urgency.
+              Navigation chrome (arrows + breadcrumb) is rendered outside the
+              modal as fixed-position overlays — the header is always a plain
+              centered title regardless of queue length. */}
+          <div className="w-full bg-danger px-6 py-4">
+            <h2 className="text-center text-2xl font-bold uppercase tracking-widest text-black">
+              Accident Detected
+            </h2>
           </div>
 
-          {/* ── Section 3: Core Telemetry ─────────────────────────────────── */}
-          <div className="space-y-3 bg-surface-1 px-6 py-4">
-            <div className="flex items-start justify-between">
-              <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                Timestamp
-              </span>
-              <span className="text-right text-sm tabular-nums text-fg">
-                {formatFullDateTime(alert.detected_at)}
-              </span>
+          {/* ── Core Telemetry Section Wrapper ──────────────────────────────
+              Relative positioning anchors the absolutely positioned Snooze button. */}
+          <div className="relative">
+            {/* Snooze/Unmute Button placed top right in the telemetry section. */}
+            {isUnverified ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "absolute right-4 top-4 z-10 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg",
+                  isSnoozed && "text-warning hover:text-warning",
+                )}
+                title={isSnoozed ? "Unmute Alarm" : "Snooze Alarm"}
+                aria-label={isSnoozed ? "Unmute alarm" : "Snooze alarm"}
+                disabled={busy}
+                onClick={handleSnoozeToggle}
+              >
+                {isSnoozed ? (
+                  <RiNotificationOffLine size={20} />
+                ) : (
+                  <RiNotification2Line size={20} />
+                )}
+              </Button>
+            ) : null}
+
+            {/* ── Section 2a: Snapshot image ────────────────────────────────── */}
+            <div className="flex min-h-[220px] items-center justify-center bg-surface-3 p-6">
+              <SnapshotImage
+                snapshotUrl={alert.snapshot_url}
+                alt={`Accident snapshot for log ${alert.log_id}`}
+                className="max-h-52 w-auto rounded border-2 border-stroke object-contain"
+                fallbackClassName="h-40 w-full rounded"
+              />
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                Camera Name
-              </span>
-              <span className="text-sm font-bold uppercase text-fg">
-                {alert.camera_name ?? `Camera ${alert.camera_id}`}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                AI-Confidence Score
-              </span>
-              {/*
+
+            {/* ── Section 3: Core Telemetry ─────────────────────────────────── */}
+            <div className="space-y-3 bg-surface-1 px-6 py-4">
+              <div className="flex items-start justify-between">
+                <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                  Timestamp
+                </span>
+                <span className="text-right text-sm tabular-nums text-fg">
+                  {formatFullDateTime(alert.detected_at)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                  Camera Name
+                </span>
+                <span className="text-sm font-bold uppercase text-fg">
+                  {alert.camera_name ?? `Camera ${alert.camera_id}`}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                  AI-Confidence Score
+                </span>
+                {/*
                 Red when the AI confidence is below 75 % — a low score means the
                 detection is less certain and warrants closer operator scrutiny.
                 Green (success) at 75 % and above signals a high-confidence event.
               */}
-              <span
-                className={cn(
-                  "text-sm font-bold",
-                  alert.confidence_score * 100 < 75 ? "text-danger" : "text-success",
-                )}
-              >
-                {formatAlertConfidence(alert.confidence_score)}
-              </span>
-            </div>
+                <span
+                  className={cn(
+                    "text-sm font-bold",
+                    alert.confidence_score * 100 < 75 ? "text-danger" : "text-success",
+                  )}
+                >
+                  {formatAlertConfidence(alert.confidence_score)}
+                </span>
+              </div>
 
-            {/* ── Section 4: Audit Trail ──────────────────────────────────────
+              {/* ── Section 4: Audit Trail ──────────────────────────────────────
                 Only rendered when a verification record is present. For fresh
                 Unverified incidents both fields are null, so this section stays
                 hidden until an operator has confirmed the incident. */}
-            {hasAuditTrail && (
-              <>
-                <hr className="my-[14px] border-border" />
-                <div className="mt-2 grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                      Verified By
-                    </p>
-                    <p className="mt-1 text-sm text-fg">{alert.verified_by_name ?? "—"}</p>
+              {hasAuditTrail && (
+                <>
+                  <hr className="my-[14px] border-border" />
+                  <div className="mt-2 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                        Verified By
+                      </p>
+                      <p className="mt-1 text-sm text-fg">{alert.verified_by_name ?? "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
+                        Time Verified
+                      </p>
+                      <p className="mt-1 text-sm text-fg">
+                        {formatFullDateTime(alert.verified_at)}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                      Time Verified
-                    </p>
-                    <p className="mt-1 text-sm text-fg">{formatFullDateTime(alert.verified_at)}</p>
-                  </div>
-                </div>
-              </>
-            )}
+                </>
+              )}
+            </div>
+
+            {conflict ? (
+              <div className="bg-surface-1 px-6 pb-1 pt-1">
+                <IncidentHandledNotice info={conflict} />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mb-3 w-full"
+                  onClick={() => {
+                    setConflict(null)
+                    removeAlert(alert.log_id)
+                  }}
+                >
+                  Dismiss this notice
+                </Button>
+              </div>
+            ) : null}
+
+            {error ? (
+              <div className="bg-surface-1 px-6 pb-3">
+                <p className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
+                  {error}
+                </p>
+              </div>
+            ) : null}
           </div>
 
-          {conflict ? (
-            <div className="bg-surface-1 px-6 pb-1 pt-1">
-              <IncidentHandledNotice info={conflict} />
-              <Button
-                variant="outline"
-                size="sm"
-                className="mb-3 w-full"
-                onClick={() => {
-                  setConflict(null)
-                  removeAlert(alert.log_id)
-                }}
-              >
-                Dismiss this notice
-              </Button>
-            </div>
-          ) : null}
-
-          {error ? (
-            <div className="bg-surface-1 px-6 pb-3">
-              <p className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
-                {error}
-              </p>
-            </div>
-          ) : null}
-        </div>
-
-        {/* ── Section 5: Footer Action Buttons ──────────────────────────────
+          {/* ── Section 5: Footer Action Buttons ──────────────────────────────
             Full-width flex row with equal-width buttons (flex-1). All onClick
             handlers and disabled logic are unchanged from the original. */}
-        <div className="flex w-full gap-4 border-t border-stroke bg-surface-1 p-4">
-          <Button
-            variant="secondary"
-            className="flex-1 rounded-md bg-surface-3 py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
-            disabled={busy}
-            onClick={() => runAction(dismissAlert, "Failed to dismiss alert.")}
-          >
-            {busy ? "…" : "Dismiss Accident"}
-          </Button>
-          <Button
-            className="flex-1 rounded-md bg-primary py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
-            disabled={busy}
-            onClick={() =>
-              isUnverified
-                ? runAction(confirmAlert, "Failed to confirm alert.")
-                : runAction(resolveAlert, "Failed to resolve alert.")
-            }
-          >
-            {busy ? "…" : isUnverified ? "Confirm Accident" : "Resolve Accident"}
-          </Button>
+          <div className="flex w-full gap-4 border-t border-stroke bg-surface-1 p-4">
+            <Button
+              variant="secondary"
+              className="flex-1 rounded-md bg-surface-3 py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
+              disabled={busy}
+              onClick={() => runAction(dismissAlert, "Failed to dismiss alert.")}
+            >
+              {busy ? "…" : "Dismiss Accident"}
+            </Button>
+            <Button
+              className="flex-1 rounded-md bg-primary py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
+              disabled={busy}
+              onClick={() =>
+                isUnverified
+                  ? runAction(confirmAlert, "Failed to confirm alert.")
+                  : runAction(resolveAlert, "Failed to resolve alert.")
+              }
+            >
+              {busy ? "…" : isUnverified ? "Confirm Accident" : "Resolve Accident"}
+            </Button>
+          </div>
         </div>
-      </div>
-    </Modal>
+      </Modal>
+    </>
   )
 }
