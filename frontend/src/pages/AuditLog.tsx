@@ -285,6 +285,7 @@ export default function AuditLog() {
           <FilterSelect
             value={action}
             options={actionOptions}
+            enableSearch
             onChange={(value) => {
               reset()
               setAction(value)

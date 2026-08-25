@@ -79,7 +79,7 @@ export function FilterSelect<T extends string>({
               <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search..." />
             </div>
           )}
-          <ul className="max-h-[300px] overflow-y-auto py-1 m-0 list-none">
+          <ul className="custom-scrollbar max-h-[300px] overflow-y-auto py-1 m-0 list-none">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option) => (
                 <li
