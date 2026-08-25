@@ -11,7 +11,6 @@ import { getBackups, getLatestRestore, triggerBackup, type BackupRead } from "@/
 import { getApiError, getApiErrorMessage } from "@/api/client"
 import { Badge } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
-import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import {
   Table,
@@ -185,7 +184,6 @@ function BackupRow({
 export default function Maintenance() {
   const queryClient = useQueryClient()
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [notice, setNotice] = useState<NoticeState | null>(null)
   const [restoreTargetId, setRestoreTargetId] = useState<string | null>(null)
 
   /**
@@ -225,7 +223,6 @@ export default function Maintenance() {
         ).map((b) => b.backup_id),
       )
       toast.info("Database backup started in the background.")
-      setNotice({ tone: "warning", message: "Backup started. Please wait…" })
       window.setTimeout(async () => {
         const result = await queryClient.fetchQuery({
           queryKey: BACKUPS_QUERY_KEY,
@@ -235,20 +232,9 @@ export default function Maintenance() {
         const hasNew = result.items.some((b) => !preBackupIdsRef.current.has(b.backup_id))
         if (hasNew) {
           toast.success("Database backup created successfully.")
+        } else {
+          toast.info("Backup is still processing in the background.")
         }
-        setNotice(
-          hasNew
-            ? {
-                tone: "success",
-                message: "Backup complete. The new backup is now available in the list.",
-              }
-            : {
-                tone: "warning",
-                message:
-                  "Backup started. It is still running in the background — click Refresh to check when it's ready.",
-              },
-        )
-        window.setTimeout(() => setNotice(null), 5000)
       }, 4000)
     },
     onError: (error) => {
@@ -257,10 +243,6 @@ export default function Maintenance() {
         ? "A backup or restore is already running."
         : getApiErrorMessage(error, "Unable to start a backup.")
       toast.error(message)
-      setNotice({
-        tone: "error",
-        message,
-      })
     },
   })
 
@@ -290,7 +272,6 @@ export default function Maintenance() {
             isLoading={triggerMutation.isPending}
             loadingLabel="Starting…"
             onClick={() => {
-              setNotice(null)
               triggerMutation.mutate()
             }}
           >
@@ -298,8 +279,6 @@ export default function Maintenance() {
           </Button>
         </div>
       </div>
-
-      {notice ? <NoticeBanner notice={notice} /> : null}
 
       {backupsQuery.isError ? (
         <QueryErrorBanner
@@ -432,10 +411,6 @@ export default function Maintenance() {
           onSuccess={() => {
             const message = `Restore requested for backup ${restoreTargetId}.`
             toast.success(message)
-            setNotice({
-              tone: "success",
-              message: `Restore requested for backup ${restoreTargetId}. Nothing happens automatically — stop services and run the offline restore procedure to complete it.`,
-            })
             setRestoreTargetId(null)
             queryClient.invalidateQueries({ queryKey: LATEST_RESTORE_QUERY_KEY })
           }}

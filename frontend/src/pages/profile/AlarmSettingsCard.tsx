@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { Input } from "@/components/ui/Input"
-import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { getAlarmSettings, updateAlarmSettings } from "@/api/settings"
 import type { AlarmSettings } from "@/api/settings"
@@ -35,7 +34,6 @@ function formatSoundLabel(key: string): string {
 export function AlarmSettingsCard() {
   const queryClient = useQueryClient()
   const [form, setForm] = useState<AlarmSettings | null>(null)
-  const [notice, setNotice] = useState<NoticeState | null>(null)
 
   const settingsQuery = useQuery({
     queryKey: ALARM_SETTINGS_QUERY_KEY,
@@ -61,7 +59,6 @@ export function AlarmSettingsCard() {
       setForm(updated)
       setDetectionSoundVolume(updated.volume)
       toast.success("Alarm settings saved.")
-      setNotice({ tone: "success", message: "Alarm settings saved." })
     },
     onError: (error) => {
       const message = getApiErrorMessage(error, "Unable to save alarm settings.")
@@ -70,7 +67,6 @@ export function AlarmSettingsCard() {
   })
 
   function updateField<K extends keyof AlarmSettings>(field: K, value: AlarmSettings[K]) {
-    setNotice(null)
     mutation.reset()
     setForm((current) => (current ? { ...current, [field]: value } : current))
   }
@@ -88,7 +84,7 @@ export function AlarmSettingsCard() {
       form.snooze_duration === settingsQuery.data.snooze_duration
 
     if (unchanged) {
-      setNotice({ tone: "success", message: "No changes to save." })
+      toast.info("No changes to save.")
       return
     }
 
@@ -192,7 +188,6 @@ export function AlarmSettingsCard() {
             hint={`Must be between ${form.options.snooze_min_seconds} and ${form.options.snooze_max_seconds} seconds.`}
           />
 
-          {notice ? <NoticeBanner notice={notice} /> : null}
           {errorMessage ? <p className="text-caption text-danger">{errorMessage}</p> : null}
 
           <Button type="submit" isLoading={mutation.isPending} loadingLabel="Saving…">
