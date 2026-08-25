@@ -2,7 +2,6 @@ import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { RiEditBoxLine, RiLockPasswordLine } from "@remixicon/react"
 
-import { Card } from "@/components/ui/Card"
 import { Badge, BadgeDot } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
@@ -46,8 +45,8 @@ export default function ProfileSettings() {
   )
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6 sm:p-8">
-      <div>
+    <div className="mx-auto max-w-4xl p-6 sm:p-8">
+      <div className="mb-8">
         <h1 className="mb-0.5 text-xl font-semibold text-fg">Profile</h1>
         <p className="text-secondary text-fg-muted">
           Manage your personal information and system preferences.
@@ -55,7 +54,7 @@ export default function ProfileSettings() {
       </div>
 
       {profileQuery.isLoading ? (
-        <Card className="p-12 text-center text-secondary text-fg-muted">Loading profile...</Card>
+        <div className="py-12 text-center text-secondary text-fg-muted">Loading profile...</div>
       ) : profileQuery.isError ? (
         <QueryErrorBanner
           error={profileQuery.error}
@@ -63,9 +62,9 @@ export default function ProfileSettings() {
           onRetry={() => profileQuery.refetch()}
         />
       ) : profile ? (
-        <>
-          {/* Card 1: Avatar & Identity Header */}
-          <Card className="flex flex-col items-start justify-between gap-6 p-6 sm:flex-row sm:items-center sm:p-8">
+        <div className="divide-y divide-stroke">
+          {/* Section 1: Avatar & Identity Header */}
+          <div className="flex flex-col items-start justify-between gap-6 pb-8 sm:flex-row sm:items-center">
             <div className="flex items-center gap-5 sm:gap-6">
               <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-h2 font-semibold text-fg shadow-inner sm:h-24 sm:w-24">
                 {initials}
@@ -87,10 +86,10 @@ export default function ProfileSettings() {
               <span>Edit</span>
               <RiEditBoxLine size={16} className="text-fg-muted" />
             </button>
-          </Card>
+          </div>
 
-          {/* Card 2: Personal Information */}
-          <Card className="p-6 sm:p-8">
+          {/* Section 2: Personal Information */}
+          <div className="py-8">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-fg sm:text-lg">Personal Information</h3>
               <button
@@ -157,10 +156,10 @@ export default function ProfileSettings() {
                 </div>
               ) : null}
             </div>
-          </Card>
+          </div>
 
-          {/* Card 3: Security & Credentials */}
-          <Card className="flex flex-col items-start justify-between gap-4 p-6 sm:flex-row sm:items-center sm:p-8">
+          {/* Section 3: Security & Credentials */}
+          <div className="flex flex-col items-start justify-between gap-4 py-8 sm:flex-row sm:items-center">
             <div className="space-y-1">
               <h3 className="text-base font-semibold text-fg sm:text-lg">Security & Password</h3>
               <p className="text-secondary text-fg-muted">
@@ -178,11 +177,11 @@ export default function ProfileSettings() {
               <RiLockPasswordLine size={16} />
               <span>Change Password</span>
             </Button>
-          </Card>
+          </div>
 
-          {/* Card 4: Alarm Settings */}
-          <div>
-            <AlarmSettingsCard />
+          {/* Section 4: Alarm Settings */}
+          <div className="pt-8">
+            <AlarmSettingsCard className="border-0 bg-transparent p-0 shadow-none" />
           </div>
 
           {/* Modals */}
@@ -199,7 +198,7 @@ export default function ProfileSettings() {
               }}
             />
           )}
-        </>
+        </div>
       ) : null}
     </div>
   )
