@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { BellRing, BellOff } from "lucide-react"
+import { RiNotification2Line, RiNotificationOffLine } from "@remixicon/react"
 
 import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
@@ -169,9 +169,9 @@ export function GlobalAlerts() {
               onClick={handleSnooze}
             >
               {isSnoozedNow(alert.log_id, snoozedUntil) ? (
-                <BellOff size={20} />
+                <RiNotificationOffLine size={20} />
               ) : (
-                <BellRing size={20} />
+                <RiNotification2Line size={20} />
               )}
             </Button>
           ) : null}
