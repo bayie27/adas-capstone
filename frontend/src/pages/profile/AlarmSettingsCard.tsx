@@ -11,6 +11,7 @@ import { getAlarmSettings, updateAlarmSettings } from "@/api/settings"
 import type { AlarmSettings } from "@/api/settings"
 import { getApiErrorMessage } from "@/api/client"
 import { previewDetectionSound, setDetectionSoundVolume } from "@/utils/detectionSound"
+import { toast } from "@/store/useToastStore"
 
 const ALARM_SETTINGS_QUERY_KEY = ["alarm-settings"] as const
 
@@ -59,7 +60,12 @@ export function AlarmSettingsCard() {
       queryClient.setQueryData(ALARM_SETTINGS_QUERY_KEY, updated)
       setForm(updated)
       setDetectionSoundVolume(updated.volume)
+      toast.success("Alarm settings saved.")
       setNotice({ tone: "success", message: "Alarm settings saved." })
+    },
+    onError: (error) => {
+      const message = getApiErrorMessage(error, "Unable to save alarm settings.")
+      toast.error(message)
     },
   })
 
