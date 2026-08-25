@@ -8,7 +8,7 @@ rows reviewable and diffable in the repo.
 
 Rows marked **unsynced** have not been copied into the sheet by anyone yet.
 
-7 finding(s), 7 unsynced.
+8 finding(s), 8 unsynced.
 
 | Section / Chapter | Page Number | Required Revision | Notes | Status | Assigned to | Synced | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -19,3 +19,4 @@ Rows marked **unsynced** have not been copied into the sheet by anyone yet.
 | Scalability and Performance Considerations | unconfirmed | Correct AI engine FPS and capacity behavior | Capacity is inference-only; runtime inference FPS drives warnings | Not started | Daniboy | no | [2026-08-19-runtime-fps-scalability.md](findings/2026-08-19-runtime-fps-scalability.md) |
 | Table 26, TC-AI-402 | unconfirmed | Correct AI engine FPS and capacity behavior | Capacity is standalone; runtime inference FPS drives warnings | Not started | Daniboy | no | [2026-08-19-runtime-fps-tc-ai-402.md](findings/2026-08-19-runtime-fps-tc-ai-402.md) |
 | Table 17, TC-U-301 | unconfirmed | Correct AI engine FPS and capacity behavior | Capacity is standalone; runtime inference FPS drives warnings | Not started | Daniboy | no | [2026-08-19-runtime-fps-tc-u-301.md](findings/2026-08-19-runtime-fps-tc-u-301.md) |
+| Data Flow Diagram (DFD), Figures 5-6 | 99 | Replace the current DFD narrative and Figures 5-6 with the new logical DFD | Two new editable Lucidchart documents: Context Level (0) and Level 1. Supersedes the DFD portions of tracker items 0.11, 2.1, and 2.4 where applicable. | Not started | Enjey, Daniboy | no | [2026-08-23-logical-dfd-overhaul.md](findings/2026-08-23-logical-dfd-overhaul.md) |
