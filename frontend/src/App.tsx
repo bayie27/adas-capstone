@@ -10,6 +10,7 @@ import { RealtimeAlertsBridge } from "@/components/RealtimeAlertsBridge"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { DevPanelTrigger } from "@/components/dev/DevPanelTrigger"
 import { ExportJobsTray } from "@/components/exports/ExportJobsTray"
+import { ToastContainer } from "@/components/ui/ToastContainer"
 import { useDeliveryBacklog } from "@/hooks/useDeliveryBacklog"
 
 const Login = lazy(() => import("@/pages/Login"))
@@ -50,6 +51,7 @@ function App() {
       {deliveryBacklog ? <DeliveryBacklogNotice {...deliveryBacklog} /> : null}
       <DevPanelTrigger />
       <ExportJobsTray />
+      <ToastContainer />
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
