@@ -57,9 +57,10 @@ export function GlobalAlerts() {
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<IncidentHandledInfo | null>(null)
 
-  // ── Navigation index ───────────────────────────────────────────────────────
+  // ── Navigation index & transition direction ──────────────────────────────
   // Clamped on every render, so it self-corrects when an alert is removed.
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [slideDirection, setSlideDirection] = useState<"next" | "prev" | "fade">("fade")
 
   const noop = useCallback(() => {}, [])
 
@@ -83,6 +84,7 @@ export function GlobalAlerts() {
   function navigate(direction: -1 | 1) {
     const next = clampedIndex + direction
     if (next < 0 || next >= alerts.length) return
+    setSlideDirection(direction === 1 ? "next" : "prev")
     setSelectedIndex(next)
     // Clear stale feedback when the operator navigates away.
     setError(null)
@@ -109,6 +111,7 @@ export function GlobalAlerts() {
     try {
       await action(logId)
       removeAlert(logId)
+      setSlideDirection("fade")
       // Stay at the same position; if the tail was removed, clampedIndex will
       // naturally back up to the new last element on the next render. We only
       // need to explicitly correct when the raw selectedIndex now overshoots.
@@ -218,6 +221,7 @@ export function GlobalAlerts() {
 
           {/* ── Alert N of M pill badge — centered at bottom of viewport ── */}
           <div
+            key={`counter-${clampedIndex}`}
             aria-live="polite"
             aria-atomic="true"
             className={cn(
@@ -225,6 +229,7 @@ export function GlobalAlerts() {
               "flex items-center gap-2 rounded-full border border-white/20",
               "bg-black/80 px-6 py-2.5 backdrop-blur-md shadow-2xl",
               "text-sm font-bold tracking-wide tabular-nums text-white",
+              "animate-alert-fade-in",
             )}
           >
             Alert {clampedIndex + 1} of {alerts.length}
@@ -245,7 +250,15 @@ export function GlobalAlerts() {
         backdropClassName="bg-backdrop-alert"
         className="max-w-md overflow-hidden p-0"
       >
-        <div className="-mx-6 -mb-6">
+        <div
+          key={alert.log_id}
+          className={cn(
+            "-mx-6 -mb-6",
+            slideDirection === "next" && "animate-alert-slide-right",
+            slideDirection === "prev" && "animate-alert-slide-left",
+            slideDirection === "fade" && "animate-alert-fade-in",
+          )}
+        >
           {/* ── Section 1: Header ─────────────────────────────────────────────
               Edge-to-edge solid background header enforcing urgency.
               Navigation chrome (arrows + breadcrumb) is rendered outside the

@@ -133,3 +133,49 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: var(--color-fg-muted);
 }
+
+/* --- Modal switch animations --- */
+@keyframes alertSlideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes alertSlideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes alertFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-alert-slide-right {
+  animation: alertSlideInRight 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-alert-slide-left {
+  animation: alertSlideInLeft 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-alert-fade-in {
+  animation: alertFadeIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
