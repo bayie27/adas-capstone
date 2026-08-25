@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { RiUserLine } from "@remixicon/react"
+import { RiUser3Line } from "@remixicon/react"
 
 import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
@@ -105,8 +105,8 @@ export function EditProfileModal({ profile, onClose }: EditProfileModalProps) {
       title="Edit Personal Information"
       subtitle="Update your personal account details."
       icon={
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-strong bg-transparent">
-          <RiUserLine size={20} className="text-fg" />
+        <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
+          <RiUser3Line size={28} className="text-fg" />
         </div>
       }
     >
