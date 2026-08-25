@@ -1,7 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
@@ -12,6 +11,7 @@ import { getApiErrorMessage } from "@/api/client"
 import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/format"
 import { ChangePasswordModal } from "@/pages/profile/ChangePasswordModal"
 import { AlarmSettingsCard } from "@/pages/profile/AlarmSettingsCard"
+import { toast } from "@/store/useToastStore"
 
 const PROFILE_QUERY_KEY = ["my-profile"] as const
 
@@ -38,7 +38,6 @@ export default function ProfileSettings() {
   const setSession = useAuthStore((state) => state.setSession)
   const clearSession = useAuthStore((state) => state.clearSession)
   const [profileForm, setProfileForm] = useState<ProfileFormState>(EMPTY_PROFILE_FORM)
-  const [profileNotice, setProfileNotice] = useState<NoticeState | null>(null)
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
   const [hasHydratedProfileForm, setHasHydratedProfileForm] = useState(false)
 
@@ -69,6 +68,7 @@ export default function ProfileSettings() {
       const usernameChanged = username !== null && updatedProfile.username !== username
 
       if (usernameChanged) {
+        toast.info("Username updated. Please sign in again.")
         clearSession()
         navigate("/login", {
           replace: true,
@@ -83,7 +83,10 @@ export default function ProfileSettings() {
         setSession(role, updatedProfile.username, userId ?? updatedProfile.user_id)
       }
 
-      setProfileNotice({ tone: "success", message: "Profile updated successfully." })
+      toast.success("Profile updated successfully.")
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Unable to update your profile."))
     },
   })
 
@@ -120,17 +123,12 @@ export default function ProfileSettings() {
       return
     }
 
-    setProfileNotice(null)
-
     const nextFirstName = profileForm.first_name.trim()
     const nextLastName = profileForm.last_name.trim()
     const nextUsername = profileForm.username.trim()
 
     if (!nextFirstName || !nextLastName || !nextUsername) {
-      setProfileNotice({
-        tone: "error",
-        message: "First name, last name, and username are required.",
-      })
+      toast.error("First name, last name, and username are required.")
       return
     }
 
@@ -140,7 +138,7 @@ export default function ProfileSettings() {
     if (nextUsername !== profile.username) payload.username = nextUsername
 
     if (Object.keys(payload).length === 0) {
-      setProfileNotice({ tone: "error", message: "No profile changes to save." })
+      toast.info("No profile changes to save.")
       return
     }
 
@@ -185,7 +183,6 @@ export default function ProfileSettings() {
                 type="text"
                 value={profileForm.first_name}
                 onChange={(event) => {
-                  setProfileNotice(null)
                   setProfileForm((current) => ({ ...current, first_name: event.target.value }))
                 }}
               />
@@ -194,7 +191,6 @@ export default function ProfileSettings() {
                 type="text"
                 value={profileForm.last_name}
                 onChange={(event) => {
-                  setProfileNotice(null)
                   setProfileForm((current) => ({ ...current, last_name: event.target.value }))
                 }}
               />
@@ -203,24 +199,9 @@ export default function ProfileSettings() {
                 type="text"
                 value={profileForm.username}
                 onChange={(event) => {
-                  setProfileNotice(null)
                   setProfileForm((current) => ({ ...current, username: event.target.value }))
                 }}
               />
-
-              {profileNotice ? <NoticeBanner notice={profileNotice} /> : null}
-
-              {updateProfileMutation.isError ? (
-                <NoticeBanner
-                  notice={{
-                    tone: "error",
-                    message: getApiErrorMessage(
-                      updateProfileMutation.error,
-                      "Unable to update your profile.",
-                    ),
-                  }}
-                />
-              ) : null}
 
               <div className="flex flex-wrap gap-3">
                 <Button
@@ -248,7 +229,7 @@ export default function ProfileSettings() {
         <ChangePasswordModal
           onClose={() => setModal({ kind: "closed" })}
           onSuccess={() => {
-            setProfileNotice({ tone: "success", message: "Password updated successfully." })
+            toast.success("Password updated successfully.")
             setModal({ kind: "closed" })
           }}
         />

@@ -11,7 +11,6 @@ import { getBackups, getLatestRestore, triggerBackup, type BackupRead } from "@/
 import { getApiError, getApiErrorMessage } from "@/api/client"
 import { Badge } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
-import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import {
   Table,
@@ -26,6 +25,7 @@ import {
 import { RestoreConfirmModal } from "@/pages/maintenance/RestoreConfirmModal"
 import { formatFullDateTime } from "@/utils/datetime"
 import { formatFileSize } from "@/utils/format"
+import { toast } from "@/store/useToastStore"
 
 const BACKUPS_QUERY_KEY = ["system-backups"] as const
 const LATEST_RESTORE_QUERY_KEY = ["latest-restore"] as const
@@ -184,7 +184,6 @@ function BackupRow({
 export default function Maintenance() {
   const queryClient = useQueryClient()
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [notice, setNotice] = useState<NoticeState | null>(null)
   const [restoreTargetId, setRestoreTargetId] = useState<string | null>(null)
 
   /**
@@ -223,7 +222,7 @@ export default function Maintenance() {
             ?.items ?? []
         ).map((b) => b.backup_id),
       )
-      setNotice({ tone: "warning", message: "Backup started. Please wait…" })
+      toast.info("Database backup started in the background.")
       window.setTimeout(async () => {
         const result = await queryClient.fetchQuery({
           queryKey: BACKUPS_QUERY_KEY,
@@ -231,29 +230,19 @@ export default function Maintenance() {
           staleTime: 0,
         })
         const hasNew = result.items.some((b) => !preBackupIdsRef.current.has(b.backup_id))
-        setNotice(
-          hasNew
-            ? {
-                tone: "success",
-                message: "Backup complete. The new backup is now available in the list.",
-              }
-            : {
-                tone: "warning",
-                message:
-                  "Backup started. It is still running in the background — click Refresh to check when it's ready.",
-              },
-        )
-        window.setTimeout(() => setNotice(null), 5000)
+        if (hasNew) {
+          toast.success("Database backup created successfully.")
+        } else {
+          toast.info("Backup is still processing in the background.")
+        }
       }, 4000)
     },
     onError: (error) => {
       const isBusy = getApiError(error)?.code === "CONFLICT_BUSY"
-      setNotice({
-        tone: "error",
-        message: isBusy
-          ? "A backup or restore is already running."
-          : getApiErrorMessage(error, "Unable to start a backup."),
-      })
+      const message = isBusy
+        ? "A backup or restore is already running."
+        : getApiErrorMessage(error, "Unable to start a backup.")
+      toast.error(message)
     },
   })
 
@@ -283,7 +272,6 @@ export default function Maintenance() {
             isLoading={triggerMutation.isPending}
             loadingLabel="Starting…"
             onClick={() => {
-              setNotice(null)
               triggerMutation.mutate()
             }}
           >
@@ -291,8 +279,6 @@ export default function Maintenance() {
           </Button>
         </div>
       </div>
-
-      {notice ? <NoticeBanner notice={notice} /> : null}
 
       {backupsQuery.isError ? (
         <QueryErrorBanner
@@ -423,10 +409,8 @@ export default function Maintenance() {
           backupId={restoreTargetId}
           onClose={() => setRestoreTargetId(null)}
           onSuccess={() => {
-            setNotice({
-              tone: "success",
-              message: `Restore requested for backup ${restoreTargetId}. Nothing happens automatically — stop services and run the offline restore procedure to complete it.`,
-            })
+            const message = `Restore requested for backup ${restoreTargetId}.`
+            toast.success(message)
             setRestoreTargetId(null)
             queryClient.invalidateQueries({ queryKey: LATEST_RESTORE_QUERY_KEY })
           }}

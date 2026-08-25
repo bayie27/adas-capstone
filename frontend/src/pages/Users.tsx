@@ -13,7 +13,6 @@ import { Button, focusRing } from "@/components/ui/Button"
 import { ClearFiltersButton } from "@/components/ui/ClearFiltersButton"
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
 import { FilterSelect } from "@/components/ui/FilterSelect"
-import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { SearchInput } from "@/components/ui/SearchInput"
 import { TableStateRow } from "@/components/ui/Table"
@@ -30,6 +29,7 @@ import { formatUserRole, getUserFullName } from "@/utils/format"
 import { AddUserModal } from "@/pages/users/AddUserModal"
 import { EditUserModal } from "@/pages/users/EditUserModal"
 import { ChangePasswordModal } from "@/pages/users/ChangePasswordModal"
+import { toast } from "@/store/useToastStore"
 
 const USERS_QUERY_KEY = ["users"] as const
 const USERS_PAGE_SIZE = 10
@@ -52,7 +52,6 @@ export default function Users() {
 
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
-  const [notice, setNotice] = useState<NoticeState | null>(null)
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
   // "active" is a sentinel for "omit the param" — GET /api/users/ already
   // defaults to active-only when is_active is absent, so this preserves
@@ -93,11 +92,9 @@ export default function Users() {
     mutationFn: deleteUser,
     onSuccess: () => {
       const deletedUser = modal.kind === "delete" ? modal.user : null
+      const message = `${deletedUser?.username ?? "User"} was removed from the active user list.`
 
-      setNotice({
-        tone: "success",
-        message: `${deletedUser?.username ?? "User"} was removed from the active user list.`,
-      })
+      toast.success(message)
 
       if (users.length === 1 && page > 1) {
         prev()
@@ -111,17 +108,13 @@ export default function Users() {
   const restoreUserMutation = useMutation({
     mutationFn: (userId: number) => restoreUser(userId),
     onSuccess: (updated) => {
-      setNotice({
-        tone: "success",
-        message: `${updated.username} was restored.`,
-      })
+      const message = `${updated.username} was restored.`
+      toast.success(message)
       queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY })
     },
     onError: (error) => {
-      setNotice({
-        tone: "error",
-        message: getApiErrorMessage(error, "Unable to restore this user."),
-      })
+      const message = getApiErrorMessage(error, "Unable to restore this user.")
+      toast.error(message)
     },
   })
 
@@ -132,14 +125,11 @@ export default function Users() {
         <p className="text-xs text-fg-muted">Manage user accounts & system access roles</p>
       </div>
 
-      {notice ? <NoticeBanner notice={notice} /> : null}
-
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2.5">
           <SearchInput
             value={searchTerm}
             onChange={(value) => {
-              setNotice(null)
               reset()
               setSearchTerm(value)
             }}
@@ -153,7 +143,6 @@ export default function Users() {
               { value: "null", label: "All" },
             ]}
             onChange={(value) => {
-              setNotice(null)
               reset()
               setActiveFilter(value)
             }}
@@ -171,7 +160,6 @@ export default function Users() {
         <Button
           size="sm"
           onClick={() => {
-            setNotice(null)
             setModal({ kind: "add" })
           }}
         >
@@ -189,25 +177,29 @@ export default function Users() {
                 <th className="px-6 py-4 text-xs font-medium">Username</th>
                 <th className="px-6 py-4 text-xs font-medium">Role</th>
                 <th className="px-6 py-4 text-xs font-medium">Last Login</th>
+                <th className="px-6 py-4 text-xs font-medium">Status</th>
                 <th className="px-6 py-4 text-right text-xs font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stroke">
               {usersQuery.isLoading ? (
-                <TableStateRow colSpan={5}>Loading users...</TableStateRow>
+                <TableStateRow colSpan={6}>
+                  <div className="py-8 text-center text-sm text-fg-muted">Loading users...</div>
+                </TableStateRow>
               ) : usersQuery.isError ? (
-                <TableStateRow colSpan={5} tone="error">
-                  {getApiErrorMessage(usersQuery.error, "Unable to load users.")}
+                <TableStateRow colSpan={6}>
+                  <div className="py-8 text-center text-sm text-danger">
+                    {getApiErrorMessage(usersQuery.error, "Unable to load users.")}
+                  </div>
                 </TableStateRow>
               ) : users.length === 0 ? (
-                <TableStateRow colSpan={5}>No users found.</TableStateRow>
+                <TableStateRow colSpan={6}>
+                  <div className="py-8 text-center text-sm text-fg-muted">No users found.</div>
+                </TableStateRow>
               ) : (
                 users.map((user) => {
                   const isRestoring =
                     restoreUserMutation.isPending && restoreUserMutation.variables === user.user_id
-                  // D-011 §2.3 — rowBusy stays per-row so a pending delete on one
-                  // row disables only that row's buttons while in flight; the
-                  // other rows are unaffected.
                   const rowBusy =
                     (deleteUserMutation.isPending &&
                       modal.kind === "delete" &&
@@ -222,20 +214,21 @@ export default function Users() {
                   return (
                     <tr
                       key={user.user_id}
-                      className="text-fg-body transition-colors hover:bg-surface-1"
+                      className={cn(
+                        "text-fg-body transition-colors hover:bg-surface-1",
+                        rowBusy ? "opacity-50" : "",
+                      )}
                     >
                       <td className="px-6 py-4 text-xs font-medium">{getUserFullName(user)}</td>
-                      <td className="px-6 py-4 text-xs">
-                        {user.username}
-                        {!user.is_active ? (
-                          <Badge variant="subtle" tone="neutral" uppercase={false} className="ml-2">
-                            Deactivated
-                          </Badge>
-                        ) : null}
-                      </td>
+                      <td className="px-6 py-4 text-xs">{user.username}</td>
                       <td className="px-6 py-4 text-xs">{formatUserRole(user.role)}</td>
                       <td className="px-6 py-4 text-xs">
                         {formatRelativeDateTime(user.last_login)}
+                      </td>
+                      <td className="px-6 py-4 text-xs">
+                        <Badge tone={user.is_active ? "success" : "danger"} variant="subtle">
+                          {user.is_active ? "Active" : "Deactivated"}
+                        </Badge>
                       </td>
                       <td className="px-6 py-4 text-right">
                         {user.is_active ? (
@@ -245,7 +238,6 @@ export default function Users() {
                               disabled={rowBusy}
                               aria-label={`Edit ${getUserFullName(user)}`}
                               onClick={() => {
-                                setNotice(null)
                                 setModal({ kind: "edit", user })
                               }}
                               className={iconButtonClass}
@@ -257,7 +249,6 @@ export default function Users() {
                               disabled={rowBusy}
                               aria-label={`Reset password for ${getUserFullName(user)}`}
                               onClick={() => {
-                                setNotice(null)
                                 setModal({ kind: "password", user })
                               }}
                               className={iconButtonClass}
@@ -269,7 +260,6 @@ export default function Users() {
                               disabled={rowBusy}
                               aria-label={`Delete ${getUserFullName(user)}`}
                               onClick={() => {
-                                setNotice(null)
                                 setModal({ kind: "delete", user })
                               }}
                               className={cn(iconButtonClass, "hover:text-danger")}
@@ -284,7 +274,6 @@ export default function Users() {
                               aria-label={`Restore ${getUserFullName(user)}`}
                               disabled={isRestoring || rowBusy}
                               onClick={() => {
-                                setNotice(null)
                                 restoreUserMutation.mutate(user.user_id)
                               }}
                               className={cn(
@@ -324,10 +313,8 @@ export default function Users() {
         <AddUserModal
           onClose={() => setModal({ kind: "closed" })}
           onSuccess={(user) => {
-            setNotice({
-              tone: "success",
-              message: `${user.username} was created successfully.`,
-            })
+            const message = `${user.username} was created successfully.`
+            toast.success(message)
             reset()
             setModal({ kind: "closed" })
             queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY })
@@ -340,10 +327,8 @@ export default function Users() {
           user={modal.user}
           onClose={() => setModal({ kind: "closed" })}
           onSuccess={(updatedUser) => {
-            setNotice({
-              tone: "success",
-              message: `${updatedUser.username} was updated successfully.`,
-            })
+            const message = `${updatedUser.username} was updated successfully.`
+            toast.success(message)
             setModal({ kind: "closed" })
             queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY })
 
@@ -382,10 +367,8 @@ export default function Users() {
           user={modal.user}
           onClose={() => setModal({ kind: "closed" })}
           onSuccess={() => {
-            setNotice({
-              tone: "success",
-              message: `Password reset for ${modal.user.username} completed successfully.`,
-            })
+            const message = `Password reset for ${modal.user.username} completed successfully.`
+            toast.success(message)
             setModal({ kind: "closed" })
             queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY })
           }}
@@ -412,7 +395,6 @@ export default function Users() {
         onClose={() => setModal({ kind: "closed" })}
         onConfirm={() => {
           if (modal.kind === "delete") {
-            setNotice(null)
             deleteUserMutation.mutate(modal.user.user_id)
           }
         }}

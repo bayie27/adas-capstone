@@ -45,11 +45,15 @@ const mockDeactivatedUser: UserRecord = {
   last_login: null,
 }
 
+import { ToastContainer } from "@/components/ui/ToastContainer"
+import { toast } from "@/store/useToastStore"
+
 function renderUsers() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
+        <ToastContainer />
         <Users />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -59,6 +63,7 @@ function renderUsers() {
 describe("Users Page Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    toast.clear()
   })
 
   it("renders edit, reset password, and delete buttons for active users", async () => {

@@ -11,6 +11,7 @@ import { describeCameraDesiredState, secondsUntil } from "@/utils/format"
 import { formatFullDateTime, secondsSince } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
 import { RiEyeLine, RiEyeOffLine, RiFileCopyLine } from "@remixicon/react"
+import { toast } from "@/store/useToastStore"
 
 // Mirrors backend/app/core/config.py's HEARTBEAT_STALE_SECONDS -- not
 // returned on CameraDetail, so declared here rather than left unstated.
@@ -83,6 +84,7 @@ function RedactedRtspRow({ value }: { value: string }) {
     try {
       await navigator.clipboard.writeText(value)
       setCopied(true)
+      toast.info("Masked stream URL copied to clipboard.")
       window.setTimeout(() => setCopied(false), 1500)
     } catch {
       // Clipboard access can be denied (permissions, insecure context) --
