@@ -34,6 +34,11 @@ import { cn } from "@/utils/cn"
  *
  * Standard top-right window controls (X button) are strictly omitted from this
  * modal to enforce the HITL (Human-in-the-Loop) workflow.
+ *
+ * When multiple alerts are queued, Back/Forward chevrons let the operator
+ * browse any alert freely. Navigation is unrestricted — browsing does not
+ * silence the siren; only an explicit snooze does. Actions (confirm/dismiss)
+ * apply to the currently viewed alert and stay at the nearest remaining index.
  */
 export function GlobalAlerts() {
   const queryClient = useQueryClient()
@@ -47,20 +52,37 @@ export function GlobalAlerts() {
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<IncidentHandledInfo | null>(null)
 
-  // The dialog displays the front of the alerts queue. Snoozing an alert
-  // mutes the siren sound via useAlertStore while keeping the modal open
-  // until confirmed, dismissed, or resolved.
-  const alert = alerts[0]
+  // ── Navigation index ───────────────────────────────────────────────────────
+  // Clamped on every render, so it self-corrects when an alert is removed.
+  const [selectedIndex, setSelectedIndex] = useState(0)
 
   const noop = useCallback(() => {}, [])
 
-  if (!alert) return null
+  if (!alerts.length) return null
+
+  // Clamp to valid range every render — handles the case where the last alert
+  // in the list is confirmed/dismissed while the operator is viewing it.
+  const clampedIndex = Math.min(selectedIndex, alerts.length - 1)
+  const alert = alerts[clampedIndex]
 
   const busy = loadingId === alert.log_id
   const isUnverified = alert.detection_status === "Unverified"
   const isOngoing = alert.detection_status === "Ongoing"
   const hasAuditTrail = Boolean(alert.verified_by_name || alert.verified_at)
   const isSnoozed = isSnoozedNow(alert.log_id, snoozedUntil)
+
+  const hasMultiple = alerts.length > 1
+  const isFirst = clampedIndex === 0
+  const isLast = clampedIndex === alerts.length - 1
+
+  function navigate(direction: -1 | 1) {
+    const next = clampedIndex + direction
+    if (next < 0 || next >= alerts.length) return
+    setSelectedIndex(next)
+    // Clear stale feedback when the operator navigates away.
+    setError(null)
+    setConflict(null)
+  }
 
   function invalidateAlerts() {
     queryClient.invalidateQueries({ queryKey: ["alerts"] })
@@ -82,6 +104,15 @@ export function GlobalAlerts() {
     try {
       await action(logId)
       removeAlert(logId)
+      // Stay at the same position; if the tail was removed, clampedIndex will
+      // naturally back up to the new last element on the next render. We only
+      // need to explicitly correct when the raw selectedIndex now overshoots.
+      const newLength = alerts.length - 1
+      if (newLength > 0 && selectedIndex >= newLength) {
+        setSelectedIndex(newLength - 1)
+      } else {
+        setSelectedIndex(clampedIndex)
+      }
       invalidateAlerts()
     } catch (err) {
       // A lost race is not a failure to retry — a colleague already decided.
@@ -152,16 +183,86 @@ export function GlobalAlerts() {
     >
       <div className="-mx-6 -mb-6">
         {/* ── Section 1: Header ─────────────────────────────────────────────
-            Edge-to-edge solid background header enforcing urgency. */}
-        <div className="w-full bg-danger px-6 py-4">
-          <h2 className="text-center text-2xl font-bold uppercase tracking-widest text-black">
-            Accident Detected
-          </h2>
-          {alerts.length > 1 && (
-            <p className="mt-1 text-center text-xs font-medium text-black/70">
-              +{alerts.length - 1} more alert
-              {alerts.length > 2 ? "s" : ""} queued
-            </p>
+            Edge-to-edge solid background header enforcing urgency.
+            When multiple alerts are queued, the header becomes a three-column
+            row: [◀] [centered title + breadcrumb] [▶].
+            Back is pinned to the far left; Next is pinned to the far right. */}
+        <div className="w-full bg-danger px-2 py-4">
+          {hasMultiple ? (
+            <div className="flex items-center">
+              {/* ── Far-left Back chevron ── */}
+              <button
+                type="button"
+                aria-label="Previous alert"
+                disabled={isFirst}
+                onClick={() => navigate(-1)}
+                className={cn(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-opacity",
+                  isFirst
+                    ? "cursor-not-allowed opacity-30"
+                    : "opacity-80 hover:bg-black/10 hover:opacity-100",
+                )}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+
+              {/* ── Centered title + breadcrumb ── */}
+              <div className="flex-1 text-center">
+                <h2 className="text-2xl font-bold uppercase tracking-widest text-black">
+                  Accident Detected
+                </h2>
+                <p className="mt-0.5 text-xs font-semibold tabular-nums text-black/70">
+                  Alert {clampedIndex + 1} of {alerts.length}
+                </p>
+              </div>
+
+              {/* ── Far-right Next chevron ── */}
+              <button
+                type="button"
+                aria-label="Next alert"
+                disabled={isLast}
+                onClick={() => navigate(1)}
+                className={cn(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-opacity",
+                  isLast
+                    ? "cursor-not-allowed opacity-30"
+                    : "opacity-80 hover:bg-black/10 hover:opacity-100",
+                )}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            /* Single alert — plain centered heading, no nav chrome. */
+            <h2 className="text-center text-2xl font-bold uppercase tracking-widest text-black">
+              Accident Detected
+            </h2>
           )}
         </div>
 
