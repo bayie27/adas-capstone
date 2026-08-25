@@ -318,77 +318,6 @@ function OperationalBanner({ live }: { live: SystemHealthLiveResponse | undefine
   )
 }
 
-// ─── Hardware health card ────────────────────────────────────────────────────
-
-/**
- * Compact operator-facing hardware status card with two rows.
- * Derives plain-language status from existing live fields and warning codes —
- * no new API fields needed. Placed above the technical accordion so operators
- * see hardware status without needing to expand technical details.
- */
-function HardwareHealthRow({
-  label,
-  tone,
-  statusText,
-}: {
-  label: string
-  tone: "success" | "warning" | "danger" | "neutral"
-  statusText: string
-}) {
-  return (
-    <div className="flex items-center justify-between py-2.5 border-b border-stroke last:border-b-0">
-      <span className="text-xs font-medium text-fg-muted uppercase tracking-[0.08em]">{label}</span>
-      <div className="flex items-center gap-2">
-        <BadgeDot tone={tone} />
-        <span className="text-xs text-fg-body">{statusText}</span>
-      </div>
-    </div>
-  )
-}
-
-function HardwareHealthCard({ live }: { live: SystemHealthLiveResponse | undefined }) {
-  if (!live) return null
-
-  const hasGpuTempCritical = (live.warnings ?? []).some((w) => w.code === "GPU_TEMP_CRITICAL")
-  const hasRamCritical = (live.warnings ?? []).some((w) => w.code === "RAM_CRITICAL")
-
-  // GPU row
-  let gpuTone: "success" | "warning" | "danger" | "neutral"
-  let gpuText: string
-  if (live.gpus.length === 0) {
-    gpuTone = "neutral"
-    gpuText = "No graphics processor detected"
-  } else if (hasGpuTempCritical) {
-    gpuTone = "danger"
-    gpuText = `Overheating${live.gpu_temp_max != null ? ` (${live.gpu_temp_max.toFixed(0)}°C)` : ""}`
-  } else {
-    gpuTone = "success"
-    gpuText = `Working normally${live.gpu_temp_max != null ? ` (${live.gpu_temp_max.toFixed(0)}°C)` : ""}`
-  }
-
-  // CPU / memory row
-  let memTone: "success" | "warning" | "danger" | "neutral"
-  let memText: string
-  if (hasRamCritical) {
-    memTone = "danger"
-    memText = `Memory almost full${live.ram_usage != null ? ` (${live.ram_usage.toFixed(0)}%)` : ""}`
-  } else {
-    memTone = "success"
-    memText = `Running normally${live.cpu_usage != null ? ` · CPU ${live.cpu_usage.toFixed(0)}%` : ""}`
-  }
-
-  return (
-    <div className="mb-8 rounded-xl border border-stroke bg-surface-1 p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <RiCpuLine size={16} className="text-fg-muted" />
-        <h3 className="text-xs font-medium text-fg-body">Hardware Health</h3>
-      </div>
-      <HardwareHealthRow label="Graphics processor" tone={gpuTone} statusText={gpuText} />
-      <HardwareHealthRow label="Processor & memory" tone={memTone} statusText={memText} />
-    </div>
-  )
-}
-
 // ─── KPI card helpers ────────────────────────────────────────────────────────
 
 /**
@@ -798,9 +727,6 @@ export default function SystemHealth() {
           subtext={formatDiskSubtext(live)}
         />
       </div>
-
-      {/* ── Hardware health summary card ────────────────────────────────── */}
-      <HardwareHealthCard live={live} />
 
       {/* ── Technical details accordion ─────────────────────────────────── */}
       <details
