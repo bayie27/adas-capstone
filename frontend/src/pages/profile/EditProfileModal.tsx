@@ -33,7 +33,7 @@ export function EditProfileModal({ profile, onClose }: EditProfileModalProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const updateMutation = useMutation({
-    mutationFn: updateMyProfile,
+    mutationFn: (payload: UpdateMyProfileInput) => updateMyProfile(payload),
     onSuccess: (updatedProfile) => {
       queryClient.setQueryData(PROFILE_QUERY_KEY, updatedProfile)
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY })
