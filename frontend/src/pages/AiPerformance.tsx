@@ -64,20 +64,37 @@ export default function AiPerformance() {
   // See Users.tsx: mirror the query total into state so usePagination can clamp
   // the page at read time without an effect.
   const [seenTotal, setSeenTotal] = useState(0)
-  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
-    seenTotal,
-    ITEMS_PER_PAGE,
-  )
+  const {
+    page,
+    pageSize,
+    totalPages,
+    offset,
+    rangeStart,
+    rangeEnd,
+    next,
+    prev,
+    reset,
+    goTo,
+    setPageSize,
+  } = usePagination(seenTotal, ITEMS_PER_PAGE)
 
   const performanceQuery = useQuery({
-    queryKey: [...PERFORMANCE_QUERY_KEY, debouncedSearchTerm, startDate, endDate, cameraId, offset],
+    queryKey: [
+      ...PERFORMANCE_QUERY_KEY,
+      debouncedSearchTerm,
+      startDate,
+      endDate,
+      cameraId,
+      pageSize,
+      offset,
+    ],
     queryFn: () =>
       getPerformanceAnalytics({
         search: debouncedSearchTerm || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         camera_id: cameraId ? [Number(cameraId)] : undefined,
-        limit: ITEMS_PER_PAGE,
+        limit: pageSize,
         offset,
       }),
     placeholderData: (previousData) => previousData,
@@ -382,10 +399,12 @@ export default function AiPerformance() {
             rangeStart={rangeStart}
             rangeEnd={rangeEndValue}
             totalFiltered={totalFiltered}
-            pageSize={ITEMS_PER_PAGE}
+            pageSize={pageSize}
             isFetching={performanceQuery.isFetching}
             onPrev={prev}
             onNext={next}
+            onPageChange={goTo}
+            onPageSizeChange={setPageSize}
           />
         }
       >

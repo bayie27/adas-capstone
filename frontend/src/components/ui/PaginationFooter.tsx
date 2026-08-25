@@ -98,6 +98,7 @@ export function PaginationFooter({
               onChange={(value) => onPageSizeChange(Number(value))}
               ariaLabel="Items per page"
               className="w-auto"
+              direction="up"
             />
           ) : (
             <span className="flex items-center gap-1 rounded border border-stroke bg-surface-1 px-2 py-1 text-fg">

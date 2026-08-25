@@ -73,18 +73,27 @@ export default function Users() {
   // the total — so mirror it into state and sync during render (placeholderData
   // keeps it stable across refetches). This clamps the page without an effect.
   const [seenTotal, setSeenTotal] = useState(0)
-  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
-    seenTotal,
-    USERS_PAGE_SIZE,
-  )
+  const {
+    page,
+    pageSize,
+    totalPages,
+    offset,
+    rangeStart,
+    rangeEnd,
+    next,
+    prev,
+    reset,
+    goTo,
+    setPageSize,
+  } = usePagination(seenTotal, USERS_PAGE_SIZE)
 
   const usersQuery = useQuery({
-    queryKey: [...USERS_QUERY_KEY, debouncedSearchTerm, activeFilter, USERS_PAGE_SIZE, offset],
+    queryKey: [...USERS_QUERY_KEY, debouncedSearchTerm, activeFilter, pageSize, offset],
     queryFn: () =>
       getUsers({
         search: debouncedSearchTerm || undefined,
         is_active: activeFilter === "active" ? undefined : activeFilter,
-        limit: USERS_PAGE_SIZE,
+        limit: pageSize,
         offset,
       }),
     placeholderData: (previousData) => previousData,
@@ -185,10 +194,12 @@ export default function Users() {
             rangeStart={rangeStart}
             rangeEnd={rangeEndValue}
             totalFiltered={totalUsers}
-            pageSize={USERS_PAGE_SIZE}
+            pageSize={pageSize}
             isFetching={usersQuery.isFetching}
             onPrev={prev}
             onNext={next}
+            onPageChange={goTo}
+            onPageSizeChange={setPageSize}
           />
         }
       >
