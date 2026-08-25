@@ -18,6 +18,7 @@ Precision formula (Use Case 7 / paper §Precision Calibration):
   Returns None when no detections exist in the window (zero-division guard).
 """
 
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -29,6 +30,7 @@ from app.core.db import get_session
 from app.core.errors import AppHTTPException
 from app.models import AuditResult, Camera, DetectionLog, DetectionStatus, User
 from app.schemas import DashboardAnalyticsResponse, PerformanceAnalyticsResponse
+from app.services.cameras import format_camera_filter_line, resolve_camera_names
 from app.services.filters import (
     IncidentFilters,
     apply_incident_filters,
@@ -302,6 +304,7 @@ def _dashboard_filters_summary(
     start_date: datetime | None,
     end_date: datetime | None,
     camera_id: list[int] | None,
+    camera_names: Mapping[str, str],
 ) -> list[str]:
     lines = []
     if start_date or end_date:
@@ -310,7 +313,28 @@ def _dashboard_filters_summary(
             f"to {end_date.isoformat() if end_date else '…'}"
         )
     if camera_id:
-        lines.append("Camera IDs: " + ", ".join(str(c) for c in camera_id))
+        lines.append(format_camera_filter_line(camera_names, camera_id))
+    return lines
+
+
+def _performance_filters_summary(
+    *,
+    start_date: datetime | None,
+    end_date: datetime | None,
+    camera_id: list[int] | None,
+    search: str | None,
+    camera_names: Mapping[str, str],
+) -> list[str]:
+    lines = []
+    if start_date or end_date:
+        lines.append(
+            f"Date range: {start_date.isoformat() if start_date else '…'} "
+            f"to {end_date.isoformat() if end_date else '…'}"
+        )
+    if camera_id:
+        lines.append(format_camera_filter_line(camera_names, camera_id))
+    if search:
+        lines.append(f"Search: {search!r}")
     return lines
 
 
@@ -349,6 +373,10 @@ def export_dashboard(
         "camera_id": list(camera_id or ()),
     }
     source_ip = _client_ip(request)
+    # Resolved once and threaded through both the audit row (Step 5) and
+    # the PDF filter-summary header (Step 6) so a camera-filtered export
+    # issues exactly one resolve_camera_names query, not two.
+    camera_names = resolve_camera_names(session, camera_id or ())
 
     # A count query, not a materialized id list: `WHERE log_id IN (...)`
     # with tens of thousands of bind parameters exceeds SQLite's default
@@ -377,6 +405,7 @@ def export_dashboard(
             result=AuditResult.FAILURE,
             failure_category="row_limit_exceeded",
             source_ip=source_ip,
+            camera_names=camera_names,
         )
         session.commit()
         raise
@@ -391,11 +420,15 @@ def export_dashboard(
         row_count=row_count,
         result=AuditResult.SUCCESS,
         source_ip=source_ip,
+        camera_names=camera_names,
     )
     session.commit()
 
     filters_summary = _dashboard_filters_summary(
-        start_date=start_date, end_date=end_date, camera_id=camera_id
+        start_date=start_date,
+        end_date=end_date,
+        camera_id=camera_id,
+        camera_names=camera_names,
     )
 
     if format == "pdf":
@@ -739,6 +772,10 @@ def export_performance(
         "search": search,
     }
     source_ip = _client_ip(request)
+    # Resolved once and threaded through both the audit row (Step 5) and
+    # the PDF filter-summary header (Step 6) so a camera-filtered export
+    # issues exactly one resolve_camera_names query, not two.
+    camera_names = resolve_camera_names(session, camera_id or ())
 
     data = _compute_performance_data(
         session,
@@ -763,6 +800,7 @@ def export_performance(
             result=AuditResult.FAILURE,
             failure_category="row_limit_exceeded",
             source_ip=source_ip,
+            camera_names=camera_names,
         )
         session.commit()
         raise
@@ -777,19 +815,17 @@ def export_performance(
         row_count=row_count,
         result=AuditResult.SUCCESS,
         source_ip=source_ip,
+        camera_names=camera_names,
     )
     session.commit()
 
-    filters_summary = []
-    if start_date or end_date:
-        filters_summary.append(
-            f"Date range: {start_date.isoformat() if start_date else '…'} "
-            f"to {end_date.isoformat() if end_date else '…'}"
-        )
-    if camera_id:
-        filters_summary.append("Camera IDs: " + ", ".join(str(c) for c in camera_id))
-    if search:
-        filters_summary.append(f"Search: {search!r}")
+    filters_summary = _performance_filters_summary(
+        start_date=start_date,
+        end_date=end_date,
+        camera_id=camera_id,
+        search=search,
+        camera_names=camera_names,
+    )
 
     if format == "pdf":
         pdf_bytes = build_performance_pdf(

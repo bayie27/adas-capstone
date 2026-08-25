@@ -26,6 +26,7 @@ from sqlmodel import Session, col, func, select
 
 from app.core.config import settings
 from app.models import AuditResult, DetectionLog, DetectionStatus, ExportJob, User
+from app.services.cameras import resolve_camera_names
 from app.services.filters import IncidentFilters, apply_sort
 from app.services.formatting import format_user_name
 from app.services.reports.common import record_export_attempt
@@ -74,7 +75,9 @@ def _incident_filters_from_dict(filters: dict) -> IncidentFilters:
     )
 
 
-def _generate_incidents(session: Session, job: ExportJob) -> tuple[bytes, int]:
+def _generate_incidents(
+    session: Session, job: ExportJob, camera_names: dict[str, str]
+) -> tuple[bytes, int]:
     from app.api.routes.alerts import (
         ALERT_SORT_FIELDS,
         INCIDENT_CSV_COLUMNS,
@@ -100,7 +103,9 @@ def _generate_incidents(session: Session, job: ExportJob) -> tuple[bytes, int]:
     )
     logs = session.exec(stmt).all()
     requested_by = _requested_by_name(session, job)
-    summary = _filters_summary(filters, sort_by=sort_by, sort_order=sort_order)
+    summary = _filters_summary(
+        filters, sort_by=sort_by, sort_order=sort_order, camera_names=camera_names
+    )
 
     if job.format == "pdf":
         content = build_incident_pdf(
@@ -117,7 +122,9 @@ def _generate_incidents(session: Session, job: ExportJob) -> tuple[bytes, int]:
     return text.encode("utf-8"), len(logs)
 
 
-def _generate_dashboard(session: Session, job: ExportJob) -> tuple[bytes, int]:
+def _generate_dashboard(
+    session: Session, job: ExportJob, camera_names: dict[str, str]
+) -> tuple[bytes, int]:
     from app.api.routes.analytics import (
         _ACCIDENT_STATUSES,
         _compute_dashboard_data,
@@ -139,7 +146,10 @@ def _generate_dashboard(session: Session, job: ExportJob) -> tuple[bytes, int]:
     camera_id = filters_dict.get("camera_id") or None
     requested_by = _requested_by_name(session, job)
     summary = _dashboard_filters_summary(
-        start_date=start_date, end_date=end_date, camera_id=camera_id
+        start_date=start_date,
+        end_date=end_date,
+        camera_id=camera_id,
+        camera_names=camera_names,
     )
 
     if job.format == "pdf":
@@ -220,8 +230,13 @@ def _generate_dashboard(session: Session, job: ExportJob) -> tuple[bytes, int]:
     return text.encode("utf-8"), len(logs)
 
 
-def _generate_performance(session: Session, job: ExportJob) -> tuple[bytes, int]:
-    from app.api.routes.analytics import _compute_performance_data
+def _generate_performance(
+    session: Session, job: ExportJob, camera_names: dict[str, str]
+) -> tuple[bytes, int]:
+    from app.api.routes.analytics import (
+        _compute_performance_data,
+        _performance_filters_summary,
+    )
 
     filters_dict = _filters_dict_from_job(job)
     start_date = (
@@ -245,16 +260,13 @@ def _generate_performance(session: Session, job: ExportJob) -> tuple[bytes, int]
         camera_id=camera_id,
         search=search,
     )
-    summary = []
-    if start_date or end_date:
-        summary.append(
-            f"Date range: {start_date.isoformat() if start_date else '…'} "
-            f"to {end_date.isoformat() if end_date else '…'}"
-        )
-    if camera_id:
-        summary.append("Camera IDs: " + ", ".join(str(c) for c in camera_id))
-    if search:
-        summary.append(f"Search: {search!r}")
+    summary = _performance_filters_summary(
+        start_date=start_date,
+        end_date=end_date,
+        camera_id=camera_id,
+        search=search,
+        camera_names=camera_names,
+    )
 
     if job.format == "pdf":
         content = build_performance_pdf(
@@ -295,7 +307,10 @@ def _generate_performance(session: Session, job: ExportJob) -> tuple[bytes, int]
     return text.encode("utf-8"), len(data["per_camera"])
 
 
-def _generate_audit(session: Session, job: ExportJob) -> tuple[bytes, int]:
+def _generate_audit(
+    session: Session, job: ExportJob, camera_names: dict[str, str]
+) -> tuple[bytes, int]:
+    del camera_names  # unused — AUDIT_EXPORT has no camera filter (Step 6)
     from app.api.routes.audit import (
         AUDIT_SORT_FIELDS,
         _apply_audit_filters,
@@ -443,7 +458,9 @@ _RETRAINING_MANIFEST_COLUMNS = [
 ]
 
 
-def _generate_retraining(session: Session, job: ExportJob) -> tuple[bytes, int]:
+def _generate_retraining(
+    session: Session, job: ExportJob, camera_names: dict[str, str]
+) -> tuple[bytes, int]:
     """07_PKG_reports.md Step 6 — a local ZIP of `manifest.csv` +
     `snapshots/`. Only human-labeled incidents (D-010's mapping table);
     `Unverified` is excluded. A row can outlive its snapshot file — that's
@@ -454,6 +471,7 @@ def _generate_retraining(session: Session, job: ExportJob) -> tuple[bytes, int]:
     directory component) — never from the raw, client/AI-controlled
     `snapshot_key` — so there is no path-traversal surface here at all.
     """
+    del camera_names  # unused — the retraining manifest has no PDF header
     import hashlib
     import io
     import zipfile
@@ -540,7 +558,9 @@ def _generate_retraining(session: Session, job: ExportJob) -> tuple[bytes, int]:
     return zip_buffer.getvalue(), len(logs)
 
 
-_GENERATORS: dict[str, Callable[[Session, ExportJob], tuple[bytes, int]]] = {
+_GENERATORS: dict[
+    str, Callable[[Session, ExportJob, dict[str, str]], tuple[bytes, int]]
+] = {
     "incidents": _generate_incidents,
     "dashboard": _generate_dashboard,
     "performance": _generate_performance,
@@ -599,10 +619,17 @@ def process_export_job(engine: Engine, job_id: str) -> None:
         audit_action = "AUDIT_EXPORT" if job.report_type == "audit" else "REPORT_EXPORT"
         filters_dict = _filters_dict_from_job(job)
         sort_dict = _sort_dict_from_job(job) or None
+        # Resolved once and threaded through both the generator (PDF
+        # filter-summary header, Step 6) and every record_export_attempt
+        # call below (audit row, Step 5) so a camera-filtered job issues
+        # exactly one resolve_camera_names query, not two or three.
+        camera_names = resolve_camera_names(
+            session, filters_dict.get("camera_id") or ()
+        )
 
         try:
             generator = _GENERATORS[job.report_type]
-            content, row_count = generator(session, job)
+            content, row_count = generator(session, job, camera_names)
         except Exception:
             logger.exception("Export job %s failed during generation", job_id)
             job = session.get(ExportJob, job_id)
@@ -624,6 +651,7 @@ def process_export_job(engine: Engine, job_id: str) -> None:
                     result=AuditResult.FAILURE,
                     failure_category="generation_failed",
                     job_id=job.job_id,
+                    camera_names=camera_names,
                 )
             session.commit()
             return
@@ -661,6 +689,7 @@ def process_export_job(engine: Engine, job_id: str) -> None:
                     result=AuditResult.FAILURE,
                     failure_category="artifact_write_failed",
                     job_id=job.job_id,
+                    camera_names=camera_names,
                 )
             session.commit()
             return
@@ -691,6 +720,7 @@ def process_export_job(engine: Engine, job_id: str) -> None:
                 mode="job",
                 result=AuditResult.SUCCESS,
                 job_id=job.job_id,
+                camera_names=camera_names,
             )
         session.commit()
 

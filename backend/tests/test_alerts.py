@@ -5,6 +5,7 @@ snooze, and authenticated snapshot retrieval.
 """
 
 import csv
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from io import StringIO
@@ -847,6 +848,35 @@ class TestTransitionSideEffects:
         assert rows[0].target_ref == str(log.log_id)
 
     @pytest.mark.parametrize(("route", "source_status", "action"), _TRANSITIONS)
+    def test_audit_detail_carries_camera_id_and_name(
+        self,
+        client: TestClient,
+        session: Session,
+        route: str,
+        source_status: DetectionStatus,
+        action: str,
+    ):
+        """P25 Step 2 — every legal transition's audit row snapshots the
+        camera's name alongside its id, not just the bare id."""
+        operator, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name=f"Named Cam {action}", channel_id=1)
+        extra = (
+            {"verified_by_id": operator.user_id, "verified_at": datetime.now(UTC)}
+            if source_status == DetectionStatus.ONGOING
+            else {}
+        )
+        log = make_alert(session, camera, status=source_status, **extra)
+
+        resp = client.post(f"/api/alerts/{log.log_id}/{route}", headers=headers)
+        assert resp.status_code == 200
+
+        rows = session.exec(select(AuditLog).where(AuditLog.action == action)).all()
+        assert len(rows) == 1
+        detail = json.loads(rows[0].detail)
+        assert detail["camera_id"] == camera.camera_id
+        assert detail["camera_name"] == f"Named Cam {action}"
+
+    @pytest.mark.parametrize(("route", "source_status", "action"), _TRANSITIONS)
     def test_detected_at_and_created_at_never_modified_by_a_transition(
         self,
         client: TestClient,
@@ -1206,6 +1236,63 @@ class TestSnooze:
         session.refresh(log)
         assert log.snoozed_by_id == operator.user_id
         assert log.snoozed_until is not None
+
+    def test_snooze_audit_detail_carries_camera_id_and_name(
+        self, client: TestClient, session: Session
+    ):
+        """P25 Step 2 — ALERT_SNOOZE is the only HITL transition whose
+        audit row previously carried no camera reference at all."""
+        _, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name="Snooze Named Cam", channel_id=1)
+        log = make_alert(session, camera, status=DetectionStatus.UNVERIFIED)
+
+        resp = client.post(f"/api/alerts/{log.log_id}/snooze", headers=headers)
+        assert resp.status_code == 200
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "ALERT_SNOOZE")
+        ).all()
+        assert len(rows) == 1
+        detail = json.loads(rows[0].detail)
+        assert detail["camera_id"] == camera.camera_id
+        assert detail["camera_name"] == "Snooze Named Cam"
+        assert detail["snoozed_until"] is not None
+
+    def test_snooze_with_no_camera_row_reports_null_name_not_a_500(
+        self, client: TestClient, session: Session
+    ):
+        """P25 Step 2 — the `if log.camera else None` guard is reachable
+        and must stay reachable: a log whose camera row is gone by the
+        time the audit write happens must report camera_name: null rather
+        than raising."""
+        from sqlalchemy import text
+
+        _, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name="Vanishing Cam", channel_id=1)
+        log = make_alert(session, camera, status=DetectionStatus.UNVERIFIED)
+        camera_id = camera.camera_id
+
+        # ondelete="RESTRICT" (models/detection.py) blocks this in normal
+        # operation — cameras are only ever soft-deleted. Bypassing FK
+        # enforcement here is the only way to reach the defensive branch.
+        session.execute(text("PRAGMA foreign_keys=OFF"))
+        session.execute(
+            text("DELETE FROM camera WHERE camera_id = :id"), {"id": camera_id}
+        )
+        session.execute(text("PRAGMA foreign_keys=ON"))
+        session.commit()
+        session.expire(log)
+
+        resp = client.post(f"/api/alerts/{log.log_id}/snooze", headers=headers)
+        assert resp.status_code == 200
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "ALERT_SNOOZE")
+        ).all()
+        assert len(rows) == 1
+        detail = json.loads(rows[0].detail)
+        assert detail["camera_id"] == camera_id
+        assert detail["camera_name"] is None
 
     def test_snooze_uses_actor_saved_duration(
         self, client: TestClient, session: Session

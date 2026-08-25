@@ -6,6 +6,7 @@ artifact expiry, and the retraining ZIP package.
 
 import csv
 import io
+import json
 import sys
 import uuid
 import zipfile
@@ -20,6 +21,7 @@ from app.services.reports.jobs import (
     recover_interrupted_jobs,
 )
 from fastapi.testclient import TestClient
+from pypdf import PdfReader
 from sqlmodel import Session, select
 
 from .conftest import auth_headers, make_admin, make_camera, make_operator
@@ -992,3 +994,319 @@ class TestRetraining:
         assert by_log_id[false_positive.log_id]["human_label"] == "false_positive"
         assert by_log_id[false_positive.log_id]["snapshot_available"] == "false"
         assert by_log_id[false_positive.log_id]["snapshot_filename"] == "N/A"
+
+
+class TestExportAuditCameraNames:
+    """P25 Step 5 — REPORT_EXPORT/AUDIT_EXPORT audit rows annotate a
+    camera_id filter with the resolved names, as a sibling key inside
+    `filters` rather than a replacement for it."""
+
+    def test_camera_filtered_export_audit_row_has_camera_names(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        camera = make_camera(session, name="Filter Cam", channel_id=20)
+
+        resp = client.get(
+            f"/api/alerts/export?camera_id={camera.camera_id}&format=csv",
+            headers=headers,
+        )
+        assert resp.status_code == 200
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "REPORT_EXPORT")
+        ).all()
+        assert len(rows) == 1
+        detail = json.loads(rows[0].detail)
+        assert detail["filters"]["camera_id"] == [camera.camera_id]
+        assert detail["filters"]["camera_names"] == {
+            str(camera.camera_id): "Filter Cam"
+        }
+
+    def test_unfiltered_export_audit_row_has_no_camera_names_key(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        resp = client.get("/api/alerts/export?format=csv", headers=headers)
+        assert resp.status_code == 200
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "REPORT_EXPORT")
+        ).all()
+        assert len(rows) == 1
+        detail = json.loads(rows[0].detail)
+        assert "camera_names" not in detail["filters"]
+
+    def test_audit_export_row_has_no_camera_names_key(
+        self, client: TestClient, session: Session
+    ):
+        """`_audit_filters_dict` has no camera_id key at all, so the
+        camera_names branch must never fire for AUDIT_EXPORT."""
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        resp = client.get("/api/audit-logs/export?format=csv", headers=headers)
+        assert resp.status_code == 200
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "AUDIT_EXPORT")
+        ).all()
+        assert len(rows) == 1
+        detail = json.loads(rows[0].detail)
+        assert "camera_names" not in detail["filters"]
+
+    def test_soft_deleted_camera_still_resolves_name_in_export_filter(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        deleted_camera = make_camera(
+            session, name="Ghost Cam", channel_id=21, is_active=False
+        )
+
+        resp = client.get(
+            f"/api/alerts/export?camera_id={deleted_camera.camera_id}&format=csv",
+            headers=headers,
+        )
+        assert resp.status_code == 200
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "REPORT_EXPORT")
+        ).all()
+        detail = json.loads(rows[0].detail)
+        assert detail["filters"]["camera_names"] == {
+            str(deleted_camera.camera_id): "Ghost Cam"
+        }
+
+    def test_unresolvable_camera_id_is_absent_from_the_map(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        resp = client.get(
+            "/api/alerts/export?camera_id=999999&format=csv", headers=headers
+        )
+        assert resp.status_code == 200
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "REPORT_EXPORT")
+        ).all()
+        detail = json.loads(rows[0].detail)
+        # Nothing in the filter resolved, so the map is empty and the
+        # camera_names key itself is omitted (never an empty {}).
+        assert "camera_names" not in detail["filters"]
+
+
+class TestCameraFilterSummaryHeader:
+    """P25 Step 6 — the PDF filter-summary block's "Camera IDs: 3, 7" line
+    becomes "Cameras: 3 (Front Entrance), 7 (Gate B)" across all three PDF
+    kinds that carry a camera filter, on both the sync and async job paths."""
+
+    def test_incidents_pdf_job_shows_camera_names(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session, username="cam_pdf_incidents")
+        headers = auth_headers(client, "cam_pdf_incidents", "Admin123")
+        camera = make_camera(session, name="Front Entrance", channel_id=30)
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={
+                "report_type": "incidents",
+                "format": "pdf",
+                "camera_id": [camera.camera_id],
+            },
+            headers=headers,
+        )
+        job_id = resp.json()["job_id"]
+        process_export_job(session.get_bind(), job_id)
+
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        text = PdfReader(io.BytesIO(download_resp.content)).pages[0].extract_text()
+        assert f"Cameras: {camera.camera_id} (Front Entrance)" in text
+
+    def test_dashboard_pdf_job_shows_camera_names(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session, username="cam_pdf_dashboard")
+        headers = auth_headers(client, "cam_pdf_dashboard", "Admin123")
+        camera = make_camera(session, name="Gate B", channel_id=31)
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={
+                "report_type": "dashboard",
+                "format": "pdf",
+                "camera_id": [camera.camera_id],
+            },
+            headers=headers,
+        )
+        job_id = resp.json()["job_id"]
+        process_export_job(session.get_bind(), job_id)
+
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        text = PdfReader(io.BytesIO(download_resp.content)).pages[0].extract_text()
+        assert f"Cameras: {camera.camera_id} (Gate B)" in text
+
+    def test_performance_pdf_job_shows_camera_names(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session, username="cam_pdf_performance")
+        headers = auth_headers(client, "cam_pdf_performance", "Admin123")
+        camera = make_camera(session, name="Loading Dock", channel_id=32)
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={
+                "report_type": "performance",
+                "format": "pdf",
+                "camera_id": [camera.camera_id],
+            },
+            headers=headers,
+        )
+        job_id = resp.json()["job_id"]
+        process_export_job(session.get_bind(), job_id)
+
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        text = PdfReader(io.BytesIO(download_resp.content)).pages[0].extract_text()
+        assert f"Cameras: {camera.camera_id} (Loading Dock)" in text
+
+    def test_unresolvable_camera_id_renders_bare(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session, username="cam_pdf_bare")
+        headers = auth_headers(client, "cam_pdf_bare", "Admin123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={
+                "report_type": "incidents",
+                "format": "pdf",
+                "camera_id": [999999],
+            },
+            headers=headers,
+        )
+        job_id = resp.json()["job_id"]
+        process_export_job(session.get_bind(), job_id)
+
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        text = PdfReader(io.BytesIO(download_resp.content)).pages[0].extract_text()
+        assert "Cameras: 999999" in text
+        assert "999999 (None)" not in text
+
+    def test_unfiltered_export_has_no_camera_line(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session, username="cam_pdf_unfiltered")
+        headers = auth_headers(client, "cam_pdf_unfiltered", "Admin123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "incidents", "format": "pdf"},
+            headers=headers,
+        )
+        job_id = resp.json()["job_id"]
+        process_export_job(session.get_bind(), job_id)
+
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        text = PdfReader(io.BytesIO(download_resp.content)).pages[0].extract_text()
+        assert "Cameras:" not in text
+
+    def test_audit_export_pdf_header_unchanged(
+        self, client: TestClient, session: Session
+    ):
+        make_admin(session, username="cam_pdf_audit")
+        headers = auth_headers(client, "cam_pdf_audit", "Admin123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "audit", "format": "pdf"},
+            headers=headers,
+        )
+        job_id = resp.json()["job_id"]
+        process_export_job(session.get_bind(), job_id)
+
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        text = PdfReader(io.BytesIO(download_resp.content)).pages[0].extract_text()
+        assert "Cameras:" not in text
+
+    def test_async_job_header_matches_sync_export(
+        self, client: TestClient, session: Session
+    ):
+        """jobs.py imports _filters_summary from alerts.py rather than
+        owning a copy — this pins that the two paths stay identical."""
+        make_admin(session, username="cam_pdf_parity")
+        headers = auth_headers(client, "cam_pdf_parity", "Admin123")
+        camera = make_camera(session, name="Parity Cam", channel_id=33)
+
+        sync_resp = client.get(
+            f"/api/alerts/export?camera_id={camera.camera_id}&format=pdf",
+            headers=headers,
+        )
+        sync_text = PdfReader(io.BytesIO(sync_resp.content)).pages[0].extract_text()
+
+        job_resp = client.post(
+            "/api/exports/jobs",
+            json={
+                "report_type": "incidents",
+                "format": "pdf",
+                "camera_id": [camera.camera_id],
+            },
+            headers=headers,
+        )
+        job_id = job_resp.json()["job_id"]
+        process_export_job(session.get_bind(), job_id)
+        download_resp = client.get(
+            f"/api/exports/jobs/{job_id}/download", headers=headers
+        )
+        async_text = (
+            PdfReader(io.BytesIO(download_resp.content)).pages[0].extract_text()
+        )
+
+        expected_line = f"Cameras: {camera.camera_id} (Parity Cam)"
+        assert expected_line in sync_text
+        assert expected_line in async_text
+
+    def test_single_resolve_query_per_pdf_export(
+        self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
+    ):
+        """The map is resolved once in the route and threaded through both
+        record_export_attempt and the filter-summary builder — a future
+        change that re-resolves would double the query count."""
+        import app.api.routes.alerts as alerts_module
+
+        make_admin(session, username="cam_pdf_singlequery")
+        headers = auth_headers(client, "cam_pdf_singlequery", "Admin123")
+        camera = make_camera(session, name="Query Cam", channel_id=34)
+
+        calls = []
+        original = alerts_module.resolve_camera_names
+
+        def spy(session_, camera_ids):
+            calls.append(tuple(camera_ids))
+            return original(session_, camera_ids)
+
+        monkeypatch.setattr(alerts_module, "resolve_camera_names", spy)
+
+        resp = client.get(
+            f"/api/alerts/export?camera_id={camera.camera_id}&format=pdf",
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        assert len(calls) == 1

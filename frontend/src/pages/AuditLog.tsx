@@ -1,6 +1,24 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { RiArrowDownSLine, RiArrowRightSLine, RiFileHistoryLine } from "@remixicon/react"
+import { RiArrowDownSLine, RiArrowRightSLine, RiFileCopyLine } from "@remixicon/react"
+
+import {
+  filterActiveEntries,
+  formatAuditAction,
+  formatChangedFields,
+  formatCheckLabel,
+  formatScalarDetailValue,
+  formatTargetDisplayName,
+  formatTargetType,
+  hasResolvedName,
+  humanizeDetailKey,
+  isLongHexId,
+  isOpaqueIdKey,
+  isPlainObject,
+  isUnsetValue,
+  isUuid,
+  truncateId,
+} from "@/utils/auditFormat"
 
 import {
   AUDIT_ACTIONS,
@@ -30,6 +48,7 @@ import {
 } from "@/components/ui/Table"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
+import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useUserOptions } from "@/hooks/useUserOptions"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { formatFullDateTime } from "@/utils/datetime"
@@ -73,41 +92,6 @@ function ResultBadge({ result }: { result: string }) {
   )
 }
 
-/**
- * D-1 (settled): third `ADMINISTRATION` nav row. D-4 (design authority, no
- * Figma frame): closest existing precedent is Detections' Logs tab — a
- * toolbar with the full filter set, a sortable table, pagination and export
- * — so this screen follows that shape rather than inventing a new one.
- */
-const AUDIT_ACTION_MAP: Record<string, string> = {
-  LOGIN_SUCCESS: "Successful Login",
-  LOGIN_FAILURE: "Failed Login",
-  LOGOUT: "Logged Out",
-  ALERT_CONFIRM: "Confirmed Alert",
-  ALERT_DISMISS: "Dismissed Alert",
-  ALERT_RESOLVE: "Resolved Alert",
-  ALERT_CORRECTION: "Corrected Alert",
-  ALERT_SNOOZE: "Snoozed Alert",
-  CAMERA_CREATE: "Created Camera",
-  CAMERA_UPDATE: "Updated Camera",
-  CAMERA_ENABLE: "Enabled Camera",
-  CAMERA_DISABLE: "Disabled Camera",
-  CAMERA_DELETE: "Deleted Camera",
-  REPORT_EXPORT: "Exported Report",
-  AUDIT_EXPORT: "Exported Audit Log",
-  USER_CREATE: "Created User",
-  USER_UPDATE: "Updated User",
-  USER_ENABLE: "Enabled User",
-  USER_DISABLE: "Disabled User",
-  USER_ROLE_CHANGE: "Changed User Role",
-  USER_PASSWORD_RESET: "Reset User Password",
-  USER_PROFILE_UPDATE: "Updated User Profile",
-  USER_PASSWORD_CHANGE: "Changed Password",
-  ALARM_SETTINGS_UPDATE: "Updated Alarm Settings",
-  BACKUP_TRIGGER: "Triggered Backup",
-  RESTORE_TRIGGER: "Triggered Restore",
-}
-
 export default function AuditLog() {
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearch = useDebouncedValue(searchTerm.trim(), 300)
@@ -127,7 +111,25 @@ export default function AuditLog() {
 
   const hasFilters = Boolean(startDate || endDate || action || result || userId || targetType)
 
-  const usersQuery = useUserOptions()
+  const usersQuery = useUserOptions({ isActive: "null" })
+  const camerasQuery = useCameraOptions({ isActive: "null" })
+
+  const userMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const u of usersQuery.data?.users ?? []) {
+      map.set(String(u.user_id), u.username)
+    }
+    return map
+  }, [usersQuery.data?.users])
+
+  const cameraMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const c of camerasQuery.data?.cameras ?? []) {
+      map.set(String(c.camera_id), c.camera_name)
+    }
+    return map
+  }, [camerasQuery.data?.cameras])
+
   const userOptions = [
     { value: "", label: "All actors" },
     ...(usersQuery.data?.users ?? []).map((u) => ({
@@ -138,7 +140,7 @@ export default function AuditLog() {
 
   const actionOptions = [
     { value: "", label: "All actions" },
-    ...AUDIT_ACTIONS.map((a) => ({ value: a, label: a })),
+    ...AUDIT_ACTIONS.map((a) => ({ value: a, label: formatAuditAction(a) })),
   ]
 
   const resultOptions = [
@@ -148,7 +150,7 @@ export default function AuditLog() {
 
   const targetTypeOptions = [
     { value: "", label: "All target types" },
-    ...AUDIT_TARGET_TYPES.map((t) => ({ value: t, label: t })),
+    ...AUDIT_TARGET_TYPES.map((t) => ({ value: t, label: formatTargetType(t) })),
   ]
 
   // usePagination derives rangeStart/rangeEnd/totalPages from the total it's
@@ -241,15 +243,12 @@ export default function AuditLog() {
 
   return (
     <div className="mx-auto max-w-[1400px] p-8">
-      <div className="mb-6 flex items-center gap-2.5">
-        <RiFileHistoryLine size={18} className="text-fg-muted" />
-        <div>
-          <h1 className="mb-0.5 text-xl font-semibold text-fg">Audit Log</h1>
-          <p className="text-xs text-fg-muted">
-            Every audited state change in the system — logins, HITL transitions, camera and user
-            mutations, exports and backups
-          </p>
-        </div>
+      <div className="mb-6">
+        <h1 className="mb-0.5 text-xl font-semibold text-fg">Audit Log</h1>
+        <p className="text-xs text-fg-muted">
+          Every audited state change in the system — logins, HITL transitions, camera and user
+          mutations, exports and backups
+        </p>
       </div>
 
       {auditQuery.isError ? (
@@ -408,6 +407,8 @@ export default function AuditLog() {
                   onToggle={() =>
                     setExpandedId((current) => (current === entry.audit_id ? null : entry.audit_id))
                   }
+                  cameraMap={cameraMap}
+                  userMap={userMap}
                 />
               ))
             )}
@@ -418,15 +419,177 @@ export default function AuditLog() {
   )
 }
 
+/**
+ * Renders a truncated ID with a copy-to-clipboard button. The full value is
+ * available on hover via a title attribute.
+ */
+function CopyableId({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false)
+  const display = truncateId(value)
+  const isLong = display !== value
+
+  function handleCopy(e: React.MouseEvent) {
+    e.stopPropagation()
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span title={isLong ? value : undefined} className="font-mono text-xs">
+        {display}
+      </span>
+      {isLong ? (
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex items-center rounded p-0.5 text-fg-muted transition-colors hover:text-fg"
+          title={copied ? "Copied!" : "Copy full ID"}
+        >
+          <RiFileCopyLine size={12} />
+        </button>
+      ) : null}
+    </span>
+  )
+}
+
+/**
+ * Renders a single detail value. Handles nested objects, arrays, UUIDs,
+ * opaque numeric IDs, and enum/reason codes — never lets a raw object hit the
+ * DOM as `[object Object]` or renders literal `null`/`undefined`.
+ */
+function DetailValue({
+  detailKey,
+  value,
+  detail,
+}: {
+  detailKey: string
+  value: unknown
+  detail?: Record<string, unknown> | null
+}) {
+  // Null, undefined, empty string, or unset structure
+  if (isUnsetValue(value)) {
+    return <span className="italic text-fg-muted">Not set</span>
+  }
+
+  // Boolean
+  if (typeof value === "boolean") {
+    return (
+      <span className={value ? "font-medium text-success" : "font-medium text-danger"}>
+        {value ? "✓ Passed" : "✗ Failed"}
+      </span>
+    )
+  }
+
+  // Arrays (e.g. changed_fields: ["camera_name", "channel_id"] or camera_id: [1, 2])
+  if (Array.isArray(value)) {
+    if (detailKey === "changed_fields") {
+      return <span className="font-medium text-fg">{formatChangedFields(value)}</span>
+    }
+    const formattedItems = value.map((item) =>
+      isUnsetValue(item) ? "Not set" : formatScalarDetailValue(detailKey, item),
+    )
+    return <span className="font-medium text-fg">{formattedItems.join(", ")}</span>
+  }
+
+  // Nested objects fallback if rendered directly
+  if (isPlainObject(value)) {
+    if (detailKey === "checks") {
+      const checkEntries = Object.entries(value)
+      if (checkEntries.length === 0) {
+        return <span className="italic text-fg-muted">Not set</span>
+      }
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          {checkEntries.map(([name, ok]) => {
+            const passed = Boolean(ok)
+            return (
+              <Badge
+                key={name}
+                variant="outline"
+                tone={passed ? "success" : "danger"}
+                uppercase={false}
+              >
+                {formatCheckLabel(name)}: {passed ? "Passed" : "Failed"}
+              </Badge>
+            )
+          })}
+        </div>
+      )
+    }
+
+    const activeEntries = filterActiveEntries(value)
+    if (activeEntries.length === 0) {
+      return <span className="italic text-fg-muted">None</span>
+    }
+
+    return (
+      <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 rounded-lg border border-stroke bg-surface-2 p-3 sm:grid-cols-2">
+        {activeEntries.map(([subKey, subVal]) => (
+          <div key={subKey} className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-fg-muted">{humanizeDetailKey(subKey)}:</span>
+            <DetailValue detailKey={subKey} value={subVal} />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  const strValue = String(value).trim()
+
+  // UUID-shaped strings get truncated with copy button
+  if (isUuid(strValue)) {
+    return <CopyableId value={strValue} />
+  }
+
+  // Long hex strings (e.g. non-hyphenated backup IDs)
+  if (isLongHexId(strValue)) {
+    return <CopyableId value={strValue} />
+  }
+
+  // Opaque numeric IDs — append a clarifying suffix, unless a sibling key
+  // in this same detail payload already spells out the name (P25 audit
+  // target labels — e.g. camera_id next to camera_name).
+  if (isOpaqueIdKey(detailKey) && /^\d+$/.test(strValue) && !hasResolvedName(detailKey, detail)) {
+    return (
+      <span className="font-medium text-fg">
+        {strValue} <span className="text-caption text-fg-muted">(internal reference)</span>
+      </span>
+    )
+  }
+
+  // Default: formatted scalar string
+  const formatted = formatScalarDetailValue(detailKey, value)
+  return <span className="font-medium text-fg">{formatted}</span>
+}
+
 function AuditRow({
   entry,
   expanded,
   onToggle,
+  cameraMap,
+  userMap,
 }: {
   entry: AuditLogEntry
   expanded: boolean
   onToggle: () => void
+  cameraMap: Map<string, string>
+  userMap: Map<string, string>
 }) {
+  const hasRequestId = entry.request_id && entry.request_id !== "-"
+  const hasSourceIp = entry.source_ip && entry.source_ip !== "-"
+  const hasDiagnostics = hasRequestId || hasSourceIp
+
+  const targetDisplay = formatTargetDisplayName({
+    targetType: entry.target_type,
+    targetRef: entry.target_ref,
+    detail: entry.detail,
+    cameraMap,
+    userMap,
+  })
+
   return (
     <>
       <TableRow className="cursor-pointer" onClick={onToggle}>
@@ -437,11 +600,22 @@ function AuditRow({
             <span className="ml-1 text-caption text-fg-muted">({entry.role})</span>
           ) : null}
         </TableCell>
-        <TableCell>{AUDIT_ACTION_MAP[entry.action] || entry.action}</TableCell>
+        <TableCell>{formatAuditAction(entry.action)}</TableCell>
         <TableCell className="text-fg-muted">
-          {entry.target_type
-            ? `${entry.target_type}${entry.target_ref ? ` · ${entry.target_ref}` : ""}`
-            : "-"}
+          {entry.target_type ? (
+            <span
+              title={
+                entry.target_ref && targetDisplay !== entry.target_ref
+                  ? `${formatTargetType(entry.target_type)} ID: ${entry.target_ref}`
+                  : (entry.target_ref ?? undefined)
+              }
+            >
+              {formatTargetType(entry.target_type)}
+              {targetDisplay ? ` · ${targetDisplay}` : ""}
+            </span>
+          ) : (
+            <span className="text-caption italic text-fg-muted">Not applicable</span>
+          )}
         </TableCell>
         <TableCell>
           <ResultBadge result={entry.result} />
@@ -461,32 +635,124 @@ function AuditRow({
               detail is stored as a JSON string backend-side and exposed as
               a parsed object by a field_validator — it arrives as real
               structure and must not be re-parsed as a string here.
-              source_ip and request_id are the forensic columns; request_id
-              is what correlates this row with a line in the backend log,
-              which is the only reason the field exists, so both live in
-              the expanded view rather than the row.
             */}
-            <div className="grid grid-cols-1 gap-6 py-2 md:grid-cols-[1fr_auto]">
+            <div className="space-y-4 py-2">
+              {/* — Action Details (operational, always visible) — */}
               <div>
                 <h4 className="mb-2 text-xs font-semibold text-fg-muted">Action Details</h4>
                 {entry.detail && Object.keys(entry.detail).length > 0 ? (
-                  <div className="flex flex-col gap-1.5 text-sm">
-                    {Object.entries(entry.detail).map(([key, value]) => (
-                      <div key={key} className="flex gap-2">
-                        <span className="text-fg-muted capitalize">{key.replace(/_/g, " ")}:</span>
-                        <span className="font-medium text-fg">{String(value)}</span>
-                      </div>
-                    ))}
+                  <div className="grid grid-cols-1 gap-x-8 gap-y-2.5 text-xs md:grid-cols-2">
+                    {Object.entries(entry.detail).map(([key, value]) => {
+                      if (isPlainObject(value)) {
+                        if (key === "checks") {
+                          const checkEntries = Object.entries(value)
+                          return (
+                            <div key={key} className="col-span-full flex flex-col gap-1.5">
+                              <span className="font-medium text-fg-muted">
+                                {humanizeDetailKey(key)}:
+                              </span>
+                              <div className="pl-3">
+                                {checkEntries.length === 0 ? (
+                                  <span className="italic text-fg-muted">Not set</span>
+                                ) : (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {checkEntries.map(([name, ok]) => {
+                                      const passed = Boolean(ok)
+                                      return (
+                                        <Badge
+                                          key={name}
+                                          variant="outline"
+                                          tone={passed ? "success" : "danger"}
+                                          uppercase={false}
+                                        >
+                                          {formatCheckLabel(name)}: {passed ? "Passed" : "Failed"}
+                                        </Badge>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        }
+
+                        const activeEntries = filterActiveEntries(value)
+                        if (activeEntries.length === 0) {
+                          return (
+                            <div key={key} className="flex items-center gap-2">
+                              <span className="text-fg-muted">{humanizeDetailKey(key)}:</span>
+                              <span className="italic text-fg-muted">None</span>
+                            </div>
+                          )
+                        }
+
+                        return (
+                          <div key={key} className="col-span-full flex flex-col gap-1.5">
+                            <span className="font-medium text-fg-muted">
+                              {humanizeDetailKey(key)}:
+                            </span>
+                            <div className="pl-3">
+                              <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 rounded-lg border border-stroke bg-surface-2 p-3 sm:grid-cols-2">
+                                {activeEntries.map(([subKey, subVal]) => (
+                                  <div
+                                    key={subKey}
+                                    className="flex flex-wrap items-center gap-2 text-xs"
+                                  >
+                                    <span className="text-fg-muted">
+                                      {humanizeDetailKey(subKey)}:
+                                    </span>
+                                    <DetailValue
+                                      detailKey={subKey}
+                                      value={subVal}
+                                      detail={entry.detail}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div key={key} className="flex flex-wrap items-center gap-2">
+                          <span className="text-fg-muted">{humanizeDetailKey(key)}:</span>
+                          <DetailValue detailKey={key} value={value} detail={entry.detail} />
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
-                  <div className="text-sm text-fg-muted">No detail recorded.</div>
+                  <div className="text-xs text-fg-muted">No detail recorded.</div>
                 )}
               </div>
-              <div className="space-y-1 text-caption text-fg-muted">
-                <h4 className="mb-2 text-xs font-semibold text-fg-muted">Diagnostic Data</h4>
-                <div>Request ID: {entry.request_id ?? "-"}</div>
-                <div>Source IP: {entry.source_ip ?? "-"}</div>
-              </div>
+
+              {/* — Technical Details (diagnostic, collapsible) — */}
+              <details className="group">
+                <summary className="cursor-pointer select-none text-caption text-fg-muted transition-colors hover:text-fg">
+                  <span className="ml-1">Technical Details</span>
+                </summary>
+                <div className="mt-2 space-y-1 pl-4 text-caption text-fg-muted">
+                  <div>
+                    Request ID:{" "}
+                    {hasRequestId ? (
+                      <CopyableId value={entry.request_id!} />
+                    ) : (
+                      <span className="italic">N/A (system-initiated)</span>
+                    )}
+                  </div>
+                  <div>
+                    Source IP:{" "}
+                    {hasSourceIp ? (
+                      <span>{entry.source_ip}</span>
+                    ) : (
+                      <span className="italic">
+                        {hasDiagnostics ? "N/A" : "N/A (system-initiated)"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </details>
             </div>
           </TableCell>
         </TableRow>

@@ -3,7 +3,7 @@ import { downloadBlobResponse } from "@/utils/download"
 import type { ExportFormat } from "@/components/ui/ExportButton"
 
 /**
- * The 26-entry action catalog (`AUDIT_ACTIONS`, `app/models/audit.py`),
+ * The 27-entry action catalog (`AUDIT_ACTIONS`, `app/models/audit.py`),
  * mirrored here rather than fetched — there is no options endpoint for it
  * (only `GET /` and `GET /export` exist on this router), and unlike
  * Phase 14's alarm-sound allowlist this one is a fixed, migration-gated
@@ -26,6 +26,7 @@ export const AUDIT_ACTIONS = [
   "CAMERA_ENABLE",
   "CAMERA_DISABLE",
   "CAMERA_DELETE",
+  "CAMERA_RESTORE",
   "REPORT_EXPORT",
   "AUDIT_EXPORT",
   "USER_CREATE",

@@ -385,6 +385,44 @@ class TestAuditViewer:
         )
         assert resp.json()["total_filtered"] == 1
 
+    def test_target_ref_alone_correlates_backup_and_restore_rows(
+        self, client: TestClient, session: Session
+    ):
+        """P26 — the reason target_ref was added to BACKUP_TRIGGER rows: a
+        bare `?target_ref=` (no target_type) must surface both "this backup
+        was created" (target_type=backup) and "this backup was restored"
+        (target_type=restore) rows for the same backup id in one query."""
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        backup_id = "a3f9e1c204b84d7a9e6f8b1c2d3e4f50"
+        session.add(
+            AuditLog(
+                actor_type="system",
+                action="BACKUP_TRIGGER",
+                result="success",
+                target_type="backup",
+                target_ref=backup_id,
+            )
+        )
+        session.add(
+            AuditLog(
+                actor_type="user",
+                user_id=admin.user_id,
+                username=admin.username,
+                action="RESTORE_TRIGGER",
+                result="success",
+                target_type="restore",
+                target_ref=backup_id,
+            )
+        )
+        session.commit()
+
+        resp = client.get(f"/api/audit-logs/?target_ref={backup_id}", headers=headers)
+        body = resp.json()
+        assert body["total_filtered"] == 2
+        actions = {item["action"] for item in body["items"]}
+        assert actions == {"BACKUP_TRIGGER", "RESTORE_TRIGGER"}
+
     def test_filter_by_date_range(self, client: TestClient, session: Session):
         from datetime import UTC, datetime, timedelta
 
@@ -433,6 +471,37 @@ class TestAuditViewer:
 
         resp = client.get("/api/audit-logs/?search=findme_special", headers=headers)
         assert resp.json()["total_filtered"] == 1
+
+    def test_search_matches_camera_name_snapshotted_in_detail(
+        self, client: TestClient, session: Session
+    ):
+        """P25 — `search` does an `icontains` on the raw `detail` JSON
+        string, so a camera name snapshotted into it (Step 2) is findable
+        with zero route changes. This pins that a future refactor of the
+        filter can't lose it."""
+        import json
+
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+        session.add(
+            AuditLog(
+                actor_type="user",
+                username="admin",
+                action="ALERT_CONFIRM",
+                target_type="incident",
+                target_ref="118",
+                result="success",
+                detail=json.dumps({"camera_id": 3, "camera_name": "Findme Camera"}),
+            )
+        )
+        session.commit()
+
+        resp = client.get(
+            "/api/audit-logs/", params={"search": "Findme Camera"}, headers=headers
+        )
+        assert resp.status_code == 200
+        assert resp.json()["total_filtered"] == 1
+        assert resp.json()["items"][0]["action"] == "ALERT_CONFIRM"
 
     def test_no_update_or_delete_route_exists(
         self, client: TestClient, session: Session

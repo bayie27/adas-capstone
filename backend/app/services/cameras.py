@@ -10,6 +10,7 @@ than assumed, which is exactly what makes a mid-cooldown restart durable
 instead of stranding the camera Paused forever.
 """
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -85,6 +86,43 @@ def presented_statuses(camera: Camera, *, now: datetime) -> tuple[str, str]:
         return ConnectionStatus.UNRESPONSIVE.value, AIStatus.UNRESPONSIVE.value
 
     return camera.connection_status, camera.ai_status
+
+
+def resolve_camera_names(session: Session, camera_ids: Iterable[int]) -> dict[str, str]:
+    """Map camera ids to their current names for audit `detail` payloads.
+
+    Keys are stringified because `detail` is JSON-serialized (services/audit.py:88)
+    and JSON object keys are always strings. Ids with no matching row — a
+    hard-deleted camera, or a bad id echoed back from a request — are simply
+    absent from the result rather than mapped to None: the audit row should say
+    what was resolvable, not assert a null name.
+    """
+    ids = list(camera_ids)
+    if not ids:
+        return {}
+    rows = session.exec(
+        select(Camera.camera_id, Camera.camera_name).where(
+            col(Camera.camera_id).in_(ids)
+        )
+    ).all()
+    return {str(camera_id): camera_name for camera_id, camera_name in rows}
+
+
+def format_camera_filter_line(
+    camera_names: Mapping[str, str], camera_ids: Iterable[int]
+) -> str:
+    """'Cameras: 3 (Front Entrance), 7 (Gate B)' for a PDF filter-summary block.
+
+    Takes an already-resolved map rather than a session so it stays pure and
+    testable, and so a caller that also writes an audit row resolves once.
+    An id absent from the map renders bare ('7') rather than '7 (None)' — a
+    hard-deleted camera should still show that it was filtered on.
+    """
+    parts = []
+    for camera_id in camera_ids:
+        name = camera_names.get(str(camera_id))
+        parts.append(f"{camera_id} ({name})" if name else str(camera_id))
+    return "Cameras: " + ", ".join(parts)
 
 
 def _stale_cutoff(now: datetime) -> datetime:
