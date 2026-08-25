@@ -46,10 +46,10 @@ export function GlobalAlerts() {
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<IncidentHandledInfo | null>(null)
 
-  // Snoozed incidents (FR-07) mute the alarm modal for that incident until
-  // the shared deadline expires or a RE_ALARM event reactivates it.
-  const activeAlerts = alerts.filter((a) => !isSnoozedNow(a.log_id, snoozedUntil))
-  const alert = activeAlerts[0]
+  // The dialog displays the front of the alerts queue. Snoozing an alert
+  // mutes the siren sound via useAlertStore while keeping the modal open
+  // until confirmed, dismissed, or resolved.
+  const alert = alerts[0]
 
   const noop = useCallback(() => {}, [])
 
@@ -59,6 +59,7 @@ export function GlobalAlerts() {
   const isUnverified = alert.detection_status === "Unverified"
   const isOngoing = alert.detection_status === "Ongoing"
   const hasAuditTrail = Boolean(alert.verified_by_name || alert.verified_at)
+  const isSnoozed = isSnoozedNow(alert.log_id, snoozedUntil)
 
   function invalidateAlerts() {
     queryClient.invalidateQueries({ queryKey: ["alerts"] })
@@ -147,10 +148,10 @@ export function GlobalAlerts() {
           <h2 className="text-center text-2xl font-bold uppercase tracking-widest text-black">
             Accident Detected
           </h2>
-          {activeAlerts.length > 1 && (
+          {alerts.length > 1 && (
             <p className="mt-1 text-center text-xs font-medium text-black/70">
-              +{activeAlerts.length - 1} more alert
-              {activeAlerts.length > 2 ? "s" : ""} queued
+              +{alerts.length - 1} more alert
+              {alerts.length > 2 ? "s" : ""} queued
             </p>
           )}
         </div>
@@ -163,16 +164,16 @@ export function GlobalAlerts() {
             <Button
               variant="ghost"
               size="icon"
-              className="absolute right-4 top-4 z-10 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
-              title="Snooze Alarm"
-              disabled={busy}
+              className={cn(
+                "absolute right-4 top-4 z-10 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg",
+                isSnoozed && "text-warning hover:text-warning",
+              )}
+              title={isSnoozed ? "Alarm muted" : "Snooze Alarm"}
+              aria-label={isSnoozed ? "Alarm muted" : "Snooze alarm"}
+              disabled={busy || isSnoozed}
               onClick={handleSnooze}
             >
-              {isSnoozedNow(alert.log_id, snoozedUntil) ? (
-                <RiNotificationOffLine size={20} />
-              ) : (
-                <RiNotification2Line size={20} />
-              )}
+              {isSnoozed ? <RiNotificationOffLine size={20} /> : <RiNotification2Line size={20} />}
             </Button>
           ) : null}
 
