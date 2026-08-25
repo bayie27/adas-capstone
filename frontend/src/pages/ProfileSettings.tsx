@@ -64,28 +64,17 @@ export default function ProfileSettings() {
       ) : profile ? (
         <div className="divide-y divide-stroke">
           {/* Section 1: Avatar & Identity Header */}
-          <div className="flex flex-col items-start justify-between gap-6 pb-8 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-5 sm:gap-6">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-h2 font-semibold text-fg shadow-inner sm:h-24 sm:w-24">
-                {initials}
-              </div>
-              <div className="space-y-1">
-                <h2 className="text-xl font-semibold text-fg sm:text-2xl">
-                  {displayName || "Unnamed User"}
-                </h2>
-                <p className="text-secondary text-fg-muted">{displayRole}</p>
-                <p className="text-caption text-fg-muted">@{profile.username}</p>
-              </div>
+          <div className="flex items-center gap-5 pb-8 sm:gap-6">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-h2 font-semibold text-fg shadow-inner sm:h-24 sm:w-24">
+              {initials}
             </div>
-
-            <button
-              type="button"
-              onClick={() => setModal({ kind: "edit_profile" })}
-              className="flex items-center gap-1.5 rounded-lg border border-stroke bg-surface-2/40 px-3.5 py-1.5 text-secondary font-medium text-fg transition-colors hover:border-stroke-strong hover:bg-surface-2"
-            >
-              <span>Edit</span>
-              <RiEditBoxLine size={16} className="text-fg-muted" />
-            </button>
+            <div className="space-y-1">
+              <h2 className="text-xl font-semibold text-fg sm:text-2xl">
+                {displayName || "Unnamed User"}
+              </h2>
+              <p className="text-secondary text-fg-muted">{displayRole}</p>
+              <p className="text-caption text-fg-muted">@{profile.username}</p>
+            </div>
           </div>
 
           {/* Section 2: Personal Information */}

@@ -90,8 +90,8 @@ describe("ProfileSettings Page", () => {
 
     renderProfileSettings()
 
-    const editButtons = await screen.findAllByRole("button", { name: "Edit" })
-    await user.click(editButtons[0])
+    const editButton = await screen.findByRole("button", { name: "Edit" })
+    await user.click(editButton)
 
     expect(screen.getByText("Edit Personal Information")).toBeInTheDocument()
 
