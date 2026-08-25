@@ -30,6 +30,7 @@ import { formatUserRole, getUserFullName } from "@/utils/format"
 import { AddUserModal } from "@/pages/users/AddUserModal"
 import { EditUserModal } from "@/pages/users/EditUserModal"
 import { ChangePasswordModal } from "@/pages/users/ChangePasswordModal"
+import { toast } from "@/store/useToastStore"
 
 const USERS_QUERY_KEY = ["users"] as const
 const USERS_PAGE_SIZE = 10
@@ -93,10 +94,12 @@ export default function Users() {
     mutationFn: deleteUser,
     onSuccess: () => {
       const deletedUser = modal.kind === "delete" ? modal.user : null
+      const message = `${deletedUser?.username ?? "User"} was removed from the active user list.`
 
+      toast.success(message)
       setNotice({
         tone: "success",
-        message: `${deletedUser?.username ?? "User"} was removed from the active user list.`,
+        message,
       })
 
       if (users.length === 1 && page > 1) {
@@ -111,16 +114,20 @@ export default function Users() {
   const restoreUserMutation = useMutation({
     mutationFn: (userId: number) => restoreUser(userId),
     onSuccess: (updated) => {
+      const message = `${updated.username} was restored.`
+      toast.success(message)
       setNotice({
         tone: "success",
-        message: `${updated.username} was restored.`,
+        message,
       })
       queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY })
     },
     onError: (error) => {
+      const message = getApiErrorMessage(error, "Unable to restore this user.")
+      toast.error(message)
       setNotice({
         tone: "error",
-        message: getApiErrorMessage(error, "Unable to restore this user."),
+        message,
       })
     },
   })
@@ -324,9 +331,11 @@ export default function Users() {
         <AddUserModal
           onClose={() => setModal({ kind: "closed" })}
           onSuccess={(user) => {
+            const message = `${user.username} was created successfully.`
+            toast.success(message)
             setNotice({
               tone: "success",
-              message: `${user.username} was created successfully.`,
+              message,
             })
             reset()
             setModal({ kind: "closed" })
@@ -340,9 +349,11 @@ export default function Users() {
           user={modal.user}
           onClose={() => setModal({ kind: "closed" })}
           onSuccess={(updatedUser) => {
+            const message = `${updatedUser.username} was updated successfully.`
+            toast.success(message)
             setNotice({
               tone: "success",
-              message: `${updatedUser.username} was updated successfully.`,
+              message,
             })
             setModal({ kind: "closed" })
             queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY })
@@ -382,9 +393,11 @@ export default function Users() {
           user={modal.user}
           onClose={() => setModal({ kind: "closed" })}
           onSuccess={() => {
+            const message = `Password reset for ${modal.user.username} completed successfully.`
+            toast.success(message)
             setNotice({
               tone: "success",
-              message: `Password reset for ${modal.user.username} completed successfully.`,
+              message,
             })
             setModal({ kind: "closed" })
             queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY })
