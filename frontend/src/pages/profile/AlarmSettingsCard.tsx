@@ -11,6 +11,7 @@ import type { AlarmSettings } from "@/api/settings"
 import { getApiErrorMessage } from "@/api/client"
 import { previewDetectionSound, setDetectionSoundVolume } from "@/utils/detectionSound"
 import { toast } from "@/store/useToastStore"
+import { cn } from "@/utils/cn"
 
 const ALARM_SETTINGS_QUERY_KEY = ["alarm-settings"] as const
 
@@ -31,7 +32,7 @@ function formatSoundLabel(key: string): string {
  * second copy of a number that could drift from what the PUT route
  * actually enforces.
  */
-export function AlarmSettingsCard() {
+export function AlarmSettingsCard({ className }: { className?: string } = {}) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState<AlarmSettings | null>(null)
 
@@ -96,7 +97,7 @@ export function AlarmSettingsCard() {
     : null
 
   return (
-    <Card className="p-8">
+    <Card className={cn("p-8", className)}>
       <div className="mb-6">
         <h2 className="text-h3 font-semibold text-fg">Alarm Settings</h2>
         <p className="text-secondary text-fg-muted">
