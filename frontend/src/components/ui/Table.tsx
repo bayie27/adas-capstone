@@ -6,8 +6,8 @@ import { focusRing } from "@/components/ui/Button"
 
 /**
  * The table container and its parts, as the Cameras / Detections / Users /
- * AI Performance frames draw them: a --radius-xl card with the table inside,
- * caption-sized muted headers, --color-stroke row dividers, and 24px cell
+ * AI Performance frames draw them: a --radius-sm (4px) card with the table inside,
+ * caption-sized muted headers (12px), --color-stroke row dividers, and 24px cell
  * padding (§2.3).
  *
  * §2.7 — tables scroll horizontally inside their card rather than reflowing.
@@ -29,7 +29,7 @@ export function TableContainer({
   children: ReactNode
 }) {
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-stroke bg-surface-1", className)}>
+    <div className={cn("overflow-hidden rounded-sm border border-stroke bg-surface-1", className)}>
       <div className="overflow-x-auto">{children}</div>
       {footer}
     </div>

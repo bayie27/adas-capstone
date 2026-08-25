@@ -15,7 +15,16 @@ import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { SearchInput } from "@/components/ui/SearchInput"
-import { TableStateRow } from "@/components/ui/Table"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  TableStateRow,
+} from "@/components/ui/Table"
 import { cn } from "@/utils/cn"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
@@ -64,18 +73,27 @@ export default function Users() {
   // the total — so mirror it into state and sync during render (placeholderData
   // keeps it stable across refetches). This clamps the page without an effect.
   const [seenTotal, setSeenTotal] = useState(0)
-  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
-    seenTotal,
-    USERS_PAGE_SIZE,
-  )
+  const {
+    page,
+    pageSize,
+    totalPages,
+    offset,
+    rangeStart,
+    rangeEnd,
+    next,
+    prev,
+    reset,
+    goTo,
+    setPageSize,
+  } = usePagination(seenTotal, USERS_PAGE_SIZE)
 
   const usersQuery = useQuery({
-    queryKey: [...USERS_QUERY_KEY, debouncedSearchTerm, activeFilter, USERS_PAGE_SIZE, offset],
+    queryKey: [...USERS_QUERY_KEY, debouncedSearchTerm, activeFilter, pageSize, offset],
     queryFn: () =>
       getUsers({
         search: debouncedSearchTerm || undefined,
         is_active: activeFilter === "active" ? undefined : activeFilter,
-        limit: USERS_PAGE_SIZE,
+        limit: pageSize,
         offset,
       }),
     placeholderData: (previousData) => previousData,
@@ -168,146 +186,134 @@ export default function Users() {
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-stroke bg-surface-1">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-stroke bg-surface-1 text-fg-muted">
-                <th className="px-6 py-4 text-xs font-medium">Full Name</th>
-                <th className="px-6 py-4 text-xs font-medium">Username</th>
-                <th className="px-6 py-4 text-xs font-medium">Role</th>
-                <th className="px-6 py-4 text-xs font-medium">Last Login</th>
-                <th className="px-6 py-4 text-xs font-medium">Status</th>
-                <th className="px-6 py-4 text-right text-xs font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stroke">
-              {usersQuery.isLoading ? (
-                <TableStateRow colSpan={6}>
-                  <div className="py-8 text-center text-sm text-fg-muted">Loading users...</div>
-                </TableStateRow>
-              ) : usersQuery.isError ? (
-                <TableStateRow colSpan={6}>
-                  <div className="py-8 text-center text-sm text-danger">
-                    {getApiErrorMessage(usersQuery.error, "Unable to load users.")}
-                  </div>
-                </TableStateRow>
-              ) : users.length === 0 ? (
-                <TableStateRow colSpan={6}>
-                  <div className="py-8 text-center text-sm text-fg-muted">No users found.</div>
-                </TableStateRow>
-              ) : (
-                users.map((user) => {
-                  const isRestoring =
-                    restoreUserMutation.isPending && restoreUserMutation.variables === user.user_id
-                  const rowBusy =
-                    (deleteUserMutation.isPending &&
-                      modal.kind === "delete" &&
-                      modal.user.user_id === user.user_id) ||
-                    isRestoring
-                  const iconButtonClass = cn(
-                    "rounded p-1.5 text-fg-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg",
-                    "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:text-fg-muted",
-                    focusRing,
-                  )
+      <TableContainer
+        footer={
+          <PaginationFooter
+            page={page}
+            totalPages={totalPages}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEndValue}
+            totalFiltered={totalUsers}
+            pageSize={pageSize}
+            isFetching={usersQuery.isFetching}
+            onPrev={prev}
+            onNext={next}
+            onPageChange={goTo}
+            onPageSizeChange={setPageSize}
+          />
+        }
+      >
+        <Table>
+          <TableHead>
+            <TableHeaderCell>Full Name</TableHeaderCell>
+            <TableHeaderCell>Username</TableHeaderCell>
+            <TableHeaderCell>Role</TableHeaderCell>
+            <TableHeaderCell>Last Login</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell className="text-right">Actions</TableHeaderCell>
+          </TableHead>
+          <TableBody>
+            {usersQuery.isLoading ? (
+              <TableStateRow colSpan={6}>Loading users...</TableStateRow>
+            ) : usersQuery.isError ? (
+              <TableStateRow colSpan={6} tone="error">
+                {getApiErrorMessage(usersQuery.error, "Unable to load users.")}
+              </TableStateRow>
+            ) : users.length === 0 ? (
+              <TableStateRow colSpan={6}>No users found.</TableStateRow>
+            ) : (
+              users.map((user) => {
+                const isRestoring =
+                  restoreUserMutation.isPending && restoreUserMutation.variables === user.user_id
+                const rowBusy =
+                  (deleteUserMutation.isPending &&
+                    modal.kind === "delete" &&
+                    modal.user.user_id === user.user_id) ||
+                  isRestoring
+                const iconButtonClass = cn(
+                  "rounded p-1.5 text-fg-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg",
+                  "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:text-fg-muted",
+                  focusRing,
+                )
 
-                  return (
-                    <tr
-                      key={user.user_id}
-                      className={cn(
-                        "text-fg-body transition-colors hover:bg-surface-1",
-                        rowBusy ? "opacity-50" : "",
+                return (
+                  <TableRow key={user.user_id} className={rowBusy ? "opacity-50" : undefined}>
+                    <TableCell className="font-medium text-fg">{getUserFullName(user)}</TableCell>
+                    <TableCell className="text-fg-muted">{user.username}</TableCell>
+                    <TableCell className="text-fg-muted">{formatUserRole(user.role)}</TableCell>
+                    <TableCell className="text-fg-muted">
+                      {formatRelativeDateTime(user.last_login)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge tone={user.is_active ? "success" : "danger"} variant="subtle">
+                        {user.is_active ? "Active" : "Deactivated"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {user.is_active ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            disabled={rowBusy}
+                            aria-label={`Edit ${getUserFullName(user)}`}
+                            onClick={() => {
+                              setModal({ kind: "edit", user })
+                            }}
+                            className={iconButtonClass}
+                          >
+                            <RiPencilLine size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={rowBusy}
+                            aria-label={`Reset password for ${getUserFullName(user)}`}
+                            onClick={() => {
+                              setModal({ kind: "password", user })
+                            }}
+                            className={iconButtonClass}
+                          >
+                            <RiKey2Line size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={rowBusy}
+                            aria-label={`Delete ${getUserFullName(user)}`}
+                            onClick={() => {
+                              setModal({ kind: "delete", user })
+                            }}
+                            className={cn(iconButtonClass, "hover:text-danger")}
+                          >
+                            <RiDeleteBinLine size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end">
+                          <button
+                            type="button"
+                            aria-label={`Restore ${getUserFullName(user)}`}
+                            disabled={isRestoring || rowBusy}
+                            onClick={() => {
+                              restoreUserMutation.mutate(user.user_id)
+                            }}
+                            className={cn(
+                              "flex items-center gap-1.5 rounded-sm text-xs text-fg-muted transition-colors duration-150 hover:text-fg",
+                              "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-fg-muted",
+                              focusRing,
+                            )}
+                          >
+                            <RiArrowGoBackLine size={14} />
+                            {isRestoring ? "Restoring…" : "Restore"}
+                          </button>
+                        </div>
                       )}
-                    >
-                      <td className="px-6 py-4 text-xs font-medium">{getUserFullName(user)}</td>
-                      <td className="px-6 py-4 text-xs">{user.username}</td>
-                      <td className="px-6 py-4 text-xs">{formatUserRole(user.role)}</td>
-                      <td className="px-6 py-4 text-xs">
-                        {formatRelativeDateTime(user.last_login)}
-                      </td>
-                      <td className="px-6 py-4 text-xs">
-                        <Badge tone={user.is_active ? "success" : "danger"} variant="subtle">
-                          {user.is_active ? "Active" : "Deactivated"}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        {user.is_active ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              disabled={rowBusy}
-                              aria-label={`Edit ${getUserFullName(user)}`}
-                              onClick={() => {
-                                setModal({ kind: "edit", user })
-                              }}
-                              className={iconButtonClass}
-                            >
-                              <RiPencilLine size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={rowBusy}
-                              aria-label={`Reset password for ${getUserFullName(user)}`}
-                              onClick={() => {
-                                setModal({ kind: "password", user })
-                              }}
-                              className={iconButtonClass}
-                            >
-                              <RiKey2Line size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={rowBusy}
-                              aria-label={`Delete ${getUserFullName(user)}`}
-                              onClick={() => {
-                                setModal({ kind: "delete", user })
-                              }}
-                              className={cn(iconButtonClass, "hover:text-danger")}
-                            >
-                              <RiDeleteBinLine size={14} />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-end">
-                            <button
-                              type="button"
-                              aria-label={`Restore ${getUserFullName(user)}`}
-                              disabled={isRestoring || rowBusy}
-                              onClick={() => {
-                                restoreUserMutation.mutate(user.user_id)
-                              }}
-                              className={cn(
-                                "flex items-center gap-1.5 rounded-sm text-xs text-fg-muted transition-colors duration-150 hover:text-fg",
-                                "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-fg-muted",
-                                focusRing,
-                              )}
-                            >
-                              <RiArrowGoBackLine size={14} />
-                              {isRestoring ? "Restoring…" : "Restore"}
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <PaginationFooter
-          page={page}
-          totalPages={totalPages}
-          rangeStart={rangeStart}
-          rangeEnd={rangeEndValue}
-          totalFiltered={totalUsers}
-          pageSize={USERS_PAGE_SIZE}
-          isFetching={usersQuery.isFetching}
-          onPrev={prev}
-          onNext={next}
-        />
-      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       {modal.kind === "add" && (
         <AddUserModal

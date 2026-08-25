@@ -18,7 +18,16 @@ import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"
 import { StatCard } from "@/components/ui/StatCard"
-import { TableStateRow } from "@/components/ui/Table"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  TableStateRow,
+} from "@/components/ui/Table"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
@@ -55,20 +64,37 @@ export default function AiPerformance() {
   // See Users.tsx: mirror the query total into state so usePagination can clamp
   // the page at read time without an effect.
   const [seenTotal, setSeenTotal] = useState(0)
-  const { page, totalPages, offset, rangeStart, rangeEnd, next, prev, reset } = usePagination(
-    seenTotal,
-    ITEMS_PER_PAGE,
-  )
+  const {
+    page,
+    pageSize,
+    totalPages,
+    offset,
+    rangeStart,
+    rangeEnd,
+    next,
+    prev,
+    reset,
+    goTo,
+    setPageSize,
+  } = usePagination(seenTotal, ITEMS_PER_PAGE)
 
   const performanceQuery = useQuery({
-    queryKey: [...PERFORMANCE_QUERY_KEY, debouncedSearchTerm, startDate, endDate, cameraId, offset],
+    queryKey: [
+      ...PERFORMANCE_QUERY_KEY,
+      debouncedSearchTerm,
+      startDate,
+      endDate,
+      cameraId,
+      pageSize,
+      offset,
+    ],
     queryFn: () =>
       getPerformanceAnalytics({
         search: debouncedSearchTerm || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         camera_id: cameraId ? [Number(cameraId)] : undefined,
-        limit: ITEMS_PER_PAGE,
+        limit: pageSize,
         offset,
       }),
     placeholderData: (previousData) => previousData,
@@ -365,84 +391,81 @@ export default function AiPerformance() {
         />
       ) : null}
 
-      <div className="overflow-hidden rounded-xl border border-stroke bg-surface-1">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-stroke bg-surface-1 text-fg-muted">
-                <th className="px-6 py-4 text-xs font-medium">Camera Name</th>
-                <th className="px-6 py-4 text-right text-xs font-medium">Accidents</th>
-                <th className="px-6 py-4 text-right text-xs font-medium">Dismissed</th>
-                <th className="px-6 py-4 text-right text-xs font-medium">Precision Score</th>
-                <th className="px-6 py-4 text-right text-xs font-medium">Confidence Score</th>
-                <th className="px-6 py-4 text-right text-xs font-medium">Dismissed Score</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stroke">
-              {performanceQuery.isLoading ? (
-                <TableStateRow colSpan={6}>Loading AI performance...</TableStateRow>
-              ) : perCamera.length === 0 ? (
-                <TableStateRow colSpan={6}>
-                  No camera statistics found for the current filters.
-                </TableStateRow>
-              ) : (
-                perCamera.map((item) => (
-                  <tr
-                    key={item.camera_id}
-                    className="text-fg-body transition-colors hover:bg-surface-1"
+      <TableContainer
+        footer={
+          <PaginationFooter
+            page={page}
+            totalPages={totalPages}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEndValue}
+            totalFiltered={totalFiltered}
+            pageSize={pageSize}
+            isFetching={performanceQuery.isFetching}
+            onPrev={prev}
+            onNext={next}
+            onPageChange={goTo}
+            onPageSizeChange={setPageSize}
+          />
+        }
+      >
+        <Table>
+          <TableHead>
+            <TableHeaderCell>Camera Name</TableHeaderCell>
+            <TableHeaderCell className="text-right">Accidents</TableHeaderCell>
+            <TableHeaderCell className="text-right">Dismissed</TableHeaderCell>
+            <TableHeaderCell className="text-right">Precision Score</TableHeaderCell>
+            <TableHeaderCell className="text-right">Confidence Score</TableHeaderCell>
+            <TableHeaderCell className="text-right">Dismissed Score</TableHeaderCell>
+          </TableHead>
+          <TableBody>
+            {performanceQuery.isLoading ? (
+              <TableStateRow colSpan={6}>Loading AI performance...</TableStateRow>
+            ) : perCamera.length === 0 ? (
+              <TableStateRow colSpan={6}>
+                No camera statistics found for the current filters.
+              </TableStateRow>
+            ) : (
+              perCamera.map((item) => (
+                <TableRow key={item.camera_id}>
+                  <TableCell className="font-medium text-fg">{item.camera_name}</TableCell>
+                  <TableCell className="text-right text-fg-muted">{item.total_accidents}</TableCell>
+                  <TableCell className="text-right text-fg-muted">{item.total_dismissed}</TableCell>
+                  {/*
+                    Same null-vs-value pattern as the two columns below:
+                    `precision_score` is null (unmeasured), not 0, when
+                    nothing has been acted on in the window. Rendering it as
+                    a hardcoded danger colour regardless of null read as
+                    "confirmed bad" rather than "nothing to measure yet" —
+                    exactly the wrong claim to make silently on a capstone
+                    metric.
+                  */}
+                  <TableCell
+                    className={`text-right font-medium ${
+                      item.precision_score === null ? "text-fg-muted" : "text-danger"
+                    }`}
                   >
-                    <td className="px-6 py-4 text-xs font-medium">{item.camera_name}</td>
-                    <td className="px-6 py-4 text-right text-xs">{item.total_accidents}</td>
-                    <td className="px-6 py-4 text-right text-xs">{item.total_dismissed}</td>
-                    {/*
-                      Same null-vs-value pattern as the two columns below:
-                      `precision_score` is null (unmeasured), not 0, when
-                      nothing has been acted on in the window. Rendering it as
-                      a hardcoded danger colour regardless of null read as
-                      "confirmed bad" rather than "nothing to measure yet" —
-                      exactly the wrong claim to make silently on a capstone
-                      metric.
-                    */}
-                    <td
-                      className={`px-6 py-4 text-right text-xs font-medium ${
-                        item.precision_score === null ? "text-fg-muted" : "text-danger"
-                      }`}
-                    >
-                      {formatPercent(item.precision_score)}
-                    </td>
-                    <td
-                      className={`px-6 py-4 text-right text-xs font-medium ${
-                        item.avg_accident_confidence === null ? "text-fg-muted" : "text-success"
-                      }`}
-                    >
-                      {formatPercent(item.avg_accident_confidence)}
-                    </td>
-                    <td
-                      className={`px-6 py-4 text-right text-xs font-medium ${
-                        item.avg_dismissed_confidence === null ? "text-fg-muted" : "text-danger"
-                      }`}
-                    >
-                      {formatPercent(item.avg_dismissed_confidence)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <PaginationFooter
-          page={page}
-          totalPages={totalPages}
-          rangeStart={rangeStart}
-          rangeEnd={rangeEndValue}
-          totalFiltered={totalFiltered}
-          pageSize={ITEMS_PER_PAGE}
-          isFetching={performanceQuery.isFetching}
-          onPrev={prev}
-          onNext={next}
-        />
-      </div>
+                    {formatPercent(item.precision_score)}
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-medium ${
+                      item.avg_accident_confidence === null ? "text-fg-muted" : "text-success"
+                    }`}
+                  >
+                    {formatPercent(item.avg_accident_confidence)}
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-medium ${
+                      item.avg_dismissed_confidence === null ? "text-fg-muted" : "text-danger"
+                    }`}
+                  >
+                    {formatPercent(item.avg_dismissed_confidence)}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       <Modal
         isOpen={showWarningModal}
