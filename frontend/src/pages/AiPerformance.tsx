@@ -17,6 +17,7 @@ import { FilterSelect } from "@/components/ui/FilterSelect"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"
+import { StatCard } from "@/components/ui/StatCard"
 import {
   Table,
   TableBody,
@@ -27,6 +28,7 @@ import {
   TableRow,
   TableStateRow,
 } from "@/components/ui/Table"
+import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
