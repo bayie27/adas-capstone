@@ -18,6 +18,7 @@ import { formatRelativeDateTime } from "@/utils/datetime"
 import { failureMessage } from "@/utils/exportJobs"
 import { cn } from "@/utils/cn"
 import { useState } from "react"
+import { toast } from "@/store/useToastStore"
 
 const POLL_INTERVAL_MS = 3000
 const HISTORY_PAGE_SIZE = 20
@@ -89,7 +90,9 @@ function JobRow({
     setDownloadError(null)
     try {
       await downloadExportJob(job)
+      toast.success("Export downloaded successfully.")
     } catch {
+      toast.error("Download failed. The file may have expired.")
       setDownloadError("Download failed. The file may have expired — try again.")
     }
   }
@@ -191,7 +194,9 @@ function HistoryJobRow({ job }: { job: ExportJobRead }) {
     setDownloadError(null)
     try {
       await downloadExportJob(job)
+      toast.success("Export downloaded successfully.")
     } catch {
+      toast.error("Download failed. The file may have expired.")
       setDownloadError("Download failed. The file may have expired — try again.")
     }
   }
