@@ -26,6 +26,7 @@ import {
 import { RestoreConfirmModal } from "@/pages/maintenance/RestoreConfirmModal"
 import { formatFullDateTime } from "@/utils/datetime"
 import { formatFileSize } from "@/utils/format"
+import { toast } from "@/store/useToastStore"
 
 const BACKUPS_QUERY_KEY = ["system-backups"] as const
 const LATEST_RESTORE_QUERY_KEY = ["latest-restore"] as const
@@ -223,6 +224,7 @@ export default function Maintenance() {
             ?.items ?? []
         ).map((b) => b.backup_id),
       )
+      toast.info("Database backup started in the background.")
       setNotice({ tone: "warning", message: "Backup started. Please wait…" })
       window.setTimeout(async () => {
         const result = await queryClient.fetchQuery({
@@ -231,6 +233,9 @@ export default function Maintenance() {
           staleTime: 0,
         })
         const hasNew = result.items.some((b) => !preBackupIdsRef.current.has(b.backup_id))
+        if (hasNew) {
+          toast.success("Database backup created successfully.")
+        }
         setNotice(
           hasNew
             ? {
@@ -248,11 +253,13 @@ export default function Maintenance() {
     },
     onError: (error) => {
       const isBusy = getApiError(error)?.code === "CONFLICT_BUSY"
+      const message = isBusy
+        ? "A backup or restore is already running."
+        : getApiErrorMessage(error, "Unable to start a backup.")
+      toast.error(message)
       setNotice({
         tone: "error",
-        message: isBusy
-          ? "A backup or restore is already running."
-          : getApiErrorMessage(error, "Unable to start a backup."),
+        message,
       })
     },
   })
@@ -423,6 +430,8 @@ export default function Maintenance() {
           backupId={restoreTargetId}
           onClose={() => setRestoreTargetId(null)}
           onSuccess={() => {
+            const message = `Restore requested for backup ${restoreTargetId}.`
+            toast.success(message)
             setNotice({
               tone: "success",
               message: `Restore requested for backup ${restoreTargetId}. Nothing happens automatically — stop services and run the offline restore procedure to complete it.`,
