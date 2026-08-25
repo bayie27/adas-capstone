@@ -399,12 +399,12 @@ function DualHealthChart({
       ) : isUnavailable ? (
         <ChartMessage>Unavailable — not reported on this host.</ChartMessage>
       ) : (
-        <div className="-ml-4 flex-1">
+        <div className="flex-1">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
               <XAxis dataKey="time" {...AXIS_PROPS} dy={8} tick={false} />
-              <YAxis {...AXIS_PROPS} width={32} tickFormatter={(v) => `${v}${unit}`} />
+              <YAxis {...AXIS_PROPS} width={38} tickFormatter={(v) => `${v}${unit}`} />
               <Tooltip
                 {...TOOLTIP_PROPS}
                 cursor={{ stroke: "var(--color-stroke-strong)", strokeWidth: 1 }}
