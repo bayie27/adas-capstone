@@ -187,15 +187,15 @@ export function GlobalAlerts() {
             disabled={isFirst}
             onClick={() => navigate(-1)}
             className={cn(
-              "fixed left-4 top-1/2 z-[10000] -translate-y-1/2",
-              "flex h-12 w-12 items-center justify-center rounded-full",
-              "bg-black/60 text-white shadow-lg backdrop-blur-sm transition-all",
+              "fixed left-6 top-1/2 z-[10000] -translate-y-1/2",
+              "flex h-16 w-16 items-center justify-center rounded-full border border-white/20",
+              "bg-black/75 text-white shadow-2xl backdrop-blur-md transition-all",
               isFirst
-                ? "cursor-not-allowed opacity-25"
-                : "opacity-90 hover:scale-110 hover:bg-black/80 hover:opacity-100",
+                ? "cursor-not-allowed opacity-20"
+                : "opacity-90 hover:scale-110 hover:bg-black/90 hover:opacity-100 active:scale-95",
             )}
           >
-            <RiArrowLeftSLine size={28} aria-hidden />
+            <RiArrowLeftSLine size={40} aria-hidden />
           </button>
 
           {/* ── Far-right Next arrow ── */}
@@ -205,15 +205,15 @@ export function GlobalAlerts() {
             disabled={isLast}
             onClick={() => navigate(1)}
             className={cn(
-              "fixed right-4 top-1/2 z-[10000] -translate-y-1/2",
-              "flex h-12 w-12 items-center justify-center rounded-full",
-              "bg-black/60 text-white shadow-lg backdrop-blur-sm transition-all",
+              "fixed right-6 top-1/2 z-[10000] -translate-y-1/2",
+              "flex h-16 w-16 items-center justify-center rounded-full border border-white/20",
+              "bg-black/75 text-white shadow-2xl backdrop-blur-md transition-all",
               isLast
-                ? "cursor-not-allowed opacity-25"
-                : "opacity-90 hover:scale-110 hover:bg-black/80 hover:opacity-100",
+                ? "cursor-not-allowed opacity-20"
+                : "opacity-90 hover:scale-110 hover:bg-black/90 hover:opacity-100 active:scale-95",
             )}
           >
-            <RiArrowRightSLine size={28} aria-hidden />
+            <RiArrowRightSLine size={40} aria-hidden />
           </button>
 
           {/* ── Alert N of M pill badge — centered at bottom of viewport ── */}
@@ -222,9 +222,9 @@ export function GlobalAlerts() {
             aria-atomic="true"
             className={cn(
               "fixed bottom-8 left-1/2 z-[10000] -translate-x-1/2",
-              "flex items-center gap-1.5 rounded-full",
-              "bg-black/70 px-4 py-1.5 backdrop-blur-sm",
-              "text-xs font-semibold tabular-nums text-white shadow-lg",
+              "flex items-center gap-2 rounded-full border border-white/20",
+              "bg-black/80 px-6 py-2.5 backdrop-blur-md shadow-2xl",
+              "text-sm font-bold tracking-wide tabular-nums text-white",
             )}
           >
             Alert {clampedIndex + 1} of {alerts.length}
