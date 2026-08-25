@@ -40,6 +40,7 @@ import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
 import { CameraDetailPanel } from "@/pages/cameras/CameraDetailPanel"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"
+import { toast } from "@/store/useToastStore"
 import {
   RiAddLine,
   RiArrowGoBackLine,
@@ -190,12 +191,14 @@ export default function Cameras() {
         queryClient.setQueryData(queryKey, data)
       }
 
+      const message = getApiErrorMessage(
+        error,
+        `Unable to ${nextEnabled ? "enable" : "disable"} ${camera.camera_name}.`,
+      )
+      toast.error(message)
       setNotice({
         tone: "error",
-        message: getApiErrorMessage(
-          error,
-          `Unable to ${nextEnabled ? "enable" : "disable"} ${camera.camera_name}.`,
-        ),
+        message,
       })
     },
     onSuccess: (updated) => {
@@ -206,9 +209,11 @@ export default function Cameras() {
         shouldApplyCameraEvent(updated.config_version, cached.config_version) ? updated : cached,
       )
 
+      const message = `${updated.camera_name} is now ${updated.is_enabled ? "enabled" : "disabled"}.`
+      toast.success(message)
       setNotice({
         tone: "success",
-        message: `${updated.camera_name} is now ${updated.is_enabled ? "enabled" : "disabled"}.`,
+        message,
       })
     },
     // The kpis object is server-computed over the whole active population, so
@@ -224,10 +229,12 @@ export default function Cameras() {
     mutationFn: deleteCamera,
     onSuccess: () => {
       const deletedCamera = modal.kind === "delete" ? modal.camera : null
+      const message = `${deletedCamera?.camera_name ?? "Camera"} was removed from the active camera list.`
 
+      toast.success(message)
       setNotice({
         tone: "success",
-        message: `${deletedCamera?.camera_name ?? "Camera"} was removed from the active camera list.`,
+        message,
       })
 
       if ((camerasQuery.data?.cameras.length ?? 0) === 1 && page > 1) {
@@ -248,19 +255,23 @@ export default function Cameras() {
   const restoreCameraMutation = useMutation({
     mutationFn: restoreCamera,
     onSuccess: (updated) => {
+      const message = `${updated.camera_name} was restored.`
+      toast.success(message)
       setNotice({
         tone: "success",
-        message: `${updated.camera_name} was restored.`,
+        message,
       })
       invalidateCameraQueries()
     },
     onError: (error) => {
+      const message =
+        getApiError(error)?.code === "CONFLICT_DUPLICATE"
+          ? "A camera with that name or channel already exists. Rename the live camera, or rename this one, then try restoring again."
+          : getApiErrorMessage(error, "Unable to restore this camera.")
+      toast.error(message)
       setNotice({
         tone: "error",
-        message:
-          getApiError(error)?.code === "CONFLICT_DUPLICATE"
-            ? "A camera with that name or channel already exists. Rename the live camera, or rename this one, then try restoring again."
-            : getApiErrorMessage(error, "Unable to restore this camera."),
+        message,
       })
     },
   })
@@ -581,9 +592,11 @@ export default function Cameras() {
         <AddCameraModal
           onClose={() => setModal({ kind: "closed" })}
           onSuccess={(camera) => {
+            const message = `${camera.camera_name} was added successfully.`
+            toast.success(message)
             setNotice({
               tone: "success",
-              message: `${camera.camera_name} was added successfully.`,
+              message,
             })
             reset()
             setModal({ kind: "closed" })
@@ -597,9 +610,11 @@ export default function Cameras() {
           camera={modal.camera}
           onClose={() => setModal({ kind: "closed" })}
           onSuccess={(camera) => {
+            const message = `${camera.camera_name} was updated successfully.`
+            toast.success(message)
             setNotice({
               tone: "success",
-              message: `${camera.camera_name} was updated successfully.`,
+              message,
             })
             setModal({ kind: "closed" })
             invalidateCameraQueries()
