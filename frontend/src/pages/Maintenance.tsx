@@ -110,15 +110,18 @@ function BackupRow({
       </TableRow>
       {expanded ? (
         <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={TABLE_COLUMN_COUNT} className="bg-canvas">
+          <TableCell colSpan={TABLE_COLUMN_COUNT} className="bg-canvas py-6">
             {/*
               `valid` alone hides which gate passed — a backup whose checks
               disagree with its own valid flag (a partial failure the
               summary can't distinguish from a clean pass) is exactly the
               case a restore candidate needs to be able to tell apart.
             */}
-            <div className="flex flex-wrap items-center justify-between gap-2 py-2">
-              <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-caption font-medium text-fg-muted mr-1">
+                  Validation Checks:
+                </span>
                 {checkEntries.length === 0 ? (
                   <span className="text-caption text-fg-muted">No check detail recorded.</span>
                 ) : (
@@ -145,16 +148,22 @@ function BackupRow({
                 click apart.
               */}
               {backup.valid ? (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onRequestRestore(backup.backup_id)
-                  }}
-                  className="text-caption font-medium text-danger transition-colors hover:text-danger/80"
-                >
-                  Request restore from this backup…
-                </button>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stroke pt-2.5">
+                  <span className="text-caption text-fg-muted">
+                    Restore database state and rollback to this backup point.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onRequestRestore(backup.backup_id)
+                    }}
+                  >
+                    Request Restore
+                  </Button>
+                </div>
               ) : null}
             </div>
           </TableCell>
