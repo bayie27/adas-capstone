@@ -1,7 +1,13 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { RiAddLine, RiPencilLine, RiKey2Line, RiDeleteBinLine } from "@remixicon/react"
+import {
+  RiAddLine,
+  RiArrowGoBackLine,
+  RiDeleteBinLine,
+  RiKey2Line,
+  RiPencilLine,
+} from "@remixicon/react"
 import { Badge } from "@/components/ui/Badge"
 import { Button, focusRing } from "@/components/ui/Button"
 import { ClearFiltersButton } from "@/components/ui/ClearFiltersButton"
@@ -14,7 +20,7 @@ import { TableStateRow } from "@/components/ui/Table"
 import { cn } from "@/utils/cn"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { usePagination } from "@/hooks/usePagination"
-import { deleteUser, getUsers } from "@/api/users"
+import { deleteUser, getUsers, restoreUser } from "@/api/users"
 import { useAuthStore } from "@/store/useAuthStore"
 import type { UserRecord } from "@/api/users"
 import { getDefaultRouteForRole, toApiRole } from "@/utils/auth"
@@ -102,6 +108,23 @@ export default function Users() {
     },
   })
 
+  const restoreUserMutation = useMutation({
+    mutationFn: (userId: number) => restoreUser(userId),
+    onSuccess: (updated) => {
+      setNotice({
+        tone: "success",
+        message: `${updated.username} was restored.`,
+      })
+      queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY })
+    },
+    onError: (error) => {
+      setNotice({
+        tone: "error",
+        message: getApiErrorMessage(error, "Unable to restore this user."),
+      })
+    },
+  })
+
   return (
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6">
@@ -180,13 +203,16 @@ export default function Users() {
                 <TableStateRow colSpan={5}>No users found.</TableStateRow>
               ) : (
                 users.map((user) => {
-                  // A row mid-delete shouldn't accept a second action against
-                  // the same account while its removal is still in flight —
+                  const isRestoring =
+                    restoreUserMutation.isPending && restoreUserMutation.variables === user.user_id
+                  // D-011 §2.3 — rowBusy stays per-row so a pending delete on one
+                  // row disables only that row's buttons while in flight; the
                   // other rows are unaffected.
                   const rowBusy =
-                    deleteUserMutation.isPending &&
-                    modal.kind === "delete" &&
-                    modal.user.user_id === user.user_id
+                    (deleteUserMutation.isPending &&
+                      modal.kind === "delete" &&
+                      modal.user.user_id === user.user_id) ||
+                    isRestoring
                   const iconButtonClass = cn(
                     "rounded p-1.5 text-fg-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg",
                     "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:text-fg-muted",
@@ -211,45 +237,67 @@ export default function Users() {
                       <td className="px-6 py-4 text-xs">
                         {formatRelativeDateTime(user.last_login)}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            disabled={rowBusy}
-                            aria-label={`Edit ${getUserFullName(user)}`}
-                            onClick={() => {
-                              setNotice(null)
-                              setModal({ kind: "edit", user })
-                            }}
-                            className={iconButtonClass}
-                          >
-                            <RiPencilLine size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={rowBusy}
-                            aria-label={`Reset password for ${getUserFullName(user)}`}
-                            onClick={() => {
-                              setNotice(null)
-                              setModal({ kind: "password", user })
-                            }}
-                            className={iconButtonClass}
-                          >
-                            <RiKey2Line size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={rowBusy}
-                            aria-label={`Delete ${getUserFullName(user)}`}
-                            onClick={() => {
-                              setNotice(null)
-                              setModal({ kind: "delete", user })
-                            }}
-                            className={cn(iconButtonClass, "hover:text-danger")}
-                          >
-                            <RiDeleteBinLine size={14} />
-                          </button>
-                        </div>
+                      <td className="px-6 py-4 text-right">
+                        {user.is_active ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              disabled={rowBusy}
+                              aria-label={`Edit ${getUserFullName(user)}`}
+                              onClick={() => {
+                                setNotice(null)
+                                setModal({ kind: "edit", user })
+                              }}
+                              className={iconButtonClass}
+                            >
+                              <RiPencilLine size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={rowBusy}
+                              aria-label={`Reset password for ${getUserFullName(user)}`}
+                              onClick={() => {
+                                setNotice(null)
+                                setModal({ kind: "password", user })
+                              }}
+                              className={iconButtonClass}
+                            >
+                              <RiKey2Line size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={rowBusy}
+                              aria-label={`Delete ${getUserFullName(user)}`}
+                              onClick={() => {
+                                setNotice(null)
+                                setModal({ kind: "delete", user })
+                              }}
+                              className={cn(iconButtonClass, "hover:text-danger")}
+                            >
+                              <RiDeleteBinLine size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end">
+                            <button
+                              type="button"
+                              aria-label={`Restore ${getUserFullName(user)}`}
+                              disabled={isRestoring || rowBusy}
+                              onClick={() => {
+                                setNotice(null)
+                                restoreUserMutation.mutate(user.user_id)
+                              }}
+                              className={cn(
+                                "flex items-center gap-1.5 rounded-sm text-xs text-fg-muted transition-colors duration-150 hover:text-fg",
+                                "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-fg-muted",
+                                focusRing,
+                              )}
+                            >
+                              <RiArrowGoBackLine size={14} />
+                              {isRestoring ? "Restoring…" : "Restore"}
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )

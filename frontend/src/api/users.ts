@@ -103,3 +103,11 @@ export async function resetUserPassword(userId: number, input: ResetUserPassword
 export async function deleteUser(userId: number) {
   await api.delete(`/users/${userId}`)
 }
+
+/**
+ * The counterpart to `deleteUser` — a thin wrapper over `updateUser`
+ * that reactivates a deactivated account.
+ */
+export async function restoreUser(userId: number) {
+  return updateUser(userId, { is_active: true })
+}
