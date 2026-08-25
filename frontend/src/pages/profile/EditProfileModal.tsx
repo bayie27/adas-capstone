@@ -110,7 +110,9 @@ export function EditProfileModal({ profile, onClose }: EditProfileModalProps) {
         </div>
       }
     >
-      <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-6">
+      <form onSubmit={handleSubmit} className="flex flex-col">
+        <hr className="mb-6 -mx-6 border-t border-stroke" />
+
         <div className="space-y-4">
           <Input
             label="First Name"
@@ -143,18 +145,22 @@ export function EditProfileModal({ profile, onClose }: EditProfileModalProps) {
           />
         </div>
 
-        {errorMessage ? <p className="text-xs text-danger">{errorMessage}</p> : null}
+        {errorMessage ? <p className="mt-4 text-xs text-danger">{errorMessage}</p> : null}
 
-        <div className="flex items-center justify-end gap-3">
-          <button
-            type="button"
+        <hr className="my-6 -mx-6 border-t border-stroke" />
+
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            className="border-stroke-strong"
             onClick={onClose}
-            className="rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-xs font-medium text-fg-body transition-colors hover:text-fg"
+            disabled={updateMutation.isPending}
           >
             Cancel
-          </button>
+          </Button>
           <Button
             type="submit"
+            variant="primary"
             disabled={!isDirty}
             isLoading={updateMutation.isPending}
             loadingLabel="Saving..."

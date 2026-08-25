@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
+import { RiLockLine } from "@remixicon/react"
 
 import { Modal } from "@/components/ui/Modal"
+import { Button } from "@/components/ui/Button"
 import { PasswordInput } from "@/components/ui/PasswordInput"
 import { changeMyPassword } from "@/api/users"
 import type { NoticeState } from "@/components/ui/NoticeBanner"
 import { getApiErrorMessage } from "@/api/client"
-import { RiLockLine } from "@remixicon/react"
 
 type PasswordFormState = {
   old_password: string
@@ -75,12 +76,14 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
       title="Change Password"
       subtitle="Update your account password."
       icon={
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-strong bg-transparent">
-          <RiLockLine size={20} className="text-fg" />
+        <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
+          <RiLockLine size={28} className="text-fg" />
         </div>
       }
     >
-      <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-6">
+      <form onSubmit={handleSubmit} className="flex flex-col">
+        <hr className="mb-6 -mx-6 border-t border-stroke" />
+
         <div className="space-y-4">
           <PasswordInput
             label="Current Password"
@@ -108,27 +111,32 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
 
         {currentNotice ? (
           <p
-            className={`text-xs ${currentNotice.tone === "success" ? "text-success" : "text-danger"}`}
+            className={`mt-4 text-xs ${currentNotice.tone === "success" ? "text-success" : "text-danger"}`}
           >
             {currentNotice.message}
           </p>
         ) : null}
 
-        <div className="flex items-center justify-end gap-3">
-          <button
-            type="button"
+        <hr className="my-6 -mx-6 border-t border-stroke" />
+
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            className="border-stroke-strong"
             onClick={onClose}
-            className="rounded-md border border-stroke-strong bg-transparent px-4 py-2 text-xs font-medium text-fg-body transition-colors hover:text-fg"
+            disabled={mutation.isPending}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
+            variant="primary"
             disabled={mutation.isPending}
-            className="rounded-md bg-primary px-4 py-2 text-xs font-medium text-fg-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            isLoading={mutation.isPending}
+            loadingLabel="Saving..."
           >
-            {mutation.isPending ? "Saving..." : "Save Changes"}
-          </button>
+            Save Changes
+          </Button>
         </div>
       </form>
     </Modal>
