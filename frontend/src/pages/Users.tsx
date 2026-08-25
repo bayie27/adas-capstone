@@ -109,7 +109,7 @@ export default function Users() {
   })
 
   const restoreUserMutation = useMutation({
-    mutationFn: restoreUser,
+    mutationFn: (userId: number) => restoreUser(userId),
     onSuccess: (updated) => {
       setNotice({
         tone: "success",
