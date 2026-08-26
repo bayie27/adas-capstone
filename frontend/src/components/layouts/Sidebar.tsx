@@ -46,7 +46,6 @@ export function Sidebar() {
   const clearSession = useAuthStore((state) => state.clearSession)
   const clockOffsetMs = useAlertStore((state) => state.clockOffsetMs)
   const clockIsSkewed = Math.abs(clockOffsetMs) > CLOCK_SKEW_WARNING_MS
-  const connectionId = useAlertStore((state) => state.connectionId)
 
   const basePath = role === "Admin" ? "/admin" : "/user"
 
@@ -162,7 +161,7 @@ export function Sidebar() {
           ))}
       </nav>
 
-      <div className="space-y-0.5 border-t border-stroke p-3">
+      <div className="space-y-1 px-5 pb-3">
         {clockIsSkewed ? (
           <div
             role="status"
@@ -186,7 +185,9 @@ export function Sidebar() {
           <RiQuestionLine size={16} className={isHelpActive ? "text-fg" : "text-fg-muted"} />
           <span className="text-[13px] font-medium">Help Center</span>
         </button>
+      </div>
 
+      <div className="border-t border-stroke px-5 py-3">
         {/*
           D-3, settled: not a Link. A footer avatar chip that only sometimes
           leads somewhere reads as decoration, not navigation — the prior fix
@@ -196,43 +197,32 @@ export function Sidebar() {
           (ACCOUNT -> Profile, same treatment as every other row); this chip
           goes back to a pure identity display, no affordance implied.
         */}
-        <div className={cn("flex items-center gap-2.5", navRow)}>
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-[10px] font-bold text-fg-muted">
-            {initials || <RiUserLine size={14} className="text-fg-muted" />}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-xs font-bold text-fg-muted">
+              {initials || <RiUserLine size={18} className="text-fg-muted" />}
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm font-semibold leading-tight text-fg-sidebar">
+                {displayName}
+              </span>
+              <span className="truncate text-xs text-fg-muted">{displayRole}</span>
+            </div>
           </div>
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-[13px] font-medium leading-tight text-fg-sidebar">
-              {displayName}
-            </span>
-            <span className="text-[11px] text-fg-muted">{displayRole}</span>
-          </div>
-        </div>
 
-        <button
-          type="button"
-          onClick={handleLogout}
-          className={cn("w-full", navRow, navInactive, focusRing)}
-        >
-          <RiLogoutBoxRLine size={16} className="text-fg-muted" />
-          <span className="text-[13px] font-medium">Log Out</span>
-        </button>
-
-        {/*
-          ConnectionReadyData.connection_id — the handle that identifies this
-          socket in the backend log. Purely diagnostic, so it gets the
-          lowest-priority treatment in the footer: truncated, monospace, no
-          affordance. Its only job is to be quotable in a support
-          conversation ("the alerts stopped updating on session a1b2c3d4"),
-          which a full UUID doesn't need to be to serve.
-        */}
-        {connectionId ? (
-          <p
-            className="truncate px-3 pt-1 font-mono text-[10px] text-fg-muted"
-            title={connectionId}
+          <button
+            type="button"
+            onClick={handleLogout}
+            aria-label="Log Out"
+            title="Log Out"
+            className={cn(
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 hover:bg-danger-subtle hover:text-danger",
+              focusRing,
+            )}
           >
-            Session {connectionId.slice(0, 8)}
-          </p>
-        ) : null}
+            <RiLogoutBoxRLine size={20} />
+          </button>
+        </div>
       </div>
     </aside>
   )
