@@ -86,7 +86,8 @@ The units P7 writes, plus a restricted maintenance unit:
 /etc/systemd/system/adas-backend.service
 /etc/systemd/system/adas-maintenance.service     # oneshot: python -m app.maintenance restart
 /etc/systemd/system/adas-maintenance.timer       # daily at MAINTENANCE_HOUR_LOCAL
-/etc/systemd/system/adas-restore.service         # oneshot: python -m app.maintenance restore
+/etc/systemd/system/adas-restore-coordinator.service # supervised restore coordinator
+/opt/adas-capstone/backend/scripts/restore_requested.sh # fixed restore wrapper
 ```
 
 D-011 requires these to be **restricted** — able to perform only the approved ADAS maintenance
@@ -94,9 +95,10 @@ workflow, never arbitrary commands. Use `ExecStart` with a fixed argument list (
 non-root `User=`, `ProtectSystem=strict` with an explicit `ReadWritePaths=` covering only the database,
 backup, and export directories, `NoNewPrivileges=yes`, and `PrivateTmp=yes`.
 
-The restore unit is the one that matters architecturally: it is what runs **while FastAPI is stopped**,
-which is the entire reason restore is offline (a running process cannot safely replace its own WAL-mode
-database).
+The coordinator is the unit that matters architecturally: it stays supervised while FastAPI is stopped,
+claims the request, and invokes `restore_requested.sh`, which performs the offline work and rollback
+while the application services are down. The unit names are now the same as the reviewed artifacts in
+`deploy/systemd/`; live systemd behavior remains unverified in this Windows session.
 
 ### 3. Fake the AI engine
 
@@ -111,7 +113,7 @@ the timings NFR-16 asks for.
 | Drill | Measures | Records |
 |---|---|---|
 | **Daily restart** (`systemctl start adas-maintenance`) | NFR-16, TC-R-303 | backup duration **separately from** restart downtime; time to `/healthz/ready`; time to first fresh heartbeat |
-| **Restore** (`POST /api/system/restores` → flag file → `adas-restore.service`) | NFR-18 | total time from request to serving traffic again; target **60 seconds** |
+| **Restore** (`POST /api/system/restores` → durable request → `adas-restore-coordinator.service`) | NFR-18 | total time from request to serving traffic again; target **60 seconds** |
 | **Rollback** (break startup deliberately, e.g. an unwritable `DATABASE_URL`) | D-011 | that the emergency pre-restore backup is restored and the original system comes back |
 | **Online backup under write load** | NFR-18, TC-U-402 | that no request fails with "database is locked" while a backup runs |
 | **Timer firing** | NFR-16 | set `MAINTENANCE_HOUR_LOCAL` to a minute from now and confirm the timer actually fires |

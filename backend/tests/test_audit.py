@@ -15,6 +15,7 @@ from app.core.db import create_db_engine
 from app.core.migrations import get_alembic_config
 from app.core.security import create_session_token
 from app.models import AuditLog, AuditResult, Camera
+from app.schemas import AuditLogRead
 from app.services import audit
 from app.services.sessions import create_session
 from fastapi.testclient import TestClient
@@ -32,6 +33,21 @@ def _cookie_header_for(session: Session, user) -> dict:
     session.commit()
     token = create_session_token(user, auth_session)
     return {"Cookie": f"{settings.SESSION_COOKIE_NAME}={token}"}
+
+
+def test_audit_read_keeps_legacy_plain_text_detail_readable():
+    item = AuditLogRead.model_validate(
+        {
+            "audit_id": 1,
+            "actor_type": "system",
+            "action": "RESTORE_TRIGGER",
+            "result": "success",
+            "detail": "legacy marker",
+            "created_at": datetime.now(UTC),
+        }
+    )
+
+    assert item.detail == {"message": "legacy marker"}
 
 
 class TestAuditCoupling:

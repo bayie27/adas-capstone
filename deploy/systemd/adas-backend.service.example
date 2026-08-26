@@ -1,9 +1,9 @@
 # REVIEWED-BUT-UNVERIFIED, PRODUCTION-TARGET, ILLUSTRATIVE — see
-# deploy/systemd/README.md. Not part of P7's scope; copy and adapt.
+# deploy/systemd/README.md.
 [Unit]
 Description=ADAS FastAPI backend
-After=network-online.target
-Wants=network-online.target
+After=network-online.target adas-restore-coordinator.service
+Wants=network-online.target adas-restore-coordinator.service
 
 [Service]
 Type=simple

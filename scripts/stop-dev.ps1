@@ -49,6 +49,7 @@ param(
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
+Import-Module (Join-Path $RepoRoot "scripts\lib\adas-lifecycle.psm1") -Force
 
 function Write-Step($message) {
     Write-Host "[stop-dev] $message" -ForegroundColor Cyan
@@ -60,6 +61,9 @@ if ($All -or -not ($Backend -or $Frontend -or $Sim -or $Ai)) {
     $Sim = $true
     $Ai = $true
 }
+
+$managedProfile = if ($Backend -and $Ai) { Read-AdasLaunchProfile -RepoRoot $RepoRoot } else { $null }
+$managedFullStop = $null -ne $managedProfile
 
 $script:UsedNetstatFallback = $false
 
@@ -128,10 +132,30 @@ function Stop-AiEngine {
     Write-Step "AI engine stopped."
 }
 
-# Reverse of the start-up order: AI engine -> frontend -> backend -> sim.
-if ($Ai) { Stop-AiEngine }
+# Reverse of the start-up order: coordinator -> AI engine -> frontend -> backend -> sim.
+if ($managedFullStop) {
+    $backupDirectory = Get-AdasBackupDirectory -RepoRoot $RepoRoot
+    if (-not (Stop-AdasRestoreCoordinator -RepoRoot $RepoRoot -BackupDirectory $backupDirectory)) {
+        Write-Error "The controlled restore coordinator could not be stopped safely. No managed service was terminated."
+        exit 1
+    }
+    if (-not (Stop-AdasManagedComponent -RepoRoot $RepoRoot -Component ai_engine -AllowMissing)) {
+        Write-Error "The controlled AI process could not be stopped safely. The backend was left running."
+        exit 1
+    }
+}
+elseif ($Ai) {
+    Stop-AiEngine
+}
 if ($Frontend) { Stop-ByPort -Port 5173 -Label "Frontend" }
-if ($Backend) { Stop-ByPort -Port 8000 -Label "Backend" }
+if ($managedFullStop) {
+    if (-not (Stop-AdasManagedComponent -RepoRoot $RepoRoot -Component backend -AllowMissing)) {
+        Write-Error "The controlled backend process could not be stopped safely."
+        exit 1
+    }
+    Clear-AdasRuntimeMetadata -RepoRoot $RepoRoot
+}
+elseif ($Backend) { Stop-ByPort -Port 8000 -Label "Backend" }
 if ($Sim) { Stop-ByPort -Port 8554 -Label "Sim (MediaMTX)" }
 
 if ($script:UsedNetstatFallback) {

@@ -126,7 +126,7 @@ they're where the backend writes files outside the database:
 | Setting         | Default                      | What lives there                                                                                                                                       |
 | --------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `SNAPSHOT_ROOT` | `<repo>/ai_engine/snapshots` | Incident snapshot JPEGs, served only via the authenticated `GET /api/alerts/{log_id}/snapshot` — never a public static mount                           |
-| `BACKUP_DIR`    | `<repo>/var/backups`         | Verified online backups + `restore_state.json`                                                                                                         |
+| `BACKUP_DIR`    | `<repo>/var/backups`         | Verified online backups, durable restore state, coordinator heartbeat, and maintenance lease files                                                     |
 | `EXPORT_DIR`    | `<repo>/var/exports`         | Generated CSV/PDF/ZIP export artifacts (expire after `EXPORT_ARTIFACT_TTL_HOURS`)                                                                      |
 | `LOG_DIR`       | `<repo>/var/log`             | `scripts\adas-maintenance.ps1`'s transcripts, per-component stdout/stderr, and `maintenance-runs.jsonl` (read by `GET /api/system/maintenance/status`) |
 
@@ -436,7 +436,23 @@ uv run pytest
 
 Tests use an in-memory SQLite database and never touch `adas.db`. This excludes `backend/tests/perf/` by default (slow — seeds a real 100,000-row database); run it explicitly with `uv run pytest -m slow backend/tests/perf/`. For the full pre-push/pre-PR command reference (`pnpm check`, `pnpm full:check`, individual lint/format/typecheck scripts), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**Back up or restore the local database:**
+**Back up or restore from the Administrator dashboard:**
+
+Open **Maintenance** while signed in as an Administrator. The backup table
+shows each restore point by date/time, origin, size, and validation status.
+Expand a valid row and choose **Restore this backup…**. Review the repeated
+metadata in the confirmation window, enter the current Administrator
+password, type the exact confirmation phrase shown there, and choose
+**Restore database**. The dashboard reports when the supervised maintenance
+service is unavailable; an invalid backup can be inspected but has no restore
+action. The newest point is never selected automatically.
+
+The confirmation starts a durable, audited request. The system takes the
+services offline briefly, restores the selected point, verifies readiness and
+the AI heartbeat, and safely recovers the original database if the restored
+services fail that check. Users may be signed out during this process.
+
+**Technical maintenance for deployment operators:**
 
 ```bash
 cd backend
@@ -444,7 +460,14 @@ uv run python -m app.maintenance backup
 uv run python -m app.maintenance list
 ```
 
-On Windows, `scripts\adas-maintenance.ps1` wraps the full backup/restore/restart lifecycle (stopping and restarting the backend/AI engine processes around the same Python maintenance core) — see that script's own header comment for every `-Action`. Every run is captured under `var\log\` (transcript, per-component stdout/stderr, and one JSON line per `-Action Restart` run in `maintenance-runs.jsonl`) instead of a console window that vanishes when closed.
+These are deployment-recovery tools, not steps in the Administrator dashboard
+workflow. On Windows, `scripts\adas-maintenance.ps1` wraps the full
+backup/restore/restart lifecycle with the independently supervised
+coordinator. Every run is captured under `var\log\` (transcript,
+per-component stdout/stderr, coordinator logs, and one JSON line per
+restart run in `maintenance-runs.jsonl`). Linux parity is in
+`deploy/systemd/`, and is reviewed but still unverified on this Windows
+workstation.
 
 **Automate the daily restart (NFR-16):**
 

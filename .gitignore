@@ -22,6 +22,9 @@ eggs/
 .eggs/
 lib/
 lib64/
+# This shared lifecycle module is source code, not generated library output.
+!scripts/lib/
+!scripts/lib/adas-lifecycle.psm1
 parts/
 sdist/
 var/

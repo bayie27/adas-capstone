@@ -8,7 +8,7 @@ rows reviewable and diffable in the repo.
 
 Rows marked **unsynced** have not been copied into the sheet by anyone yet.
 
-9 finding(s), 8 unsynced.
+10 finding(s), 9 unsynced.
 
 | Section / Chapter | Page Number | Required Revision | Notes | Status | Assigned to | Synced | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -21,3 +21,4 @@ Rows marked **unsynced** have not been copied into the sheet by anyone yet.
 | Table 17, TC-U-301 | unconfirmed | Correct AI engine FPS and capacity behavior | Capacity is standalone; runtime inference FPS drives warnings | Not started | Daniboy | no | [2026-08-19-runtime-fps-tc-u-301.md](findings/2026-08-19-runtime-fps-tc-u-301.md) |
 | Use Cases — Use Case 4 (Manage Cameras) | pp. 76–77; p. 97; p. 100; pp. 131–132; audit Doc pp. 23–24 | Add the removed-camera restore path and align the camera-management figures and prose with the live UI | The live implementation supports soft deletion, filtered listing, restoration, and duplicate-conflict handling. Figure 4 and Figure 12 also need redraws. | In progress | Daniboy | no | [2026-08-20-camera-restore-uc4.md](findings/2026-08-20-camera-restore-uc4.md) |
 | Use Cases — Use Case 2 (Manage User Accounts), Figure 4, FR-20 | pp. 64, 72–74; p. 97; p. 100; audit Doc p. 24 | Add the deactivated-user restore path and align the administrator account-management narrative and audit actions with the live UI | FR-03 and the UC-2 postcondition already mention that retained user accounts may be restored. The existing wireframe-coverage finding owns the missing User Management screens; Figure 4 also needs the user-restore branch added when it is redrawn. | Not started | Daniboy | no | [2026-08-25-user-restore-uc2.md](findings/2026-08-25-user-restore-uc2.md) |
+| System Maintenance / Database Restoration | pp. 152–154; 🚩 Action Stream!A67:H67 | Mark the existing button-driven database-restore tracker item complete | The live defense paper already describes dashboard initiation, external Windows/Linux orchestration, rollback, and audit logging. Only the existing tracker row needs completion; no duplicate row or defense-paper replacement is proposed. | Not started | Daniboy | no | [2026-08-26-p27-button-driven-restore.md](findings/2026-08-26-p27-button-driven-restore.md) |

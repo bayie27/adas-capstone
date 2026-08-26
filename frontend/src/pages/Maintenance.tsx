@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   RiArrowDownSLine,
@@ -7,7 +7,14 @@ import {
   RiRefreshLine,
 } from "@remixicon/react"
 
-import { getBackups, getLatestRestore, triggerBackup, type BackupRead } from "@/api/maintenance"
+import {
+  getBackups,
+  getLatestRestore,
+  getMaintenanceStatus,
+  triggerBackup,
+  type BackupRead,
+  type RestoreStatus,
+} from "@/api/maintenance"
 import { getApiError, getApiErrorMessage } from "@/api/client"
 import { Badge } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
@@ -29,15 +36,16 @@ import { toast } from "@/store/useToastStore"
 
 const BACKUPS_QUERY_KEY = ["system-backups"] as const
 const LATEST_RESTORE_QUERY_KEY = ["latest-restore"] as const
+const MAINTENANCE_STATUS_QUERY_KEY = ["maintenance-status"] as const
 const TABLE_COLUMN_COUNT = 5
 
-// Mirrors settings.BACKUP_DAILY_RETENTION / BACKUP_MANUAL_RETENTION
-// (backend/app/core/config.py) -- fixed retention counts, not returned by
-// GET /api/system/backups, so declared here rather than left unstated.
 const BACKUP_DAILY_RETENTION = 30
 const BACKUP_MANUAL_RETENTION = 10
 
-const RESTORE_STATUS_LABEL: Record<string, string> = {
+const ACTIVE_RESTORE_STATUSES = new Set<RestoreStatus>(["requested", "in_progress", "db_restored"])
+const TERMINAL_RESTORE_STATUSES = new Set<RestoreStatus>(["completed", "failed", "rolled_back"])
+
+const RESTORE_STATUS_LABEL: Record<RestoreStatus, string> = {
   requested: "Requested",
   in_progress: "In progress",
   db_restored: "Database restored",
@@ -46,29 +54,41 @@ const RESTORE_STATUS_LABEL: Record<string, string> = {
   rolled_back: "Rolled back",
 }
 
-/**
- * Display-layer mapping from raw backup.checks keys (set by the backend) to
- * plain-language labels for operations staff. Covers all current check names;
- * unknown future keys fall back to formatCheckLabel below so they never
- * silently disappear from the UI.
- */
 const CHECK_LABELS: Record<string, string> = {
   checksum: "File Integrity",
   quick_check: "Database Structure",
   foreign_key_check: "Data Links",
+  file_size: "File Size",
+  artifact_name: "Artifact Name",
 }
 
-/**
- * Returns the friendly label for a check key, or a lightly formatted version
- * of the raw key (title-case, underscores → spaces) for any unmapped key
- * added later on the backend.
- */
 function formatCheckLabel(key: string): string {
   if (CHECK_LABELS[key]) return CHECK_LABELS[key]
   return key
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ")
+}
+
+function formatBackupOrigin(origin: string) {
+  if (origin === "manual") return "Manual backup"
+  if (origin === "scheduled") return "Scheduled backup"
+  if (origin === "pre-restore") return "Pre-restore backup"
+  return origin
+}
+
+function restoreBadgeTone(status: RestoreStatus) {
+  if (status === "completed") return "success" as const
+  if (status === "failed") return "danger" as const
+  if (status === "rolled_back" || status === "db_restored") return "warning" as const
+  return "neutral" as const
+}
+
+function coordinatorUnavailableReason(
+  state: "unavailable" | "idle" | "executing" | "error" | undefined,
+) {
+  if (state === "executing") return "A restore is already in progress."
+  return "Automatic restore is unavailable because the maintenance service is not running."
 }
 
 function ValidityBadge({ valid }: { valid: boolean }) {
@@ -84,42 +104,43 @@ function BackupRow({
   expanded,
   onToggle,
   onRequestRestore,
+  restoreAvailable,
+  restoreUnavailableReason,
 }: {
   backup: BackupRead
   expanded: boolean
   onToggle: () => void
-  onRequestRestore: (backupId: string) => void
+  onRequestRestore: (backup: BackupRead) => void
+  restoreAvailable: boolean
+  restoreUnavailableReason: string
 }) {
   const checkEntries = Object.entries(backup.checks)
 
   return (
     <>
-      <TableRow className="cursor-pointer" onClick={onToggle}>
-        <TableCell className="font-mono text-caption text-fg-muted">{backup.backup_id}</TableCell>
-        <TableCell className="text-fg-muted">{formatFullDateTime(backup.created_at)}</TableCell>
-        <TableCell className="text-fg-muted">{backup.origin}</TableCell>
+      <TableRow className="cursor-pointer" onClick={onToggle} aria-expanded={expanded}>
+        <TableCell className="text-fg-muted">
+          <div>{formatFullDateTime(backup.created_at)}</div>
+        </TableCell>
+        <TableCell className="text-fg-muted">{formatBackupOrigin(backup.origin)}</TableCell>
         <TableCell className="text-fg-muted">{formatFileSize(backup.file_size)}</TableCell>
-        <TableCell className="text-right">
+        <TableCell>
           <ValidityBadge valid={backup.valid} />
+        </TableCell>
+        <TableCell className="text-right">
           {expanded ? (
-            <RiArrowDownSLine size={14} className="ml-2 inline text-fg-muted" />
+            <RiArrowDownSLine size={14} className="inline text-fg-muted" />
           ) : (
-            <RiArrowRightSLine size={14} className="ml-2 inline text-fg-muted" />
+            <RiArrowRightSLine size={14} className="inline text-fg-muted" />
           )}
         </TableCell>
       </TableRow>
       {expanded ? (
-        <TableRow className="hover:bg-transparent">
+        <TableRow className="hover:bg-transparent" onClick={(event) => event.stopPropagation()}>
           <TableCell colSpan={TABLE_COLUMN_COUNT} className="bg-canvas py-6">
-            {/*
-              `valid` alone hides which gate passed — a backup whose checks
-              disagree with its own valid flag (a partial failure the
-              summary can't distinguish from a clean pass) is exactly the
-              case a restore candidate needs to be able to tell apart.
-            */}
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-caption font-medium text-fg-muted mr-1">
+                <span className="mr-1 text-caption font-medium text-fg-muted">
                   Validation Checks:
                 </span>
                 {checkEntries.length === 0 ? (
@@ -137,32 +158,28 @@ function BackupRow({
                   ))
                 )}
               </div>
-              {/*
-                Restore lives one interaction deeper than the backup list
-                itself (expand, then click) and only appears for a manifest-
-                valid backup — get_valid_backup rejects anything else
-                server-side anyway (maintenance/restore.py:145-152), so an
-                invalid backup gets no misleading affordance to click.
-                Spatial and interaction distance from "Trigger Backup" above
-                is deliberate: the two actions should never be one careless
-                click apart.
-              */}
+
               {backup.valid ? (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stroke pt-2.5">
                   <span className="text-caption text-fg-muted">
-                    Restore database state and rollback to this backup point.
+                    Choose this date, origin, and size as the restore point.
                   </span>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onRequestRestore(backup.backup_id)
-                    }}
-                  >
-                    Request Restore
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {!restoreAvailable ? (
+                      <span className="text-right text-caption text-fg-muted">
+                        {restoreUnavailableReason}
+                      </span>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      disabled={!restoreAvailable}
+                      onClick={() => onRequestRestore(backup)}
+                    >
+                      Restore this backup…
+                    </Button>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -173,54 +190,62 @@ function BackupRow({
   )
 }
 
-/**
- * D-1 (settled): third ADMINISTRATION nav row, same guard as Users/Audit
- * Log — the parent /admin route already requires Admin (Phase 5); nothing
- * new added here. D-4/D-7 (design authority, no Figma frame): the backup
- * list follows the same toolbar-and-table shape as Audit Log, with the
- * expandable-row pattern (Audit Log's `detail`) reused for `checks` rather
- * than a second modal.
- */
 export default function Maintenance() {
   const queryClient = useQueryClient()
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [restoreTargetId, setRestoreTargetId] = useState<string | null>(null)
-
-  /**
-   * Snapshot of backup IDs that existed before a Create Backup was triggered.
-   * Used after the 4-second delayed refetch to detect whether a new row
-   * appeared — if so, the background task finished within the window.
-   */
+  const [restoreTarget, setRestoreTarget] = useState<BackupRead | null>(null)
   const preBackupIdsRef = useRef<Set<string>>(new Set())
+  const sawActiveRestoreRef = useRef(false)
 
   const backupsQuery = useQuery({
     queryKey: BACKUPS_QUERY_KEY,
     queryFn: getBackups,
   })
 
+  const statusQuery = useQuery({
+    queryKey: MAINTENANCE_STATUS_QUERY_KEY,
+    queryFn: getMaintenanceStatus,
+    refetchInterval: 2_000,
+  })
+
   const latestRestoreQuery = useQuery({
     queryKey: LATEST_RESTORE_QUERY_KEY,
     queryFn: getLatestRestore,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status && ACTIVE_RESTORE_STATUSES.has(status) ? 2_000 : false
+    },
   })
 
-  /**
-   * POST /api/system/backups returns 202 immediately — the actual write
-   * runs in a background task. There is nothing to poll for completion (no
-   * job id). We snapshot the current backup IDs at trigger time, then after a
-   * short delay fetch the list again and compare: if a new row appeared the
-   * task finished within that window and we update the banner accordingly;
-   * if not, we prompt the operator to refresh manually. A 409 means one is
-   * already running.
-   */
+  useEffect(() => {
+    const state = latestRestoreQuery.data
+    if (!state) return
+    if (ACTIVE_RESTORE_STATUSES.has(state.status)) {
+      sawActiveRestoreRef.current = true
+      return
+    }
+    if (TERMINAL_RESTORE_STATUSES.has(state.status) && sawActiveRestoreRef.current) {
+      sawActiveRestoreRef.current = false
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: BACKUPS_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: LATEST_RESTORE_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: MAINTENANCE_STATUS_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: ["my-profile"] }),
+        queryClient.invalidateQueries({ queryKey: ["cameras"] }),
+        queryClient.invalidateQueries({ queryKey: ["alerts"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard-analytics"] }),
+      ])
+    }
+  }, [latestRestoreQuery.data, queryClient])
+
   const triggerMutation = useMutation({
     mutationFn: triggerBackup,
     onSuccess: () => {
-      // Capture what already exists before the new backup lands
       preBackupIdsRef.current = new Set(
         (
           queryClient.getQueryData<Awaited<ReturnType<typeof getBackups>>>(BACKUPS_QUERY_KEY)
             ?.items ?? []
-        ).map((b) => b.backup_id),
+        ).map((backup) => backup.backup_id),
       )
       toast.info("Database backup started in the background.")
       window.setTimeout(async () => {
@@ -229,24 +254,29 @@ export default function Maintenance() {
           queryFn: getBackups,
           staleTime: 0,
         })
-        const hasNew = result.items.some((b) => !preBackupIdsRef.current.has(b.backup_id))
-        if (hasNew) {
-          toast.success("Database backup created successfully.")
-        } else {
-          toast.info("Backup is still processing in the background.")
-        }
-      }, 4000)
+        const hasNew = result.items.some((backup) => !preBackupIdsRef.current.has(backup.backup_id))
+        toast[hasNew ? "success" : "info"](
+          hasNew
+            ? "Database backup created successfully."
+            : "Backup is still processing in the background.",
+        )
+      }, 4_000)
     },
     onError: (error) => {
       const isBusy = getApiError(error)?.code === "CONFLICT_BUSY"
-      const message = isBusy
-        ? "A backup or restore is already running."
-        : getApiErrorMessage(error, "Unable to start a backup.")
-      toast.error(message)
+      toast.error(
+        isBusy
+          ? "A backup or restore is already running."
+          : getApiErrorMessage(error, "Unable to start a backup."),
+      )
     },
   })
 
   const backups = backupsQuery.data?.items ?? []
+  const coordinator = statusQuery.data?.restore_coordinator
+  const restoreAvailable = coordinator?.available === true
+  const restoreUnavailableReason = coordinatorUnavailableReason(coordinator?.state)
+  const latestRestore = latestRestoreQuery.data
 
   return (
     <div className="mx-auto max-w-[1400px] p-8">
@@ -271,9 +301,7 @@ export default function Maintenance() {
             size="sm"
             isLoading={triggerMutation.isPending}
             loadingLabel="Starting…"
-            onClick={() => {
-              triggerMutation.mutate()
-            }}
+            onClick={() => triggerMutation.mutate()}
           >
             Create Backup
           </Button>
@@ -288,6 +316,20 @@ export default function Maintenance() {
         />
       ) : null}
 
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stroke bg-surface-1 px-4 py-3">
+        <div>
+          <h2 className="text-sm font-semibold text-fg">Automatic restore service</h2>
+          <p className="mt-1 text-caption text-fg-muted">
+            {restoreAvailable
+              ? "Ready to accept a selected validated backup."
+              : restoreUnavailableReason}
+          </p>
+        </div>
+        <Badge variant="subtle" tone={restoreAvailable ? "success" : "neutral"}>
+          {restoreAvailable ? "Ready" : coordinator?.state === "executing" ? "Busy" : "Unavailable"}
+        </Badge>
+      </div>
+
       <p className="mb-3 flex items-center gap-1.5 text-sm italic text-fg-muted">
         <RiInformationLine size={14} className="shrink-0" />
         The system safely retains up to {BACKUP_DAILY_RETENTION} daily and {BACKUP_MANUAL_RETENTION}{" "}
@@ -297,11 +339,11 @@ export default function Maintenance() {
       <TableContainer>
         <Table>
           <TableHead>
-            <TableHeaderCell>Backup ID</TableHeaderCell>
-            <TableHeaderCell>Created</TableHeaderCell>
+            <TableHeaderCell>Date and time</TableHeaderCell>
             <TableHeaderCell>Origin</TableHeaderCell>
             <TableHeaderCell>Size</TableHeaderCell>
-            <TableHeaderCell className="text-right">Validity</TableHeaderCell>
+            <TableHeaderCell>Validity</TableHeaderCell>
+            <TableHeaderCell className="text-right">Details</TableHeaderCell>
           </TableHead>
           <TableBody>
             {backupsQuery.isLoading ? (
@@ -319,7 +361,9 @@ export default function Maintenance() {
                       current === backup.backup_id ? null : backup.backup_id,
                     )
                   }
-                  onRequestRestore={setRestoreTargetId}
+                  onRequestRestore={setRestoreTarget}
+                  restoreAvailable={restoreAvailable}
+                  restoreUnavailableReason={restoreUnavailableReason}
                 />
               ))
             )}
@@ -327,92 +371,65 @@ export default function Maintenance() {
         </Table>
       </TableContainer>
 
-      {/*
-        POST /api/system/restores only ever writes a request flag file — the
-        offline restore itself runs later, with services stopped, so this
-        browser has no signal for when (or whether) it finishes. Rather than
-        auto-reload on a timer that can't know when the system is back, this
-        renders whatever GET /restores/latest last reported and leaves
-        reloading to the operator once they've actually run the offline
-        step. MAINTENANCE_NOTICE (Phase 12's banner, already wired app-wide
-        in App.tsx) is what tells every connected dashboard the socket is
-        about to drop — this section is the durable record, not the
-        real-time warning.
-      */}
-      {latestRestoreQuery.data ? (
+      {latestRestore ? (
         <div className="mt-6 rounded-xl border border-stroke bg-surface-1 p-5">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-fg">Restore Status</h2>
               <p className="mt-1 text-caption text-fg-muted">
-                Backup {latestRestoreQuery.data.backup_id} &middot; requested{" "}
-                {formatFullDateTime(latestRestoreQuery.data.requested_at)}
-                {latestRestoreQuery.data.requested_by
-                  ? ` by ${latestRestoreQuery.data.requested_by}`
-                  : ""}
+                Requested {formatFullDateTime(latestRestore.requested_at)}
+                {latestRestore.requested_by ? ` by ${latestRestore.requested_by}` : ""}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="subtle"
-                tone={
-                  latestRestoreQuery.data.status === "completed"
-                    ? "success"
-                    : latestRestoreQuery.data.status === "failed"
-                      ? "danger"
-                      : "neutral"
-                }
-              >
-                {RESTORE_STATUS_LABEL[latestRestoreQuery.data.status] ??
-                  latestRestoreQuery.data.status}
-              </Badge>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => latestRestoreQuery.refetch()}
-                disabled={latestRestoreQuery.isFetching}
-              >
-                <RiRefreshLine size={13} />
-                Refresh
-              </Button>
-              {/*
-                Always offered, not just once a terminal status arrives —
-                the operator's own browser can never observe the offline
-                steps progress in real time (the backend is down while they
-                run), so "check back and reload the whole app" is the
-                honest action at every stage, not just the end.
-              */}
-              <Button size="sm" onClick={() => window.location.reload()}>
-                Reload app
-              </Button>
-            </div>
+            <Badge variant="subtle" tone={restoreBadgeTone(latestRestore.status)}>
+              {RESTORE_STATUS_LABEL[latestRestore.status]}
+            </Badge>
           </div>
 
-          {latestRestoreQuery.data.status === "requested" ? (
+          {latestRestore.status === "requested" ? (
             <p className="mt-3 text-caption text-fg-muted">
-              Waiting on a person — nothing happens automatically from here. Stop services and run{" "}
-              <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[11px]">
-                python -m app.maintenance restore {latestRestoreQuery.data.backup_id}
-              </code>{" "}
-              from the command line to complete it.
+              The selected restore point is queued. The system will restart automatically when the
+              maintenance service claims it.
             </p>
           ) : null}
-
-          {latestRestoreQuery.data.error ? (
-            <p className="mt-3 text-caption text-danger">{latestRestoreQuery.data.error}</p>
+          {latestRestore.status === "in_progress" ? (
+            <p className="mt-3 text-caption text-fg-muted">
+              The database restore is in progress. This page will update when the system is
+              available again.
+            </p>
+          ) : null}
+          {latestRestore.status === "db_restored" ? (
+            <p className="mt-3 text-caption text-fg-muted">
+              The database was replaced and the system is checking service readiness.
+            </p>
+          ) : null}
+          {latestRestore.status === "rolled_back" ? (
+            <p className="mt-3 text-caption text-warning">
+              The selected restore point did not pass the readiness check. The original database was
+              recovered safely.
+            </p>
+          ) : null}
+          {latestRestore.error ? (
+            <p className="mt-3 text-caption text-danger">{latestRestore.error}</p>
+          ) : null}
+          {latestRestore.steps.length > 0 ? (
+            <p className="mt-3 text-caption text-fg-muted">
+              Latest step: {latestRestore.steps[latestRestore.steps.length - 1].name}
+            </p>
           ) : null}
         </div>
       ) : null}
 
-      {restoreTargetId ? (
+      {restoreTarget ? (
         <RestoreConfirmModal
-          backupId={restoreTargetId}
-          onClose={() => setRestoreTargetId(null)}
-          onSuccess={() => {
-            const message = `Restore requested for backup ${restoreTargetId}.`
-            toast.success(message)
-            setRestoreTargetId(null)
-            queryClient.invalidateQueries({ queryKey: LATEST_RESTORE_QUERY_KEY })
+          backup={restoreTarget}
+          onClose={() => setRestoreTarget(null)}
+          onSuccess={(response) => {
+            toast.success(response.detail)
+            sawActiveRestoreRef.current = true
+            setRestoreTarget(null)
+            void queryClient.invalidateQueries({ queryKey: LATEST_RESTORE_QUERY_KEY })
+            void queryClient.invalidateQueries({ queryKey: MAINTENANCE_STATUS_QUERY_KEY })
           }}
         />
       ) : null}

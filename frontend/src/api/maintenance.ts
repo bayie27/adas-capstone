@@ -31,6 +31,8 @@ export interface RestoreRequestParams {
 export interface RestoreTriggerResponse {
   detail: string
   backup_id: string
+  request_id: string
+  status: "requested"
 }
 
 export interface RestoreStepRead {
@@ -55,10 +57,48 @@ export interface RestoreStateRead {
   backup_id: string
   requested_at: string
   requested_by: string | null
+  request_id: string | null
   emergency_backup_id: string | null
   steps: RestoreStepRead[]
   error: string | null
   completed_at: string | null
+}
+
+export type RestoreCoordinatorState = "unavailable" | "idle" | "executing" | "error"
+export type RestoreCoordinatorReason =
+  "not_running" | "stale" | "runtime_uncontrolled" | "busy" | "error"
+
+export interface RestoreCoordinatorRead {
+  available: boolean
+  state: RestoreCoordinatorState
+  platform: "windows" | "systemd" | null
+  last_seen_at: string | null
+  reason: RestoreCoordinatorReason | null
+}
+
+export interface BackupSummaryRead {
+  backup_id: string
+  created_at: string
+  valid: boolean
+}
+
+export interface LastRestartRead {
+  ran_at: string
+  downtime_seconds: number | null
+  ready: boolean
+  exit_code: number
+}
+
+export interface MaintenanceStatusRead {
+  last_scheduled_backup: BackupSummaryRead | null
+  last_manual_backup: BackupSummaryRead | null
+  next_scheduled_backup_at: string | null
+  backup_overdue: boolean
+  maintenance_hour_local: number
+  maintenance_timezone: string
+  last_restart: LastRestartRead | null
+  latest_restore: RestoreStateRead | null
+  restore_coordinator: RestoreCoordinatorRead
 }
 
 export async function getBackups() {
@@ -73,9 +113,12 @@ export async function triggerBackup() {
 
 /** `RestoreRequestIn.expected_confirmation` (`schemas/maintenance.py`) — the
  * exact string the backend checks byte-for-byte, mirrored here so the UI's
- * placeholder/validation can't drift from what a 422 actually demands. */
-export function expectedRestoreConfirmation(backupId: string) {
-  return `RESTORE ${backupId}`
+ * placeholder/validation can't drift from what a 422 actually demands. The
+ * selected backup id is sent separately by the row action and is not part of
+ * the phrase an Administrator has to copy or understand. */
+export function expectedRestoreConfirmation(_backupId?: string) {
+  void _backupId
+  return "RESTORE DATABASE"
 }
 
 export async function requestRestore(params: RestoreRequestParams) {
@@ -86,5 +129,10 @@ export async function requestRestore(params: RestoreRequestParams) {
 /** `null` when no restore has ever been requested. */
 export async function getLatestRestore() {
   const { data } = await api.get<RestoreStateRead | null>("/system/restores/latest")
+  return data
+}
+
+export async function getMaintenanceStatus() {
+  const { data } = await api.get<MaintenanceStatusRead>("/system/maintenance/status")
   return data
 }

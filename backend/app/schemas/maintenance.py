@@ -3,11 +3,14 @@ routes/maintenance.py. Never includes `artifact_path` or any absolute
 filesystem path (01_CONTRACTS.md §1.6)."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import field_validator
-from sqlmodel import SQLModel
+from sqlmodel import Field, SQLModel
 
 from app.core.validation import reject_null_bytes
+
+RESTORE_CONFIRMATION_PHRASE = "RESTORE DATABASE"
 
 
 class BackupRead(SQLModel):
@@ -39,13 +42,22 @@ class RestoreRequestIn(SQLModel):
         return reject_null_bytes(v)
 
     @staticmethod
-    def expected_confirmation(backup_id: str) -> str:
-        return f"RESTORE {backup_id}"
+    def expected_confirmation(_backup_id: str | None = None) -> str:
+        """Return the human-readable phrase required for a destructive restore.
+
+        The selected backup id is carried by the row action and request body;
+        it is never part of the phrase an Administrator has to type or
+        understand. The optional argument preserves compatibility for callers
+        that previously mirrored the phrase helper with the selected id.
+        """
+        return RESTORE_CONFIRMATION_PHRASE
 
 
 class RestoreTriggerResponse(SQLModel):
     detail: str
     backup_id: str
+    request_id: str
+    status: Literal["requested"] = "requested"
 
 
 class RestoreStepRead(SQLModel):
@@ -62,8 +74,9 @@ class RestoreStateRead(SQLModel):
     backup_id: str
     requested_at: datetime
     requested_by: str | None = None
+    request_id: str | None = None
     emergency_backup_id: str | None = None
-    steps: list[RestoreStepRead] = []
+    steps: list[RestoreStepRead] = Field(default_factory=list)
     error: str | None = None
     completed_at: datetime | None = None
 
@@ -81,6 +94,23 @@ class LastRestartRead(SQLModel):
     exit_code: int
 
 
+class RestoreCoordinatorRead(SQLModel):
+    available: bool
+    state: Literal["unavailable", "idle", "executing", "error"]
+    platform: Literal["windows", "systemd"] | None = None
+    last_seen_at: datetime | None = None
+    reason: (
+        Literal[
+            "not_running",
+            "stale",
+            "runtime_uncontrolled",
+            "busy",
+            "error",
+        ]
+        | None
+    ) = None
+
+
 class MaintenanceStatusRead(SQLModel):
     last_scheduled_backup: BackupSummaryRead | None = None
     last_manual_backup: BackupSummaryRead | None = None
@@ -90,3 +120,4 @@ class MaintenanceStatusRead(SQLModel):
     maintenance_timezone: str
     last_restart: LastRestartRead | None = None
     latest_restore: RestoreStateRead | None = None
+    restore_coordinator: RestoreCoordinatorRead
