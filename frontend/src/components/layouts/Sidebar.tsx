@@ -196,26 +196,32 @@ export function Sidebar() {
           (ACCOUNT -> Profile, same treatment as every other row); this chip
           goes back to a pure identity display, no affordance implied.
         */}
-        <div className={cn("flex items-center gap-2.5", navRow)}>
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-[10px] font-bold text-fg-muted">
-            {initials || <RiUserLine size={14} className="text-fg-muted" />}
+        <div className="flex items-center justify-between gap-2.5 rounded-md px-3 py-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-[10px] font-bold text-fg-muted">
+              {initials || <RiUserLine size={14} className="text-fg-muted" />}
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-[13px] font-medium leading-tight text-fg-sidebar">
+                {displayName}
+              </span>
+              <span className="truncate text-[11px] text-fg-muted">{displayRole}</span>
+            </div>
           </div>
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-[13px] font-medium leading-tight text-fg-sidebar">
-              {displayName}
-            </span>
-            <span className="text-[11px] text-fg-muted">{displayRole}</span>
-          </div>
-        </div>
 
-        <button
-          type="button"
-          onClick={handleLogout}
-          className={cn("w-full", navRow, navInactive, focusRing)}
-        >
-          <RiLogoutBoxRLine size={16} className="text-fg-muted" />
-          <span className="text-[13px] font-medium">Log Out</span>
-        </button>
+          <button
+            type="button"
+            onClick={handleLogout}
+            aria-label="Log Out"
+            title="Log Out"
+            className={cn(
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 hover:bg-danger-subtle hover:text-danger",
+              focusRing,
+            )}
+          >
+            <RiLogoutBoxRLine size={16} />
+          </button>
+        </div>
 
         {/*
           ConnectionReadyData.connection_id — the handle that identifies this
