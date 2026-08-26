@@ -11,8 +11,8 @@ For a whole-system sweep rather than a diff, read [`paper_sync/INVENTORY.md`](..
 
 ## Claude-specific notes
 
-- **Read the paper and both audit artifacts with the native Google Drive connector.** It reads; it does not write. That is the whole Drive story.
-- **Every finding is written to a file** under `paper_sync/findings/`. Nothing is ever written to the Doc or the Sheet — a human moves it up. Do not describe a written file as though it reached Drive.
+- **Read the paper and both audit artifacts with the native Google Drive connector.** This runtime is read-only; do not enter the optional Codex Drive-write phase in the shared procedure.
+- **Every finding is written to a file** under `paper_sync/findings/`. Claude does not write the Doc, Sheet, or comments; a human applies them. Do not describe a local finding as though it reached Drive.
 - **`gh` is available** for the PR input mode (`gh pr diff`, `gh pr view`).
 
 ## Reading the Drive docs without burning turns

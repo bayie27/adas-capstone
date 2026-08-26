@@ -17,7 +17,7 @@ Two that catch everyone, repeated here because they cost the most time:
 
 The code has run ahead of the paper. When a change touches something the paper describes — routes, model columns, constants quoted by value, dependencies, deployment, AI-engine behaviour — check it with [`paper_sync/PROCEDURE.md`](paper_sync/PROCEDURE.md).
 
-That procedure produces a proposed edit with evidence. It never edits the paper itself; a human applies it.
+That procedure always produces a local proposed edit with evidence. Codex can read the whole native Docs through Google Drive MCP, map passages to rendered PDF pages, and apply explicitly approved updates to the defense paper, audit Doc, and tracker Sheet with read-back verification; a TXT export is only a fallback. Claude Code remains read-only and requires a human to apply them.
 
 It is also packaged as an invocable skill, `adas-paper-sync`, in both directories this repo carries:
 
@@ -26,4 +26,4 @@ It is also packaged as an invocable skill, `adas-paper-sync`, in both directorie
 | Codex, Antigravity | `.agents/skills/adas-paper-sync/` |
 | Claude Code        | `.claude/skills/adas-paper-sync/` |
 
-Both wrappers point at the same `paper_sync/PROCEDURE.md`; they differ only in the tool mechanics for reading the Doc. If your runtime does not pick up a project-level skill, point it at the procedure directly — nothing in it depends on the skill loading.
+Both wrappers point at the same `paper_sync/PROCEDURE.md`; they differ in Drive mechanics and write capability. If your runtime does not pick up a project-level skill, point it at the procedure directly.
