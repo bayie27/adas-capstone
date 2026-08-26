@@ -313,6 +313,47 @@ right status) while a failed-and-stuck-on-target restore would show it missing e
 
 ---
 
+### Results — 2026-08-26 (P27 live Windows dashboard restore and rollback drills)
+
+Executed against the full local Windows demo profile with MediaMTX from
+`C:\Users\Dani\OneDrive - dlsl.edu.ph\Desktop\ACADEMICS\mediamtx_v1.18.0_windows_amd64`, backend, frontend,
+AI engine, and the independently supervised restore coordinator. The restore point was chosen in
+the dashboard by its visible date/time (`08/26/2026, 22:07:27`), origin (`Manual backup`), and size
+(`512.0 KB`). Both runs used the dashboard's current-password field and exact `RESTORE DATABASE`
+phrase; neither run received terminal intervention after the Restore button was clicked.
+
+#### Drill A — successful button-only restore
+
+| Measurement | Result |
+|---|---|
+| Date/time of drill | 2026-08-26, request accepted at 23:14:19 local |
+| Failure injected | None |
+| Restore result | **Completed**; backend readiness and a fresh AI heartbeat both passed |
+| Total request → terminal result | ~36s; the maintenance transcript recorded `ready: true` and `heartbeat_confirmed: true` |
+| User-facing confirmation | After reconnecting and signing in again, Maintenance showed `Completed` and coordinator `Ready` |
+| Auditability | System `RESTORE_TRIGGER` outcome row recorded `completed` |
+
+#### Drill B — automatic readiness-failure rollback
+
+| Measurement | Result |
+|---|---|
+| Date/time of drill | 2026-08-26, request accepted at 23:21:39 local |
+| Failure injected (what, exactly) | A pre-arranged hidden local watcher waited for the post-swap `db_restored` state, then killed only the newly spawned AI leaf processes (PIDs 34244, 34576, and 24580). No terminal action was taken after the dashboard click. |
+| Rollback triggered automatically? (Y/N) | **Y** — the coordinator detected the failed fresh-heartbeat gate and ran the rollback branch |
+| Rollback DB-file swap duration | 0.67ms (`rollback_swap_primary_database`) |
+| System confirmed back on the pre-restore (emergency) state? | **Yes** — `P27_BUTTON_DRILL_AUTOROLLBACK_BASELINE` was present in the emergency/live database and absent from the selected historical backup; the live outcome audit detail recorded `outcome: rolled_back` |
+| Total request → rollback result | ~88s; this includes the deliberate 60s readiness timeout before rollback and restart |
+| User-facing confirmation | After reconnecting and signing in again, Maintenance showed `Rolled back`, coordinator `Ready`, and Audit Log showed the administrator trigger plus system outcome |
+| Any manual intervention required? | **No** after the dashboard click; the coordinator stopped/restarted the managed backend and AI wrappers and restored the emergency database itself |
+| Sidecar result | No stale sidecars were present on the selected or emergency backup artifacts. The final live `adas.db-wal`/`adas.db-shm` files were active WAL-mode files created by the restarted backend, not stale restore artifacts. |
+
+The in-app browser drills used the local HTTP profile because the browser could not accept the
+development self-signed LAN certificate. The Windows launch-profile persistence and LAN/TLS/AI
+trust settings remain covered by the implementation's profile and parser tests; a browser-level
+LAN-certificate readback was not claimed here.
+
+---
+
 ## 4 & 5. TC-R-401 / TC-R-402 — 24-hour endurance
 
 **Target:** NFR-13 (99.9% uptime, no gradual degradation) — flat RAM (no
@@ -544,7 +585,7 @@ this package doesn't own.
 |---|---|---|
 | 1 | TC-R-303 | 2026-08-11 **pass** (8.13s downtime, budget 10s). 2026-08-16 (P18 Step 8, the real *unattended* trigger): attempt 1 **failed** (genuine `UnicodeEncodeError` crash, found and fixed live — `PYTHONUTF8`), attempt 2 **passed** functionally (`LastTaskResult: 0`) but **over the 10s downtime budget** (19.8s–72.3s across this session's runs) under this session's own heavy concurrent resource load — see the 2026-08-16 results block for the full accounting |
 | 2 | NFR-18 (no single TC id — the 60s restore window) | **pass** — 2026-08-11 (~26s) and 2026-08-16 regression re-run (~38s), both well inside the 60s budget |
-| 3 | Rollback drill (D-011, no single TC id) | **pass** — 2026-08-11 and 2026-08-16 regression re-run, both with a genuine failure injected and rollback verified via a marker row |
+| 3 | Rollback drill (D-011, no single TC id) | **pass** — 2026-08-11 and 2026-08-16 regression re-runs, plus 2026-08-26 P27 automatic dashboard rollback with a genuine post-swap AI failure and marker/audit verification |
 | 4–5 | TC-R-401, TC-R-402 | not yet run — owner decision 2026-08-11, see results above |
 | 6 | TC-S-203 | not yet run — owner decision 2026-08-11, see results above |
 | 7 | TC-R-304 | **pass** — 2026-08-11, session + alert queue both survived a tab close/reopen |
