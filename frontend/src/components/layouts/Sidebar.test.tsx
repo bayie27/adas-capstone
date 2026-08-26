@@ -28,7 +28,6 @@ describe("Sidebar", () => {
     useAuthStore.setState({
       role: "Admin",
       username: "olivia.quinn",
-      isAuthenticated: true,
     })
     useAlertStore.setState({
       clockOffsetMs: 0,
