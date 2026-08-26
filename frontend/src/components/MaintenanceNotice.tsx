@@ -29,12 +29,7 @@ export function MaintenanceNotice() {
           <RiAlertLine size={15} className="shrink-0" aria-hidden="true" />
           {/* Server-authored copy, rendered verbatim — this frontend does
               not compose its own sentence around it. */}
-          <span className="truncate">
-            {notice.message}
-            {notice.backup_id ? (
-              <span className="text-warning/70"> (Backup: {notice.backup_id})</span>
-            ) : null}
-          </span>
+          <span className="truncate">{notice.message}</span>
         </span>
         <button
           type="button"
