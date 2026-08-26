@@ -162,7 +162,7 @@ export function Sidebar() {
           ))}
       </nav>
 
-      <div className="space-y-0.5 border-t border-stroke p-3">
+      <div className="space-y-1 p-3 pb-2">
         {clockIsSkewed ? (
           <div
             role="status"
@@ -186,7 +186,9 @@ export function Sidebar() {
           <RiQuestionLine size={16} className={isHelpActive ? "text-fg" : "text-fg-muted"} />
           <span className="text-[13px] font-medium">Help Center</span>
         </button>
+      </div>
 
+      <div className="border-t border-stroke p-3">
         {/*
           D-3, settled: not a Link. A footer avatar chip that only sometimes
           leads somewhere reads as decoration, not navigation — the prior fix
