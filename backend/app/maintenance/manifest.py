@@ -101,8 +101,16 @@ class BackupManifest:
     @property
     def valid(self) -> bool:
         """A file is not listed as a valid restore point unless its
-        required checks passed (Step 1). Missing keys count as failed."""
-        return all(self.checks.get(name) for name in _REQUIRED_CHECKS)
+        required checks passed (Step 1). Missing keys count as failed. The
+        live listing adds artifact-name and file-size checks; older manifests
+        without those additive keys remain backward compatible."""
+        if not all(self.checks.get(name) for name in _REQUIRED_CHECKS):
+            return False
+        return all(
+            self.checks[name]
+            for name in ("artifact_name", "file_size")
+            if name in self.checks
+        )
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -137,7 +145,10 @@ def read_manifest(backup_dir: Path, backup_id: str) -> BackupManifest | None:
     if not path.exists():
         return None
     try:
-        return BackupManifest.from_dict(json.loads(path.read_text()))
+        manifest = BackupManifest.from_dict(json.loads(path.read_text()))
+        if manifest.backup_id != backup_id:
+            return None
+        return manifest
     except (json.JSONDecodeError, TypeError, KeyError, OSError):
         return None
 

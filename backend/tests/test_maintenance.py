@@ -22,14 +22,16 @@ test_maintenance_schedule.py.
 """
 
 import json
+import os
 import sqlite3
 import threading
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
 from app.maintenance import archive as archive_mod
+from app.maintenance import coordinator as coordinator_mod
 from app.maintenance import restore as restore_mod
 from app.maintenance.backup import (
     InsufficientDiskSpaceError,
@@ -37,6 +39,7 @@ from app.maintenance.backup import (
     RetentionConfig,
     create_backup,
     get_valid_backup,
+    list_backup_candidates,
     list_backups,
     prune_backups,
     release_maintenance_lock,
@@ -155,7 +158,7 @@ def _release_stray_lock():
     from app.maintenance.backup import _maintenance_lock
 
     if _maintenance_lock.locked():
-        _maintenance_lock.release()
+        release_maintenance_lock()
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +325,22 @@ class TestBackupCore:
         assert m.backup_id not in {
             mm.backup_id for mm in list_backups(maint_paths.backup_dir)
         }
+
+    def test_manifest_identity_mismatch_is_inspectable_but_invalid(self, maint_paths):
+        m = create_backup(
+            db_path=maint_paths.db_path, backup_dir=maint_paths.backup_dir
+        )
+        manifest_path = manifest_path_for(maint_paths.backup_dir, m.backup_id)
+        manifest = json.loads(manifest_path.read_text())
+        manifest["filename"] = "adas_backup_wrong.db"
+        manifest_path.write_text(json.dumps(manifest))
+
+        candidates = list_backup_candidates(maint_paths.backup_dir)
+
+        assert len(candidates) == 1
+        assert candidates[0].valid is False
+        assert candidates[0].checks["artifact_name"] is False
+        assert get_valid_backup(maint_paths.backup_dir, m.backup_id) is None
 
     @pytest.mark.parametrize(
         "url",
@@ -613,6 +632,22 @@ class TestRestoreCore:
 
         after = maint_paths.db_path.read_bytes()
         assert before == after
+        state = restore_mod.read_restore_state(maint_paths.backup_dir)
+        assert state is not None
+        assert len(state.request_id or "") == 32
+        assert state.execute_after is not None
+        assert datetime.fromisoformat(state.execute_after) > datetime.fromisoformat(
+            state.requested_at
+        )
+
+        state.status = restore_mod.STATUS_COMPLETED
+        restore_mod.write_restore_state(maint_paths.backup_dir, state)
+        second = restore_mod.write_restore_request(
+            maint_paths.backup_dir,
+            backup_id=m1.backup_id,
+            requested_by="admin",
+        )
+        assert second.request_id != state.request_id
 
     def test_record_restore_outcome_audit_writes_system_actor_row(self, maint_paths):
         conn = sqlite3.connect(maint_paths.db_path)
@@ -877,6 +912,9 @@ def maintenance_settings(client: TestClient, tmp_path, monkeypatch):
     # from this same global — without patching it too, the status route
     # would read the real demo laptop's actual restart-drill history.
     monkeypatch.setattr(app_settings, "LOG_DIR", log_dir)
+    monkeypatch.setattr(app_settings, "RESTORE_COORDINATOR_STALE_SECONDS", 10)
+    monkeypatch.setattr(app_settings, "RESTORE_REQUEST_GRACE_SECONDS", 3)
+    monkeypatch.setattr(app_settings, "RESTORE_REQUEST_MAX_AGE_SECONDS", 60)
 
     return SimpleNamespace(
         backup_dir=backup_dir, archive_dir=archive_dir, log_dir=log_dir
@@ -940,6 +978,23 @@ class TestBackupRoutes:
         assert "c:\\" not in serialized
         assert str(maintenance_settings.backup_dir).lower() not in serialized
 
+    def test_corrupt_backup_remains_inspectable_but_not_restorable(
+        self, client, session, maintenance_settings
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        assert client.post("/api/system/backups", headers=headers).status_code == 202
+        item = client.get("/api/system/backups", headers=headers).json()["items"][0]
+        db_path = db_path_for(maintenance_settings.backup_dir, item["backup_id"])
+        db_path.write_bytes(b"not a database")
+
+        listed = client.get("/api/system/backups", headers=headers).json()
+
+        assert listed["total_filtered"] == 1
+        assert listed["items"][0]["backup_id"] == item["backup_id"]
+        assert listed["items"][0]["valid"] is False
+        assert listed["items"][0]["checks"]["checksum"] is False
+
     def test_trigger_writes_success_audit_row(
         self, client, session, maintenance_settings
     ):
@@ -990,19 +1045,37 @@ class TestBackupRoutes:
         assert denied_rows[0].target_ref is None
 
 
+def _write_available_coordinator(backup_dir):
+    now = datetime.now(UTC).isoformat()
+    coordinator_mod.write_coordinator_state(
+        backup_dir,
+        coordinator_mod.CoordinatorState(
+            schema_version=coordinator_mod.COORDINATOR_SCHEMA_VERSION,
+            platform="windows",
+            pid=os.getpid(),
+            started_at=now,
+            last_seen_at=now,
+            state="idle",
+            runtime_ready=True,
+        ),
+    )
+
+
 class TestRestoreRoutes:
     def _body(self, backup_id: str, password: str = "Admin123") -> dict:
         return {
             "backup_id": backup_id,
             "current_password": password,
-            "confirmation": f"RESTORE {backup_id}",
+            "confirmation": "RESTORE DATABASE",
         }
 
     def _seed_backup(self, client, maintenance_settings, headers) -> str:
         resp = client.post("/api/system/backups", headers=headers)
         assert resp.status_code == 202
         items = client.get("/api/system/backups", headers=headers).json()["items"]
-        return items[0]["backup_id"]
+        backup_id = items[0]["backup_id"]
+        _write_available_coordinator(maintenance_settings.backup_dir)
+        return backup_id
 
     def test_requires_admin(self, client, session, maintenance_settings):
         make_operator(session)
@@ -1094,6 +1167,7 @@ class TestRestoreRoutes:
     ):
         make_admin(session)
         headers = auth_headers(client, "admin", "Admin123")
+        _write_available_coordinator(maintenance_settings.backup_dir)
 
         resp = client.post(
             "/api/system/restores", json=self._body(new_backup_id()), headers=headers
@@ -1115,6 +1189,8 @@ class TestRestoreRoutes:
         )
         assert resp.status_code == 202
         assert resp.json()["backup_id"] == backup_id
+        assert resp.json()["status"] == "requested"
+        assert len(resp.json()["request_id"]) == 32
 
         state_file = restore_mod.restore_state_path(maintenance_settings.backup_dir)
         assert state_file.exists()
@@ -1167,10 +1243,51 @@ class TestRestoreRoutes:
         """Edge case 3.16."""
         make_admin(session)
         headers = auth_headers(client, "admin", "Admin123")
+        _write_available_coordinator(maintenance_settings.backup_dir)
         resp = client.post(
             "/api/system/restores", json=self._body(new_backup_id()), headers=headers
         )
         assert resp.status_code == 404
+
+    def test_unavailable_coordinator_returns_503_without_publishing_request(
+        self, client, session, maintenance_settings
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        backup_id = self._seed_backup(client, maintenance_settings, headers)
+        coordinator_mod.coordinator_state_path(maintenance_settings.backup_dir).unlink()
+
+        resp = client.post(
+            "/api/system/restores", json=self._body(backup_id), headers=headers
+        )
+
+        assert resp.status_code == 503
+        assert resp.json()["code"] == "RESTORE_COORDINATOR_UNAVAILABLE"
+        assert not restore_mod.restore_state_path(
+            maintenance_settings.backup_dir
+        ).exists()
+
+    def test_active_restore_cannot_be_overwritten(
+        self, client, session, maintenance_settings
+    ):
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+        backup_id = self._seed_backup(client, maintenance_settings, headers)
+        first = client.post(
+            "/api/system/restores", json=self._body(backup_id), headers=headers
+        )
+        assert first.status_code == 202
+        first_request_id = first.json()["request_id"]
+
+        second = client.post(
+            "/api/system/restores", json=self._body(backup_id), headers=headers
+        )
+
+        assert second.status_code == 409
+        state = restore_mod.read_restore_state(maintenance_settings.backup_dir)
+        assert state is not None
+        assert state.request_id == first_request_id
+        assert state.status == restore_mod.STATUS_REQUESTED
 
 
 class TestMaintenanceStatusRoute:
@@ -1195,6 +1312,8 @@ class TestMaintenanceStatusRoute:
         assert body["backup_overdue"] is True
         assert body["last_restart"] is None
         assert body["latest_restore"] is None
+        assert body["restore_coordinator"]["available"] is False
+        assert body["restore_coordinator"]["reason"] == "not_running"
         assert body["maintenance_hour_local"] == 3
         assert body["maintenance_timezone"] == "Asia/Manila"
 
@@ -1228,12 +1347,13 @@ class TestMaintenanceStatusRoute:
         backup_id = client.get("/api/system/backups", headers=headers).json()["items"][
             0
         ]["backup_id"]
+        _write_available_coordinator(maintenance_settings.backup_dir)
         client.post(
             "/api/system/restores",
             json={
                 "backup_id": backup_id,
                 "current_password": "Admin123",
-                "confirmation": f"RESTORE {backup_id}",
+                "confirmation": "RESTORE DATABASE",
             },
             headers=headers,
         )
@@ -1251,11 +1371,29 @@ class TestCrossOperationLock:
     `test_second_concurrent_restore_returns_409` above only cover the
     same-operation case)."""
 
+    def test_backup_refuses_after_restore_claim_before_runner_starts(self, maint_paths):
+        restore_mod.write_restore_state(
+            maint_paths.backup_dir,
+            restore_mod.RestoreState(
+                status=restore_mod.STATUS_IN_PROGRESS,
+                backup_id=new_backup_id(),
+                requested_at=datetime.now(UTC).isoformat(),
+                request_id=new_backup_id(),
+            ),
+        )
+
+        with pytest.raises(MaintenanceBusyError):
+            create_backup(
+                db_path=maint_paths.db_path,
+                backup_dir=maint_paths.backup_dir,
+                origin=ORIGIN_MANUAL,
+            )
+
     def _restore_body(self, backup_id: str, password: str = "Admin123") -> dict:
         return {
             "backup_id": backup_id,
             "current_password": password,
-            "confirmation": f"RESTORE {backup_id}",
+            "confirmation": "RESTORE DATABASE",
         }
 
     def test_restore_returns_409_while_backup_holds_the_lock(
@@ -1269,6 +1407,7 @@ class TestCrossOperationLock:
 
         assert try_acquire_maintenance_lock() is True
         try:
+            _write_available_coordinator(maintenance_settings.backup_dir)
             resp = client.post(
                 "/api/system/restores",
                 json=self._restore_body(new_backup_id()),

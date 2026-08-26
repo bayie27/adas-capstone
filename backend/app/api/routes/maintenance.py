@@ -7,11 +7,9 @@ Python module boundary differs (01_CONTRACTS.md §5.8).
 
 FastAPI never replaces `adas.db` and never gets shell execution here: the
 backup routes call straight into `app.maintenance.backup` (online, safe);
-the restore route only ever writes a request flag file via
+the restore route only ever writes a durable request via
 `app.maintenance.restore.write_restore_request` — the actual offline
-restore is performed later, by the external orchestrator, invoking
-`app.maintenance` from the command line while services are already
-stopped.
+restore is performed later by the independently supervised coordinator.
 """
 
 import json
@@ -27,10 +25,11 @@ from app.core.config import settings
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
 from app.core.security import verify_password
+from app.maintenance import coordinator as coordinator_mod
 from app.maintenance import restore as restore_mod
 from app.maintenance.backup import (
     RetentionConfig,
-    list_backups,
+    list_backup_candidates,
     perform_backup_assuming_lock_held,
     release_maintenance_lock,
     resolve_sqlite_db_path,
@@ -41,6 +40,7 @@ from app.maintenance.manifest import (
     ORIGIN_SCHEDULED,
     InvalidBackupIdError,
     list_manifests,
+    validate_backup_id,
 )
 from app.models import AuditResult, User
 from app.schemas.events import EventType, MaintenanceNoticeData, make_event
@@ -51,6 +51,7 @@ from app.schemas.maintenance import (
     BackupTriggerResponse,
     LastRestartRead,
     MaintenanceStatusRead,
+    RestoreCoordinatorRead,
     RestoreRequestIn,
     RestoreStateRead,
     RestoreTriggerResponse,
@@ -139,7 +140,7 @@ def list_backups_route(
     """Admin only. Never returns `artifact_path` or any absolute path — only
     the backup id, timestamps, origin, size, and validation status
     (01_CONTRACTS.md §1.6, §5.8)."""
-    manifests = list_backups(settings.BACKUP_DIR)
+    manifests = list_backup_candidates(settings.BACKUP_DIR)
     items = [
         BackupRead(
             backup_id=m.backup_id,
@@ -176,7 +177,7 @@ def trigger_backup(
     the background job finishes."""
     source_ip = _client_ip(request)
 
-    if not try_acquire_maintenance_lock():
+    if not try_acquire_maintenance_lock(settings.BACKUP_DIR):
         audit.record_out_of_band(
             session.get_bind(),
             action="BACKUP_TRIGGER",
@@ -200,7 +201,11 @@ def trigger_backup(
     )
 
 
-@router.post("/restores", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/restores",
+    response_model=RestoreTriggerResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def trigger_restore(
     body: RestoreRequestIn,
     request: Request,
@@ -210,12 +215,12 @@ async def trigger_restore(
 ) -> RestoreTriggerResponse:
     """Admin only, and deliberately heavy on authorization — this is
     destructive (08_PKG_backup_ops.md Step 5). Requires the current admin's
-    password re-submitted in the body, an explicit confirmation string
-    containing the selected backup id, and a backup id that maps to a
+    password re-submitted in the body, the exact human-readable confirmation
+    phrase, and a backup id that maps to a
     manifest-listed, currently-valid file inside BACKUP_DIR. Never accepts
     a client-supplied filesystem path — the id is validated (bare uuid4
     hex) before it is ever joined onto BACKUP_DIR (edge case 4.10). Writes
-    only the restore-request flag file; never touches `adas.db`."""
+    only the restore-request file; never touches `adas.db`."""
     source_ip = _client_ip(request)
 
     if not verify_password(body.current_password, current_admin.password_hash):
@@ -235,7 +240,7 @@ async def trigger_restore(
             code="AUTH_INVALID_CREDENTIALS",
         )
 
-    expected = RestoreRequestIn.expected_confirmation(body.backup_id)
+    expected = RestoreRequestIn.expected_confirmation()
     if body.confirmation != expected:
         audit.record_out_of_band(
             session.get_bind(),
@@ -253,7 +258,62 @@ async def trigger_restore(
             code="VALIDATION_ERROR",
         )
 
-    if not try_acquire_maintenance_lock():
+    # Reject path-unsafe input before consulting coordinator state.  This is
+    # a pure input check; the selected manifest is still revalidated under
+    # the lease immediately before publication.
+    try:
+        validate_backup_id(body.backup_id)
+    except InvalidBackupIdError as exc:
+        audit.record_out_of_band(
+            session.get_bind(),
+            action="RESTORE_TRIGGER",
+            result=AuditResult.DENIED,
+            actor=current_admin,
+            target_type="restore",
+            target_ref=body.backup_id,
+            detail={"reason": "invalid_backup_id"},
+            source_ip=source_ip,
+        )
+        raise AppHTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Not a valid backup id.",
+            code="VALIDATION_ERROR",
+        ) from exc
+
+    availability = coordinator_mod.get_coordinator_availability(
+        settings.BACKUP_DIR,
+        stale_seconds=settings.RESTORE_COORDINATOR_STALE_SECONDS,
+    )
+    if not availability.available:
+        if availability.reason == "busy":
+            audit.record_out_of_band(
+                session.get_bind(),
+                action="RESTORE_TRIGGER",
+                result=AuditResult.DENIED,
+                actor=current_admin,
+                target_type="restore",
+                target_ref=body.backup_id,
+                detail={"reason": "already_running"},
+                source_ip=source_ip,
+            )
+            raise _busy_error()
+        audit.record_out_of_band(
+            session.get_bind(),
+            action="RESTORE_TRIGGER",
+            result=AuditResult.DENIED,
+            actor=current_admin,
+            target_type="restore",
+            target_ref=body.backup_id,
+            detail={"reason": "restore_coordinator_unavailable"},
+            source_ip=source_ip,
+        )
+        raise AppHTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Automatic restore is unavailable because the maintenance service is not running.",
+            code="RESTORE_COORDINATOR_UNAVAILABLE",
+        )
+
+    if not try_acquire_maintenance_lock(settings.BACKUP_DIR):
         audit.record_out_of_band(
             session.get_bind(),
             action="RESTORE_TRIGGER",
@@ -267,10 +327,67 @@ async def trigger_restore(
         raise _busy_error()
 
     try:
+        # The heartbeat and restore document can change between the first
+        # availability check and lease acquisition, so both are read again
+        # while this process owns the publish lease.
+        availability = coordinator_mod.get_coordinator_availability(
+            settings.BACKUP_DIR,
+            stale_seconds=settings.RESTORE_COORDINATOR_STALE_SECONDS,
+        )
+        current_state = restore_mod.read_restore_state(settings.BACKUP_DIR)
+        if not availability.available:
+            if availability.reason == "busy" or (
+                current_state is not None
+                and current_state.status in coordinator_mod.ACTIVE_RESTORE_STATUSES
+            ):
+                audit.record_out_of_band(
+                    session.get_bind(),
+                    action="RESTORE_TRIGGER",
+                    result=AuditResult.DENIED,
+                    actor=current_admin,
+                    target_type="restore",
+                    target_ref=body.backup_id,
+                    detail={"reason": "already_running"},
+                    source_ip=source_ip,
+                )
+                raise _busy_error()
+            audit.record_out_of_band(
+                session.get_bind(),
+                action="RESTORE_TRIGGER",
+                result=AuditResult.DENIED,
+                actor=current_admin,
+                target_type="restore",
+                target_ref=body.backup_id,
+                detail={"reason": "restore_coordinator_unavailable"},
+                source_ip=source_ip,
+            )
+            raise AppHTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Automatic restore is unavailable because the maintenance service is not running.",
+                code="RESTORE_COORDINATOR_UNAVAILABLE",
+            )
+        if (
+            current_state is not None
+            and current_state.status in coordinator_mod.ACTIVE_RESTORE_STATUSES
+        ):
+            audit.record_out_of_band(
+                session.get_bind(),
+                action="RESTORE_TRIGGER",
+                result=AuditResult.DENIED,
+                actor=current_admin,
+                target_type="restore",
+                target_ref=body.backup_id,
+                detail={"reason": "already_running"},
+                source_ip=source_ip,
+            )
+            raise _busy_error()
+
         state = restore_mod.write_restore_request(
             settings.BACKUP_DIR,
             backup_id=body.backup_id,
             requested_by=current_admin.username,
+            grace_seconds=settings.RESTORE_REQUEST_GRACE_SECONDS,
+            assume_lock_held=True,
         )
     except InvalidBackupIdError as exc:
         audit.record_out_of_band(
@@ -302,6 +419,34 @@ async def trigger_restore(
         raise AppHTTPException(
             status.HTTP_404_NOT_FOUND, "Backup not found.", code="NOT_FOUND"
         ) from exc
+    except restore_mod.RestoreRequestBusyError as exc:
+        audit.record_out_of_band(
+            session.get_bind(),
+            action="RESTORE_TRIGGER",
+            result=AuditResult.DENIED,
+            actor=current_admin,
+            target_type="restore",
+            target_ref=body.backup_id,
+            detail={"reason": "already_running"},
+            source_ip=source_ip,
+        )
+        raise _busy_error() from exc
+    except restore_mod.RestoreStateUnreadableError as exc:
+        audit.record_out_of_band(
+            session.get_bind(),
+            action="RESTORE_TRIGGER",
+            result=AuditResult.DENIED,
+            actor=current_admin,
+            target_type="restore",
+            target_ref=body.backup_id,
+            detail={"reason": "restore_state_unavailable"},
+            source_ip=source_ip,
+        )
+        raise AppHTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Automatic restore is temporarily unavailable. Please try again later.",
+            code="RESTORE_STATE_UNAVAILABLE",
+        ) from exc
     finally:
         release_maintenance_lock()
 
@@ -312,7 +457,7 @@ async def trigger_restore(
         actor=current_admin,
         target_type="restore",
         target_ref=body.backup_id,
-        detail={"status": state.status},
+        detail={"status": state.status, "request_id": state.request_id},
         source_ip=source_ip,
     )
     session.commit()
@@ -340,8 +485,10 @@ async def trigger_restore(
         )
 
     return RestoreTriggerResponse(
-        detail="Restore requested. Stop services and run the offline restore to complete it.",
+        detail="Restore accepted. The system will restart automatically.",
         backup_id=body.backup_id,
+        request_id=state.request_id or "",
+        status="requested",
     )
 
 
@@ -355,10 +502,23 @@ def _serialize_restore_state(
         backup_id=state.backup_id,
         requested_at=state.requested_at,
         requested_by=state.requested_by,
+        request_id=state.request_id,
         emergency_backup_id=state.emergency_backup_id,
         steps=state.steps,
         error=state.error,
         completed_at=state.completed_at,
+    )
+
+
+def _serialize_coordinator(
+    availability: coordinator_mod.CoordinatorAvailability,
+) -> RestoreCoordinatorRead:
+    return RestoreCoordinatorRead(
+        available=availability.available,
+        state=availability.state,
+        platform=availability.platform,
+        last_seen_at=availability.last_seen_at,
+        reason=availability.reason,
     )
 
 
@@ -434,5 +594,11 @@ def maintenance_status_route(
         last_restart=_last_restart_from_log(),
         latest_restore=_serialize_restore_state(
             restore_mod.read_restore_state(settings.BACKUP_DIR)
+        ),
+        restore_coordinator=_serialize_coordinator(
+            coordinator_mod.get_coordinator_availability(
+                settings.BACKUP_DIR,
+                stale_seconds=settings.RESTORE_COORDINATOR_STALE_SECONDS,
+            )
         ),
     )
