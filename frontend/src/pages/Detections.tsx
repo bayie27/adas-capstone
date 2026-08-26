@@ -38,6 +38,7 @@ import {
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useUserOptions } from "@/hooks/useUserOptions"
 import { useNow } from "@/hooks/useNow"
+import { toast } from "@/store/useToastStore"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -217,26 +218,42 @@ export default function Detections() {
 
   const exportJobMutation = useExportJobSubmit()
 
-  const handleMutationSuccess = (updatedAlert: AlertLog) => {
+  const handleMutationSuccess = (updatedAlert: AlertLog, action: string) => {
     queryClient.setQueryData(["alert-details", updatedAlert.log_id], updatedAlert)
     setSelectedAlertPreview(updatedAlert)
     removeAlert(updatedAlert.log_id)
+    toast.success(`Incident #${updatedAlert.log_id} ${action}.`)
     queryClient.invalidateQueries({ queryKey: ["alerts"] })
   }
 
   const confirmMutation = useMutation({
     mutationFn: confirmAlert,
-    onSuccess: handleMutationSuccess,
+    onSuccess: (alert) => handleMutationSuccess(alert, "confirmed"),
+    onError: (err) => {
+      if (!getIncidentConflict(err)) {
+        toast.error(getApiErrorMessage(err, "Failed to confirm incident."))
+      }
+    },
   })
 
   const dismissMutation = useMutation({
     mutationFn: dismissAlert,
-    onSuccess: handleMutationSuccess,
+    onSuccess: (alert) => handleMutationSuccess(alert, "dismissed"),
+    onError: (err) => {
+      if (!getIncidentConflict(err)) {
+        toast.error(getApiErrorMessage(err, "Failed to dismiss incident."))
+      }
+    },
   })
 
   const resolveMutation = useMutation({
     mutationFn: resolveAlert,
-    onSuccess: handleMutationSuccess,
+    onSuccess: (alert) => handleMutationSuccess(alert, "resolved"),
+    onError: (err) => {
+      if (!getIncidentConflict(err)) {
+        toast.error(getApiErrorMessage(err, "Failed to resolve incident."))
+      }
+    },
   })
 
   // Snooze mutes an incident in place rather than closing it, so unlike the
@@ -251,7 +268,13 @@ export default function Detections() {
       if (snoozedAlert.snoozed_until) {
         activateSnooze(snoozedAlert.log_id, snoozedAlert.snoozed_until, username)
       }
+      toast.info(`Incident #${snoozedAlert.log_id} snoozed.`)
       queryClient.invalidateQueries({ queryKey: ["alerts"] })
+    },
+    onError: (err) => {
+      if (!getIncidentConflict(err)) {
+        toast.error(getApiErrorMessage(err, "Failed to snooze alert."))
+      }
     },
   })
 

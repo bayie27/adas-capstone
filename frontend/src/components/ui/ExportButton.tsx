@@ -3,6 +3,7 @@ import { RiArrowDownSLine, RiDownloadLine } from "@remixicon/react"
 
 import { Button } from "@/components/ui/Button"
 import { cn } from "@/utils/cn"
+import { toast } from "@/store/useToastStore"
 
 export type ExportFormat = "csv" | "pdf"
 
@@ -148,6 +149,7 @@ export function ExportButton({
 
     if (justFinishedCleanly) {
       setJustExported(true)
+      toast.success("Export downloaded successfully.")
       const timer = setTimeout(() => setJustExported(false), 2000)
       return () => clearTimeout(timer)
     }

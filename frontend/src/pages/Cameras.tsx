@@ -6,7 +6,6 @@ import { Button, focusRing } from "@/components/ui/Button"
 import { ClearFiltersButton } from "@/components/ui/ClearFiltersButton"
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal"
 import { FilterSelect } from "@/components/ui/FilterSelect"
-import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { PaginationFooter } from "@/components/ui/PaginationFooter"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"
@@ -40,6 +39,7 @@ import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
 import { CameraDetailPanel } from "@/pages/cameras/CameraDetailPanel"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"
+import { toast } from "@/store/useToastStore"
 import {
   RiAddLine,
   RiArrowGoBackLine,
@@ -97,7 +97,6 @@ export default function Cameras() {
   // defaults to active-only when is_active is absent, so this preserves
   // today's behavior exactly rather than sending an explicit "true".
   const [activeFilter, setActiveFilter] = useState<"active" | "false" | "null">("active")
-  const [notice, setNotice] = useState<NoticeState | null>(null)
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
   // An id, not the row itself — so the panel re-derives against the live
   // query below and reflects a toggle or a broadcast landing while it's open,
@@ -190,13 +189,11 @@ export default function Cameras() {
         queryClient.setQueryData(queryKey, data)
       }
 
-      setNotice({
-        tone: "error",
-        message: getApiErrorMessage(
-          error,
-          `Unable to ${nextEnabled ? "enable" : "disable"} ${camera.camera_name}.`,
-        ),
-      })
+      const message = getApiErrorMessage(
+        error,
+        `Unable to ${nextEnabled ? "enable" : "disable"} ${camera.camera_name}.`,
+      )
+      toast.error(message)
     },
     onSuccess: (updated) => {
       // The response is the authoritative row — new config_version, new
@@ -206,10 +203,8 @@ export default function Cameras() {
         shouldApplyCameraEvent(updated.config_version, cached.config_version) ? updated : cached,
       )
 
-      setNotice({
-        tone: "success",
-        message: `${updated.camera_name} is now ${updated.is_enabled ? "enabled" : "disabled"}.`,
-      })
+      const message = `${updated.camera_name} is now ${updated.is_enabled ? "enabled" : "disabled"}.`
+      toast.success(message)
     },
     // The kpis object is server-computed over the whole active population, so
     // `enabled` / `active_detection` cannot be derived locally from one row.
@@ -224,11 +219,9 @@ export default function Cameras() {
     mutationFn: deleteCamera,
     onSuccess: () => {
       const deletedCamera = modal.kind === "delete" ? modal.camera : null
+      const message = `${deletedCamera?.camera_name ?? "Camera"} was removed from the active camera list.`
 
-      setNotice({
-        tone: "success",
-        message: `${deletedCamera?.camera_name ?? "Camera"} was removed from the active camera list.`,
-      })
+      toast.success(message)
 
       if ((camerasQuery.data?.cameras.length ?? 0) === 1 && page > 1) {
         prev()
@@ -248,20 +241,16 @@ export default function Cameras() {
   const restoreCameraMutation = useMutation({
     mutationFn: restoreCamera,
     onSuccess: (updated) => {
-      setNotice({
-        tone: "success",
-        message: `${updated.camera_name} was restored.`,
-      })
+      const message = `${updated.camera_name} was restored.`
+      toast.success(message)
       invalidateCameraQueries()
     },
     onError: (error) => {
-      setNotice({
-        tone: "error",
-        message:
-          getApiError(error)?.code === "CONFLICT_DUPLICATE"
-            ? "A camera with that name or channel already exists. Rename the live camera, or rename this one, then try restoring again."
-            : getApiErrorMessage(error, "Unable to restore this camera."),
-      })
+      const message =
+        getApiError(error)?.code === "CONFLICT_DUPLICATE"
+          ? "A camera with that name or channel already exists. Rename the live camera, or rename this one, then try restoring again."
+          : getApiErrorMessage(error, "Unable to restore this camera.")
+      toast.error(message)
     },
   })
 
@@ -309,8 +298,6 @@ export default function Cameras() {
           Add, configure, and monitor the connection and AI detection status of cameras
         </p>
       </div>
-
-      {notice ? <NoticeBanner notice={notice} /> : null}
 
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
         <StatCard
@@ -398,7 +385,6 @@ export default function Cameras() {
               { value: "null", label: "All" },
             ]}
             onChange={(value) => {
-              setNotice(null)
               reset()
               setActiveFilter(value)
             }}
@@ -420,7 +406,6 @@ export default function Cameras() {
         <Button
           size="sm"
           onClick={() => {
-            setNotice(null)
             setModal({ kind: "add" })
           }}
         >
@@ -506,7 +491,6 @@ export default function Cameras() {
                             label={`${camera.is_enabled ? "Disable" : "Enable"} ${camera.camera_name}`}
                             disabled={pendingToggleCameraId === camera.camera_id}
                             onChange={() => {
-                              setNotice(null)
                               toggleEnabledMutation.mutate({
                                 camera,
                                 nextEnabled: !camera.is_enabled,
@@ -517,7 +501,6 @@ export default function Cameras() {
                             type="button"
                             aria-label={`Edit ${camera.camera_name}`}
                             onClick={() => {
-                              setNotice(null)
                               setModal({ kind: "edit", camera })
                             }}
                             className={cn(
@@ -531,7 +514,6 @@ export default function Cameras() {
                             type="button"
                             aria-label={`Delete ${camera.camera_name}`}
                             onClick={() => {
-                              setNotice(null)
                               setModal({ kind: "delete", camera })
                             }}
                             className={cn(
@@ -548,7 +530,6 @@ export default function Cameras() {
                           aria-label={`Restore ${camera.camera_name}`}
                           disabled={isRestoring}
                           onClick={() => {
-                            setNotice(null)
                             restoreCameraMutation.mutate(camera.camera_id)
                           }}
                           className={cn(
@@ -581,10 +562,8 @@ export default function Cameras() {
         <AddCameraModal
           onClose={() => setModal({ kind: "closed" })}
           onSuccess={(camera) => {
-            setNotice({
-              tone: "success",
-              message: `${camera.camera_name} was added successfully.`,
-            })
+            const message = `${camera.camera_name} was added successfully.`
+            toast.success(message)
             reset()
             setModal({ kind: "closed" })
             invalidateCameraQueries()
@@ -597,10 +576,8 @@ export default function Cameras() {
           camera={modal.camera}
           onClose={() => setModal({ kind: "closed" })}
           onSuccess={(camera) => {
-            setNotice({
-              tone: "success",
-              message: `${camera.camera_name} was updated successfully.`,
-            })
+            const message = `${camera.camera_name} was updated successfully.`
+            toast.success(message)
             setModal({ kind: "closed" })
             invalidateCameraQueries()
           }}
@@ -631,7 +608,6 @@ export default function Cameras() {
         onClose={() => setModal({ kind: "closed" })}
         onConfirm={() => {
           if (modal.kind === "delete") {
-            setNotice(null)
             deleteCameraMutation.mutate(modal.camera.camera_id)
           }
         }}

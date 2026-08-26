@@ -16,6 +16,7 @@ interface FilterSelectProps<T extends string> {
   disabled?: boolean
   ariaLabel?: string
   enableSearch?: boolean
+  direction?: "down" | "up"
 }
 
 export function FilterSelect<T extends string>({
@@ -26,6 +27,7 @@ export function FilterSelect<T extends string>({
   disabled,
   ariaLabel,
   enableSearch = false,
+  direction = "down",
 }: FilterSelectProps<T>) {
   const [isOpen, setIsOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -73,7 +75,12 @@ export function FilterSelect<T extends string>({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-max min-w-full z-50 rounded border border-stroke bg-canvas shadow-md overflow-hidden">
+        <div
+          className={cn(
+            "absolute left-0 w-max min-w-full z-50 rounded border border-stroke bg-canvas shadow-md overflow-hidden",
+            direction === "up" ? "bottom-full mb-1" : "top-full mt-1",
+          )}
+        >
           {enableSearch && (
             <div className="p-2 border-b border-stroke bg-surface-1">
               <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search..." />

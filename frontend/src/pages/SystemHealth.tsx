@@ -12,24 +12,21 @@ import {
 
 import { AreaChartCard, ChartMessage } from "@/components/charts/AreaChartCard"
 import { AXIS_PROPS, CHART, TOOLTIP_PROPS } from "@/components/charts/chartTheme"
-import { Badge, BadgeDot } from "@/components/ui/Badge"
+import { BadgeDot } from "@/components/ui/Badge"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
 import { Tabs } from "@/components/ui/Tabs"
 import { getSystemHealthHistory, getSystemHealthLive } from "@/api/health"
-import type { GpuRead, SystemHealthDataPoint, SystemHealthLiveResponse } from "@/api/health"
+import type { SystemHealthDataPoint, SystemHealthLiveResponse } from "@/api/health"
 import { getOperatorWarningEntry } from "@/utils/warningCopy"
 import { formatRelativeDateTime } from "@/utils/datetime"
-import { truncateLabel } from "@/utils/format"
 import { cn } from "@/utils/cn"
 import {
   RiAlertLine,
   RiCheckboxCircleLine,
-  RiCpuLine,
   RiDashboard3Line,
   RiHardDrive2Line,
   RiServerLine,
-  RiShieldCheckLine,
   RiTimerLine,
 } from "@remixicon/react"
 
@@ -87,11 +84,6 @@ function formatMs(value: number | null | undefined): string {
 function formatFps(value: number | null | undefined): string {
   if (value == null) return "N/A"
   return `${value.toFixed(1)} fps`
-}
-
-function formatTemp(value: number | null | undefined): string {
-  if (value == null) return "N/A"
-  return `${value.toFixed(0)}°C`
 }
 
 /**
@@ -318,77 +310,6 @@ function OperationalBanner({ live }: { live: SystemHealthLiveResponse | undefine
   )
 }
 
-// ─── Hardware health card ────────────────────────────────────────────────────
-
-/**
- * Compact operator-facing hardware status card with two rows.
- * Derives plain-language status from existing live fields and warning codes —
- * no new API fields needed. Placed above the technical accordion so operators
- * see hardware status without needing to expand technical details.
- */
-function HardwareHealthRow({
-  label,
-  tone,
-  statusText,
-}: {
-  label: string
-  tone: "success" | "warning" | "danger" | "neutral"
-  statusText: string
-}) {
-  return (
-    <div className="flex items-center justify-between py-2.5 border-b border-stroke last:border-b-0">
-      <span className="text-xs font-medium text-fg-muted uppercase tracking-[0.08em]">{label}</span>
-      <div className="flex items-center gap-2">
-        <BadgeDot tone={tone} />
-        <span className="text-xs text-fg-body">{statusText}</span>
-      </div>
-    </div>
-  )
-}
-
-function HardwareHealthCard({ live }: { live: SystemHealthLiveResponse | undefined }) {
-  if (!live) return null
-
-  const hasGpuTempCritical = (live.warnings ?? []).some((w) => w.code === "GPU_TEMP_CRITICAL")
-  const hasRamCritical = (live.warnings ?? []).some((w) => w.code === "RAM_CRITICAL")
-
-  // GPU row
-  let gpuTone: "success" | "warning" | "danger" | "neutral"
-  let gpuText: string
-  if (live.gpus.length === 0) {
-    gpuTone = "neutral"
-    gpuText = "No graphics processor detected"
-  } else if (hasGpuTempCritical) {
-    gpuTone = "danger"
-    gpuText = `Overheating${live.gpu_temp_max != null ? ` (${live.gpu_temp_max.toFixed(0)}°C)` : ""}`
-  } else {
-    gpuTone = "success"
-    gpuText = `Working normally${live.gpu_temp_max != null ? ` (${live.gpu_temp_max.toFixed(0)}°C)` : ""}`
-  }
-
-  // CPU / memory row
-  let memTone: "success" | "warning" | "danger" | "neutral"
-  let memText: string
-  if (hasRamCritical) {
-    memTone = "danger"
-    memText = `Memory almost full${live.ram_usage != null ? ` (${live.ram_usage.toFixed(0)}%)` : ""}`
-  } else {
-    memTone = "success"
-    memText = `Running normally${live.cpu_usage != null ? ` · CPU ${live.cpu_usage.toFixed(0)}%` : ""}`
-  }
-
-  return (
-    <div className="mb-8 rounded-xl border border-stroke bg-surface-1 p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <RiCpuLine size={16} className="text-fg-muted" />
-        <h3 className="text-xs font-medium text-fg-body">Hardware Health</h3>
-      </div>
-      <HardwareHealthRow label="Graphics processor" tone={gpuTone} statusText={gpuText} />
-      <HardwareHealthRow label="Processor & memory" tone={memTone} statusText={memText} />
-    </div>
-  )
-}
-
 // ─── KPI card helpers ────────────────────────────────────────────────────────
 
 /**
@@ -402,176 +323,6 @@ function diskDotTone(live: SystemHealthLiveResponse | undefined): "success" | "w
   if (codes.includes("DISK_CRITICAL")) return "danger"
   if (codes.includes("DISK_WARNING")) return "warning"
   return "success"
-}
-
-// ─── GPU section ─────────────────────────────────────────────────────────────
-
-function GpuStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-stroke bg-canvas px-4 py-3">
-      <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-fg-muted">
-        {label}
-      </div>
-      <div className="mt-1 text-secondary font-semibold text-fg">{value}</div>
-    </div>
-  )
-}
-
-/**
- * gpus[] is per-device, every metric nullable. Three cases, all real: zero
- * GPUs (the CI runner, any CPU-only box) is a stated absence, not an empty
- * table; one GPU renders its row and the live roll-ups are redundant with
- * it, so they're dropped; two or more is where the roll-ups earn their
- * place, because gpu_temp_max is the number that matters and the per-device
- * rows say which device is producing it.
- */
-function GpuSection({ live }: { live: SystemHealthLiveResponse | undefined }) {
-  if (!live) return null
-  const gpus = live.gpus
-
-  return (
-    <div className="mb-8 rounded-xl border border-stroke bg-surface-1 p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <RiCpuLine size={16} className="text-fg-muted" />
-        <h3 className="text-xs font-medium text-fg-body">GPU</h3>
-      </div>
-
-      {gpus.length === 0 ? (
-        <p className="text-caption text-fg-muted">No GPU detected on this machine.</p>
-      ) : (
-        <>
-          {gpus.length > 1 ? (
-            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <GpuStat label="Usage (avg)" value={formatPercent(live.gpu_usage_avg)} />
-              <GpuStat label="Temperature (max)" value={formatTemp(live.gpu_temp_max)} />
-              <GpuStat label="Memory (max)" value={formatPercent(live.gpu_mem_pct_max)} />
-            </div>
-          ) : null}
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-stroke text-fg-muted">
-                  <th className="py-2 pr-4 text-xs font-medium">#</th>
-                  <th className="py-2 pr-4 text-xs font-medium">Device</th>
-                  <th className="py-2 pr-4 text-right text-xs font-medium">Usage</th>
-                  <th className="py-2 pr-4 text-right text-xs font-medium">Temp</th>
-                  <th className="py-2 text-right text-xs font-medium">Memory</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stroke">
-                {gpus.map((gpu: GpuRead) => (
-                  <tr key={gpu.index} className="text-fg-body">
-                    <td className="py-2.5 pr-4 text-xs">{gpu.index}</td>
-                    <td className="py-2.5 pr-4 text-xs" title={gpu.name}>
-                      {truncateLabel(gpu.name, 32)}
-                    </td>
-                    <td className="py-2.5 pr-4 text-right text-xs">
-                      {formatPercent(gpu.usage_percent)}
-                    </td>
-                    <td className="py-2.5 pr-4 text-right text-xs">{formatTemp(gpu.temp_c)}</td>
-                    <td className="py-2.5 text-right text-xs">
-                      {gpu.mem_used_mb !== null && gpu.mem_total_mb !== null
-                        ? `${(gpu.mem_used_mb / 1024).toFixed(1)} / ${(gpu.mem_total_mb / 1024).toFixed(1)} GB`
-                        : "N/A"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-function DiagnosticRow({ label, explanation }: { label: string; explanation: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 border-b border-stroke py-3 last:border-b-0">
-      <div>
-        <div className="text-xs font-medium text-fg-body">{label}</div>
-        <p className="mt-1 text-caption text-fg-muted">{explanation}</p>
-      </div>
-      <Badge
-        tone="neutral"
-        variant="subtle"
-        uppercase={false}
-        className="shrink-0 whitespace-nowrap"
-      >
-        Unavailable — logged server-side only
-      </Badge>
-    </div>
-  )
-}
-
-/**
- * Two heartbeat-time checks (`_check_engine_identity`, `_check_clock_skew` —
- * `backend/app/api/routes/internal.py`) run on every heartbeat but only ever
- * log a warning — neither is persisted to a table or returned by any
- * response, so this section always reads Unavailable today (G7). Neither
- * check has ever emitted a structured code of its own — unlike the five real
- * `HealthWarning` codes `_build_warnings` does emit (`system_health.py:64`),
- * which power `WarningsStrip` above and are unrelated to these two checks.
- * This section has no code to react to and does not invent one.
- */
-function EngineDiagnosticsSection() {
-  return (
-    <div className="mb-8 rounded-xl border border-stroke bg-surface-1 p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <RiShieldCheckLine size={16} className="text-fg-muted" />
-        <h3 className="text-xs font-medium text-fg-body">Engine Diagnostics</h3>
-      </div>
-
-      <DiagnosticRow
-        label="Two-engine conflict"
-        explanation="Warns when a second engine_id heartbeats within the stale window of a different one -- e.g. two engine processes pointed at the same backend."
-      />
-      <DiagnosticRow
-        label="Engine clock skew"
-        explanation="Warns when a heartbeat's own sent_at disagrees with server time by more than 10 seconds -- a sign the engine's clock has drifted."
-      />
-    </div>
-  )
-}
-
-function CapacityRow({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-between py-1.5 text-xs">
-      <span className="font-medium tracking-[0.08em] text-fg-muted">{label}</span>
-      <Badge tone="neutral" variant="subtle" uppercase={false}>
-        Unavailable
-      </Badge>
-    </div>
-  )
-}
-
-/**
- * `ai_engine/capacity.py` benchmarks the machine once at startup and writes
- * `machine_profile.json` (device, chosen camera capacity, the FPS band the
- * decision was made against) — gitignored, machine-local, and never
- * transmitted to the backend (G8). Mounted live today, same as
- * EngineDiagnosticsSection, always Unavailable until that changes.
- */
-function MachineCapacitySection() {
-  return (
-    <div className="mb-8 rounded-xl border border-stroke bg-surface-1 p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <RiServerLine size={16} className="text-fg-muted" />
-        <h3 className="text-xs font-medium text-fg-body">Machine Capacity</h3>
-      </div>
-
-      <CapacityRow label="Device" />
-      <CapacityRow label="Chosen camera capacity" />
-      <CapacityRow label="FPS band" />
-
-      {/* CLAUDE.md, verbatim, on ai_engine/machine_profile.json's absence: */}
-      <p className="mt-3 text-caption text-fg-muted">
-        "Absence is not an error — the engine falls back to a conservative one camera and says so on
-        startup."
-      </p>
-    </div>
-  )
 }
 
 /**
@@ -648,12 +399,12 @@ function DualHealthChart({
       ) : isUnavailable ? (
         <ChartMessage>Unavailable — not reported on this host.</ChartMessage>
       ) : (
-        <div className="-ml-4 flex-1">
+        <div className="flex-1">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
               <XAxis dataKey="time" {...AXIS_PROPS} dy={8} tick={false} />
-              <YAxis {...AXIS_PROPS} width={32} tickFormatter={(v) => `${v}${unit}`} />
+              <YAxis {...AXIS_PROPS} width={38} tickFormatter={(v) => `${v}${unit}`} />
               <Tooltip
                 {...TOOLTIP_PROPS}
                 cursor={{ stroke: "var(--color-stroke-strong)", strokeWidth: 1 }}
@@ -692,7 +443,6 @@ function DualHealthChart({
 
 export default function SystemHealth() {
   const [activeTab, setActiveTab] = useState<"48h" | "30d">("48h")
-  const [techDetailsOpen, setTechDetailsOpen] = useState(false)
 
   const liveQuery = useQuery({
     queryKey: ["system-health-live"],
@@ -799,165 +549,119 @@ export default function SystemHealth() {
         />
       </div>
 
-      {/* ── Hardware health summary card ────────────────────────────────── */}
-      <HardwareHealthCard live={live} />
+      {/* ── History range tabs + 6 charts ──────────────────────────────── */}
+      <div className="mb-5">
+        <Tabs
+          items={RANGE_TABS}
+          value={activeTab}
+          onChange={setActiveTab}
+          variant="pill"
+          label="History range"
+        />
+      </div>
 
-      {/* ── Technical details accordion ─────────────────────────────────── */}
-      <details
-        open={techDetailsOpen}
-        onToggle={(e) => setTechDetailsOpen((e.currentTarget as HTMLDetailsElement).open)}
-        className="rounded-xl border border-stroke bg-surface-1"
-      >
-        <summary className="flex cursor-pointer select-none items-center justify-between px-5 py-4 text-sm font-medium text-fg hover:bg-surface-2 rounded-xl transition-colors duration-150 [&::-webkit-details-marker]:hidden list-none">
-          <span>Advance details</span>
-          <span
-            className={cn(
-              "text-fg-muted transition-transform duration-200",
-              techDetailsOpen ? "rotate-180" : "rotate-0",
-            )}
-            aria-hidden="true"
-          >
-            ▾
-          </span>
-        </summary>
+      {historyQuery.isError ? (
+        <QueryErrorBanner
+          error={historyQuery.error}
+          fallback="Historical health data unavailable."
+          onRetry={() => historyQuery.refetch()}
+        />
+      ) : null}
 
-        <div className="px-5 pb-5 pt-2">
-          {/* GPU table — existing component, moved here unchanged */}
-          <GpuSection live={live} />
-
-          {/* Engine Diagnostics — existing component, verbatim copy */}
-          <EngineDiagnosticsSection />
-
-          {/* Machine Capacity — existing component, verbatim copy */}
-          <MachineCapacitySection />
-
-          {/* History range tabs + 6 charts */}
-          <div className="mb-5">
-            <Tabs
-              items={RANGE_TABS}
-              value={activeTab}
-              onChange={setActiveTab}
-              variant="pill"
-              label="History range"
-            />
-          </div>
-
-          {historyQuery.isError ? (
-            <QueryErrorBanner
-              error={historyQuery.error}
-              fallback="Historical health data unavailable."
-              onRetry={() => historyQuery.refetch()}
-            />
-          ) : null}
-
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <AreaChartCard
-              title="CPU Utilization"
-              data={toChartData(historyData, "cpu_usage", activeTab)}
-              dataKey="value"
-              xKey="time"
-              height={260}
-              isLoading={historyQuery.isLoading}
-              allowDecimals={false}
-              yDomain={[0, 100]}
-              unit="%"
-              tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "CPU Utilization"]}
-              action={
-                live ? (
-                  <LiveReading
-                    value={live.cpu_usage}
-                    available={live.cpu_usage_available}
-                    unit="%"
-                  />
-                ) : null
-              }
-            />
-            <AreaChartCard
-              title="GPU Utilization"
-              data={toChartData(historyData, "gpu_usage", activeTab)}
-              dataKey="value"
-              xKey="time"
-              height={260}
-              isLoading={historyQuery.isLoading}
-              allowDecimals={false}
-              yDomain={[0, 100]}
-              unit="%"
-              tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "GPU Utilization"]}
-            />
-            {/*
-              Figma's fourth chart is "Core Temperature". The history points carry
-              cpu_temp_avg/peak and gpu_temp_peak — all null on Windows for CPU.
-              Wired to gpu_temp_peak and labelled GPU Temperature; recorded as a
-              design/backend mismatch rather than silently relabelled.
-            */}
-            <AreaChartCard
-              title="GPU Temperature"
-              data={toChartData(historyData, "gpu_temp_peak", activeTab)}
-              dataKey="value"
-              xKey="time"
-              height={260}
-              isLoading={historyQuery.isLoading}
-              allowDecimals={false}
-              unit="°C"
-              stroke={CHART.danger}
-              tooltipFormatter={(v) => [`${Number(v).toFixed(1)}°C`, "GPU Temperature"]}
-            />
-            <AreaChartCard
-              title="RAM Utilization"
-              data={toChartData(historyData, "ram_usage", activeTab)}
-              dataKey="value"
-              xKey="time"
-              height={260}
-              isLoading={historyQuery.isLoading}
-              allowDecimals={false}
-              yDomain={[0, 100]}
-              unit="%"
-              tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "RAM Utilization"]}
-              action={
-                live ? (
-                  <LiveReading
-                    value={live.ram_usage}
-                    available={live.ram_usage_available}
-                    unit="%"
-                  />
-                ) : null
-              }
-            />
-            {/*
-              cpu_temp_avg/peak — null on Windows for CPU, per the plan's own
-              note — and gpu_mem_pct_avg/peak were both carried by the history
-              endpoint and plotted nowhere. Two more chart cards than Figma
-              draws; no frame for these, so genuinely unavailable (Windows CPU
-              temp) renders as an honest gap rather than a fabricated flat line.
-            */}
-            <DualHealthChart
-              title="CPU Temperature"
-              data={historyData}
-              avgKey="cpu_temp_avg"
-              peakKey="cpu_temp_peak"
-              unit="°C"
-              isLoading={historyQuery.isLoading}
-              action={
-                live ? (
-                  <LiveReading
-                    value={live.cpu_temp}
-                    available={live.cpu_temp_available}
-                    unit="°C"
-                  />
-                ) : null
-              }
-            />
-            <DualHealthChart
-              title="GPU Memory"
-              data={historyData}
-              avgKey="gpu_mem_pct_avg"
-              peakKey="gpu_mem_pct_peak"
-              unit="%"
-              isLoading={historyQuery.isLoading}
-            />
-          </div>
-        </div>
-      </details>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <AreaChartCard
+          title="CPU Utilization"
+          data={toChartData(historyData, "cpu_usage", activeTab)}
+          dataKey="value"
+          xKey="time"
+          height={260}
+          isLoading={historyQuery.isLoading}
+          allowDecimals={false}
+          yDomain={[0, 100]}
+          unit="%"
+          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "CPU Utilization"]}
+          action={
+            live ? (
+              <LiveReading value={live.cpu_usage} available={live.cpu_usage_available} unit="%" />
+            ) : null
+          }
+        />
+        <AreaChartCard
+          title="GPU Utilization"
+          data={toChartData(historyData, "gpu_usage", activeTab)}
+          dataKey="value"
+          xKey="time"
+          height={260}
+          isLoading={historyQuery.isLoading}
+          allowDecimals={false}
+          yDomain={[0, 100]}
+          unit="%"
+          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "GPU Utilization"]}
+        />
+        {/*
+          Figma's fourth chart is "Core Temperature". The history points carry
+          cpu_temp_avg/peak and gpu_temp_peak — all null on Windows for CPU.
+          Wired to gpu_temp_peak and labelled GPU Temperature; recorded as a
+          design/backend mismatch rather than silently relabelled.
+        */}
+        <AreaChartCard
+          title="GPU Temperature"
+          data={toChartData(historyData, "gpu_temp_peak", activeTab)}
+          dataKey="value"
+          xKey="time"
+          height={260}
+          isLoading={historyQuery.isLoading}
+          allowDecimals={false}
+          unit="°C"
+          stroke={CHART.danger}
+          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}°C`, "GPU Temperature"]}
+        />
+        <AreaChartCard
+          title="RAM Utilization"
+          data={toChartData(historyData, "ram_usage", activeTab)}
+          dataKey="value"
+          xKey="time"
+          height={260}
+          isLoading={historyQuery.isLoading}
+          allowDecimals={false}
+          yDomain={[0, 100]}
+          unit="%"
+          tooltipFormatter={(v) => [`${Number(v).toFixed(1)}%`, "RAM Utilization"]}
+          action={
+            live ? (
+              <LiveReading value={live.ram_usage} available={live.ram_usage_available} unit="%" />
+            ) : null
+          }
+        />
+        {/*
+          cpu_temp_avg/peak — null on Windows for CPU, per the plan's own
+          note — and gpu_mem_pct_avg/peak were both carried by the history
+          endpoint and plotted nowhere. Two more chart cards than Figma
+          draws; no frame for these, so genuinely unavailable (Windows CPU
+          temp) renders as an honest gap rather than a fabricated flat line.
+        */}
+        <DualHealthChart
+          title="CPU Temperature"
+          data={historyData}
+          avgKey="cpu_temp_avg"
+          peakKey="cpu_temp_peak"
+          unit="°C"
+          isLoading={historyQuery.isLoading}
+          action={
+            live ? (
+              <LiveReading value={live.cpu_temp} available={live.cpu_temp_available} unit="°C" />
+            ) : null
+          }
+        />
+        <DualHealthChart
+          title="GPU Memory"
+          data={historyData}
+          avgKey="gpu_mem_pct_avg"
+          peakKey="gpu_mem_pct_peak"
+          unit="%"
+          isLoading={historyQuery.isLoading}
+        />
+      </div>
     </div>
   )
 }
