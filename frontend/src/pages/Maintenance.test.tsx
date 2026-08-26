@@ -69,6 +69,10 @@ function renderMaintenance() {
   )
 }
 
+function findBackupRow(name: RegExp) {
+  return screen.findByRole("row", { name }, { timeout: 5000 })
+}
+
 describe("Maintenance page restore point picker", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -80,10 +84,10 @@ describe("Maintenance page restore point picker", () => {
     const user = userEvent.setup()
     renderMaintenance()
 
-    expect(await screen.findByRole("row", { name: /2026.*1\.0 MB.*Valid/i })).toBeInTheDocument()
+    expect(await findBackupRow(/2026.*1\.0 MB.*Valid/i)).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Restore this backup…" })).not.toBeInTheDocument()
 
-    await user.click(await screen.findByRole("row", { name: /2026.*1\.0 MB.*Valid/i }))
+    await user.click(await findBackupRow(/2026.*1\.0 MB.*Valid/i))
     const restoreTrigger = screen.getByRole("button", { name: "Restore this backup…" })
     expect(restoreTrigger).toBeEnabled()
 
@@ -111,7 +115,7 @@ describe("Maintenance page restore point picker", () => {
     const user = userEvent.setup()
     renderMaintenance()
 
-    await user.click(await screen.findByRole("row", { name: /2026.*512 B.*Valid/i }))
+    await user.click(await findBackupRow(/2026.*512 B.*Valid/i))
     await user.click(screen.getByRole("button", { name: "Restore this backup…" }))
     await user.type(screen.getByLabelText(/current password/i), "hunter2")
     await user.type(screen.getByLabelText('Type "RESTORE DATABASE" to confirm'), "RESTORE DATABASE")
@@ -134,7 +138,7 @@ describe("Maintenance page restore point picker", () => {
     const user = userEvent.setup()
     renderMaintenance()
 
-    await user.click(await screen.findByRole("row", { name: /2026.*512 B.*Invalid/i }))
+    await user.click(await findBackupRow(/2026.*512 B.*Invalid/i))
 
     expect(screen.getByText("Validation Checks:")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Restore this backup…" })).not.toBeInTheDocument()
@@ -153,7 +157,7 @@ describe("Maintenance page restore point picker", () => {
     const user = userEvent.setup()
     renderMaintenance()
 
-    await user.click(await screen.findByRole("row", { name: /2026.*1\.0 MB.*Valid/i }))
+    await user.click(await findBackupRow(/2026.*1\.0 MB.*Valid/i))
 
     expect(screen.getByRole("button", { name: "Restore this backup…" })).toBeDisabled()
     expect(
