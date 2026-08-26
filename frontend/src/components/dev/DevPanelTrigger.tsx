@@ -2,6 +2,8 @@ import { Suspense, lazy, useEffect, useState } from "react"
 import { RiTerminalBoxLine } from "@remixicon/react"
 
 import { useDevTools } from "@/hooks/useDevTools"
+import { focusRing } from "@/components/ui/Button"
+import { cn } from "@/utils/cn"
 
 // lazy() so the panel body lands in its own chunk. The gate is a runtime
 // probe rather than import.meta.env.DEV (DT-3), which means this code ships
@@ -34,7 +36,12 @@ export function DevPanelTrigger() {
         onClick={() => setIsOpen(true)}
         aria-label="Open dev tools"
         title="Dev tools (Ctrl+Shift+D)"
-        className="fixed bottom-4 right-4 z-[9000] rounded-full border border-stroke bg-surface-1 p-3 text-fg-muted shadow-lg transition-colors hover:border-stroke-strong hover:text-fg"
+        className={cn(
+          "fixed bottom-16 right-4 z-[9000] flex h-10 w-10 items-center justify-center rounded-full",
+          "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-colors duration-150",
+          "hover:border-stroke-strong hover:text-fg",
+          focusRing,
+        )}
       >
         <RiTerminalBoxLine size={18} />
       </button>
