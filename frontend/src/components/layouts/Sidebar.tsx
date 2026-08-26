@@ -46,7 +46,6 @@ export function Sidebar() {
   const clearSession = useAuthStore((state) => state.clearSession)
   const clockOffsetMs = useAlertStore((state) => state.clockOffsetMs)
   const clockIsSkewed = Math.abs(clockOffsetMs) > CLOCK_SKEW_WARNING_MS
-  const connectionId = useAlertStore((state) => state.connectionId)
 
   const basePath = role === "Admin" ? "/admin" : "/user"
 
@@ -162,7 +161,7 @@ export function Sidebar() {
           ))}
       </nav>
 
-      <div className="space-y-1 p-3 pb-2">
+      <div className="space-y-1 px-5 pb-3">
         {clockIsSkewed ? (
           <div
             role="status"
@@ -188,7 +187,7 @@ export function Sidebar() {
         </button>
       </div>
 
-      <div className="border-t border-stroke p-3">
+      <div className="border-t border-stroke px-5 py-3">
         {/*
           D-3, settled: not a Link. A footer avatar chip that only sometimes
           leads somewhere reads as decoration, not navigation — the prior fix
@@ -198,7 +197,7 @@ export function Sidebar() {
           (ACCOUNT -> Profile, same treatment as every other row); this chip
           goes back to a pure identity display, no affordance implied.
         */}
-        <div className="flex items-center justify-between gap-3 rounded-md px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stroke-strong bg-surface-2 text-xs font-bold text-fg-muted">
               {initials || <RiUserLine size={18} className="text-fg-muted" />}
@@ -224,23 +223,6 @@ export function Sidebar() {
             <RiLogoutBoxRLine size={20} />
           </button>
         </div>
-
-        {/*
-          ConnectionReadyData.connection_id — the handle that identifies this
-          socket in the backend log. Purely diagnostic, so it gets the
-          lowest-priority treatment in the footer: truncated, monospace, no
-          affordance. Its only job is to be quotable in a support
-          conversation ("the alerts stopped updating on session a1b2c3d4"),
-          which a full UUID doesn't need to be to serve.
-        */}
-        {connectionId ? (
-          <p
-            className="truncate px-3 pt-1 font-mono text-[10px] text-fg-muted"
-            title={connectionId}
-          >
-            Session {connectionId.slice(0, 8)}
-          </p>
-        ) : null}
       </div>
     </aside>
   )
