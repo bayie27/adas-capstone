@@ -52,7 +52,7 @@ restart_start=$(date +%s)
 systemctl restart "$AI_SERVICE"
 systemctl restart "$BACKEND_SERVICE"
 
-if run_maintenance restart --phase wait --timeout "$READY_TIMEOUT_SECONDS"; then
+if run_maintenance restart --phase wait --timeout "$READY_TIMEOUT_SECONDS" --require-heartbeat; then
     restart_end=$(date +%s)
     log "Restart downtime: $((restart_end - restart_start)) seconds."
     exit 0

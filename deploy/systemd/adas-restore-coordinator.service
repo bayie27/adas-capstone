@@ -1,0 +1,33 @@
+# REVIEWED-BUT-UNVERIFIED, PRODUCTION-TARGET — see deploy/systemd/README.md.
+[Unit]
+Description=ADAS confirmed-restore coordinator
+After=local-fs.target network-online.target
+Before=adas-backend.service adas-ai-engine.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/adas-capstone
+Environment=PYTHONPATH=/opt/adas-capstone/backend
+ExecStart=/usr/local/bin/uv run python -m app.maintenance watch-restores --platform systemd
+Restart=always
+RestartSec=2
+Environment=ADAS_BACKEND_SERVICE=adas-backend.service
+Environment=ADAS_AI_SERVICE=adas-ai-engine.service
+Environment=ADAS_SERVICE_USER=adas
+TimeoutStopSec=300
+# The default SQLite URL is repo-relative (./adas.db), and the fixed runner
+# must atomically replace that file plus its temporary restore siblings. Keep
+# system paths read-only while leaving the deployment root writable; the
+# dedicated service user and deployment filesystem permissions still govern
+# the database and backup data.
+ProtectSystem=full
+ReadWritePaths=/opt/adas-capstone/var
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
