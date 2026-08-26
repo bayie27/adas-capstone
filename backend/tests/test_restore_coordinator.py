@@ -146,10 +146,12 @@ def test_cross_process_maintenance_lease_excludes_a_second_process(tmp_path):
         from app.maintenance.backup import MaintenanceLease
 
         lease = MaintenanceLease(Path(sys.argv[1]))
+        release_signal = Path(sys.argv[2])
         acquired = lease.acquire(blocking=False)
         print("acquired" if acquired else "busy", flush=True)
         if acquired:
-            time.sleep(0.75)
+            while not release_signal.exists():
+                time.sleep(0.01)
             lease.release()
         """
     )
@@ -159,8 +161,9 @@ def test_cross_process_maintenance_lease_excludes_a_second_process(tmp_path):
     env["PYTHONPATH"] = os.pathsep.join(
         part for part in (str(backend_root), env.get("PYTHONPATH")) if part
     )
+    release_signal = tmp_path / "release"
     first = subprocess.Popen(
-        [sys.executable, "-c", code, str(tmp_path)],
+        [sys.executable, "-c", code, str(tmp_path), str(release_signal)],
         cwd=repo_root,
         env=env,
         stdout=subprocess.PIPE,
@@ -170,7 +173,7 @@ def test_cross_process_maintenance_lease_excludes_a_second_process(tmp_path):
         assert first.stdout is not None
         assert first.stdout.readline().strip() == "acquired"
         second = subprocess.run(
-            [sys.executable, "-c", code, str(tmp_path)],
+            [sys.executable, "-c", code, str(tmp_path), str(release_signal)],
             cwd=repo_root,
             env=env,
             capture_output=True,
@@ -180,6 +183,7 @@ def test_cross_process_maintenance_lease_excludes_a_second_process(tmp_path):
         )
         assert second.stdout.strip() == "busy"
     finally:
+        release_signal.touch()
         first.wait(timeout=10)
 
 
