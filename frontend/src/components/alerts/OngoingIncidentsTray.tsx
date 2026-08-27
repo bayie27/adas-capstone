@@ -236,25 +236,26 @@ export function OngoingIncidentsTray() {
 
   return (
     <>
-      {/* ── Floating Trigger Button / Squircle with Badge ──────────────── */}
+      {/* ── Floating Trigger Button / Pill ──────────────────────────────── */}
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        aria-label={`Ongoing incidents tray (${ongoingAlerts.length})`}
+        aria-label="Ongoing incidents tray"
         title="Ongoing incidents"
         className={cn(
-          "fixed top-8 right-8 z-[8000] flex h-9 w-9 items-center justify-center rounded-lg",
-          "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-all duration-150",
-          "hover:border-stroke-strong hover:bg-surface-2 hover:text-fg active:scale-95",
+          "fixed top-8 right-8 z-[8000] flex h-9 items-center gap-2 rounded-full px-3.5",
+          "border border-warning/40 bg-surface-1 text-warning shadow-overlay transition-all duration-150",
+          "hover:border-warning/80 hover:bg-surface-2 hover:shadow-lg active:scale-95",
           focusRing,
         )}
       >
-        <RiAlarmWarningLine size={17} className="shrink-0 text-warning" />
-        <span
-          className="absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-warning px-0.5 text-[9px] font-bold leading-none text-fg-on-primary shadow-sm ring-2 ring-surface-1"
-          aria-hidden="true"
-        >
-          {ongoingAlerts.length}
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-warning opacity-75" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-warning" />
+        </span>
+        <RiAlarmWarningLine size={16} className="shrink-0 text-warning" />
+        <span className="text-xs font-semibold tabular-nums text-fg">
+          {ongoingAlerts.length} Ongoing
         </span>
       </button>
 
