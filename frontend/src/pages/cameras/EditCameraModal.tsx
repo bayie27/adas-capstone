@@ -86,13 +86,17 @@ export function EditCameraModal({
       title="Edit Camera"
       subtitle="Update existing camera name & channel no."
       icon={
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-strong bg-transparent">
-          <RiPencilLine size={20} className="text-fg" />
+        <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
+          <RiPencilLine size={28} className="text-fg" />
         </div>
       }
+      className="bg-surface-1 sm:max-w-[590px]"
     >
-      <form onSubmit={handleSubmit}>
-        <div className="space-y-4 border-y border-stroke py-6">
+      <form onSubmit={handleSubmit} className="flex flex-col">
+        <hr className="border-t border-stroke mb-6 -mx-6" />
+
+        <div className="grid grid-cols-[150px_1fr] gap-x-8 gap-y-6">
+          <div className="text-base font-medium text-fg">Camera</div>
           <CameraFormFields
             form={form}
             errors={fieldErrors}
@@ -102,19 +106,31 @@ export function EditCameraModal({
         </div>
 
         {(formError ?? requestError) ? (
-          <p className="mt-4 text-caption text-danger">{formError ?? requestError}</p>
+          <p className="mt-4 text-xs text-danger">{formError ?? requestError}</p>
         ) : null}
 
-        <div className="mt-6 flex items-end justify-between gap-4">
-          <div className="space-y-0.5 text-caption text-fg-muted">
-            <div>Date Added: {formatShortDateTime(camera.created_at)}</div>
-            <div>Last Changes: {formatShortDateTime(camera.updated_at)}</div>
+        <hr className="border-t border-stroke my-6 -mx-6" />
+
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col text-[12px] font-normal text-fg-muted leading-[28px]">
+            <div>Date Added: {formatShortDateTime(camera.created_at ?? null)}</div>
+            <div>Last Changes: {formatShortDateTime(camera.updated_at ?? null)}</div>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              className="border-stroke-strong"
+              onClick={onClose}
+              disabled={mutation.isPending}
+            >
               Cancel
             </Button>
-            <Button type="submit" isLoading={mutation.isPending} loadingLabel="Saving…">
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={mutation.isPending}
+              loadingLabel="Saving…"
+            >
               Save Changes
             </Button>
           </div>
