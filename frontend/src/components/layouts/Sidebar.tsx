@@ -107,7 +107,7 @@ export function Sidebar() {
 
   // §2.8 — nav rest / hover / active, shared by the links and the two footer
   // buttons so the Help Center row cannot drift from the rows above it.
-  const navRow = "flex items-center gap-3 rounded-md px-3 py-2 transition-colors duration-150"
+  const navRow = "flex items-center gap-3 rounded px-3 py-2 transition-colors duration-150"
   const navInactive = "text-fg-muted hover:bg-surface-1 hover:text-fg-body"
   const navActive = "bg-surface-2 text-fg"
 
