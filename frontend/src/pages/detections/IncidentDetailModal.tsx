@@ -98,7 +98,7 @@ export function IncidentDetailModal({
       hideClose
       overlayClassName={cn("z-[9500]", overlayClassName)}
       className={cn(
-        "w-full max-w-[490px] overflow-hidden p-0 border-t-4",
+        "w-full max-w-[590px] overflow-hidden p-0 border-t-4",
         alert ? getAlertBorderClass(alert.detection_status) : "border-t-stroke-strong",
       )}
     >
