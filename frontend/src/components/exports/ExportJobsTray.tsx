@@ -309,7 +309,7 @@ export function ExportJobsTray() {
         title="Export jobs"
         className={cn(
           "fixed top-8 z-[8000] flex h-9 w-9 items-center justify-center rounded-lg",
-          hasOngoingAlerts ? "right-[152px]" : "right-8",
+          hasOngoingAlerts ? "right-[138px]" : "right-8",
           "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-all duration-150",
           "hover:border-stroke-strong hover:bg-surface-2 hover:text-fg active:scale-95",
           focusRing,
