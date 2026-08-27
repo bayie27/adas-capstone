@@ -231,7 +231,7 @@ export function GlobalAlerts() {
       // incident modal open must land on top of it, not behind it.
       overlayClassName="z-9999"
       backdropClassName="bg-backdrop-alert"
-      className="max-w-md overflow-hidden p-0"
+      className="w-full max-w-[500px] overflow-hidden p-0"
       noEntrance
       outerContent={
         hasMultiple ? (
@@ -308,7 +308,7 @@ export function GlobalAlerts() {
               modal as fixed-position overlays — the header is always a plain
               centered title regardless of queue length. */}
         <div className="w-full bg-danger px-6 py-4">
-          <h2 className="text-center text-2xl font-bold uppercase tracking-widest text-black">
+          <h2 className="text-center text-xl sm:text-2xl font-bold uppercase tracking-widest text-black">
             Accident Detected
           </h2>
         </div>
@@ -337,14 +337,14 @@ export function GlobalAlerts() {
             <SnapshotImage
               snapshotUrl={alert.snapshot_url}
               alt={`Accident snapshot for log ${alert.log_id}`}
-              className="max-h-52 w-auto rounded border-2 border-stroke object-contain"
-              fallbackClassName="h-40 w-full rounded"
+              className="max-h-56 w-auto rounded border border-stroke object-contain"
+              fallbackClassName="h-44 w-full rounded"
             />
           </div>
 
           {/* ── Section 3: Core Telemetry ─────────────────────────────────── */}
-          <div className="space-y-3 bg-surface-1 px-6 py-4">
-            <div className="flex items-start justify-between">
+          <div className="space-y-3.5 bg-surface-1 px-6 py-4 sm:py-5">
+            <div className="flex items-start justify-between gap-4">
               <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
                 Timestamp
               </span>
@@ -352,7 +352,7 @@ export function GlobalAlerts() {
                 {formatFullDateTime(alert.detected_at)}
               </span>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
               <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
                 Camera Name
               </span>
@@ -360,7 +360,7 @@ export function GlobalAlerts() {
                 {alert.camera_name ?? `Camera ${alert.camera_id}`}
               </span>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
               <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
                 AI-Confidence Score
               </span>
@@ -371,7 +371,7 @@ export function GlobalAlerts() {
               */}
               <span
                 className={cn(
-                  "text-sm font-bold",
+                  "text-sm font-bold tabular-nums",
                   alert.confidence_score * 100 < 75 ? "text-danger" : "text-success",
                 )}
               >
@@ -408,17 +408,17 @@ export function GlobalAlerts() {
 
         {/* ── Section 5: Footer Action Buttons ──────────────────────────────
             Full-width flex row with equal-width buttons (flex-1). */}
-        <div className="flex w-full gap-4 border-t border-stroke bg-surface-1 p-4">
+        <div className="flex w-full items-center gap-3.5 border-t border-stroke bg-surface-1 p-4 sm:p-5">
           <Button
             variant="secondary"
-            className="flex-1 rounded-md bg-surface-3 py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
+            className="flex-1 whitespace-nowrap rounded-md bg-surface-3 py-3 text-xs sm:text-sm font-medium uppercase tracking-wider text-fg hover:bg-surface-2"
             disabled={busy}
             onClick={() => runAction(dismissAlert, "Failed to dismiss alert.")}
           >
             {busy ? "…" : "Dismiss Accident"}
           </Button>
           <Button
-            className="flex-1 rounded-md bg-primary py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
+            className="flex-1 whitespace-nowrap rounded-md bg-primary py-3 text-xs sm:text-sm font-medium uppercase tracking-wider text-fg-on-primary hover:bg-primary-hover"
             disabled={busy}
             onClick={() => runAction(confirmAlert, "Failed to confirm alert.")}
           >
