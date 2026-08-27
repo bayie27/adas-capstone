@@ -44,17 +44,25 @@ const mockAlert: AlertLog = {
 
 describe("GlobalAlerts", () => {
   beforeEach(() => {
+    useAlertStore.getState().clearAlerts()
     vi.clearAllMocks()
-    useAlertStore.setState({
-      alerts: [],
-      snoozedUntil: {},
-      snoozedBy: {},
-      handledByOther: {},
-    })
     useAuthStore.setState({ username: "testoperator" })
   })
 
   it("renders nothing when there are no alerts", () => {
+    render(renderWithProviders(<GlobalAlerts />))
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  })
+
+  it("renders nothing when only ongoing alerts exist", () => {
+    useAlertStore.setState({
+      alerts: [
+        {
+          ...mockAlert,
+          detection_status: "Ongoing",
+        },
+      ],
+    })
     render(renderWithProviders(<GlobalAlerts />))
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
   })
