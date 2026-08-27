@@ -65,7 +65,7 @@ function OngoingIncidentCard({
   }
 
   return (
-    <div className="rounded-lg border border-stroke bg-surface-1 p-3.5 shadow-sm transition-colors duration-150 hover:border-stroke-strong">
+    <div className="relative overflow-hidden rounded-lg border border-stroke bg-surface-1 p-3.5 shadow-sm transition-colors duration-150 hover:border-stroke-strong">
       <div className="flex items-start gap-3">
         {/* Snapshot Thumbnail — hover shows enlarged flyout on pointer-fine devices */}
         <div
@@ -124,6 +124,14 @@ function OngoingIncidentCard({
           <span>Review &amp; Resolve</span>
           <RiArrowRightSLine size={14} />
         </Button>
+      </div>
+
+      {/* Glowing yellow bottom animation line */}
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] overflow-hidden"
+        aria-hidden="true"
+      >
+        <div className="h-full w-full bg-gradient-to-r from-transparent via-warning to-transparent opacity-75 animate-pulse" />
       </div>
     </div>
   )
