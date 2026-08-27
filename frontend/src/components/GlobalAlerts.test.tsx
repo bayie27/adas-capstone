@@ -78,7 +78,7 @@ describe("GlobalAlerts", () => {
     expect(screen.getByRole("button", { name: /confirm accident/i })).toBeInTheDocument()
   })
 
-  it("clicking snooze mutes the alarm, and clicking again unmutes it", async () => {
+  it("clicking snooze mutes the alarm and disables the snooze button until duration expires", async () => {
     const user = userEvent.setup()
     const futureDate = new Date(Date.now() + 60_000).toISOString()
     vi.mocked(alertsApi.snoozeAlert).mockResolvedValueOnce({
@@ -92,7 +92,7 @@ describe("GlobalAlerts", () => {
     const snoozeButton = screen.getByRole("button", { name: /snooze alarm/i })
     expect(snoozeButton).not.toBeDisabled()
 
-    // 1. Click to mute (snooze)
+    // Click to snooze (mute)
     await user.click(snoozeButton)
 
     await waitFor(() => {
@@ -103,17 +103,11 @@ describe("GlobalAlerts", () => {
     expect(screen.getByRole("alertdialog")).toBeInTheDocument()
     expect(screen.getByText("Accident Detected")).toBeInTheDocument()
 
-    // Button updates to unmute state
-    const unmuteButton = screen.getByRole("button", { name: /unmute alarm/i })
-    expect(unmuteButton).toBeInTheDocument()
-    expect(unmuteButton).not.toBeDisabled()
-
-    // 2. Click to unmute
-    await user.click(unmuteButton)
-
-    // Button reverts back to snooze alarm state
+    // Button updates to snoozed state and is disabled (cannot be unmuted manually)
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /snooze alarm/i })).toBeInTheDocument()
+      const snoozedBtn = screen.getByRole("button", { name: /alarm snoozed/i })
+      expect(snoozedBtn).toBeInTheDocument()
+      expect(snoozedBtn).toBeDisabled()
     })
   })
 
@@ -159,5 +153,46 @@ describe("GlobalAlerts", () => {
     await waitFor(() => {
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
     })
+  })
+
+  it("renders navigation arrows and counter when multiple alerts are queued, and allows cycling", async () => {
+    const user = userEvent.setup()
+    const mockAlert2: AlertLog = {
+      ...mockAlert,
+      log_id: 102,
+      camera_name: "Rear Exit Cam",
+    }
+
+    useAlertStore.setState({ alerts: [mockAlert, mockAlert2] })
+    render(renderWithProviders(<GlobalAlerts />))
+
+    expect(screen.getByText("Alert 1 of 2")).toBeInTheDocument()
+    expect(screen.getByText("Front Gate Cam")).toBeInTheDocument()
+
+    const prevBtn = screen.getByRole("button", { name: /previous alert/i })
+    const nextBtn = screen.getByRole("button", { name: /next alert/i })
+
+    expect(prevBtn).toBeDisabled()
+    expect(nextBtn).not.toBeDisabled()
+
+    // Navigate to next alert
+    await user.click(nextBtn)
+
+    expect(screen.getByText("Alert 2 of 2")).toBeInTheDocument()
+    expect(screen.getByText("Rear Exit Cam")).toBeInTheDocument()
+    expect(nextBtn).toBeDisabled()
+    expect(prevBtn).not.toBeDisabled()
+
+    // Navigate back via keyboard ArrowLeft
+    await user.keyboard("{ArrowLeft}")
+
+    expect(screen.getByText("Alert 1 of 2")).toBeInTheDocument()
+    expect(screen.getByText("Front Gate Cam")).toBeInTheDocument()
+
+    // Navigate forward via keyboard ArrowRight
+    await user.keyboard("{ArrowRight}")
+
+    expect(screen.getByText("Alert 2 of 2")).toBeInTheDocument()
+    expect(screen.getByText("Rear Exit Cam")).toBeInTheDocument()
   })
 })
