@@ -242,7 +242,7 @@ export function IncidentDetailModal({
                     {snoozeAction}
                     <Button
                       variant="secondary"
-                      className="flex-1 rounded-md bg-surface-3 py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
+                      className="flex-1 rounded bg-surface-3 py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
                       disabled={isTransitionPending}
                       isLoading={isDismissing}
                       loadingLabel="…"
@@ -251,7 +251,7 @@ export function IncidentDetailModal({
                       Dismiss Accident
                     </Button>
                     <Button
-                      className="flex-1 rounded-md bg-primary py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
+                      className="flex-1 rounded bg-primary py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
                       disabled={isTransitionPending}
                       isLoading={isConfirming}
                       loadingLabel="…"
@@ -264,7 +264,7 @@ export function IncidentDetailModal({
                   <>
                     <Button
                       variant="secondary"
-                      className="flex-1 rounded-md bg-surface-3 py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
+                      className="flex-1 rounded bg-surface-3 py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg hover:bg-surface-2"
                       disabled={isTransitionPending}
                       isLoading={isDismissing}
                       loadingLabel="…"
@@ -273,7 +273,7 @@ export function IncidentDetailModal({
                       Dismiss Accident
                     </Button>
                     <Button
-                      className="flex-1 rounded-md bg-primary py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
+                      className="flex-1 rounded bg-primary py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
                       disabled={isTransitionPending}
                       isLoading={isResolving}
                       loadingLabel="…"

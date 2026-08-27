@@ -313,7 +313,7 @@ export function GlobalAlerts() {
             variant="ghost"
             size="icon"
             className={cn(
-              "absolute right-4 top-4 z-10 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg",
+              "absolute right-4 top-4 z-10 rounded text-fg-muted hover:bg-surface-2 hover:text-fg",
               isSnoozed &&
                 "cursor-not-allowed text-warning opacity-80 hover:bg-transparent hover:text-warning",
             )}
@@ -392,7 +392,7 @@ export function GlobalAlerts() {
 
           {error ? (
             <div className="bg-surface-1 px-6 pb-3">
-              <p className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
+              <p className="rounded border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
                 {error}
               </p>
             </div>
@@ -404,14 +404,14 @@ export function GlobalAlerts() {
         <div className="flex w-full items-center gap-3.5 border-t border-stroke bg-surface-1 p-4 sm:p-5">
           <Button
             variant="secondary"
-            className="flex-1 whitespace-nowrap rounded-md bg-surface-3 py-3 text-xs sm:text-sm font-medium uppercase tracking-wider text-fg hover:bg-surface-2"
+            className="flex-1 whitespace-nowrap rounded bg-surface-3 py-3 text-xs sm:text-sm font-medium uppercase tracking-wider text-fg hover:bg-surface-2"
             disabled={busy}
             onClick={() => runAction(dismissAlert, "Failed to dismiss alert.")}
           >
             {busy ? "…" : "Dismiss Accident"}
           </Button>
           <Button
-            className="flex-1 whitespace-nowrap rounded-md bg-primary py-3 text-xs sm:text-sm font-medium uppercase tracking-wider text-fg-on-primary hover:bg-primary-hover"
+            className="flex-1 whitespace-nowrap rounded bg-primary py-3 text-xs sm:text-sm font-medium uppercase tracking-wider text-fg-on-primary hover:bg-primary-hover"
             disabled={busy}
             onClick={() => runAction(confirmAlert, "Failed to confirm alert.")}
           >
