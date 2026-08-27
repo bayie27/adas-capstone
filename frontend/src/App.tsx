@@ -41,7 +41,6 @@ function App() {
     <Router>
       <RealtimeAlertsBridge />
       <GlobalAlerts />
-      <OngoingIncidentsTray />
       {/* Same placement as GlobalAlerts: inside Router (useNavigate) and
           QueryClientProvider (useQueryClient), but outside ErrorBoundary and
           Suspense so it survives a page crash and lazy-route loading — and
@@ -52,8 +51,14 @@ function App() {
           simply has nothing to say most of the time. */}
       {deliveryBacklog ? <DeliveryBacklogNotice {...deliveryBacklog} /> : null}
       <DevPanelTrigger />
-      <ExportJobsTray />
-      <ToastContainer />
+      {/* Lower right floating overlays: Tray buttons & Toasts */}
+      <div className="fixed bottom-10 right-5 z-[9990] flex flex-col items-end gap-3 pointer-events-none">
+        <div className="flex items-center gap-3">
+          <ExportJobsTray />
+          <OngoingIncidentsTray />
+        </div>
+        <ToastContainer />
+      </div>
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
           <Routes>

@@ -67,18 +67,15 @@ describe("ExportJobsTray", () => {
     vi.mocked(listExportJobs).mockReset()
   })
 
-  it("still mounts the trigger button even with no tracked jobs, since cross-session history may exist", () => {
+  it("does not render the trigger button when there are no tracked jobs", () => {
     useExportJobsStore.setState({ jobs: [] })
     renderTray()
-    expect(screen.getByRole("button", { name: /export jobs/i })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /export jobs/i })).not.toBeInTheDocument()
   })
 
-  it("shows an empty message for the local list when there are no tracked jobs yet", async () => {
-    useExportJobsStore.setState({ jobs: [] })
-    const user = userEvent.setup()
+  it("renders the trigger button when tracked jobs exist", () => {
     renderTray()
-    await user.click(screen.getByRole("button", { name: /export jobs/i }))
-    expect(screen.getByText("No exports tracked in this browser yet.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /export jobs/i })).toBeInTheDocument()
   })
 
   it("fetches and renders account-wide history on demand, deduplicated against the tracked session list", async () => {

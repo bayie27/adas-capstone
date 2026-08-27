@@ -35,10 +35,10 @@ export function SidePanel({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[9000]">
+    <div className="fixed inset-0 z-[9000] pointer-events-auto">
       <div
         data-testid="side-panel-backdrop"
-        className="absolute inset-0 bg-backdrop transition-opacity"
+        className="absolute inset-0 bg-backdrop transition-opacity pointer-events-auto cursor-pointer"
         onClick={onClose}
       />
 
@@ -49,7 +49,7 @@ export function SidePanel({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          "absolute right-0 top-0 h-full w-[420px] max-w-full overflow-y-auto",
+          "absolute right-0 top-0 h-full w-[420px] max-w-full overflow-y-auto pointer-events-auto",
           "bg-surface-1 border-l border-stroke shadow-2xl",
           "animate-in slide-in-from-right duration-200",
           className,
