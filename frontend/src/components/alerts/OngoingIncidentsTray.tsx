@@ -121,6 +121,7 @@ export function OngoingIncidentsTray() {
     (ongoingAlerts.find((a) => a.log_id === activeDetailAlert.log_id) ?? activeDetailAlert)
 
   function handleOpenDetails(alert: AlertLog) {
+    setIsOpen(false)
     setActiveDetailAlert(alert)
     setConflictNotice(handledByOther[alert.log_id] ?? null)
   }
