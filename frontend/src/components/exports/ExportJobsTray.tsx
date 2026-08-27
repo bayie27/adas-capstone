@@ -13,7 +13,6 @@ import { Button, focusRing } from "@/components/ui/Button"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SidePanel } from "@/components/ui/SidePanel"
 import { useExportJobsStore, type TrackedExportJob } from "@/store/useExportJobsStore"
-import { useAlertStore } from "@/store/useAlertStore"
 import { useNow } from "@/hooks/useNow"
 import { formatRelativeDateTime } from "@/utils/datetime"
 import { failureMessage } from "@/utils/exportJobs"
@@ -296,8 +295,6 @@ export function ExportJobsTray() {
   const dedupedHistory = historyItems.filter((item) => !trackedIds.has(item.job_id))
   const totalFiltered = historyQuery.data?.total_filtered ?? historyItems.length
   const hasMore = historyRequested && historyItems.length < totalFiltered
-  const alerts = useAlertStore((state) => state.alerts)
-  const hasOngoingAlerts = alerts.some((a) => a.detection_status === "Ongoing")
 
   if (jobs.length === 0 && !isOpen) {
     return null
@@ -311,8 +308,7 @@ export function ExportJobsTray() {
         aria-label={`Export jobs (${jobs.length})`}
         title="Export jobs"
         className={cn(
-          "fixed top-8 z-[8000] flex h-9 w-9 items-center justify-center rounded-lg",
-          hasOngoingAlerts ? "right-[138px]" : "right-8",
+          "relative pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg",
           "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-all duration-150",
           "hover:border-stroke-strong hover:bg-surface-2 hover:text-fg active:scale-95",
           focusRing,
