@@ -10,6 +10,7 @@ import { RealtimeAlertsBridge } from "@/components/RealtimeAlertsBridge"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { DevPanelTrigger } from "@/components/dev/DevPanelTrigger"
 import { ExportJobsTray } from "@/components/exports/ExportJobsTray"
+import { OngoingIncidentsTray } from "@/components/alerts/OngoingIncidentsTray"
 import { ToastContainer } from "@/components/ui/ToastContainer"
 import { useDeliveryBacklog } from "@/hooks/useDeliveryBacklog"
 
@@ -40,6 +41,7 @@ function App() {
     <Router>
       <RealtimeAlertsBridge />
       <GlobalAlerts />
+      <OngoingIncidentsTray />
       {/* Same placement as GlobalAlerts: inside Router (useNavigate) and
           QueryClientProvider (useQueryClient), but outside ErrorBoundary and
           Suspense so it survives a page crash and lazy-route loading — and
