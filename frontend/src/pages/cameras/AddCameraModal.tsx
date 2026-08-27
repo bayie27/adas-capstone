@@ -59,15 +59,17 @@ export function AddCameraModal({
       title="Add Camera"
       subtitle="Assign name and select the channel no. of the camera"
       icon={
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-strong bg-transparent">
-          <RiCameraLine size={20} className="text-fg" />
+        <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
+          <RiCameraLine size={28} className="text-fg" />
         </div>
       }
+      className="bg-surface-1 sm:max-w-[590px]"
     >
-      <form onSubmit={handleSubmit}>
-        {/* The frame rules the header off from the fields, and the fields off
-            from the footer. */}
-        <div className="space-y-4 border-y border-stroke py-6">
+      <form onSubmit={handleSubmit} className="flex flex-col">
+        <hr className="border-t border-stroke mb-6 -mx-6" />
+
+        <div className="grid grid-cols-[150px_1fr] gap-x-8 gap-y-6">
+          <div className="text-base font-medium text-fg">Camera</div>
           <CameraFormFields
             form={form}
             errors={fieldErrors}
@@ -78,13 +80,25 @@ export function AddCameraModal({
           />
         </div>
 
-        {formError ? <p className="mt-4 text-caption text-danger">{formError}</p> : null}
+        {formError ? <p className="mt-4 text-xs text-danger">{formError}</p> : null}
 
-        <div className="mt-6 flex items-center justify-end gap-3">
-          <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
+        <hr className="border-t border-stroke my-6 -mx-6" />
+
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            className="border-stroke-strong"
+            onClick={onClose}
+            disabled={mutation.isPending}
+          >
             Cancel
           </Button>
-          <Button type="submit" isLoading={mutation.isPending} loadingLabel="Saving…">
+          <Button
+            type="submit"
+            variant="primary"
+            isLoading={mutation.isPending}
+            loadingLabel="Saving…"
+          >
             Save Changes
           </Button>
         </div>
