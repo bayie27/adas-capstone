@@ -384,13 +384,23 @@ export default function Detections() {
 
   const broadcastHandled = useMemo(() => {
     if (selectedAlertId === null) return null
+
     const info = handledByOther[selectedAlertId]
     if (!info) return null
-    // If the open modal's status already matches the broadcast status (e.g. an already
-    // Ongoing incident is opened from the table), do not show a redundant notice.
+
+    // 1. Closed incidents (Resolved or Dismissed) are historical records with no actions;
+    // never show a transition banner on a terminal incident.
+    const isTerminal =
+      selectedAlert?.detection_status === "Dismissed" ||
+      selectedAlert?.detection_status === "Resolved"
+    if (isTerminal) return null
+
+    // 2. If the modal's status already matches the broadcast status (e.g. an already Ongoing
+    // incident is opened from the table), do not show a redundant notice.
     if (selectedAlert && selectedAlert.detection_status === info.currentStatus) {
       return null
     }
+
     return info
   }, [selectedAlertId, handledByOther, selectedAlert?.detection_status])
 
