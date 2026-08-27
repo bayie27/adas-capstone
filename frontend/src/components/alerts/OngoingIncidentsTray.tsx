@@ -291,7 +291,7 @@ export function OngoingIncidentsTray() {
         <div
           role="img"
           aria-label={`Enlarged snapshot preview for incident at ${hoveredAlert.camera_name ?? `Camera ${hoveredAlert.camera_id}`}`}
-          className="pointer-events-none fixed z-[9600] overflow-hidden rounded-xl border border-stroke bg-surface-1 shadow-2xl"
+          className="pointer-events-none fixed z-[9600] overflow-hidden rounded-lg border border-stroke bg-surface-1 shadow-2xl"
           style={{
             // Sit just left of the 420px SidePanel
             right: "calc(420px + 12px)",
