@@ -68,17 +68,14 @@ export function AddCameraModal({
       <form onSubmit={handleSubmit} className="flex flex-col">
         <hr className="border-t border-stroke mb-6 -mx-6" />
 
-        <div className="grid grid-cols-[150px_1fr] gap-x-8 gap-y-6">
-          <div className="text-base font-medium text-fg">Camera</div>
-          <CameraFormFields
-            form={form}
-            errors={fieldErrors}
-            disabled={mutation.isPending}
-            cameraNamePlaceholder="Rizal Street"
-            channelPlaceholder="1"
-            onChange={updateField}
-          />
-        </div>
+        <CameraFormFields
+          form={form}
+          errors={fieldErrors}
+          disabled={mutation.isPending}
+          cameraNamePlaceholder="Rizal Street"
+          channelPlaceholder="1"
+          onChange={updateField}
+        />
 
         {formError ? <p className="mt-4 text-xs text-danger">{formError}</p> : null}
 

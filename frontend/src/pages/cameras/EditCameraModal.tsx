@@ -95,15 +95,12 @@ export function EditCameraModal({
       <form onSubmit={handleSubmit} className="flex flex-col">
         <hr className="border-t border-stroke mb-6 -mx-6" />
 
-        <div className="grid grid-cols-[150px_1fr] gap-x-8 gap-y-6">
-          <div className="text-base font-medium text-fg">Camera</div>
-          <CameraFormFields
-            form={form}
-            errors={fieldErrors}
-            disabled={mutation.isPending}
-            onChange={updateField}
-          />
-        </div>
+        <CameraFormFields
+          form={form}
+          errors={fieldErrors}
+          disabled={mutation.isPending}
+          onChange={updateField}
+        />
 
         {(formError ?? requestError) ? (
           <p className="mt-4 text-xs text-danger">{formError ?? requestError}</p>
@@ -111,12 +108,12 @@ export function EditCameraModal({
 
         <hr className="border-t border-stroke my-6 -mx-6" />
 
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col text-[12px] font-normal text-fg-muted leading-[28px]">
+        <div className="flex items-center justify-between gap-6">
+          <div className="flex flex-col text-[12px] font-normal text-fg-muted leading-relaxed shrink-0">
             <div>Date Added: {formatShortDateTime(camera.created_at ?? null)}</div>
             <div>Last Changes: {formatShortDateTime(camera.updated_at ?? null)}</div>
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex items-center justify-end gap-2 shrink-0">
             <Button
               variant="outline"
               className="border-stroke-strong"
