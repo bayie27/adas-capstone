@@ -420,20 +420,6 @@ export default function Detections() {
       {/* ── Unified Filter Toolbar ────────────────────────────────────────── */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          {/*
-            Status is the primary filter and sits first in the row, consistent
-            with the position pattern used by Camera and Operator dropdowns on
-            other pages. An empty value means "All statuses" (no filter sent
-            to the backend).
-          */}
-          <FilterSelect
-            value={statusFilter}
-            options={STATUS_OPTIONS}
-            onChange={(value) => {
-              pagination.reset()
-              setStatusFilter(value)
-            }}
-          />
           <SearchInput
             value={logSearch}
             onChange={(value) => {
@@ -454,6 +440,14 @@ export default function Detections() {
               setEndDate(value)
             }}
             label="Filter incidents by date"
+          />
+          <FilterSelect
+            value={statusFilter}
+            options={STATUS_OPTIONS}
+            onChange={(value) => {
+              pagination.reset()
+              setStatusFilter(value)
+            }}
           />
           <FilterSelect
             value={cameraId}
