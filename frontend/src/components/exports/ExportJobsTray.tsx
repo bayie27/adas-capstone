@@ -301,16 +301,24 @@ export function ExportJobsTray() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        aria-label="Export jobs"
+        aria-label={`Export jobs${jobs.length > 0 ? ` (${jobs.length})` : ""}`}
         title="Export jobs"
         className={cn(
-          "fixed bottom-4 right-4 z-[8000] flex h-10 w-10 items-center justify-center rounded-full",
-          "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-colors duration-150",
-          "hover:text-fg",
+          "fixed bottom-4 right-4 z-[8000] flex h-11 w-11 items-center justify-center rounded-2xl",
+          "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-all duration-150",
+          "hover:border-stroke-strong hover:bg-surface-2 hover:text-fg active:scale-95",
           focusRing,
         )}
       >
-        <RiDownloadLine size={18} />
+        <RiDownloadLine size={20} />
+        {jobs.length > 0 ? (
+          <span
+            className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[11px] font-bold text-white shadow-sm ring-2 ring-surface-1"
+            aria-hidden="true"
+          >
+            {jobs.length}
+          </span>
+        ) : null}
       </button>
 
       <SidePanel

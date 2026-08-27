@@ -31,7 +31,9 @@ import { formatAlertConfidence } from "@/utils/format"
 // Evaluated once at module load — changing input device mid-session is
 // uncommon enough that a static check is acceptable here.
 const IS_POINTER_FINE =
-  typeof window !== "undefined" ? window.matchMedia("(pointer: fine)").matches : true
+  typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(pointer: fine)").matches
+    : true
 
 // ── Thumbnail hover state ────────────────────────────────────────────────────
 
@@ -229,26 +231,25 @@ export function OngoingIncidentsTray() {
 
   return (
     <>
-      {/* ── Floating Trigger Button / Pill ──────────────────────────────── */}
+      {/* ── Floating Trigger Button / Squircle with Badge ──────────────── */}
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        aria-label="Ongoing incidents tray"
+        aria-label={`Ongoing incidents tray (${ongoingAlerts.length})`}
         title="Ongoing incidents"
         className={cn(
-          "fixed bottom-4 right-16 z-[8000] flex h-10 items-center gap-2 rounded-full px-3.5",
-          "border border-warning/40 bg-surface-1 text-warning shadow-overlay transition-all duration-150",
-          "hover:border-warning/80 hover:bg-surface-2 hover:shadow-lg active:scale-95",
+          "fixed bottom-4 right-[68px] z-[8000] flex h-11 w-11 items-center justify-center rounded-2xl",
+          "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-all duration-150",
+          "hover:border-stroke-strong hover:bg-surface-2 hover:text-fg active:scale-95",
           focusRing,
         )}
       >
-        <span className="relative flex h-2.5 w-2.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-warning opacity-75" />
-          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-warning" />
-        </span>
-        <RiAlarmWarningLine size={16} className="shrink-0 text-warning" />
-        <span className="text-xs font-semibold tabular-nums text-fg">
-          {ongoingAlerts.length} Ongoing
+        <RiAlarmWarningLine size={20} className="shrink-0 text-warning" />
+        <span
+          className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[11px] font-bold text-white shadow-sm ring-2 ring-surface-1"
+          aria-hidden="true"
+        >
+          {ongoingAlerts.length}
         </span>
       </button>
 

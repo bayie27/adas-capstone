@@ -58,7 +58,7 @@ describe("OngoingIncidentsTray", () => {
 
     const trayBtn = screen.getByRole("button", { name: /ongoing incidents tray/i })
     expect(trayBtn).toBeInTheDocument()
-    expect(trayBtn).toHaveTextContent("1 Ongoing")
+    expect(trayBtn).toHaveTextContent("1")
   })
 
   it("opens the side panel when floating tray button is clicked", async () => {
