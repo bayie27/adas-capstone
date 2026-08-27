@@ -86,7 +86,7 @@ export function Modal({
           aria-label={title ?? ariaLabel}
           tabIndex={-1}
           className={cn(
-            "relative bg-surface-1 border border-stroke rounded-xl shadow-2xl w-full max-w-md overflow-hidden",
+            "relative bg-surface-1 border border-stroke rounded-lg shadow-2xl w-full max-w-md overflow-hidden",
             !noEntrance && "animate-modal-enter",
             className,
           )}
