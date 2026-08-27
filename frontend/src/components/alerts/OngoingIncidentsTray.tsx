@@ -1,12 +1,6 @@
 import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import {
-  RiAlarmWarningLine,
-  RiArrowRightSLine,
-  RiCameraLine,
-  RiCheckLine,
-  RiTimeLine,
-} from "@remixicon/react"
+import { RiArrowRightSLine, RiCameraLine, RiCheckLine, RiTimeLine } from "@remixicon/react"
 
 import {
   dismissAlert,
@@ -249,10 +243,10 @@ export function OngoingIncidentsTray() {
           focusRing,
         )}
       >
-        <RiAlarmWarningLine
-          size={17}
-          className="shrink-0 text-warning animate-pulse filter drop-shadow-[0_0_6px_var(--color-warning)]"
-        />
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-warning opacity-75" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-warning" />
+        </span>
         <span className="text-xs font-semibold uppercase tracking-wider text-fg">ONGOING</span>
         <span
           className="absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-warning px-0.5 text-[9px] font-bold leading-none text-fg-on-primary shadow-sm ring-2 ring-surface-1"
