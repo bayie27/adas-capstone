@@ -52,10 +52,16 @@ export function Modal({
 
   return (
     <div
-      className={cn("fixed inset-0 z-50 flex items-center justify-center p-4", overlayClassName)}
+      className={cn(
+        "fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-auto",
+        overlayClassName,
+      )}
     >
       <div
-        className={cn("absolute inset-0 bg-backdrop transition-opacity", backdropClassName)}
+        className={cn(
+          "absolute inset-0 bg-backdrop transition-opacity pointer-events-auto cursor-pointer",
+          backdropClassName,
+        )}
         onClick={closeOnBackdrop ? onClose : undefined}
       />
 
