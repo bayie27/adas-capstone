@@ -62,7 +62,7 @@ export function GlobalAlerts() {
   // ── Navigation index & transition direction ──────────────────────────────
   // Clamped on every render, so it self-corrects when an alert is removed.
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const [slideDirection, setSlideDirection] = useState<"next" | "prev" | "fade">("fade")
+  const [slideDirection, setSlideDirection] = useState<"next" | "prev" | null>(null)
 
   const noop = useCallback(() => {}, [])
 
@@ -136,7 +136,7 @@ export function GlobalAlerts() {
       } else {
         removeAlert(logId)
       }
-      setSlideDirection("fade")
+      setSlideDirection(null)
       // Stay at the same position; if the tail was removed, clampedIndex will
       // naturally back up to the new last element on the next render. We only
       // need to explicitly correct when the raw selectedIndex now overshoots.
@@ -276,7 +276,6 @@ export function GlobalAlerts() {
           "-mx-6 -mb-6",
           slideDirection === "next" && "animate-alert-slide-right",
           slideDirection === "prev" && "animate-alert-slide-left",
-          slideDirection === "fade" && "animate-alert-fade-in",
         )}
       >
         {/* ── Section 1: Header ─────────────────────────────────────────────
