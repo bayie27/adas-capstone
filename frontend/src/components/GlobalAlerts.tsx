@@ -53,7 +53,6 @@ export function GlobalAlerts() {
   const addAlert = useAlertStore((state) => state.addAlert)
   const removeAlert = useAlertStore((state) => state.removeAlert)
   const activateSnooze = useAlertStore((state) => state.activateSnooze)
-  const clearSnooze = useAlertStore((state) => state.clearSnooze)
   const username = useAuthStore((state) => state.username)
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -134,15 +133,6 @@ export function GlobalAlerts() {
     queryClient.invalidateQueries({ queryKey: ["alerts"] })
   }
 
-  function handleSnoozeToggle() {
-    setSlideTransition(null)
-    if (isSnoozed) {
-      clearSnooze(alert.log_id)
-    } else {
-      void handleSnooze()
-    }
-  }
-
   async function runAction(action: (logId: number) => Promise<unknown>, failure: string) {
     const logId = alert.log_id
     setLoadingId(logId)
@@ -184,6 +174,8 @@ export function GlobalAlerts() {
   }
 
   async function handleSnooze() {
+    if (isSnoozed) return
+    setSlideTransition(null)
     const logId = alert.log_id
     setLoadingId(logId)
     setError(null)
@@ -316,18 +308,19 @@ export function GlobalAlerts() {
         {/* ── Core Telemetry Section Wrapper ──────────────────────────────
               Relative positioning anchors the absolutely positioned Snooze button. */}
         <div className="relative">
-          {/* Snooze/Unmute Button placed top right in the telemetry section. */}
+          {/* Snooze Button placed top right in the telemetry section. Disabled once snoozed until expiry. */}
           <Button
             variant="ghost"
             size="icon"
             className={cn(
               "absolute right-4 top-4 z-10 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg",
-              isSnoozed && "text-warning hover:text-warning",
+              isSnoozed &&
+                "cursor-not-allowed text-warning opacity-80 hover:bg-transparent hover:text-warning",
             )}
-            title={isSnoozed ? "Unmute Alarm" : "Snooze Alarm"}
-            aria-label={isSnoozed ? "Unmute alarm" : "Snooze alarm"}
-            disabled={busy}
-            onClick={handleSnoozeToggle}
+            title={isSnoozed ? "Alarm snoozed" : "Snooze Alarm"}
+            aria-label={isSnoozed ? "Alarm snoozed" : "Snooze alarm"}
+            disabled={busy || isSnoozed}
+            onClick={handleSnooze}
           >
             {isSnoozed ? <RiNotificationOffLine size={20} /> : <RiNotification2Line size={20} />}
           </Button>
