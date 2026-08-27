@@ -15,7 +15,6 @@ import {
   type AlertLog,
   type IncidentHandledInfo,
 } from "@/api/alerts"
-import { Badge } from "@/components/ui/Badge"
 import { Button, focusRing } from "@/components/ui/Button"
 import { IncidentHandledNotice } from "@/components/ui/IncidentHandledNotice"
 import { SidePanel } from "@/components/ui/SidePanel"
@@ -88,14 +87,9 @@ function OngoingIncidentCard({
 
         {/* Incident Info */}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-1">
-            <h4 className="truncate text-xs font-semibold text-fg">
-              {alert.camera_name ?? `Camera ${alert.camera_id}`}
-            </h4>
-            <Badge tone="warning" variant="subtle" className="shrink-0 text-[10px]">
-              Ongoing
-            </Badge>
-          </div>
+          <h4 className="truncate text-xs font-semibold text-fg">
+            {alert.camera_name ?? `Camera ${alert.camera_id}`}
+          </h4>
 
           <div className="mt-1 flex flex-col gap-0.5 text-caption text-fg-muted">
             <div className="flex items-center gap-1">
