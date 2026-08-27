@@ -115,7 +115,7 @@ export function IncidentDetailModal({
             onClick={onClose}
             aria-label="Close incident details"
             className={cn(
-              "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+              "rounded text-fg-muted transition-colors duration-150 hover:text-fg",
               focusRing,
             )}
           >
