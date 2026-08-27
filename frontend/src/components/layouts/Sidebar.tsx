@@ -124,7 +124,7 @@ export function Sidebar() {
           .filter((group) => group.links.length > 0)
           .map((group) => (
             <div key={group.title}>
-              <h3 className="mb-1.5 px-3 text-[10px] font-semibold tracking-widest text-fg-muted">
+              <h3 className="mb-1.5 px-3 text-xs font-semibold tracking-widest text-fg-muted">
                 {group.title}
               </h3>
               <ul className="space-y-0.5">
@@ -151,7 +151,7 @@ export function Sidebar() {
                           <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
                         )}
                         <link.icon size={16} className={isActive ? "text-fg" : "text-fg-muted"} />
-                        <span className="text-[13px] font-medium">{link.name}</span>
+                        <span className="text-sm font-medium">{link.name}</span>
                       </Link>
                     </li>
                   )
@@ -183,7 +183,7 @@ export function Sidebar() {
           className={cn("w-full", navRow, isHelpActive ? navActive : navInactive, focusRing)}
         >
           <RiQuestionLine size={16} className={isHelpActive ? "text-fg" : "text-fg-muted"} />
-          <span className="text-[13px] font-medium">Help Center</span>
+          <span className="text-sm font-medium">Help Center</span>
         </button>
       </div>
 
