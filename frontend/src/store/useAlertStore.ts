@@ -37,8 +37,7 @@ function clearHandledIds() {
 }
 
 export function isSnoozedNow(logId: number, snoozedUntil: Record<number, string>): boolean {
-  const until = snoozedUntil[logId]
-  return Boolean(until) && new Date(until).getTime() > Date.now()
+  return Boolean(snoozedUntil[logId])
 }
 
 function withoutSnooze<T>(map: Record<number, T>, logId: number): Record<number, T> {
@@ -126,6 +125,21 @@ function activeUnverifiedCount(alerts: AlertLog[], snoozedUntil: Record<number, 
   ).length
 }
 
+const snoozeTimers: Record<number, ReturnType<typeof setTimeout>> = {}
+
+function cancelSnoozeTimer(logId: number) {
+  if (snoozeTimers[logId]) {
+    clearTimeout(snoozeTimers[logId])
+    delete snoozeTimers[logId]
+  }
+}
+
+function cancelAllSnoozeTimers() {
+  for (const logId of Object.keys(snoozeTimers)) {
+    cancelSnoozeTimer(Number(logId))
+  }
+}
+
 export const useAlertStore = create<AlertState>((set, get) => ({
   alerts: [],
   handledIds: readHandledIds(),
@@ -149,6 +163,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
       // If the alert is now Dismissed or Resolved, it should definitely be removed
       // from the active queue and marked as handled.
       if (alert.detection_status === "Dismissed" || alert.detection_status === "Resolved") {
+        cancelSnoozeTimer(alert.log_id)
         const nextHandled = new Set([...state.handledIds, alert.log_id])
         writeHandledIds(nextHandled)
         return {
@@ -188,6 +203,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
     syncSound(before, activeUnverifiedCount(get().alerts, get().snoozedUntil))
   },
   removeAlert: (logId) => {
+    cancelSnoozeTimer(logId)
     const before = activeUnverifiedCount(get().alerts, get().snoozedUntil)
     set((state) => {
       const next = new Set([...state.handledIds, logId])
@@ -202,6 +218,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
     syncSound(before, activeUnverifiedCount(get().alerts, get().snoozedUntil))
   },
   clearAlerts: () => {
+    cancelAllSnoozeTimers()
     stopDetectionSound()
     clearHandledIds()
     set({
@@ -217,14 +234,32 @@ export const useAlertStore = create<AlertState>((set, get) => ({
     })
   },
   activateSnooze: (logId, snoozedUntil, snoozedBy) => {
+    cancelSnoozeTimer(logId)
+    const expiryMs = new Date(snoozedUntil).getTime()
+    const nowMs = Date.now()
+    const delayMs = expiryMs - nowMs
+
+    if (delayMs <= 0) {
+      // Snooze deadline has already passed; ensure it is cleared
+      get().clearSnooze(logId)
+      return
+    }
+
     const before = activeUnverifiedCount(get().alerts, get().snoozedUntil)
     set((state) => ({
       snoozedUntil: { ...state.snoozedUntil, [logId]: snoozedUntil },
       snoozedBy: { ...state.snoozedBy, [logId]: snoozedBy },
     }))
     syncSound(before, activeUnverifiedCount(get().alerts, get().snoozedUntil))
+
+    // Automatically re-alarm when the snooze duration elapses
+    snoozeTimers[logId] = setTimeout(() => {
+      delete snoozeTimers[logId]
+      get().clearSnooze(logId)
+    }, delayMs)
   },
   clearSnooze: (logId) => {
+    cancelSnoozeTimer(logId)
     const before = activeUnverifiedCount(get().alerts, get().snoozedUntil)
     set((state) => ({
       snoozedUntil: withoutSnooze(state.snoozedUntil, logId),

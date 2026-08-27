@@ -79,4 +79,28 @@ describe("useAlertStore", () => {
     useAlertStore.getState().removeAlert(mockUnverifiedAlert.log_id)
     expect(soundModule.stopDetectionSound).toHaveBeenCalledTimes(1)
   })
+
+  it("automatically re-alarms when snooze duration expires", () => {
+    vi.useFakeTimers()
+    try {
+      useAlertStore.getState().addAlert(mockUnverifiedAlert)
+      expect(soundModule.playDetectionSound).toHaveBeenCalledTimes(1)
+
+      // Snooze for 10 seconds
+      const futureDate = new Date(Date.now() + 10_000).toISOString()
+      useAlertStore.getState().activateSnooze(mockUnverifiedAlert.log_id, futureDate, "Operator A")
+
+      // Sound should stop while snoozed
+      expect(soundModule.stopDetectionSound).toHaveBeenCalledTimes(1)
+
+      // Advance clock by 10.1 seconds
+      vi.advanceTimersByTime(10_100)
+
+      // Sound should play again (re-alarmed)
+      expect(soundModule.playDetectionSound).toHaveBeenCalledTimes(2)
+      expect(useAlertStore.getState().snoozedUntil[mockUnverifiedAlert.log_id]).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
