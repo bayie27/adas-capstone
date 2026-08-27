@@ -159,8 +159,15 @@ export const useAlertStore = create<AlertState>((set, get) => ({
         }
       }
 
-      // Don't re-add an alert the operator already handled this session
-      if (state.handledIds.has(alert.log_id)) return state
+      // If the incident is Ongoing, it belongs in the active OngoingIncidentsTray;
+      // un-suppress it from handledIds if it was previously placed there by old session storage.
+      if (alert.detection_status === "Ongoing" && state.handledIds.has(alert.log_id)) {
+        const nextHandled = new Set(state.handledIds)
+        nextHandled.delete(alert.log_id)
+        writeHandledIds(nextHandled)
+      } else if (state.handledIds.has(alert.log_id)) {
+        return state
+      }
 
       const existingIndex = state.alerts.findIndex((a) => a.log_id === alert.log_id)
 
