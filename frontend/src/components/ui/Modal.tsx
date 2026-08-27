@@ -37,6 +37,8 @@ interface ModalProps {
    * so the Tailwind `animate-in` classes don't replay on every state change.
    */
   noEntrance?: boolean
+  role?: string
+  ariaLabel?: string
 }
 
 export function Modal({
