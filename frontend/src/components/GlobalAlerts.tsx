@@ -117,6 +117,7 @@ export function GlobalAlerts() {
   }
 
   function handleSnoozeToggle() {
+    setSlideDirection(null)
     if (isSnoozed) {
       clearSnooze(alert.log_id)
     } else {
@@ -261,7 +262,6 @@ export function GlobalAlerts() {
                 "mt-4 flex items-center gap-2 rounded-full border border-white/20",
                 "bg-black/80 px-5 py-2 backdrop-blur-md shadow-2xl",
                 "text-xs sm:text-sm font-bold tracking-wide tabular-nums text-white",
-                "animate-alert-fade-in",
               )}
             >
               Alert {clampedIndex + 1} of {alerts.length}
@@ -272,6 +272,7 @@ export function GlobalAlerts() {
     >
       <div
         key={alert.log_id}
+        onAnimationEnd={() => setSlideDirection(null)}
         className={cn(
           "-mx-6 -mb-6",
           slideDirection === "next" && "animate-alert-slide-right",
