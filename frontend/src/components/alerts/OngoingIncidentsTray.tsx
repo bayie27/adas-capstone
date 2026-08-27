@@ -59,7 +59,7 @@ function OngoingIncidentCard({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-stroke bg-surface-1 p-3.5 shadow-sm transition-colors duration-150 hover:border-stroke-strong">
+    <div className="relative overflow-hidden rounded border border-stroke bg-surface-1 p-3.5 shadow-sm transition-colors duration-150 hover:border-stroke-strong">
       <div className="flex items-start gap-3">
         {/* Snapshot Thumbnail — hover shows enlarged flyout on pointer-fine devices */}
         <div
@@ -237,7 +237,7 @@ export function OngoingIncidentsTray() {
         aria-label={`Ongoing incidents tray (${ongoingAlerts.length})`}
         title="Ongoing incidents"
         className={cn(
-          "relative pointer-events-auto flex h-9 items-center gap-2 rounded-lg px-3",
+          "relative pointer-events-auto flex h-9 items-center gap-2 rounded px-3",
           "border border-warning/40 bg-surface-1 text-warning shadow-overlay transition-all duration-150",
           "hover:border-warning/80 hover:bg-surface-2 hover:shadow-lg active:scale-95",
           focusRing,
@@ -291,7 +291,7 @@ export function OngoingIncidentsTray() {
         <div
           role="img"
           aria-label={`Enlarged snapshot preview for incident at ${hoveredAlert.camera_name ?? `Camera ${hoveredAlert.camera_id}`}`}
-          className="pointer-events-none fixed z-[9600] overflow-hidden rounded-lg border border-stroke bg-surface-1 shadow-2xl"
+          className="pointer-events-none fixed z-[9600] overflow-hidden rounded border border-stroke bg-surface-1 shadow-2xl"
           style={{
             // Sit just left of the 420px SidePanel
             right: "calc(420px + 12px)",

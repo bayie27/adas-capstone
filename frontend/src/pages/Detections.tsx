@@ -382,8 +382,27 @@ export default function Detections() {
     snoozeMutation.reset()
   }
 
-  const broadcastHandled =
-    selectedAlertId !== null ? (handledByOther[selectedAlertId] ?? null) : null
+  const broadcastHandled = useMemo(() => {
+    if (selectedAlertId === null) return null
+
+    const info = handledByOther[selectedAlertId]
+    if (!info) return null
+
+    // 1. Closed incidents (Resolved or Dismissed) are historical records with no actions;
+    // never show a transition banner on a terminal incident.
+    const isTerminal =
+      selectedAlert?.detection_status === "Dismissed" ||
+      selectedAlert?.detection_status === "Resolved"
+    if (isTerminal) return null
+
+    // 2. If the modal's status already matches the broadcast status (e.g. an already Ongoing
+    // incident is opened from the table), do not show a redundant notice.
+    if (selectedAlert && selectedAlert.detection_status === info.currentStatus) {
+      return null
+    }
+
+    return info
+  }, [selectedAlertId, handledByOther, selectedAlert?.detection_status])
 
   const cameraOptions = [
     { value: "", label: "All cameras" },
@@ -630,7 +649,7 @@ export default function Detections() {
           selectedAlert ? (
             <Button
               variant="secondary"
-              className="flex-1 uppercase tracking-[0.08em]"
+              className="flex-1 whitespace-nowrap uppercase tracking-wider"
               disabled={isTransitionPending}
               isLoading={snoozeMutation.isPending}
               loadingLabel="Snoozing…"

@@ -10,16 +10,17 @@ import { focusRing } from "@/components/ui/Button"
 import {
   RiAlertLine,
   RiCameraLine,
-  RiDashboardLine,
   RiFileHistoryLine,
-  RiHardDrive2Line,
+  RiFullscreenLine,
+  RiGroupLine,
   RiLayoutGridLine,
   RiLogoutBoxRLine,
   RiPulseLine,
   RiQuestionLine,
-  RiScan2Line,
+  RiRobot2Line,
   RiUserLine,
   RiUserSettingsLine,
+  RiWrenchLine,
 } from "@remixicon/react"
 
 /**
@@ -62,14 +63,14 @@ export function Sidebar() {
       links: [
         { name: "Dashboard", to: basePath, icon: RiLayoutGridLine },
         { name: "Cameras", to: `${basePath}/cameras`, icon: RiCameraLine },
-        { name: "Detections", to: `${basePath}/detections`, icon: RiScan2Line },
+        { name: "Detections", to: `${basePath}/detections`, icon: RiFullscreenLine },
       ],
     },
     {
       title: "MONITORING",
       links: [
         { name: "System Health", to: `${basePath}/health`, icon: RiPulseLine },
-        { name: "AI Performance", to: `${basePath}/ai`, icon: RiDashboardLine },
+        { name: "AI Performance", to: `${basePath}/ai`, icon: RiRobot2Line },
       ],
     },
     {
@@ -77,9 +78,9 @@ export function Sidebar() {
       links:
         role === "Admin"
           ? [
-              { name: "Users", to: "/admin/users", icon: RiUserLine },
+              { name: "Users", to: "/admin/users", icon: RiGroupLine },
               { name: "Audit Log", to: "/admin/audit", icon: RiFileHistoryLine },
-              { name: "Maintenance", to: "/admin/maintenance", icon: RiHardDrive2Line },
+              { name: "Maintenance", to: "/admin/maintenance", icon: RiWrenchLine },
             ]
           : [],
     },
@@ -106,7 +107,7 @@ export function Sidebar() {
 
   // §2.8 — nav rest / hover / active, shared by the links and the two footer
   // buttons so the Help Center row cannot drift from the rows above it.
-  const navRow = "flex items-center gap-3 rounded-md px-3 py-2 transition-colors duration-150"
+  const navRow = "flex items-center gap-3 rounded px-3 py-2 transition-colors duration-150"
   const navInactive = "text-fg-muted hover:bg-surface-1 hover:text-fg-body"
   const navActive = "bg-surface-2 text-fg"
 
@@ -124,7 +125,7 @@ export function Sidebar() {
           .filter((group) => group.links.length > 0)
           .map((group) => (
             <div key={group.title}>
-              <h3 className="mb-1.5 px-3 text-[10px] font-semibold tracking-widest text-fg-muted">
+              <h3 className="mb-1.5 px-3 text-xs font-semibold tracking-widest text-fg-muted">
                 {group.title}
               </h3>
               <ul className="space-y-0.5">
@@ -151,7 +152,7 @@ export function Sidebar() {
                           <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
                         )}
                         <link.icon size={16} className={isActive ? "text-fg" : "text-fg-muted"} />
-                        <span className="text-[13px] font-medium">{link.name}</span>
+                        <span className="text-sm font-normal">{link.name}</span>
                       </Link>
                     </li>
                   )
@@ -183,7 +184,7 @@ export function Sidebar() {
           className={cn("w-full", navRow, isHelpActive ? navActive : navInactive, focusRing)}
         >
           <RiQuestionLine size={16} className={isHelpActive ? "text-fg" : "text-fg-muted"} />
-          <span className="text-[13px] font-medium">Help Center</span>
+          <span className="text-sm font-normal">Help Center</span>
         </button>
       </div>
 

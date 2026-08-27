@@ -223,7 +223,7 @@ export function GlobalAlerts() {
       // incident modal open must land on top of it, not behind it.
       overlayClassName="z-9999"
       backdropClassName="bg-backdrop-alert"
-      className="w-full max-w-[500px] overflow-hidden p-0"
+      className="w-full max-w-[600px] overflow-hidden p-0"
       noEntrance
       outerContent={
         hasMultiple ? (
