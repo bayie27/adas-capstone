@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import {
   RiAlarmWarningLine,
@@ -27,20 +27,55 @@ import { cn } from "@/utils/cn"
 import { formatRelativeDateTime } from "@/utils/datetime"
 import { formatAlertConfidence } from "@/utils/format"
 
+// True when the primary pointing device is precise (mouse / trackpad).
+// Evaluated once at module load — changing input device mid-session is
+// uncommon enough that a static check is acceptable here.
+const IS_POINTER_FINE =
+  typeof window !== "undefined" ? window.matchMedia("(pointer: fine)").matches : true
+
+// ── Thumbnail hover state ────────────────────────────────────────────────────
+
+interface ThumbHover {
+  logId: number
+  /** Viewport-relative top of the thumbnail element, for vertical anchoring. */
+  top: number
+}
+
+// ── Card ─────────────────────────────────────────────────────────────────────
+
 function OngoingIncidentCard({
   alert,
   onOpenDetails,
+  onThumbEnter,
+  onThumbLeave,
 }: {
   alert: AlertLog
   onOpenDetails: () => void
+  onThumbEnter: (logId: number, top: number) => void
+  onThumbLeave: () => void
 }) {
+  const thumbRef = useRef<HTMLDivElement>(null)
   const isHighConfidence = alert.confidence_score * 100 >= 75
+
+  const handleMouseEnter = () => {
+    if (!IS_POINTER_FINE || !thumbRef.current) return
+    const rect = thumbRef.current.getBoundingClientRect()
+    onThumbEnter(alert.log_id, rect.top)
+  }
 
   return (
     <div className="rounded-lg border border-stroke bg-surface-1 p-3.5 shadow-sm transition-colors duration-150 hover:border-stroke-strong">
       <div className="flex items-start gap-3">
-        {/* Snapshot Thumbnail */}
-        <div className="relative h-16 w-20 shrink-0 overflow-hidden rounded border border-stroke bg-surface-3">
+        {/* Snapshot Thumbnail — hover shows enlarged flyout on pointer-fine devices */}
+        <div
+          ref={thumbRef}
+          className={cn(
+            "relative h-16 w-20 shrink-0 overflow-hidden rounded border border-stroke bg-surface-3",
+            IS_POINTER_FINE && alert.snapshot_url && "cursor-zoom-in",
+          )}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={onThumbLeave}
+        >
           <SnapshotImage
             snapshotUrl={alert.snapshot_url}
             alt={`Accident snapshot for log ${alert.log_id}`}
@@ -90,13 +125,15 @@ function OngoingIncidentCard({
           )}
         </div>
         <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={onOpenDetails}>
-          <span>Review & Resolve</span>
+          <span>Review &amp; Resolve</span>
           <RiArrowRightSLine size={14} />
         </Button>
       </div>
     </div>
   )
 }
+
+// ── Tray ─────────────────────────────────────────────────────────────────────
 
 export function OngoingIncidentsTray() {
   const queryClient = useQueryClient()
@@ -111,6 +148,9 @@ export function OngoingIncidentsTray() {
   const [isDismissing, setIsDismissing] = useState(false)
   const [conflictNotice, setConflictNotice] = useState<IncidentHandledInfo | null>(null)
 
+  // Thumbnail hover preview state. null when no thumbnail is hovered.
+  const [thumbHover, setThumbHover] = useState<ThumbHover | null>(null)
+
   if (ongoingAlerts.length === 0) {
     return null
   }
@@ -120,8 +160,15 @@ export function OngoingIncidentsTray() {
     activeDetailAlert &&
     (ongoingAlerts.find((a) => a.log_id === activeDetailAlert.log_id) ?? activeDetailAlert)
 
+  // The hovered alert object, resolved from the live list so the preview
+  // always shows the most recent snapshot URL even after a WS update.
+  const hoveredAlert = thumbHover
+    ? (ongoingAlerts.find((a) => a.log_id === thumbHover.logId) ?? null)
+    : null
+
   function handleOpenDetails(alert: AlertLog) {
     setIsOpen(false)
+    setThumbHover(null)
     setActiveDetailAlert(alert)
     setConflictNotice(handledByOther[alert.log_id] ?? null)
   }
@@ -208,7 +255,10 @@ export function OngoingIncidentsTray() {
       {/* ── Expandable SidePanel ────────────────────────────────────────── */}
       <SidePanel
         isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
+        onClose={() => {
+          setIsOpen(false)
+          setThumbHover(null)
+        }}
         title="Ongoing Incidents"
         subtitle="Confirmed accidents currently being handled in the field"
       >
@@ -218,10 +268,53 @@ export function OngoingIncidentsTray() {
               key={alert.log_id}
               alert={alert}
               onOpenDetails={() => handleOpenDetails(alert)}
+              onThumbEnter={(logId, top) => setThumbHover({ logId, top })}
+              onThumbLeave={() => setThumbHover(null)}
             />
           ))}
         </div>
       </SidePanel>
+
+      {/*
+        ── Thumbnail Hover Preview Flyout ────────────────────────────────────
+        Shown only on pointer-fine (desktop) devices when a card thumbnail is
+        hovered. Rendered outside the SidePanel so it escapes the overflow
+        clipping of the drawer. pointer-events-none ensures it never captures
+        mouse events and blocks the mouseleave that would dismiss it.
+        Positioned to the left of the 420px-wide SidePanel with an 8px gap.
+      */}
+      {hoveredAlert && thumbHover && IS_POINTER_FINE ? (
+        <div
+          role="img"
+          aria-label={`Enlarged snapshot preview for incident at ${hoveredAlert.camera_name ?? `Camera ${hoveredAlert.camera_id}`}`}
+          className="pointer-events-none fixed z-[9600] overflow-hidden rounded-xl border border-stroke bg-surface-1 shadow-2xl"
+          style={{
+            // Sit just left of the 420px SidePanel
+            right: "calc(420px + 12px)",
+            // Anchor vertically to the hovered thumbnail, clamped to viewport
+            top: Math.max(8, thumbHover.top - 60),
+            width: 248,
+            height: 186,
+          }}
+        >
+          <SnapshotImage
+            snapshotUrl={hoveredAlert.snapshot_url}
+            alt={`Snapshot preview for incident ${hoveredAlert.log_id}`}
+            className="h-full w-full object-cover"
+            fallbackClassName="h-full w-full"
+            loading="eager"
+          />
+          {/* Caption overlay */}
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2.5 pb-2 pt-6">
+            <p className="truncate text-[10px] font-semibold text-white">
+              {hoveredAlert.camera_name ?? `Camera ${hoveredAlert.camera_id}`}
+            </p>
+            <p className="text-[9px] text-white/70">
+              {formatAlertConfidence(hoveredAlert.confidence_score)} confidence
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {/* ── Reused IncidentDetailModal for Full Telemetry & Resolve ─────── */}
       {selectedAlert ? (
