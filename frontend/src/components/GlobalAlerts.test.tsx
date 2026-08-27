@@ -160,4 +160,45 @@ describe("GlobalAlerts", () => {
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
     })
   })
+
+  it("renders navigation arrows and counter when multiple alerts are queued, and allows cycling", async () => {
+    const user = userEvent.setup()
+    const mockAlert2: AlertLog = {
+      ...mockAlert,
+      log_id: 102,
+      camera_name: "Rear Exit Cam",
+    }
+
+    useAlertStore.setState({ alerts: [mockAlert, mockAlert2] })
+    render(renderWithProviders(<GlobalAlerts />))
+
+    expect(screen.getByText("Alert 1 of 2")).toBeInTheDocument()
+    expect(screen.getByText("Front Gate Cam")).toBeInTheDocument()
+
+    const prevBtn = screen.getByRole("button", { name: /previous alert/i })
+    const nextBtn = screen.getByRole("button", { name: /next alert/i })
+
+    expect(prevBtn).toBeDisabled()
+    expect(nextBtn).not.toBeDisabled()
+
+    // Navigate to next alert
+    await user.click(nextBtn)
+
+    expect(screen.getByText("Alert 2 of 2")).toBeInTheDocument()
+    expect(screen.getByText("Rear Exit Cam")).toBeInTheDocument()
+    expect(nextBtn).toBeDisabled()
+    expect(prevBtn).not.toBeDisabled()
+
+    // Navigate back via keyboard ArrowLeft
+    await user.keyboard("{ArrowLeft}")
+
+    expect(screen.getByText("Alert 1 of 2")).toBeInTheDocument()
+    expect(screen.getByText("Front Gate Cam")).toBeInTheDocument()
+
+    // Navigate forward via keyboard ArrowRight
+    await user.keyboard("{ArrowRight}")
+
+    expect(screen.getByText("Alert 2 of 2")).toBeInTheDocument()
+    expect(screen.getByText("Rear Exit Cam")).toBeInTheDocument()
+  })
 })
