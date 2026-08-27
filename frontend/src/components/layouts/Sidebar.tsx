@@ -152,7 +152,7 @@ export function Sidebar() {
                           <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
                         )}
                         <link.icon size={16} className={isActive ? "text-fg" : "text-fg-muted"} />
-                        <span className="text-sm font-medium">{link.name}</span>
+                        <span className="text-sm font-normal">{link.name}</span>
                       </Link>
                     </li>
                   )
@@ -184,7 +184,7 @@ export function Sidebar() {
           className={cn("w-full", navRow, isHelpActive ? navActive : navInactive, focusRing)}
         >
           <RiQuestionLine size={16} className={isHelpActive ? "text-fg" : "text-fg-muted"} />
-          <span className="text-sm font-medium">Help Center</span>
+          <span className="text-sm font-normal">Help Center</span>
         </button>
       </div>
 
