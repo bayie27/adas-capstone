@@ -246,8 +246,8 @@ export default function AuditLog() {
       <div className="mb-6">
         <h1 className="mb-0.5 text-xl font-semibold text-fg">Audit Log</h1>
         <p className="text-xs text-fg-muted">
-          Every audited state change in the system — logins, HITL transitions, camera and user
-          mutations, exports and backups
+          Every recorded action in the system — logins, alert reviews, camera and user changes,
+          exports and backups
         </p>
       </div>
 
@@ -285,6 +285,7 @@ export default function AuditLog() {
           <FilterSelect
             value={action}
             options={actionOptions}
+            enableSearch
             onChange={(value) => {
               reset()
               setAction(value)

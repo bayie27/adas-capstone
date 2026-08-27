@@ -18,6 +18,7 @@ import { formatRelativeDateTime } from "@/utils/datetime"
 import { failureMessage } from "@/utils/exportJobs"
 import { cn } from "@/utils/cn"
 import { useState } from "react"
+import { toast } from "@/store/useToastStore"
 
 const POLL_INTERVAL_MS = 3000
 const HISTORY_PAGE_SIZE = 20
@@ -89,7 +90,9 @@ function JobRow({
     setDownloadError(null)
     try {
       await downloadExportJob(job)
+      toast.success("Export downloaded successfully.")
     } catch {
+      toast.error("Download failed. The file may have expired.")
       setDownloadError("Download failed. The file may have expired — try again.")
     }
   }
@@ -191,7 +194,9 @@ function HistoryJobRow({ job }: { job: ExportJobRead }) {
     setDownloadError(null)
     try {
       await downloadExportJob(job)
+      toast.success("Export downloaded successfully.")
     } catch {
+      toast.error("Download failed. The file may have expired.")
       setDownloadError("Download failed. The file may have expired — try again.")
     }
   }
@@ -299,7 +304,7 @@ export function ExportJobsTray() {
         aria-label="Export jobs"
         title="Export jobs"
         className={cn(
-          "fixed bottom-4 left-4 z-[8000] flex h-10 w-10 items-center justify-center rounded-full",
+          "fixed bottom-4 right-4 z-[8000] flex h-10 w-10 items-center justify-center rounded-full",
           "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-colors duration-150",
           "hover:text-fg",
           focusRing,

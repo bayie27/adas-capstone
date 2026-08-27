@@ -125,6 +125,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
+Import-Module (Join-Path $RepoRoot "scripts\lib\adas-lifecycle.psm1") -Force
 
 function Write-Step($message) {
     Write-Host "[start-dev] $message" -ForegroundColor Cyan
@@ -376,6 +377,16 @@ if ($Reseed) {
 # hard-failing every spawn with "the system cannot find the file specified."
 $script:ShellExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
 
+# The restore coordinator is available only when both services are launched
+# through the tracked, command-tree-safe helper.  Partial/foreground starts
+# deliberately remain uncontrolled so the dashboard fails closed.
+$managedBackendAi = $Backend -and $Ai -and -not $NoNewWindow
+$launchProfile = $null
+if ($managedBackendAi) {
+    $profileCertDir = if ($Lan) { $script:CertDirFull } else { Join-Path $RepoRoot $CertDir }
+    $launchProfile = New-AdasLaunchProfile -Lan ([bool]$Lan) -CertDir $profileCertDir
+}
+
 function Start-Component([string]$Title, [string]$Command, [bool]$Foreground) {
     if ($Foreground) {
         Write-Step "Running $Title in this terminal (Ctrl+C to stop)..."
@@ -412,7 +423,10 @@ if ($Backend) {
     # codec error when launched from a Bash-flavoured shell -- set
     # unconditionally rather than reactively, since there's no reliable way
     # to detect the parent shell's encoding before the crash happens.
-    if ($Lan) {
+    if ($managedBackendAi) {
+        Start-AdasManagedComponent -RepoRoot $RepoRoot -Component backend -Profile $launchProfile -LogDirectory (Join-Path $RepoRoot "var\log") -ShellExecutable $script:ShellExe | Out-Null
+    }
+    elseif ($Lan) {
         # The FastAPI CLI exposes no SSL flags at all, so TLS means driving
         # uvicorn directly. --app-dir backend replaces what the CLI normally
         # does for sys.path. The two --ws-ping-* flags pin a keepalive that
@@ -439,7 +453,10 @@ if ($Frontend) {
 }
 
 if ($Ai) {
-    if ($Lan) {
+    if ($managedBackendAi) {
+        Start-AdasManagedComponent -RepoRoot $RepoRoot -Component ai_engine -Profile $launchProfile -LogDirectory (Join-Path $RepoRoot "var\log") -ShellExecutable $script:ShellExe | Out-Null
+    }
+    elseif ($Lan) {
         # ai_engine/backend_client.py uses `requests`, which validates against
         # the certifi bundle and ignores the Windows certificate store -- so
         # trusting the cert in Trusted Root on this machine does nothing for
@@ -451,6 +468,13 @@ if ($Ai) {
         $cmd = "uv run python ai_engine/main.py"
     }
     Start-Component -Title "ADAS - AI Engine" -Command $cmd -Foreground $foreground
+}
+
+if ($managedBackendAi) {
+    Write-AdasLaunchProfile -RepoRoot $RepoRoot -Profile $launchProfile
+    $backupDirectory = Get-AdasBackupDirectory -RepoRoot $RepoRoot
+    Start-AdasRestoreCoordinator -RepoRoot $RepoRoot -BackupDirectory $backupDirectory -LogDirectory (Join-Path $RepoRoot "var\log") | Out-Null
+    Write-Step "Restore coordinator started for the full managed backend + AI profile."
 }
 
 Write-Step "Requested: $($requested -join ', '). Use scripts\stop-dev.ps1 to tear down."

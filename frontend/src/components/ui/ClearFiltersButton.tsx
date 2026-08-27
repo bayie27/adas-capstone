@@ -14,7 +14,7 @@ export function ClearFiltersButton({
       onClick={onClick}
       className={cn(
         "inline-flex h-9 items-center gap-2 rounded border border-stroke bg-canvas px-4 py-2 shadow-md",
-        "text-xs font-normal text-fg transition-colors duration-150 hover:bg-surface-1",
+        "text-sm font-normal text-fg transition-colors duration-150 hover:bg-surface-1",
         "focus:outline-none focus-visible:ring-1 focus-visible:ring-fg",
         className,
       )}

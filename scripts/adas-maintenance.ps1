@@ -64,6 +64,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
+Import-Module (Join-Path $RepoRoot "scripts\lib\adas-lifecycle.psm1") -Force
 
 # Live-drilled finding (P18 Step 8): ai_engine/main.py's startup output is
 # plain print() with no flush=True, and Python block-buffers stdout/stderr
@@ -100,6 +101,10 @@ $AiPidFile = Join-Path $RunDir "ai_engine.pid"
 
 $LogDirFull = if ([System.IO.Path]::IsPathRooted($LogDir)) { $LogDir } else { Join-Path $RepoRoot $LogDir }
 New-Item -ItemType Directory -Force -Path $LogDirFull | Out-Null
+$script:LaunchProfile = Read-AdasLaunchProfile -RepoRoot $RepoRoot
+if ($null -eq $script:LaunchProfile -and $Action -eq "Start") {
+    $script:LaunchProfile = New-AdasLaunchProfile -Lan $false -CertDir (Join-Path $RepoRoot "certs")
+}
 
 function Write-Step($message) {
     Write-Host "[adas-maintenance] $message" -ForegroundColor Cyan
@@ -155,71 +160,33 @@ function Invoke-Maintenance([string[]]$MaintenanceArgs) {
 }
 
 function Stop-TrackedProcess([string]$PidFile, [string]$Label) {
-    if (-not (Test-Path $PidFile)) {
-        Write-Step "$Label`: no PID file, nothing to stop."
-        return
-    }
-    $processId = Get-Content $PidFile -ErrorAction SilentlyContinue
-    if (-not $processId) {
-        Remove-Item $PidFile -ErrorAction SilentlyContinue
-        return
-    }
-    $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
-    if ($null -eq $proc) {
-        Write-Step "$Label`: PID $processId is not running."
-        Remove-Item $PidFile -ErrorAction SilentlyContinue
-        return
-    }
-    Write-Step "Stopping $Label (PID $processId)..."
-    # taskkill /T, not Stop-Process: the PID recorded here is `uv.exe`
-    # (Start-Backend/Start-AiEngine launch via `uv run ...`), and on Windows
-    # `uv run` does not exec-replace itself — it stays alive as a parent
-    # spawning the real fastapi/python worker as a child. Stop-Process only
-    # kills the recorded PID, so the worker (and the open port) survived
-    # every -Action Stop even though the script reported success and
-    # deleted the PID file. taskkill /T walks the whole process tree.
-    & taskkill /PID $processId /T /F 2>&1 | Out-Null
-    Start-Sleep -Milliseconds 300
-    if (Get-Process -Id $processId -ErrorAction SilentlyContinue) {
-        Write-Step "$Label`: PID $processId still alive after taskkill /T /F — leaving PID file for investigation."
-        return
-    }
-    Remove-Item $PidFile -ErrorAction SilentlyContinue
+    $component = if ($Label -match "AI") { "ai_engine" } else { "backend" }
+    return (Stop-AdasManagedComponent -RepoRoot $RepoRoot -Component $component -AllowMissing)
 }
 
 function Start-Backend {
+    if ($null -eq $script:LaunchProfile) {
+        throw "No controlled launch profile is available for the backend."
+    }
     Write-Step "Starting backend..."
-    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    $stdout = Join-Path $LogDirFull "backend-$timestamp.log"
-    $stderr = Join-Path $LogDirFull "backend-$timestamp.err.log"
-    # -WindowStyle Hidden, not Minimized: Start-Process's
-    # -RedirectStandardOutput/-RedirectStandardError only reliably applies
-    # with a hidden window — the two redirect targets must also be distinct
-    # files (backend's own .log vs .err.log here), or Start-Process throws.
-    $proc = Start-Process -FilePath "uv" `
-        -ArgumentList "run", "fastapi", "run", "backend/app/main.py" `
-        -WorkingDirectory $RepoRoot -PassThru -WindowStyle Hidden `
-        -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-    Set-Content -Path $BackendPidFile -Value $proc.Id
-    Write-Step "Backend started (PID $($proc.Id)). Logs: $stdout / $stderr"
+    $proc = Start-AdasManagedComponent -RepoRoot $RepoRoot -Component backend -Profile $script:LaunchProfile -LogDirectory $LogDirFull
+    Write-Step "Backend started (controlled PID $($proc.Id))."
 }
 
 function Start-AiEngine {
+    if ($null -eq $script:LaunchProfile) {
+        throw "No controlled launch profile is available for the AI engine."
+    }
     Write-Step "Starting AI engine..."
-    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    $stdout = Join-Path $LogDirFull "ai_engine-$timestamp.log"
-    $stderr = Join-Path $LogDirFull "ai_engine-$timestamp.err.log"
-    $proc = Start-Process -FilePath "uv" `
-        -ArgumentList "run", "python", "ai_engine/main.py" `
-        -WorkingDirectory $RepoRoot -PassThru -WindowStyle Hidden `
-        -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-    Set-Content -Path $AiPidFile -Value $proc.Id
-    Write-Step "AI engine started (PID $($proc.Id)). Logs: $stdout / $stderr"
+    $proc = Start-AdasManagedComponent -RepoRoot $RepoRoot -Component ai_engine -Profile $script:LaunchProfile -LogDirectory $LogDirFull
+    Write-Step "AI engine started (controlled PID $($proc.Id))."
 }
 
-function Wait-Ready {
+function Wait-Ready([switch]$RequireHeartbeat) {
     Write-Step "Waiting for /healthz/ready and a fresh AI heartbeat (timeout ${ReadyTimeoutSeconds}s)..."
-    $result = Invoke-Maintenance @("restart", "--phase", "wait", "--timeout", $ReadyTimeoutSeconds)
+    $args = @("restart", "--phase", "wait", "--timeout", $ReadyTimeoutSeconds)
+    if ($RequireHeartbeat) { $args += "--require-heartbeat" }
+    $result = Invoke-Maintenance $args
     $heartbeatConfirmed = $false
     if ($result.Data -and $null -ne $result.Data.heartbeat_confirmed) {
         $heartbeatConfirmed = [bool]$result.Data.heartbeat_confirmed
@@ -312,7 +279,9 @@ function Invoke-RestartAction {
             Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
             Start-Backend
             Start-AiEngine
-            $waitResult = Wait-Ready
+            Write-AdasLaunchProfile -RepoRoot $RepoRoot -Profile $script:LaunchProfile
+            Start-AdasRestoreCoordinator -RepoRoot $RepoRoot -BackupDirectory (Get-AdasBackupDirectory -RepoRoot $RepoRoot) -LogDirectory $LogDirFull | Out-Null
+            $waitResult = Wait-Ready -RequireHeartbeat
             $downtimeS = ((Get-Date) - $restartStart).TotalSeconds
             Write-Step "Restart downtime: $downtimeS seconds."
             $ready = $waitResult.Ready
@@ -356,12 +325,20 @@ try {
         "Start" {
             Start-Backend
             Start-AiEngine
-            Wait-Ready | Out-Null
+            Write-AdasLaunchProfile -RepoRoot $RepoRoot -Profile $script:LaunchProfile
+            Start-AdasRestoreCoordinator -RepoRoot $RepoRoot -BackupDirectory (Get-AdasBackupDirectory -RepoRoot $RepoRoot) -LogDirectory $LogDirFull | Out-Null
+            Wait-Ready -RequireHeartbeat | Out-Null
         }
 
         "Stop" {
-            Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
-            Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
+            $backupDirectory = Get-AdasBackupDirectory -RepoRoot $RepoRoot
+            if (-not (Stop-AdasRestoreCoordinator -RepoRoot $RepoRoot -BackupDirectory $backupDirectory)) {
+                Write-Error "The controlled restore coordinator could not be stopped safely."
+                exit 1
+            }
+            Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine" | Out-Null
+            Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend" | Out-Null
+            Clear-AdasRuntimeMetadata -RepoRoot $RepoRoot
         }
 
         "Backup" {
@@ -378,10 +355,22 @@ try {
                 Write-Error "-BackupId is required for -Action Restore." -ErrorAction Continue
                 exit 1
             }
+            if ($BackupId -cnotmatch '^[0-9a-f]{32}$') {
+                Write-Error "-BackupId is not a valid restore-point identifier." -ErrorAction Continue
+                exit 1
+            }
+            if ($null -eq $script:LaunchProfile -or -not (Test-AdasManagedProcess -RepoRoot $RepoRoot -Component backend) -or -not (Test-AdasManagedProcess -RepoRoot $RepoRoot -Component ai_engine)) {
+                Write-Error "Restore requires the full controlled backend and AI launch profile." -ErrorAction Continue
+                exit 1
+            }
 
             Write-Step "Stopping services for offline restore..."
-            Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
-            Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
+            $aiStopped = Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
+            $backendStopped = Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
+            if (-not $aiStopped -or -not $backendStopped -or -not (Test-AdasPortFree -Port 8000) -or (Test-AdasManagedProcess -RepoRoot $RepoRoot -Component backend) -or (Test-AdasManagedProcess -RepoRoot $RepoRoot -Component ai_engine)) {
+                Write-Error "Restore stopped before database work because a controlled service could not be proven offline." -ErrorAction Continue
+                exit 1
+            }
 
             Write-Step "Running offline restore for backup $BackupId..."
             $restoreResult = Invoke-Maintenance @("restore", $BackupId)
@@ -390,29 +379,38 @@ try {
                 Write-Error "Offline restore reported failure before touching the primary database. Restarting original services unchanged." -ErrorAction Continue
                 Start-Backend
                 Start-AiEngine
-                Wait-Ready | Out-Null
+                Wait-Ready -RequireHeartbeat | Out-Null
                 exit 1
             }
 
             Write-Step "Restore swapped the database. Starting services..."
             Start-Backend
             Start-AiEngine
-            $waitResult = Wait-Ready
+            $waitResult = Wait-Ready -RequireHeartbeat
 
-            if ($waitResult.Ready) {
+            if ($waitResult.Ready -and $waitResult.HeartbeatConfirmed) {
                 Write-Step "Restore verified healthy. Finalizing."
-                Invoke-Maintenance @("restore", "--finalize", "completed") | Out-Null
-                exit 0
+                $finalizeResult = Invoke-Maintenance @("restore", "--finalize", "completed")
+                if ($finalizeResult.ExitCode -eq 0) { exit 0 }
+                Write-Error "Restore outcome could not be finalized; beginning rollback." -ErrorAction Continue
             }
 
             Write-Error "Restored system failed to become healthy. Rolling back to the emergency pre-restore backup." -ErrorAction Continue
-            Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
-            Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
+            $rollbackAiStopped = Stop-TrackedProcess -PidFile $AiPidFile -Label "AI engine"
+            $rollbackBackendStopped = Stop-TrackedProcess -PidFile $BackendPidFile -Label "backend"
+            if (-not $rollbackAiStopped -or -not $rollbackBackendStopped -or -not (Test-AdasPortFree -Port 8000) -or (Test-AdasManagedProcess -RepoRoot $RepoRoot -Component backend) -or (Test-AdasManagedProcess -RepoRoot $RepoRoot -Component ai_engine)) {
+                Write-Error "Rollback stopped before database work because a controlled service could not be proven offline." -ErrorAction Continue
+                exit 2
+            }
             $rollbackResult = Invoke-Maintenance @("rollback")
+            if ($rollbackResult.ExitCode -ne 0) {
+                Write-Error "ROLLBACK FAILED; the original database was not safely restored." -ErrorAction Continue
+                exit 2
+            }
             Start-Backend
             Start-AiEngine
-            $rollbackWaitResult = Wait-Ready
-            if ($rollbackResult.ExitCode -ne 0 -or -not $rollbackWaitResult.Ready) {
+            $rollbackWaitResult = Wait-Ready -RequireHeartbeat
+            if (-not $rollbackWaitResult.Ready -or -not $rollbackWaitResult.HeartbeatConfirmed) {
                 Write-Error "ROLLBACK FAILED or the rolled-back system did not become healthy. Manual intervention required." -ErrorAction Continue
                 exit 2
             }

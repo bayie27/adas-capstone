@@ -17,6 +17,7 @@ import time
 from datetime import UTC, datetime
 
 from app.maintenance import archive as archive_mod
+from app.maintenance import coordinator as coordinator_mod
 from app.maintenance import restore as restore_mod
 from app.maintenance.backup import (
     MaintenanceBusyError,
@@ -25,7 +26,11 @@ from app.maintenance.backup import (
     list_backups,
     resolve_sqlite_db_path,
 )
-from app.maintenance.manifest import ORIGIN_MANUAL, ORIGIN_SCHEDULED
+from app.maintenance.manifest import (
+    ORIGIN_MANUAL,
+    ORIGIN_SCHEDULED,
+    InvalidBackupIdError,
+)
 from app.maintenance.verify import (
     compute_sha256,
     run_foreign_key_check,
@@ -168,7 +173,17 @@ def cmd_restore(args: argparse.Namespace) -> int:
         state = restore_mod.perform_offline_restore(
             backup_dir=settings.BACKUP_DIR, db_path=db_path, backup_id=args.backup_id
         )
-    except (MaintenanceBusyError, restore_mod.RestoreError) as exc:
+    except (
+        MaintenanceBusyError,
+        InvalidBackupIdError,
+        restore_mod.RestoreError,
+    ) as exc:
+        failed_state = restore_mod.read_restore_state(settings.BACKUP_DIR)
+        if (
+            failed_state is not None
+            and failed_state.status == restore_mod.STATUS_FAILED
+        ):
+            restore_mod.record_restore_outcome_audit(db_path, state=failed_state)
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     print(json.dumps({"status": state.status, "steps": state.steps}, indent=2))
@@ -182,7 +197,17 @@ def cmd_rollback(args: argparse.Namespace) -> int:
         state = restore_mod.perform_rollback(
             backup_dir=settings.BACKUP_DIR, db_path=db_path
         )
-    except (MaintenanceBusyError, restore_mod.RestoreError) as exc:
+    except (
+        MaintenanceBusyError,
+        InvalidBackupIdError,
+        restore_mod.RestoreError,
+    ) as exc:
+        failed_state = restore_mod.read_restore_state(settings.BACKUP_DIR)
+        if (
+            failed_state is not None
+            and failed_state.status == restore_mod.STATUS_FAILED
+        ):
+            restore_mod.record_restore_outcome_audit(db_path, state=failed_state)
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     restore_mod.record_restore_outcome_audit(db_path, state=state)
@@ -226,7 +251,11 @@ def cmd_restart(args: argparse.Namespace) -> int:
     settings = _settings()
 
     if args.phase == "wait":
-        return _wait_for_restart_readiness(settings, timeout=args.timeout)
+        return _wait_for_restart_readiness(
+            settings,
+            timeout=args.timeout,
+            require_heartbeat=getattr(args, "require_heartbeat", False),
+        )
 
     db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
     started = time.perf_counter()
@@ -254,7 +283,9 @@ def cmd_restart(args: argparse.Namespace) -> int:
     return 0 if manifest.valid else 1
 
 
-def _wait_for_restart_readiness(settings, *, timeout: float) -> int:
+def _wait_for_restart_readiness(
+    settings, *, timeout: float, require_heartbeat: bool = False
+) -> int:
     import urllib.error
     import urllib.request
 
@@ -317,6 +348,12 @@ def _wait_for_restart_readiness(settings, *, timeout: float) -> int:
             indent=2,
         )
     )
+    if heartbeat_at is None and require_heartbeat:
+        print(
+            "ERROR: AI heartbeat was not confirmed within the timeout.",
+            file=sys.stderr,
+        )
+        return 1
     if heartbeat_at is None:
         # Not a failure, but not for the reason this comment used to give:
         # P10 landed receive_heartbeat -> apply_observed() (services/
@@ -339,6 +376,11 @@ def _wait_for_restart_readiness(settings, *, timeout: float) -> int:
             file=sys.stderr,
         )
     return 0
+
+
+def cmd_watch_restores(args: argparse.Namespace) -> int:
+    """Run the externally supervised restore coordinator."""
+    return coordinator_mod.run_watch_from_settings(args.platform)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -377,7 +419,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_restart.add_argument("--phase", choices=["backup", "wait"], default="backup")
     p_restart.add_argument("--timeout", type=float, default=60.0)
+    p_restart.add_argument("--require-heartbeat", action="store_true")
     p_restart.set_defaults(func=cmd_restart)
+
+    p_watch = sub.add_parser(
+        "watch-restores", help="Run the supervised confirmed-restore coordinator."
+    )
+    p_watch.add_argument("--platform", choices=["windows", "systemd"], required=True)
+    p_watch.set_defaults(func=cmd_watch_restores)
 
     return parser
 

@@ -27,7 +27,16 @@ class AuditLogRead(SQLModel):
         """`detail` is stored as a JSON string (app/models/audit.py); the
         API exposes it as a parsed object."""
         if isinstance(v, str):
-            return json.loads(v)
+            try:
+                parsed = json.loads(v)
+            except json.JSONDecodeError:
+                # Keep legacy/plain-text audit rows readable instead of
+                # failing the entire audit page when one older producer did
+                # not JSON-encode its detail field.
+                return {"message": v}
+            if isinstance(parsed, dict):
+                return parsed
+            return {"value": parsed}
         return v
 
 
