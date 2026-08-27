@@ -382,8 +382,17 @@ export default function Detections() {
     snoozeMutation.reset()
   }
 
-  const broadcastHandled =
-    selectedAlertId !== null ? (handledByOther[selectedAlertId] ?? null) : null
+  const broadcastHandled = useMemo(() => {
+    if (selectedAlertId === null) return null
+    const info = handledByOther[selectedAlertId]
+    if (!info) return null
+    // If the open modal's status already matches the broadcast status (e.g. an already
+    // Ongoing incident is opened from the table), do not show a redundant notice.
+    if (selectedAlert && selectedAlert.detection_status === info.currentStatus) {
+      return null
+    }
+    return info
+  }, [selectedAlertId, handledByOther, selectedAlert?.detection_status])
 
   const cameraOptions = [
     { value: "", label: "All cameras" },
