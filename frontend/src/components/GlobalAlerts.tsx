@@ -59,10 +59,13 @@ export function GlobalAlerts() {
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<IncidentHandledInfo | null>(null)
 
-  // ── Navigation index & transition direction ──────────────────────────────
+  // ── Navigation index & transition state ──────────────────────────────────
   // Clamped on every render, so it self-corrects when an alert is removed.
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const [slideDirection, setSlideDirection] = useState<"next" | "prev" | null>(null)
+  const [slideTransition, setSlideTransition] = useState<{
+    id: number
+    direction: "next" | "prev"
+  } | null>(null)
 
   const noop = useCallback(() => {}, [])
 
@@ -74,16 +77,31 @@ export function GlobalAlerts() {
   const navigate = useCallback(
     (direction: -1 | 1) => {
       if (alerts.length <= 1) return
-      const next = clampedIndex + direction
-      if (next < 0 || next >= alerts.length) return
-      setSlideDirection(direction === 1 ? "next" : "prev")
-      setSelectedIndex(next)
+      const nextIndex = clampedIndex + direction
+      if (nextIndex < 0 || nextIndex >= alerts.length) return
+      const targetAlert = alerts[nextIndex]
+      if (targetAlert) {
+        setSlideTransition({
+          id: targetAlert.log_id,
+          direction: direction === 1 ? "next" : "prev",
+        })
+      }
+      setSelectedIndex(nextIndex)
       // Clear stale feedback when the operator navigates away.
       setError(null)
       setConflict(null)
     },
-    [clampedIndex, alerts.length],
+    [clampedIndex, alerts],
   )
+
+  // Auto-clear slide transition after animation completes (240ms safety timer)
+  useEffect(() => {
+    if (!slideTransition) return
+    const timer = setTimeout(() => {
+      setSlideTransition(null)
+    }, 240)
+    return () => clearTimeout(timer)
+  }, [slideTransition])
 
   // ── Keyboard shortcut: ArrowLeft / ArrowRight to cycle queued alerts ────────
   useEffect(() => {
@@ -117,7 +135,7 @@ export function GlobalAlerts() {
   }
 
   function handleSnoozeToggle() {
-    setSlideDirection(null)
+    setSlideTransition(null)
     if (isSnoozed) {
       clearSnooze(alert.log_id)
     } else {
@@ -137,7 +155,7 @@ export function GlobalAlerts() {
       } else {
         removeAlert(logId)
       }
-      setSlideDirection(null)
+      setSlideTransition(null)
       // Stay at the same position; if the tail was removed, clampedIndex will
       // naturally back up to the new last element on the next render. We only
       // need to explicitly correct when the raw selectedIndex now overshoots.
@@ -273,11 +291,15 @@ export function GlobalAlerts() {
     >
       <div
         key={alert.log_id}
-        onAnimationEnd={() => setSlideDirection(null)}
+        onAnimationEnd={() => setSlideTransition(null)}
         className={cn(
           "-mx-6 -mb-6",
-          slideDirection === "next" && "animate-alert-slide-right",
-          slideDirection === "prev" && "animate-alert-slide-left",
+          slideTransition?.id === alert.log_id &&
+            slideTransition.direction === "next" &&
+            "animate-alert-slide-right",
+          slideTransition?.id === alert.log_id &&
+            slideTransition.direction === "prev" &&
+            "animate-alert-slide-left",
         )}
       >
         {/* ── Section 1: Header ─────────────────────────────────────────────
