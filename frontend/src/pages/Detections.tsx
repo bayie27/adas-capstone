@@ -649,7 +649,7 @@ export default function Detections() {
           selectedAlert ? (
             <Button
               variant="secondary"
-              className="flex-1 uppercase tracking-[0.08em]"
+              className="flex-1 whitespace-nowrap uppercase tracking-wider"
               disabled={isTransitionPending}
               isLoading={snoozeMutation.isPending}
               loadingLabel="Snoozing…"
