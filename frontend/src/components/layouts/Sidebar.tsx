@@ -10,16 +10,17 @@ import { focusRing } from "@/components/ui/Button"
 import {
   RiAlertLine,
   RiCameraLine,
-  RiDashboardLine,
   RiFileHistoryLine,
-  RiHardDrive2Line,
+  RiFullscreenLine,
+  RiGroupLine,
   RiLayoutGridLine,
   RiLogoutBoxRLine,
   RiPulseLine,
   RiQuestionLine,
-  RiScan2Line,
+  RiRobot2Line,
   RiUserLine,
   RiUserSettingsLine,
+  RiWrenchLine,
 } from "@remixicon/react"
 
 /**
@@ -62,14 +63,14 @@ export function Sidebar() {
       links: [
         { name: "Dashboard", to: basePath, icon: RiLayoutGridLine },
         { name: "Cameras", to: `${basePath}/cameras`, icon: RiCameraLine },
-        { name: "Detections", to: `${basePath}/detections`, icon: RiScan2Line },
+        { name: "Detections", to: `${basePath}/detections`, icon: RiFullscreenLine },
       ],
     },
     {
       title: "MONITORING",
       links: [
         { name: "System Health", to: `${basePath}/health`, icon: RiPulseLine },
-        { name: "AI Performance", to: `${basePath}/ai`, icon: RiDashboardLine },
+        { name: "AI Performance", to: `${basePath}/ai`, icon: RiRobot2Line },
       ],
     },
     {
@@ -77,9 +78,9 @@ export function Sidebar() {
       links:
         role === "Admin"
           ? [
-              { name: "Users", to: "/admin/users", icon: RiUserLine },
+              { name: "Users", to: "/admin/users", icon: RiGroupLine },
               { name: "Audit Log", to: "/admin/audit", icon: RiFileHistoryLine },
-              { name: "Maintenance", to: "/admin/maintenance", icon: RiHardDrive2Line },
+              { name: "Maintenance", to: "/admin/maintenance", icon: RiWrenchLine },
             ]
           : [],
     },
