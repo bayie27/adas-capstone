@@ -214,6 +214,7 @@ export function GlobalAlerts() {
       overlayClassName="z-9999"
       backdropClassName="bg-backdrop-alert"
       className="max-w-md overflow-hidden p-0"
+      noEntrance
       outerContent={
         hasMultiple ? (
           <>

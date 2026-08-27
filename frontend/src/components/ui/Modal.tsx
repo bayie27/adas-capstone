@@ -31,6 +31,12 @@ interface ModalProps {
    */
   wrapperClassName?: string
   outerContent?: React.ReactNode
+  /**
+   * Set true to suppress the entrance animation. Use for alert dialogs that
+   * manage their own content transitions (e.g. GlobalAlerts slide animations)
+   * so the Tailwind `animate-in` classes don't replay on every state change.
+   */
+  noEntrance?: boolean
 }
 
 export function Modal({
@@ -49,6 +55,7 @@ export function Modal({
   ariaLabel,
   wrapperClassName,
   outerContent,
+  noEntrance,
 }: ModalProps) {
   const dialogRef = useOverlayBehavior(isOpen, onClose)
 
@@ -77,7 +84,8 @@ export function Modal({
           aria-label={title ?? ariaLabel}
           tabIndex={-1}
           className={cn(
-            "relative bg-surface-1 border border-stroke rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200",
+            "relative bg-surface-1 border border-stroke rounded-xl shadow-2xl w-full max-w-md overflow-hidden",
+            !noEntrance && "animate-modal-enter",
             className,
           )}
         >
