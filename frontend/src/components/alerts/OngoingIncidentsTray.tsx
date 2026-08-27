@@ -238,15 +238,15 @@ export function OngoingIncidentsTray() {
         aria-label={`Ongoing incidents tray (${ongoingAlerts.length})`}
         title="Ongoing incidents"
         className={cn(
-          "fixed top-5 right-[76px] z-[8000] flex h-11 w-11 items-center justify-center rounded-lg",
+          "fixed top-5 right-[64px] z-[8000] flex h-9 w-9 items-center justify-center rounded-lg",
           "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-all duration-150",
           "hover:border-stroke-strong hover:bg-surface-2 hover:text-fg active:scale-95",
           focusRing,
         )}
       >
-        <RiAlarmWarningLine size={20} className="shrink-0 text-warning" />
+        <RiAlarmWarningLine size={17} className="shrink-0 text-warning" />
         <span
-          className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-warning px-1 text-[10px] font-bold leading-none text-fg-on-primary shadow-sm ring-2 ring-surface-1"
+          className="absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-warning px-0.5 text-[9px] font-bold leading-none text-fg-on-primary shadow-sm ring-2 ring-surface-1"
           aria-hidden="true"
         >
           {ongoingAlerts.length}
