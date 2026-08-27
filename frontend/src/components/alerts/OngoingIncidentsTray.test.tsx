@@ -58,7 +58,7 @@ describe("OngoingIncidentsTray", () => {
 
     const trayBtn = screen.getByRole("button", { name: /ongoing incidents tray/i })
     expect(trayBtn).toBeInTheDocument()
-    expect(trayBtn).toHaveTextContent("Ongoing")
+    expect(trayBtn).toHaveTextContent("ONGOING")
     expect(trayBtn).toHaveTextContent("1")
   })
 

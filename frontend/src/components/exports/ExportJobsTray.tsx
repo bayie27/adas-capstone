@@ -296,16 +296,19 @@ export function ExportJobsTray() {
   const dedupedHistory = historyItems.filter((item) => !trackedIds.has(item.job_id))
   const totalFiltered = historyQuery.data?.total_filtered ?? historyItems.length
   const hasMore = historyRequested && historyItems.length < totalFiltered
-
   const alerts = useAlertStore((state) => state.alerts)
   const hasOngoingAlerts = alerts.some((a) => a.detection_status === "Ongoing")
+
+  if (jobs.length === 0 && !isOpen) {
+    return null
+  }
 
   return (
     <>
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        aria-label={`Export jobs${jobs.length > 0 ? ` (${jobs.length})` : ""}`}
+        aria-label={`Export jobs (${jobs.length})`}
         title="Export jobs"
         className={cn(
           "fixed top-8 z-[8000] flex h-9 w-9 items-center justify-center rounded-lg",
@@ -316,14 +319,12 @@ export function ExportJobsTray() {
         )}
       >
         <RiDownloadLine size={17} />
-        {jobs.length > 0 ? (
-          <span
-            className="absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-stroke bg-primary px-0.5 text-[9px] font-bold leading-none text-fg-on-primary shadow-sm ring-2 ring-surface-1"
-            aria-hidden="true"
-          >
-            {jobs.length}
-          </span>
-        ) : null}
+        <span
+          className="absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-stroke bg-primary px-0.5 text-[9px] font-bold leading-none text-fg-on-primary shadow-sm ring-2 ring-surface-1"
+          aria-hidden="true"
+        >
+          {jobs.length}
+        </span>
       </button>
 
       <SidePanel

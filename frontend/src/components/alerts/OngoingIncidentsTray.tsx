@@ -253,7 +253,7 @@ export function OngoingIncidentsTray() {
           size={17}
           className="shrink-0 text-warning animate-pulse filter drop-shadow-[0_0_6px_var(--color-warning)]"
         />
-        <span className="text-xs font-semibold text-fg">Ongoing</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-fg">ONGOING</span>
         <span
           className="absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-warning px-0.5 text-[9px] font-bold leading-none text-fg-on-primary shadow-sm ring-2 ring-surface-1"
           aria-hidden="true"
