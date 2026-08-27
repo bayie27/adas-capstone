@@ -174,7 +174,10 @@ export function OngoingIncidentsTray() {
     setIsOpen(false)
     setThumbHover(null)
     setActiveDetailAlert(alert)
-    setConflictNotice(handledByOther[alert.log_id] ?? null)
+    // Filter out stale "Now Ongoing" notices from when the incident was initially
+    // confirmed. Only show if another operator resolved or dismissed it.
+    const notice = handledByOther[alert.log_id]
+    setConflictNotice(notice && notice.currentStatus !== "Ongoing" ? notice : null)
   }
 
   function handleCloseDetails() {
