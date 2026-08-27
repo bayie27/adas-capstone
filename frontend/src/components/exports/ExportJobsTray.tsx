@@ -304,7 +304,7 @@ export function ExportJobsTray() {
         aria-label={`Export jobs${jobs.length > 0 ? ` (${jobs.length})` : ""}`}
         title="Export jobs"
         className={cn(
-          "fixed top-5 right-[64px] z-[8000] flex h-9 w-9 items-center justify-center rounded-lg",
+          "fixed top-8 right-[76px] z-[8000] flex h-9 w-9 items-center justify-center rounded-lg",
           "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-all duration-150",
           "hover:border-stroke-strong hover:bg-surface-2 hover:text-fg active:scale-95",
           focusRing,

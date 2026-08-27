@@ -243,7 +243,7 @@ export function OngoingIncidentsTray() {
         aria-label={`Ongoing incidents tray (${ongoingAlerts.length})`}
         title="Ongoing incidents"
         className={cn(
-          "fixed top-5 right-5 z-[8000] flex h-9 w-9 items-center justify-center rounded-lg",
+          "fixed top-8 right-8 z-[8000] flex h-9 w-9 items-center justify-center rounded-lg",
           "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-all duration-150",
           "hover:border-stroke-strong hover:bg-surface-2 hover:text-fg active:scale-95",
           focusRing,
