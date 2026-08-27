@@ -16,11 +16,11 @@ import {
   confirmAlert,
   dismissAlert,
   getIncidentConflict,
-  resolveAlert,
   snoozeAlert,
+  type AlertLog,
+  type IncidentHandledInfo,
 } from "@/api/alerts"
 import { IncidentHandledNotice } from "@/components/ui/IncidentHandledNotice"
-import type { IncidentHandledInfo } from "@/api/alerts"
 import { formatAlertConfidence } from "@/utils/format"
 import { formatFullDateTime } from "@/utils/datetime"
 import { getApiErrorMessage } from "@/api/client"
@@ -47,8 +47,10 @@ import { cn } from "@/utils/cn"
  */
 export function GlobalAlerts() {
   const queryClient = useQueryClient()
-  const alerts = useAlertStore((state) => state.alerts)
+  const allAlerts = useAlertStore((state) => state.alerts)
+  const alerts = allAlerts.filter((a) => a.detection_status === "Unverified")
   const snoozedUntil = useAlertStore((state) => state.snoozedUntil)
+  const addAlert = useAlertStore((state) => state.addAlert)
   const removeAlert = useAlertStore((state) => state.removeAlert)
   const activateSnooze = useAlertStore((state) => state.activateSnooze)
   const clearSnooze = useAlertStore((state) => state.clearSnooze)
@@ -72,9 +74,6 @@ export function GlobalAlerts() {
   const alert = alerts[clampedIndex]
 
   const busy = loadingId === alert.log_id
-  const isUnverified = alert.detection_status === "Unverified"
-  const isOngoing = alert.detection_status === "Ongoing"
-  const hasAuditTrail = Boolean(alert.verified_by_name || alert.verified_at)
   const isSnoozed = isSnoozedNow(alert.log_id, snoozedUntil)
 
   const hasMultiple = alerts.length > 1
@@ -109,8 +108,12 @@ export function GlobalAlerts() {
     setError(null)
     setConflict(null)
     try {
-      await action(logId)
-      removeAlert(logId)
+      const result = await action(logId)
+      if (result && typeof result === "object" && "detection_status" in result) {
+        addAlert(result as AlertLog)
+      } else {
+        removeAlert(logId)
+      }
       setSlideDirection("fade")
       // Stay at the same position; if the tail was removed, clampedIndex will
       // naturally back up to the new last element on the next render. We only
@@ -243,7 +246,7 @@ export function GlobalAlerts() {
         hideClose
         closeOnBackdrop={false}
         role="alertdialog"
-        ariaLabel={isOngoing ? "Ongoing accident" : "Accident detected"}
+        ariaLabel="Accident detected"
         // Above every other overlay: an alert firing while an operator has an
         // incident modal open must land on top of it, not behind it.
         overlayClassName="z-9999"
@@ -274,26 +277,20 @@ export function GlobalAlerts() {
               Relative positioning anchors the absolutely positioned Snooze button. */}
           <div className="relative">
             {/* Snooze/Unmute Button placed top right in the telemetry section. */}
-            {isUnverified ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "absolute right-4 top-4 z-10 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg",
-                  isSnoozed && "text-warning hover:text-warning",
-                )}
-                title={isSnoozed ? "Unmute Alarm" : "Snooze Alarm"}
-                aria-label={isSnoozed ? "Unmute alarm" : "Snooze alarm"}
-                disabled={busy}
-                onClick={handleSnoozeToggle}
-              >
-                {isSnoozed ? (
-                  <RiNotificationOffLine size={20} />
-                ) : (
-                  <RiNotification2Line size={20} />
-                )}
-              </Button>
-            ) : null}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "absolute right-4 top-4 z-10 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg",
+                isSnoozed && "text-warning hover:text-warning",
+              )}
+              title={isSnoozed ? "Unmute Alarm" : "Snooze Alarm"}
+              aria-label={isSnoozed ? "Unmute alarm" : "Snooze alarm"}
+              disabled={busy}
+              onClick={handleSnoozeToggle}
+            >
+              {isSnoozed ? <RiNotificationOffLine size={20} /> : <RiNotification2Line size={20} />}
+            </Button>
 
             {/* ── Section 2a: Snapshot image ────────────────────────────────── */}
             <div className="flex min-h-[220px] items-center justify-center bg-surface-3 p-6">
@@ -341,32 +338,6 @@ export function GlobalAlerts() {
                   {formatAlertConfidence(alert.confidence_score)}
                 </span>
               </div>
-
-              {/* ── Section 4: Audit Trail ──────────────────────────────────────
-                Only rendered when a verification record is present. For fresh
-                Unverified incidents both fields are null, so this section stays
-                hidden until an operator has confirmed the incident. */}
-              {hasAuditTrail && (
-                <>
-                  <hr className="my-[14px] border-border" />
-                  <div className="mt-2 grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                        Verified By
-                      </p>
-                      <p className="mt-1 text-sm text-fg">{alert.verified_by_name ?? "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                        Time Verified
-                      </p>
-                      <p className="mt-1 text-sm text-fg">
-                        {formatFullDateTime(alert.verified_at)}
-                      </p>
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
 
             {conflict ? (
@@ -396,8 +367,7 @@ export function GlobalAlerts() {
           </div>
 
           {/* ── Section 5: Footer Action Buttons ──────────────────────────────
-            Full-width flex row with equal-width buttons (flex-1). All onClick
-            handlers and disabled logic are unchanged from the original. */}
+            Full-width flex row with equal-width buttons (flex-1). */}
           <div className="flex w-full gap-4 border-t border-stroke bg-surface-1 p-4">
             <Button
               variant="secondary"
@@ -410,13 +380,9 @@ export function GlobalAlerts() {
             <Button
               className="flex-1 rounded-md bg-primary py-3 text-xs font-medium uppercase tracking-[0.08em] text-fg-on-primary hover:bg-primary-hover"
               disabled={busy}
-              onClick={() =>
-                isUnverified
-                  ? runAction(confirmAlert, "Failed to confirm alert.")
-                  : runAction(resolveAlert, "Failed to resolve alert.")
-              }
+              onClick={() => runAction(confirmAlert, "Failed to confirm alert.")}
             >
-              {busy ? "…" : isUnverified ? "Confirm Accident" : "Resolve Accident"}
+              {busy ? "…" : "Confirm Accident"}
             </Button>
           </div>
         </div>

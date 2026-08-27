@@ -112,16 +112,18 @@ interface AlertState {
 
 // Drive the alarm off the single fact that matters — whether the active
 // (non-snoozed) queue is non-empty. Playing/stopping on the 0<->non-0 edge
-// means the siren starts once when the first active alert arrives and stops
-// the moment the queue empties, regardless of whether the change came from a
-// REST action, a WS broadcast, a snooze, or logout.
+// Drive the alarm off whether an unsnoozed Unverified detection is in the queue
+// requiring urgent operator triage. Confirmed "Ongoing" incidents are monitored
+// via the floating tray and do not sound the siren.
 const syncSound = (before: number, after: number) => {
   if (after > 0 && before === 0) playDetectionSound()
   if (after === 0 && before > 0) stopDetectionSound()
 }
 
-function activeCount(alerts: AlertLog[], snoozedUntil: Record<number, string>): number {
-  return alerts.filter((a) => !isSnoozedNow(a.log_id, snoozedUntil)).length
+function activeUnverifiedCount(alerts: AlertLog[], snoozedUntil: Record<number, string>): number {
+  return alerts.filter(
+    (a) => a.detection_status === "Unverified" && !isSnoozedNow(a.log_id, snoozedUntil),
+  ).length
 }
 
 export const useAlertStore = create<AlertState>((set, get) => ({
@@ -135,7 +137,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
   clockOffsetMs: 0,
   reconnectSummary: null,
   addAlert: (alert) => {
-    const before = activeCount(get().alerts, get().snoozedUntil)
+    const before = activeUnverifiedCount(get().alerts, get().snoozedUntil)
     set((state) => {
       // 01_CONTRACTS.md §9.5 — drop anything carrying an older merge key than
       // the incident already queued, before it can revert a newer status.
@@ -157,8 +159,15 @@ export const useAlertStore = create<AlertState>((set, get) => ({
         }
       }
 
-      // Don't re-add an alert the operator already handled this session
-      if (state.handledIds.has(alert.log_id)) return state
+      // If the incident is Ongoing, it belongs in the active OngoingIncidentsTray;
+      // un-suppress it from handledIds if it was previously placed there by old session storage.
+      if (alert.detection_status === "Ongoing" && state.handledIds.has(alert.log_id)) {
+        const nextHandled = new Set(state.handledIds)
+        nextHandled.delete(alert.log_id)
+        writeHandledIds(nextHandled)
+      } else if (state.handledIds.has(alert.log_id)) {
+        return state
+      }
 
       const existingIndex = state.alerts.findIndex((a) => a.log_id === alert.log_id)
 
@@ -176,10 +185,10 @@ export const useAlertStore = create<AlertState>((set, get) => ({
         alerts: [alert, ...state.alerts],
       }
     })
-    syncSound(before, activeCount(get().alerts, get().snoozedUntil))
+    syncSound(before, activeUnverifiedCount(get().alerts, get().snoozedUntil))
   },
   removeAlert: (logId) => {
-    const before = activeCount(get().alerts, get().snoozedUntil)
+    const before = activeUnverifiedCount(get().alerts, get().snoozedUntil)
     set((state) => {
       const next = new Set([...state.handledIds, logId])
       writeHandledIds(next)
@@ -190,7 +199,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
         snoozedBy: withoutSnooze(state.snoozedBy, logId),
       }
     })
-    syncSound(before, activeCount(get().alerts, get().snoozedUntil))
+    syncSound(before, activeUnverifiedCount(get().alerts, get().snoozedUntil))
   },
   clearAlerts: () => {
     stopDetectionSound()
@@ -208,20 +217,20 @@ export const useAlertStore = create<AlertState>((set, get) => ({
     })
   },
   activateSnooze: (logId, snoozedUntil, snoozedBy) => {
-    const before = activeCount(get().alerts, get().snoozedUntil)
+    const before = activeUnverifiedCount(get().alerts, get().snoozedUntil)
     set((state) => ({
       snoozedUntil: { ...state.snoozedUntil, [logId]: snoozedUntil },
       snoozedBy: { ...state.snoozedBy, [logId]: snoozedBy },
     }))
-    syncSound(before, activeCount(get().alerts, get().snoozedUntil))
+    syncSound(before, activeUnverifiedCount(get().alerts, get().snoozedUntil))
   },
   clearSnooze: (logId) => {
-    const before = activeCount(get().alerts, get().snoozedUntil)
+    const before = activeUnverifiedCount(get().alerts, get().snoozedUntil)
     set((state) => ({
       snoozedUntil: withoutSnooze(state.snoozedUntil, logId),
       snoozedBy: withoutSnooze(state.snoozedBy, logId),
     }))
-    syncSound(before, activeCount(get().alerts, get().snoozedUntil))
+    syncSound(before, activeUnverifiedCount(get().alerts, get().snoozedUntil))
   },
   // Deliberately does NOT call syncSound. It writes metadata only — `alerts`
   // and `snoozedUntil` are untouched, so the non-snoozed queue's count cannot

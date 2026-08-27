@@ -60,6 +60,7 @@ export interface IncidentDetailModalProps {
    * passes something, this renders nothing and the row reads as two buttons.
    */
   snoozeAction?: ReactNode
+  overlayClassName?: string
 }
 
 export function IncidentDetailModal({
@@ -75,6 +76,7 @@ export function IncidentDetailModal({
   onConfirm,
   onResolve,
   snoozeAction,
+  overlayClassName,
 }: IncidentDetailModalProps) {
   // Only ticks while an Unverified incident is open — the only case where the
   // gap between "detected" and "now" is a live decision input.
@@ -94,6 +96,7 @@ export function IncidentDetailModal({
       isOpen={isOpen}
       onClose={onClose}
       hideClose
+      overlayClassName={cn("z-[9500]", overlayClassName)}
       className={cn(
         "max-w-md overflow-hidden p-0 border-t-4",
         alert ? getAlertBorderClass(alert.detection_status) : "border-t-stroke-strong",
