@@ -52,7 +52,7 @@ function App() {
       {deliveryBacklog ? <DeliveryBacklogNotice {...deliveryBacklog} /> : null}
       <DevPanelTrigger />
       {/* Lower right floating overlays: Tray buttons & Toasts */}
-      <div className="fixed bottom-5 right-5 z-[9990] flex flex-col items-end gap-3 pointer-events-none">
+      <div className="fixed bottom-10 right-5 z-[9990] flex flex-col items-end gap-3 pointer-events-none">
         <div className="flex items-center gap-3">
           <ExportJobsTray />
           <OngoingIncidentsTray />
