@@ -86,7 +86,7 @@ export function Modal({
           aria-label={title ?? ariaLabel}
           tabIndex={-1}
           className={cn(
-            "relative bg-surface-1 border border-stroke rounded-xl shadow-2xl w-full max-w-md overflow-hidden",
+            "relative bg-surface-1 border border-stroke rounded-lg shadow-2xl w-full max-w-md overflow-hidden",
             !noEntrance && "animate-modal-enter",
             className,
           )}
@@ -110,7 +110,7 @@ export function Modal({
                   onClick={onClose}
                   aria-label="Close dialog"
                   className={cn(
-                    "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+                    "rounded text-fg-muted transition-colors duration-150 hover:text-fg",
                     focusRing,
                   )}
                 >
@@ -126,7 +126,7 @@ export function Modal({
               onClick={onClose}
               aria-label="Close dialog"
               className={cn(
-                "absolute right-4 top-4 z-10 rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
+                "absolute right-4 top-4 z-10 rounded text-fg-muted transition-colors duration-150 hover:text-fg",
                 focusRing,
               )}
             >

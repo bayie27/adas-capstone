@@ -193,7 +193,7 @@ function OperationalBanner({ live }: { live: SystemHealthLiveResponse | undefine
   const isStale = !live || live.collected_at === null || live.stale
   if (isStale) {
     return (
-      <div className="mb-6 flex items-center gap-3 rounded-xl border border-warning-border bg-warning-subtle px-5 py-4">
+      <div className="mb-6 flex items-center gap-3 rounded-lg border border-warning-border bg-warning-subtle px-5 py-4">
         <RiAlertLine size={18} className="shrink-0 text-warning" aria-hidden="true" />
         <div>
           <p className="text-sm font-medium text-warning">
@@ -225,7 +225,7 @@ function OperationalBanner({ live }: { live: SystemHealthLiveResponse | undefine
     return (
       <div
         className={cn(
-          "mb-6 rounded-xl border px-5 py-4",
+          "mb-6 rounded-lg border px-5 py-4",
           isBad
             ? "border-danger-border bg-danger-subtle"
             : "border-warning-border bg-warning-subtle",
@@ -300,7 +300,7 @@ function OperationalBanner({ live }: { live: SystemHealthLiveResponse | undefine
   const contextParts = [fpsText, cameraText].filter(Boolean).join(" · ")
 
   return (
-    <div className="mb-6 flex items-center gap-3 rounded-xl border border-success-border bg-success-subtle px-5 py-4">
+    <div className="mb-6 flex items-center gap-3 rounded-lg border border-success-border bg-success-subtle px-5 py-4">
       <RiCheckboxCircleLine size={18} className="shrink-0 text-success" aria-hidden="true" />
       <div>
         <p className="text-sm font-medium text-success">All systems normal</p>
@@ -376,7 +376,7 @@ function DualHealthChart({
 
   return (
     <div
-      className="flex flex-col rounded-xl border border-stroke bg-surface-1 p-5 shadow-sm"
+      className="flex flex-col rounded-lg border border-stroke bg-surface-1 p-5 shadow-sm"
       style={{ height: 260 }}
     >
       <div className="mb-4 flex items-center justify-between gap-4">

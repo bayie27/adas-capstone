@@ -179,12 +179,12 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
 
         <hr className="border-t border-stroke my-6 -mx-6" />
 
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col text-[12px] font-normal text-fg-muted leading-[28px]">
+        <div className="flex items-center justify-between gap-6">
+          <div className="flex flex-col text-[12px] font-normal text-fg-muted leading-relaxed shrink-0">
             <div>Date Added: {formatShortDateTime(user.created_at ?? null)}</div>
             <div>Last Changes: {formatShortDateTime(user.updated_at ?? null)}</div>
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex items-center justify-end gap-2 shrink-0">
             <Button
               variant="outline"
               className="border-stroke-strong"

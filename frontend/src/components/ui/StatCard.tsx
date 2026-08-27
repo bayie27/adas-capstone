@@ -61,7 +61,7 @@ export function StatCard({
         >
           <Icon size={17} className="text-fg-muted" />
         </div>
-        <h4 className="mb-2 min-h-[32px] text-[11px] font-medium uppercase tracking-wider text-fg-muted">
+        <h4 className="mb-2 min-h-[32px] text-xs font-medium uppercase tracking-wider text-fg-muted">
           {title}
         </h4>
         <div className="flex items-end gap-2.5">

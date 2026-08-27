@@ -18,7 +18,7 @@ export function CameraFormFields({
   onChange: (field: keyof CameraFormState, value: string) => void
 }) {
   return (
-    <>
+    <div className="flex flex-col gap-4">
       <Input
         label="Camera name"
         value={form.camera_name}
@@ -26,6 +26,8 @@ export function CameraFormFields({
         disabled={disabled}
         placeholder={cameraNamePlaceholder}
         onChange={(event) => onChange("camera_name", event.target.value)}
+        className="text-sm text-fg"
+        labelClassName="text-sm font-medium text-fg"
       />
       <Input
         label="Channel No."
@@ -38,7 +40,9 @@ export function CameraFormFields({
         inputMode="numeric"
         placeholder={channelPlaceholder}
         onChange={(event) => onChange("channel_id", event.target.value)}
+        className="text-sm text-fg"
+        labelClassName="text-sm font-medium text-fg"
       />
-    </>
+    </div>
   )
 }

@@ -75,7 +75,7 @@ export function PaginationFooter({
   if (totalFiltered <= 0) return null
 
   const navButton = cn(
-    "flex items-center gap-1 rounded-sm transition-colors duration-150 hover:text-fg",
+    "flex items-center gap-1 rounded transition-colors duration-150 hover:text-fg",
     "disabled:cursor-not-allowed disabled:opacity-50",
     focusRing,
   )
