@@ -112,8 +112,8 @@ export function Sidebar() {
   const navActive = "bg-surface-2 text-fg"
 
   return (
-    <aside className="fixed left-0 top-0 flex h-screen w-[272px] flex-col border-r border-stroke bg-surface-1 text-sm">
-      <div className="flex h-16 items-center border-b border-stroke px-5">
+    <aside className="fixed left-0 top-0 flex h-screen w-[272px] flex-col bg-surface-1 text-sm">
+      <div className="flex h-16 items-center px-5">
         <div className="flex items-center gap-2.5">
           <img src="/adas-logo.png" alt="ADAS Logo" className="h-auto w-7 object-contain" />
           <span className="text-base font-bold tracking-[0.25em] text-fg">ADAS</span>
