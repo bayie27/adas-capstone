@@ -93,6 +93,8 @@ export function IncidentDetailModal({
         ? "border-t-success"
         : "border-t-stroke-strong"
 
+  const isUnverified = alert?.detection_status === "Unverified"
+
   return (
     <Modal
       isOpen={isOpen}
@@ -100,12 +102,13 @@ export function IncidentDetailModal({
       hideClose
       overlayClassName={cn("z-[9500]", overlayClassName)}
       className={cn(
-        "w-full max-w-[1108px] overflow-hidden p-0 rounded-none sm:rounded-lg border-0",
+        "w-full overflow-hidden p-0 rounded-none sm:rounded-lg border-0",
+        isUnverified ? "max-w-[1060px]" : "max-w-[1220px]",
       )}
     >
       <div className="-mx-6 -mb-6 flex flex-col">
         {/* ── Section 1: Header ───────────────────────────────────────────── */}
-        {alert?.detection_status === "Unverified" ? (
+        {isUnverified ? (
           <div className="relative flex h-[55px] w-full items-center justify-center bg-danger px-6 sm:px-[34px]">
             <h2 className="text-center font-sans text-[24px] font-bold uppercase leading-[36px] tracking-wide text-surface-3">
               Accident Detected
@@ -125,7 +128,7 @@ export function IncidentDetailModal({
         ) : (
           <div
             className={cn(
-              "flex h-[60px] items-center justify-between border-t-4 bg-surface-1 px-6",
+              "flex h-[60px] items-center justify-between border-t-4 bg-surface-1 px-6 sm:px-7",
               statusBorderClass,
             )}
           >
@@ -149,7 +152,12 @@ export function IncidentDetailModal({
         {/* ── Section 2: Split Body Layout (Snapshot Image + Telemetry Panel) ── */}
         <div className="flex w-full flex-col items-stretch overflow-hidden md:flex-row">
           {/* Left Column: Snapshot Image Preview */}
-          <div className="flex min-h-[260px] w-full shrink-0 items-center justify-center overflow-hidden bg-canvas md:h-[370px] md:w-[560px] lg:w-[658px]">
+          <div
+            className={cn(
+              "flex min-h-[260px] w-full shrink-0 items-center justify-center overflow-hidden bg-canvas md:h-[370px]",
+              isUnverified ? "md:w-[560px] lg:w-[620px]" : "md:w-[540px] lg:w-[600px]",
+            )}
+          >
             {alert ? (
               <SnapshotImage
                 snapshotUrl={alert.snapshot_url}
@@ -163,10 +171,15 @@ export function IncidentDetailModal({
           </div>
 
           {/* Right Column: Telemetry & Actions */}
-          <div className="relative flex flex-1 flex-col justify-between bg-surface-2 min-w-0 sm:min-w-[380px]">
+          <div
+            className={cn(
+              "relative flex flex-1 flex-col justify-between bg-surface-2 min-w-0",
+              isUnverified ? "sm:min-w-[380px]" : "sm:min-w-[480px] lg:min-w-[540px]",
+            )}
+          >
             {alert ? (
               <>
-                <div className="custom-scrollbar flex flex-1 flex-col justify-between gap-4 overflow-y-auto p-6">
+                <div className="custom-scrollbar flex flex-1 flex-col justify-between gap-4 overflow-y-auto p-6 sm:p-7">
                   {/* Top Row: Accident ID + Status Badge */}
                   <div className="flex items-center justify-between">
                     <span className="font-sans text-[28px] font-medium leading-8 text-fg-body">
@@ -204,7 +217,7 @@ export function IncidentDetailModal({
                       <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
                         CAMERA NAME
                       </span>
-                      <span className="max-w-[65%] truncate text-right text-[16px] font-medium uppercase leading-8 text-white">
+                      <span className="max-w-[75%] truncate text-right text-[16px] font-medium uppercase leading-8 text-white">
                         {alert.camera_name ?? `Camera ${alert.camera_id}`}
                       </span>
                     </div>
@@ -230,7 +243,7 @@ export function IncidentDetailModal({
                   {/* Lower metadata: Verified By & Time Verified (or Closed info) */}
                   {alert.detection_status !== "Unverified" ? (
                     <div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-6">
                         <div className="flex flex-col items-start">
                           <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
                             VERIFIED BY
