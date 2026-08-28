@@ -154,7 +154,7 @@ export function IncidentDetailModal({
           {/* Left Column: Snapshot Image Preview */}
           <div
             className={cn(
-              "flex min-h-[260px] w-full shrink-0 items-center justify-center overflow-hidden bg-canvas md:h-[370px]",
+              "flex min-h-[260px] w-full shrink-0 overflow-hidden bg-canvas self-stretch",
               isUnverified ? "md:w-[560px] lg:w-[658px]" : "md:w-[600px] lg:w-[658px]",
             )}
           >
@@ -162,11 +162,13 @@ export function IncidentDetailModal({
               <SnapshotImage
                 snapshotUrl={alert.snapshot_url}
                 alt={`Accident snapshot for log ${alert.log_id}`}
-                className="h-full w-full object-cover"
+                className="h-full w-full min-h-full object-cover block"
                 fallbackClassName="h-full w-full rounded-none"
               />
             ) : (
-              <div className="text-xs text-fg-muted">Loading preview…</div>
+              <div className="flex h-full w-full items-center justify-center text-xs text-fg-muted">
+                Loading preview…
+              </div>
             )}
           </div>
 
