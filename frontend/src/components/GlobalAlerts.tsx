@@ -223,7 +223,7 @@ export function GlobalAlerts() {
       // incident modal open must land on top of it, not behind it.
       overlayClassName="z-9999"
       backdropClassName="bg-backdrop-alert"
-      className="w-full max-w-[1000px] overflow-hidden p-0 rounded-none sm:rounded-lg border-0"
+      className="w-full max-w-[1060px] overflow-hidden p-0 rounded-none sm:rounded-lg border-0"
       noEntrance
       outerContent={
         hasMultiple ? (
@@ -306,7 +306,7 @@ export function GlobalAlerts() {
         {/* ── Section 2: Split Body Layout (Snapshot Image + Telemetry Panel) ── */}
         <div className="flex flex-col md:flex-row items-stretch w-full overflow-hidden">
           {/* Left Column: Snapshot Image Preview */}
-          <div className="w-full md:w-[580px] lg:w-[658px] min-h-[260px] md:h-[370px] bg-canvas flex items-center justify-center overflow-hidden shrink-0">
+          <div className="w-full md:w-[560px] lg:w-[620px] min-h-[260px] md:h-[370px] bg-canvas flex items-center justify-center overflow-hidden shrink-0">
             <SnapshotImage
               snapshotUrl={alert.snapshot_url}
               alt={`Accident snapshot for log ${alert.log_id}`}
@@ -316,13 +316,13 @@ export function GlobalAlerts() {
           </div>
 
           {/* Right Column: Telemetry & Actions */}
-          <div className="flex-1 flex flex-col justify-between bg-stroke min-w-0 relative">
+          <div className="flex-1 flex flex-col justify-between bg-surface-2 min-w-0 sm:min-w-[380px] relative">
             {/* Snooze Button placed top right in the telemetry section. Disabled once snoozed until expiry. */}
             <Button
               variant="ghost"
               size="icon"
               className={cn(
-                "absolute right-4 top-4 z-10 rounded text-fg-muted hover:bg-surface-2 hover:text-fg",
+                "absolute right-4 top-4 z-10 rounded text-fg-muted hover:bg-surface-3 hover:text-fg",
                 isSnoozed &&
                   "cursor-not-allowed text-warning opacity-80 hover:bg-transparent hover:text-warning",
               )}
@@ -395,17 +395,17 @@ export function GlobalAlerts() {
             </div>
 
             {/* ── Section 3: Footer Action Buttons ────────────────────────── */}
-            <div className="w-full bg-surface-1 px-6 py-3 flex items-center gap-4">
+            <div className="w-full bg-surface-1 px-5 sm:px-6 py-3 flex items-center gap-3 sm:gap-4">
               <Button
                 variant="secondary"
-                className="flex-1 h-[44px] px-4 py-2 bg-border hover:bg-surface-2 text-fg text-[14px] font-medium leading-[20px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
+                className="flex-1 whitespace-nowrap h-[44px] px-3 sm:px-4 py-2 bg-border hover:bg-surface-3 text-fg text-xs sm:text-[14px] font-medium leading-[20px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
                 disabled={busy}
                 onClick={() => runAction(dismissAlert, "Failed to dismiss alert.")}
               >
                 {busy ? "…" : "Dismiss Accident"}
               </Button>
               <Button
-                className="flex-1 h-[44px] px-4 py-2 bg-fg-body hover:bg-fg text-surface-2 text-[14px] font-medium leading-[28px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
+                className="flex-1 whitespace-nowrap h-[44px] px-3 sm:px-4 py-2 bg-fg-body hover:bg-fg text-surface-2 text-xs sm:text-[14px] font-medium leading-[28px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
                 disabled={busy}
                 onClick={() => runAction(confirmAlert, "Failed to confirm alert.")}
               >
