@@ -33,7 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 this.setState({ error: null })
                 window.location.assign("/")
               }}
-              className="rounded-md border border-stroke-strong px-4 py-2 text-fg transition-colors hover:bg-surface-1"
+              className="rounded border border-stroke-strong px-4 py-2 text-fg transition-colors hover:bg-surface-1"
             >
               Reload
             </button>

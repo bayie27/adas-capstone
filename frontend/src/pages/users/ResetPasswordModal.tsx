@@ -119,15 +119,25 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
 
         <div className="h-px w-full bg-surface-3" />
 
-        <div className="flex items-center justify-between">
-          <div className="text-[10px] text-fg-muted">
+        <div className="flex items-center justify-between gap-6">
+          <div className="text-[12px] font-normal text-fg-muted leading-relaxed shrink-0">
             <div>Last Changes: {formatShortDateTime(user.password_changed_at ?? null)}</div>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
+          <div className="flex items-center justify-end gap-2 shrink-0">
+            <Button
+              variant="outline"
+              className="border-stroke-strong"
+              onClick={onClose}
+              disabled={mutation.isPending}
+            >
               Cancel
             </Button>
-            <Button type="submit" isLoading={mutation.isPending} loadingLabel="Saving…">
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={mutation.isPending}
+              loadingLabel="Saving…"
+            >
               Save Changes
             </Button>
           </div>

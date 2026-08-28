@@ -35,6 +35,8 @@ function formatSoundLabel(key: string): string {
 export function AlarmSettingsCard({ className }: { className?: string } = {}) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState<AlarmSettings | null>(null)
+  const [snoozeInput, setSnoozeInput] = useState<string>("")
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   const settingsQuery = useQuery({
     queryKey: ALARM_SETTINGS_QUERY_KEY,
@@ -48,6 +50,7 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
   // browser default until now — picks it up here.
   if (settingsQuery.data && !form) {
     setForm(settingsQuery.data)
+    setSnoozeInput(String(settingsQuery.data.snooze_duration))
     setDetectionSoundVolume(settingsQuery.data.volume)
   }
 
@@ -58,7 +61,9 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
     onSuccess: (updated) => {
       queryClient.setQueryData(ALARM_SETTINGS_QUERY_KEY, updated)
       setForm(updated)
+      setSnoozeInput(String(updated.snooze_duration))
       setDetectionSoundVolume(updated.volume)
+      setValidationError(null)
       toast.success("Alarm settings saved.")
     },
     onError: (error) => {
@@ -69,6 +74,7 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
 
   function updateField<K extends keyof AlarmSettings>(field: K, value: AlarmSettings[K]) {
     mutation.reset()
+    setValidationError(null)
     setForm((current) => (current ? { ...current, [field]: value } : current))
   }
 
@@ -76,25 +82,47 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
     event.preventDefault()
     if (!form || !settingsQuery.data) return
 
+    setValidationError(null)
+    const trimmed = snoozeInput.trim()
+    const durationNum = parseInt(trimmed, 10)
+
+    if (!trimmed || isNaN(durationNum)) {
+      setValidationError("Please enter a valid snooze duration.")
+      return
+    }
+
+    if (
+      durationNum < form.options.snooze_min_seconds ||
+      durationNum > form.options.snooze_max_seconds
+    ) {
+      setValidationError(
+        `Snooze duration must be between ${form.options.snooze_min_seconds} and ${form.options.snooze_max_seconds} seconds.`,
+      )
+      return
+    }
+
     // Saving without an actual change writes no audit row on the backend —
     // preserve that in the UI by not firing the request at all rather than
     // relying on the backend to silently no-op it.
     const unchanged =
       form.alarm_sound === settingsQuery.data.alarm_sound &&
       form.volume === settingsQuery.data.volume &&
-      form.snooze_duration === settingsQuery.data.snooze_duration
+      durationNum === settingsQuery.data.snooze_duration
 
     if (unchanged) {
       toast.info("No changes to save.")
       return
     }
 
-    mutation.mutate(form)
+    mutation.mutate({
+      ...form,
+      snooze_duration: durationNum,
+    })
   }
 
-  const errorMessage = mutation.isError
-    ? getApiErrorMessage(mutation.error, "Unable to save alarm settings.")
-    : null
+  const errorMessage =
+    validationError ??
+    (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to save alarm settings.") : null)
 
   return (
     <Card className={cn("p-8", className)}>
@@ -183,9 +211,13 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
             inputMode="numeric"
             min={form.options.snooze_min_seconds}
             max={form.options.snooze_max_seconds}
-            value={form.snooze_duration}
+            value={snoozeInput}
             disabled={mutation.isPending}
-            onChange={(event) => updateField("snooze_duration", Number(event.target.value))}
+            onChange={(event) => {
+              mutation.reset()
+              setValidationError(null)
+              setSnoozeInput(event.target.value)
+            }}
             hint={`Must be between ${form.options.snooze_min_seconds} and ${form.options.snooze_max_seconds} seconds.`}
           />
 

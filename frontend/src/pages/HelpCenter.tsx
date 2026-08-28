@@ -148,7 +148,7 @@ function ArticleGrid({
           key={article.slug}
           type="button"
           onClick={() => onSelect(article.slug)}
-          className="flex flex-col items-start rounded-xl border border-stroke bg-surface-1 p-5 text-left transition-colors duration-150 hover:border-stroke-strong hover:bg-surface-2"
+          className="flex flex-col items-start rounded-lg border border-stroke bg-surface-1 p-5 text-left transition-colors duration-150 hover:border-stroke-strong hover:bg-surface-2"
         >
           <div className="mb-3 flex w-full items-center justify-between gap-2">
             <Badge variant="subtle" tone="neutral">
@@ -299,7 +299,7 @@ function ArticleDetail({
           {getApiErrorMessage(query.error, "Unable to load this article.")}
         </p>
       ) : query.data ? (
-        <article className="rounded-xl border border-stroke bg-surface-1 p-6">
+        <article className="rounded-lg border border-stroke bg-surface-1 p-6">
           <div className="mb-4 flex items-center gap-2">
             <Badge variant="subtle" tone="neutral">
               {query.data.category}

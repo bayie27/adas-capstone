@@ -127,11 +127,11 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
 
         <hr className="border-t border-stroke my-6 -mx-6" />
 
-        <div className="flex items-center justify-between">
-          <div className="text-[12px] font-normal text-fg-muted leading-[28px]">
+        <div className="flex items-center justify-between gap-6">
+          <div className="text-[12px] font-normal text-fg-muted leading-relaxed shrink-0">
             Last Changes: {formatShortDateTime(user.password_changed_at ?? null)}
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex items-center justify-end gap-2 shrink-0">
             <Button
               variant="outline"
               className="border-stroke-strong"

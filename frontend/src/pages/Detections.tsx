@@ -20,7 +20,6 @@ import {
   TableRow,
   TableStateRow,
 } from "@/components/ui/Table"
-import { Tabs } from "@/components/ui/Tabs"
 import { IncidentHandledNotice } from "@/components/ui/IncidentHandledNotice"
 import { IncidentDetailModal } from "@/pages/detections/IncidentDetailModal"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
@@ -60,14 +59,19 @@ import { RiEyeLine } from "@remixicon/react"
 // cannot display its own current value (see M14, which is Cameras' version of
 // this problem at a page size of 8).
 const ALERTS_PAGE_SIZE = 10
-const ACTIVE_ALERT_STATUSES: AlertStatus[] = ["Unverified", "Ongoing"]
-const LOG_ALERT_STATUSES: AlertStatus[] = ["Dismissed", "Resolved"]
 
-type TabKey = "ongoing" | "logs"
+// Export always covers the historical closed-incident archive. Ongoing
+// accidents are excluded regardless of the current status filter so that a
+// live export is never inflated by in-progress incidents.
+const EXPORT_STATUSES: AlertStatus[] = ["Dismissed", "Resolved"]
 
-const TAB_ITEMS = [
-  { value: "ongoing" as const, label: "Ongoing" },
-  { value: "logs" as const, label: "Logs" },
+// Status dropdown options. An empty value means "no filter" (all statuses).
+const STATUS_OPTIONS = [
+  { value: "", label: "All statuses" },
+  { value: "Unverified", label: "Unverified" },
+  { value: "Ongoing", label: "Ongoing" },
+  { value: "Resolved", label: "Resolved" },
+  { value: "Dismissed", label: "Dismissed" },
 ]
 
 interface SortState {
@@ -110,7 +114,9 @@ export default function Detections() {
   const handledByOther = useAlertStore((state) => state.handledByOther)
   const snoozedUntilMap = useAlertStore((state) => state.snoozedUntil)
   const snoozedByMap = useAlertStore((state) => state.snoozedBy)
-  const [activeTab, setActiveTab] = useState<TabKey>("ongoing")
+
+  // "" means no status filter (all statuses shown).
+  const [statusFilter, setStatusFilter] = useState("")
   const [logSearch, setLogSearch] = useState("")
   const debouncedLogSearch = useDebouncedValue(logSearch.trim(), 300)
   const [startDate, setStartDate] = useState("")
@@ -120,68 +126,49 @@ export default function Detections() {
 
   const role = useAuthStore((state) => state.role)
   const username = useAuthStore((state) => state.username)
-  const hasFilters = Boolean(startDate || endDate || cameraId || userId)
+
+  // The clear-filters button appears when any non-search filter is active.
+  // logSearch is excluded because SearchInput already has its own clear ×.
+  const hasFilters = Boolean(statusFilter || startDate || endDate || cameraId || userId)
 
   const camerasQuery = useCameraOptions()
-
   const usersQuery = useUserOptions({ enabled: role === "Admin" })
+
   const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null)
   const [selectedAlertPreview, setSelectedAlertPreview] = useState<AlertLog | null>(null)
 
-  // Two independent paginations (one per tab). See Users.tsx for why the total
-  // is mirrored into state and synced during render.
-  const [seenActiveTotal, setSeenActiveTotal] = useState(0)
-  const activePagination = usePagination(seenActiveTotal, ALERTS_PAGE_SIZE)
-  const [seenLogsTotal, setSeenLogsTotal] = useState(0)
-  const logsPagination = usePagination(seenLogsTotal, ALERTS_PAGE_SIZE)
+  // Mirror total_filtered into state so usePagination stays stable between
+  // fetches (same pattern as Cameras.tsx / Users.tsx).
+  const [seenTotal, setSeenTotal] = useState(0)
+  const pagination = usePagination(seenTotal, ALERTS_PAGE_SIZE)
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT)
 
-  // One sort per tab, mirroring the two paginations: the live queue and the
-  // archive are different questions and should not share an ordering.
-  const [activeSort, setActiveSort] = useState<SortState>(DEFAULT_SORT)
-  const [logsSort, setLogsSort] = useState<SortState>(DEFAULT_SORT)
-
-  const activeAlertsQuery = useQuery({
+  const alertsQuery = useQuery({
     queryKey: [
       "alerts",
-      "active",
-      activePagination.offset,
-      activePagination.pageSize,
-      activeSort.key,
-      activeSort.order,
-    ],
-    queryFn: () =>
-      getAlerts({
-        status: ACTIVE_ALERT_STATUSES,
-        sort_by: activeSort.key,
-        sort_order: activeSort.order,
-        limit: activePagination.pageSize,
-        offset: activePagination.offset,
-      }),
-    placeholderData: (previousData) => previousData,
-  })
-
-  const logsQuery = useQuery({
-    queryKey: [
-      "alerts",
-      "logs",
+      "list",
+      statusFilter,
       debouncedLogSearch,
-      logsPagination.offset,
-      logsPagination.pageSize,
+      pagination.offset,
+      pagination.pageSize,
       startDate,
       endDate,
       cameraId,
       userId,
-      logsSort.key,
-      logsSort.order,
+      sort.key,
+      sort.order,
     ],
     queryFn: () =>
       getAlerts({
-        status: LOG_ALERT_STATUSES,
+        // Pass a single-element array when a specific status is chosen;
+        // omit the field entirely for "All statuses" so the backend
+        // returns every status without needing to enumerate them here.
+        status: statusFilter ? ([statusFilter] as AlertStatus[]) : undefined,
         search: debouncedLogSearch || undefined,
-        sort_by: logsSort.key,
-        sort_order: logsSort.order,
-        limit: logsPagination.pageSize,
-        offset: logsPagination.offset,
+        sort_by: sort.key,
+        sort_order: sort.order,
+        limit: pagination.pageSize,
+        offset: pagination.offset,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         camera_id: cameraId ? [Number(cameraId)] : undefined,
@@ -200,13 +187,14 @@ export default function Detections() {
     mutationFn: (format: ExportFormat) =>
       exportAlerts(
         {
-          status: LOG_ALERT_STATUSES,
+          // Export always covers the historical archive only — Ongoing
+          // incidents are excluded regardless of the current view filter.
+          // The same order as the screen is preserved so a CSV of a
+          // confidence-sorted view does not silently revert to detected_at.
+          status: EXPORT_STATUSES,
           search: debouncedLogSearch || undefined,
-          // Same order as the screen. Without this a CSV of a
-          // confidence-sorted view arrives in detected_at order and quietly is
-          // not the thing the operator was looking at.
-          sort_by: logsSort.key,
-          sort_order: logsSort.order,
+          sort_by: sort.key,
+          sort_order: sort.order,
           start_date: startDate || undefined,
           end_date: endDate || undefined,
           camera_id: cameraId ? [Number(cameraId)] : undefined,
@@ -278,19 +266,10 @@ export default function Detections() {
     },
   })
 
-  const activeTotal = activeAlertsQuery.data?.total_filtered ?? 0
-  if (activeTotal !== seenActiveTotal) {
-    setSeenActiveTotal(activeTotal)
+  const total = alertsQuery.data?.total_filtered ?? 0
+  if (total !== seenTotal) {
+    setSeenTotal(total)
   }
-  const logsTotal = logsQuery.data?.total_filtered ?? 0
-  if (logsTotal !== seenLogsTotal) {
-    setSeenLogsTotal(logsTotal)
-  }
-
-  const currentQuery = activeTab === "ongoing" ? activeAlertsQuery : logsQuery
-  const currentPagination = activeTab === "ongoing" ? activePagination : logsPagination
-  const currentSort = activeTab === "ongoing" ? activeSort : logsSort
-  const setCurrentSort = activeTab === "ongoing" ? setActiveSort : setLogsSort
 
   /**
    * D-8(a) — two states. Clicking the active column flips the direction;
@@ -305,8 +284,8 @@ export default function Detections() {
    */
   const handleSort = (key: string) => {
     const sortKey = key as AlertSortField
-    currentPagination.reset()
-    setCurrentSort((prev) =>
+    pagination.reset()
+    setSort((prev) =>
       prev.key === sortKey
         ? { key: sortKey, order: prev.order === "asc" ? "desc" : "asc" }
         : { key: sortKey, order: "desc" },
@@ -318,7 +297,7 @@ export default function Detections() {
     if (!key) return undefined
     return {
       key,
-      active: currentSort.key === key ? currentSort.order : null,
+      active: sort.key === key ? sort.order : null,
       onSort: handleSort,
     }
   }
@@ -326,7 +305,7 @@ export default function Detections() {
   // Render rows in the server's order. The server paginates (limit/offset), so
   // it defines the total order; re-sorting a single page by a different key
   // would make page boundaries and visible order disagree.
-  const currentRows = currentQuery.data?.logs ?? []
+  const currentRows = alertsQuery.data?.logs ?? []
 
   // The store's snoozedUntil map is the live truth — SNOOZE_ACTIVATED and
   // RE_ALARM update it directly without invalidating this table's REST
@@ -358,9 +337,9 @@ export default function Detections() {
     )
   }
 
-  const currentTotalFiltered = currentQuery.data?.total_filtered ?? 0
-  const rangeStart = currentPagination.rangeStart
-  const rangeEndValue = currentPagination.rangeEnd(currentRows.length)
+  const totalFiltered = alertsQuery.data?.total_filtered ?? 0
+  const rangeStart = pagination.rangeStart
+  const rangeEndValue = pagination.rangeEnd(currentRows.length)
 
   const selectedAlert = alertDetailsQuery.data ?? selectedAlertPreview
 
@@ -403,8 +382,27 @@ export default function Detections() {
     snoozeMutation.reset()
   }
 
-  const broadcastHandled =
-    selectedAlertId !== null ? (handledByOther[selectedAlertId] ?? null) : null
+  const broadcastHandled = useMemo(() => {
+    if (selectedAlertId === null) return null
+
+    const info = handledByOther[selectedAlertId]
+    if (!info) return null
+
+    // 1. Closed incidents (Resolved or Dismissed) are historical records with no actions;
+    // never show a transition banner on a terminal incident.
+    const isTerminal =
+      selectedAlert?.detection_status === "Dismissed" ||
+      selectedAlert?.detection_status === "Resolved"
+    if (isTerminal) return null
+
+    // 2. If the modal's status already matches the broadcast status (e.g. an already Ongoing
+    // incident is opened from the table), do not show a redundant notice.
+    if (selectedAlert && selectedAlert.detection_status === info.currentStatus) {
+      return null
+    }
+
+    return info
+  }, [selectedAlertId, handledByOther, selectedAlert])
 
   const cameraOptions = [
     { value: "", label: "All cameras" },
@@ -438,104 +436,101 @@ export default function Detections() {
         </p>
       </div>
 
-      <div className="mb-5">
-        <Tabs
-          items={TAB_ITEMS}
-          value={activeTab}
-          onChange={setActiveTab}
-          variant="chip"
-          label="Detections view"
+      {/* ── Unified Filter Toolbar ────────────────────────────────────────── */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchInput
+            value={logSearch}
+            onChange={(value) => {
+              pagination.reset()
+              setLogSearch(value)
+            }}
+            placeholder="Search accident no. or camera..."
+          />
+          <DateRangePicker
+            start={startDate}
+            end={endDate}
+            onStartChange={(value) => {
+              pagination.reset()
+              setStartDate(value)
+            }}
+            onEndChange={(value) => {
+              pagination.reset()
+              setEndDate(value)
+            }}
+            label="Filter incidents by date"
+          />
+          <FilterSelect
+            value={statusFilter}
+            options={STATUS_OPTIONS}
+            onChange={(value) => {
+              pagination.reset()
+              setStatusFilter(value)
+            }}
+          />
+          <FilterSelect
+            value={cameraId}
+            options={cameraOptions}
+            onChange={(value) => {
+              pagination.reset()
+              setCameraId(value)
+            }}
+          />
+          {role === "Admin" ? (
+            <FilterSelect
+              value={userId}
+              options={userOptions}
+              onChange={(value) => {
+                pagination.reset()
+                setUserId(value)
+              }}
+            />
+          ) : null}
+          {hasFilters ? (
+            <ClearFiltersButton
+              onClick={() => {
+                setStatusFilter("")
+                setStartDate("")
+                setEndDate("")
+                setCameraId("")
+                setUserId("")
+                pagination.reset()
+              }}
+            />
+          ) : null}
+        </div>
+
+        {/*
+          `total_filtered` is already on the list response, so the count is
+          free and needs no extra request. It is the count for the SAME
+          filter set the export sends — note export always targets
+          EXPORT_STATUSES (Dismissed + Resolved), not the current status chip,
+          so the count shown here may differ when an Ongoing/Unverified filter
+          is active. A follow-up can conditionally suppress the button in
+          those cases.
+        */}
+        <ExportButton
+          rowCount={alertsQuery.data?.total_filtered}
+          isExporting={exportMutation.isPending}
+          exportHasError={exportMutation.isError}
+          onExport={(format) => exportMutation.mutate(format)}
+          isSubmittingJob={exportJobMutation.isPending}
+          onExportJob={(format) =>
+            exportJobMutation.mutateAsync({
+              report_type: "incidents",
+              format,
+              status: EXPORT_STATUSES,
+              search: debouncedLogSearch || undefined,
+              sort_by: sort.key,
+              sort_order: sort.order,
+              start_date: startDate || undefined,
+              end_date: endDate || undefined,
+              camera_id: cameraId ? [Number(cameraId)] : undefined,
+              user_id: userId ? [Number(userId)] : undefined,
+            })
+          }
         />
       </div>
-
-      {/*
-        The Ongoing tab draws no toolbar (37:76) — it is a live queue, not a
-        filterable archive, and the two chips below are read-only statements of
-        what the tab contains. Only the Logs tab (112:8438) gets search, a date
-        range, the dropdowns and Export.
-      */}
-      {activeTab === "logs" ? (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <SearchInput
-              value={logSearch}
-              onChange={(value) => {
-                logsPagination.reset()
-                setLogSearch(value)
-              }}
-              placeholder="Search accident no. or camera..."
-            />
-            <DateRangePicker
-              start={startDate}
-              end={endDate}
-              onStartChange={(value) => {
-                logsPagination.reset()
-                setStartDate(value)
-              }}
-              onEndChange={(value) => {
-                logsPagination.reset()
-                setEndDate(value)
-              }}
-              label="Filter incidents by date"
-            />
-            <FilterSelect
-              value={cameraId}
-              options={cameraOptions}
-              onChange={(value) => {
-                logsPagination.reset()
-                setCameraId(value)
-              }}
-            />
-            {role === "Admin" ? (
-              <FilterSelect
-                value={userId}
-                options={userOptions}
-                onChange={(value) => {
-                  logsPagination.reset()
-                  setUserId(value)
-                }}
-              />
-            ) : null}
-            {hasFilters ? (
-              <ClearFiltersButton
-                onClick={() => {
-                  setStartDate("")
-                  setEndDate("")
-                  setCameraId("")
-                  setUserId("")
-                  logsPagination.reset()
-                }}
-              />
-            ) : null}
-          </div>
-          {/*
-            `total_filtered` is already on the list response, so the count is
-            free and needs no extra request. It is the count for the SAME
-            filter set the export sends.
-          */}
-          <ExportButton
-            rowCount={logsQuery.data?.total_filtered}
-            isExporting={exportMutation.isPending}
-            exportHasError={exportMutation.isError}
-            onExport={(format) => exportMutation.mutate(format)}
-            isSubmittingJob={exportJobMutation.isPending}
-            onExportJob={(format) =>
-              exportJobMutation.mutateAsync({
-                report_type: "incidents",
-                format,
-                status: LOG_ALERT_STATUSES,
-                search: debouncedLogSearch || undefined,
-                sort_by: logsSort.key,
-                sort_order: logsSort.order,
-                start_date: startDate || undefined,
-                end_date: endDate || undefined,
-                camera_id: cameraId ? [Number(cameraId)] : undefined,
-                user_id: userId ? [Number(userId)] : undefined,
-              })
-            }
-          />
-        </div>
-      ) : null}
 
       {/*
         A 413 can still arrive despite the pre-flight — the row count is read
@@ -544,43 +539,39 @@ export default function Detections() {
         endpoint, so it is rendered verbatim rather than replaced with a second
         sentence that can drift out of step with it.
       */}
-      {activeTab === "logs" && exportMutation.isError ? (
+      {exportMutation.isError ? (
         <QueryErrorBanner error={exportMutation.error} fallback="Unable to export logs." />
       ) : null}
 
-      {activeTab === "logs" && exportJobMutation.isError ? (
+      {exportJobMutation.isError ? (
         <QueryErrorBanner
           error={exportJobMutation.error}
           fallback="Unable to start the background export job."
         />
       ) : null}
 
-      {currentQuery.isError ? (
+      {alertsQuery.isError ? (
         <QueryErrorBanner
-          error={currentQuery.error}
-          fallback={
-            activeTab === "ongoing"
-              ? "Unable to load active alerts."
-              : "Unable to load historical logs."
-          }
-          onRetry={() => currentQuery.refetch()}
+          error={alertsQuery.error}
+          fallback="Unable to load detections."
+          onRetry={() => alertsQuery.refetch()}
         />
       ) : null}
 
       <TableContainer
         footer={
           <PaginationFooter
-            page={currentPagination.page}
-            totalPages={currentPagination.totalPages}
+            page={pagination.page}
+            totalPages={pagination.totalPages}
             rangeStart={rangeStart}
             rangeEnd={rangeEndValue}
-            totalFiltered={currentTotalFiltered}
-            pageSize={currentPagination.pageSize}
-            isFetching={currentQuery.isFetching}
-            onPrev={currentPagination.prev}
-            onNext={currentPagination.next}
-            onPageChange={currentPagination.goTo}
-            onPageSizeChange={currentPagination.setPageSize}
+            totalFiltered={totalFiltered}
+            pageSize={pagination.pageSize}
+            isFetching={alertsQuery.isFetching}
+            onPrev={pagination.prev}
+            onNext={pagination.next}
+            onPageChange={pagination.goTo}
+            onPageSizeChange={pagination.setPageSize}
           />
         }
       >
@@ -596,15 +587,11 @@ export default function Detections() {
             <TableHeaderCell className="text-right">Actions</TableHeaderCell>
           </TableHead>
           <TableBody>
-            {currentQuery.isLoading ? (
-              <TableStateRow colSpan={8}>
-                {activeTab === "ongoing" ? "Loading active alerts…" : "Loading logs…"}
-              </TableStateRow>
+            {alertsQuery.isLoading ? (
+              <TableStateRow colSpan={8}>Loading detections…</TableStateRow>
             ) : currentRows.length === 0 ? (
               <TableStateRow colSpan={8}>
-                {activeTab === "ongoing"
-                  ? "No active alerts in the queue."
-                  : "No historical logs found for the current filters."}
+                No detections found for the current filters.
               </TableStateRow>
             ) : (
               currentRows.map((item) => (
@@ -662,7 +649,7 @@ export default function Detections() {
           selectedAlert ? (
             <Button
               variant="secondary"
-              className="flex-1 uppercase tracking-[0.08em]"
+              className="flex-1 whitespace-nowrap uppercase tracking-wider"
               disabled={isTransitionPending}
               isLoading={snoozeMutation.isPending}
               loadingLabel="Snoozing…"

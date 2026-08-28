@@ -296,21 +296,31 @@ export function ExportJobsTray() {
   const totalFiltered = historyQuery.data?.total_filtered ?? historyItems.length
   const hasMore = historyRequested && historyItems.length < totalFiltered
 
+  if (jobs.length === 0 && !isOpen) {
+    return null
+  }
+
   return (
     <>
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        aria-label="Export jobs"
+        aria-label={`Export jobs (${jobs.length})`}
         title="Export jobs"
         className={cn(
-          "fixed bottom-4 right-4 z-[8000] flex h-10 w-10 items-center justify-center rounded-full",
-          "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-colors duration-150",
-          "hover:text-fg",
+          "relative pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg",
+          "border border-stroke bg-surface-1 text-fg-muted shadow-overlay transition-all duration-150",
+          "hover:border-stroke-strong hover:bg-surface-2 hover:text-fg active:scale-95",
           focusRing,
         )}
       >
-        <RiDownloadLine size={18} />
+        <RiDownloadLine size={17} />
+        <span
+          className="absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-stroke bg-primary px-0.5 text-[9px] font-bold leading-none text-fg-on-primary shadow-sm ring-2 ring-surface-1"
+          aria-hidden="true"
+        >
+          {jobs.length}
+        </span>
       </button>
 
       <SidePanel

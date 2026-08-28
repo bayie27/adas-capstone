@@ -114,10 +114,7 @@ export function ToastContainer() {
   if (toasts.length === 0) return null
 
   return (
-    <div
-      aria-label="Notifications"
-      className="fixed right-5 top-5 z-[9990] flex max-w-sm flex-col gap-2.5 pointer-events-none"
-    >
+    <div aria-label="Notifications" className="flex max-w-sm flex-col gap-2.5 pointer-events-none">
       {toasts.map((item) => (
         <ToastCard key={item.id} toast={item} />
       ))}

@@ -8,6 +8,10 @@ adas.db
 adas.db-journal
 adas.db-wal
 adas.db-shm
+app.db
+app.db-journal
+app.db-wal
+app.db-shm
 
 # C extensions
 *.so

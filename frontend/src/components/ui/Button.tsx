@@ -66,7 +66,7 @@ export function Button({
       disabled={disabled || isLoading}
       aria-busy={isLoading || undefined}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors duration-150",
+        "inline-flex items-center justify-center gap-2 rounded font-medium transition-colors duration-150",
         VARIANTS[variant],
         SIZES[size],
         focusRing,

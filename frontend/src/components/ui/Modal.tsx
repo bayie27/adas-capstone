@@ -25,9 +25,19 @@ interface ModalProps {
    * reads as more blocking.
    */
   backdropClassName?: string
-  /** `alertdialog` for anything demanding a decision before the user proceeds. */
-  role?: "dialog" | "alertdialog"
-  /** Used when there is no `title` to name the dialog from. */
+  /**
+   * Optional wrapper className or outer content rendered in the modal's centering
+   * container outside the dialog card (e.g. navigation controls, badges).
+   */
+  wrapperClassName?: string
+  outerContent?: React.ReactNode
+  /**
+   * Set true to suppress the entrance animation. Use for alert dialogs that
+   * manage their own content transitions (e.g. GlobalAlerts slide animations)
+   * so the Tailwind `animate-in` classes don't replay on every state change.
+   */
+  noEntrance?: boolean
+  role?: string
   ariaLabel?: string
 }
 
@@ -45,6 +55,9 @@ export function Modal({
   backdropClassName,
   role = "dialog",
   ariaLabel,
+  wrapperClassName,
+  outerContent,
+  noEntrance,
 }: ModalProps) {
   const dialogRef = useOverlayBehavior(isOpen, onClose)
 
@@ -52,66 +65,78 @@ export function Modal({
 
   return (
     <div
-      className={cn("fixed inset-0 z-50 flex items-center justify-center p-4", overlayClassName)}
+      className={cn(
+        "fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-auto",
+        overlayClassName,
+      )}
     >
       <div
-        className={cn("absolute inset-0 bg-backdrop transition-opacity", backdropClassName)}
+        className={cn(
+          "absolute inset-0 bg-backdrop transition-opacity pointer-events-auto cursor-pointer",
+          backdropClassName,
+        )}
         onClick={closeOnBackdrop ? onClose : undefined}
       />
 
-      <div
-        ref={dialogRef}
-        role={role}
-        aria-modal="true"
-        aria-label={title ?? ariaLabel}
-        tabIndex={-1}
-        className={cn(
-          "relative bg-surface-1 border border-stroke rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200",
-          className,
-        )}
-      >
-        {(title || icon) && (
-          <div className="px-6 pt-6 pb-4 flex items-start justify-between">
-            <div className="flex items-start gap-4">
-              {icon}
-              <div>
-                {title && <h3 className="text-lg font-semibold text-fg leading-tight">{title}</h3>}
-                {subtitle && (
-                  <p className="text-sm text-fg-muted mt-1 leading-relaxed">{subtitle}</p>
-                )}
+      <div className={cn("relative flex flex-col items-center max-w-full", wrapperClassName)}>
+        <div
+          ref={dialogRef}
+          role={role}
+          aria-modal="true"
+          aria-label={title ?? ariaLabel}
+          tabIndex={-1}
+          className={cn(
+            "relative bg-surface-1 border border-stroke rounded shadow-2xl w-full max-w-md overflow-hidden",
+            !noEntrance && "animate-modal-enter",
+            className,
+          )}
+        >
+          {(title || icon) && (
+            <div className="px-6 pt-6 pb-4 flex items-start justify-between">
+              <div className="flex items-start gap-4">
+                {icon}
+                <div>
+                  {title && (
+                    <h3 className="text-lg font-semibold text-fg leading-tight">{title}</h3>
+                  )}
+                  {subtitle && (
+                    <p className="text-sm text-fg-muted mt-1 leading-relaxed">{subtitle}</p>
+                  )}
+                </div>
               </div>
+              {!hideClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close dialog"
+                  className={cn(
+                    "rounded text-fg-muted transition-colors duration-150 hover:text-fg",
+                    focusRing,
+                  )}
+                >
+                  <RiCloseLine size={20} />
+                </button>
+              )}
             </div>
-            {!hideClose && (
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close dialog"
-                className={cn(
-                  "rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
-                  focusRing,
-                )}
-              >
-                <RiCloseLine size={20} />
-              </button>
-            )}
-          </div>
-        )}
+          )}
 
-        {!title && !icon && !hideClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close dialog"
-            className={cn(
-              "absolute right-4 top-4 z-10 rounded-sm text-fg-muted transition-colors duration-150 hover:text-fg",
-              focusRing,
-            )}
-          >
-            <RiCloseLine size={20} />
-          </button>
-        )}
+          {!title && !icon && !hideClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close dialog"
+              className={cn(
+                "absolute right-4 top-4 z-10 rounded text-fg-muted transition-colors duration-150 hover:text-fg",
+                focusRing,
+              )}
+            >
+              <RiCloseLine size={20} />
+            </button>
+          )}
 
-        <div className="px-6 pb-6">{children}</div>
+          <div className="px-6 pb-6">{children}</div>
+        </div>
+        {outerContent}
       </div>
     </div>
   )

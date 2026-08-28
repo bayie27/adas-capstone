@@ -154,7 +154,7 @@ export default function Login() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-canvas p-8">
-      <div className="w-full max-w-[400px] rounded-xl border border-stroke bg-surface-1 p-8 shadow-overlay">
+      <div className="w-full max-w-[400px] rounded-lg border border-stroke bg-surface-1 p-8 shadow-overlay">
         <div className="mb-8 flex flex-col items-center">
           <div className="mb-4 flex w-24 items-center justify-center">
             <img

@@ -53,7 +53,7 @@ export function BarChartCard({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-xl border border-stroke bg-surface-1 p-5 shadow-sm",
+        "flex flex-col rounded-lg border border-stroke bg-surface-1 p-5 shadow-sm",
         className,
       )}
       style={{ height }}

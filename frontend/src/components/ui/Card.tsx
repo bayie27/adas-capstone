@@ -24,7 +24,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-xl border border-stroke shadow-sm",
+        "rounded-lg border border-stroke shadow-sm",
         elevated ? "bg-surface-2" : "bg-surface-1",
         padded && "p-5",
         className,

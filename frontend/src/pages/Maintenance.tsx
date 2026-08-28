@@ -316,7 +316,7 @@ export default function Maintenance() {
         />
       ) : null}
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stroke bg-surface-1 px-4 py-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-stroke bg-surface-1 px-4 py-3">
         <div>
           <h2 className="text-sm font-semibold text-fg">Automatic restore service</h2>
           <p className="mt-1 text-caption text-fg-muted">
@@ -372,7 +372,7 @@ export default function Maintenance() {
       </TableContainer>
 
       {latestRestore ? (
-        <div className="mt-6 rounded-xl border border-stroke bg-surface-1 p-5">
+        <div className="mt-6 rounded-lg border border-stroke bg-surface-1 p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-fg">Restore Status</h2>
