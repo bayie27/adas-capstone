@@ -86,6 +86,13 @@ export function IncidentDetailModal({
   // the row above it. `closed_at` is a distinct field from `verified_at`.
   const closedTimeLabel = alert?.detection_status === "Resolved" ? "TIME RESOLVED" : "TIME CLOSED"
 
+  const statusBorderClass =
+    alert?.detection_status === "Ongoing"
+      ? "border-t-warning"
+      : alert?.detection_status === "Resolved"
+        ? "border-t-success"
+        : "border-t-stroke-strong"
+
   return (
     <Modal
       isOpen={isOpen}
@@ -93,7 +100,7 @@ export function IncidentDetailModal({
       hideClose
       overlayClassName={cn("z-[9500]", overlayClassName)}
       className={cn(
-        "w-full max-w-[1060px] overflow-hidden p-0 rounded-none sm:rounded-lg border-0",
+        "w-full max-w-[1108px] overflow-hidden p-0 rounded-none sm:rounded-lg border-0",
       )}
     >
       <div className="-mx-6 -mb-6 flex flex-col">
@@ -116,32 +123,25 @@ export function IncidentDetailModal({
             </button>
           </div>
         ) : (
-          <div className="flex h-[55px] items-center justify-between border-b border-stroke bg-surface-2 px-6">
-            <div className="flex items-center gap-3">
-              <p className="font-sans text-base font-bold uppercase tracking-widest text-fg">
-                {alert ? formatAlertCode(alert.log_id) : "Accident Details"}
-              </p>
-              {alert ? (
-                <span
-                  className={cn(
-                    "rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase",
-                    getAlertBadgeClass(alert.detection_status),
-                  )}
-                >
-                  {alert.detection_status}
-                </span>
-              ) : null}
-            </div>
+          <div
+            className={cn(
+              "flex h-[60px] items-center justify-between border-t-4 bg-surface-1 px-6",
+              statusBorderClass,
+            )}
+          >
+            <h2 className="font-sans text-[21px] font-bold uppercase leading-[36px] tracking-wide text-fg-body">
+              Accident Details
+            </h2>
             <button
               type="button"
               onClick={onClose}
               aria-label="Close incident details"
               className={cn(
-                "rounded text-fg-muted transition-colors duration-150 hover:text-fg",
+                "rounded p-1 text-fg-muted transition-colors duration-150 hover:text-fg",
                 focusRing,
               )}
             >
-              <RiCloseLine size={20} />
+              <RiCloseLine size={24} />
             </button>
           </div>
         )}
@@ -149,7 +149,7 @@ export function IncidentDetailModal({
         {/* ── Section 2: Split Body Layout (Snapshot Image + Telemetry Panel) ── */}
         <div className="flex w-full flex-col items-stretch overflow-hidden md:flex-row">
           {/* Left Column: Snapshot Image Preview */}
-          <div className="flex min-h-[260px] w-full shrink-0 items-center justify-center overflow-hidden bg-canvas md:h-[370px] md:w-[560px] lg:w-[620px]">
+          <div className="flex min-h-[260px] w-full shrink-0 items-center justify-center overflow-hidden bg-canvas md:h-[370px] md:w-[560px] lg:w-[658px]">
             {alert ? (
               <SnapshotImage
                 snapshotUrl={alert.snapshot_url}
@@ -166,83 +166,110 @@ export function IncidentDetailModal({
           <div className="relative flex flex-1 flex-col justify-between bg-surface-2 min-w-0 sm:min-w-[380px]">
             {alert ? (
               <>
-                <div className="custom-scrollbar flex flex-1 flex-col justify-center gap-4 overflow-y-auto p-6">
-                  {/* Telemetry fields */}
-                  <div className="flex flex-col items-start justify-start">
-                    <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
-                      TIMESTAMP
-                    </span>
-                    <span className="tabular-nums text-[16px] font-semibold leading-[32px] text-fg">
-                      {formatFullDateTime(alert.detected_at)}
-                      {isDelayed && alert.detection_status === "Unverified" ? (
-                        <span className="ml-2 inline-block text-[10px] font-medium text-warning">
-                          ({formatDuration(ageSeconds)} ago — delayed)
-                        </span>
-                      ) : null}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col items-start justify-start">
-                    <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
-                      CAMERA NAME
-                    </span>
-                    <span className="max-w-full truncate text-[16px] font-semibold uppercase leading-[32px] text-fg">
-                      {alert.camera_name ?? `Camera ${alert.camera_id}`}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col items-start justify-start">
-                    <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
-                      AI-CONFIDENCE SCORE
+                <div className="custom-scrollbar flex flex-1 flex-col justify-between gap-4 overflow-y-auto p-6">
+                  {/* Top Row: Accident ID + Status Badge */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-sans text-[28px] font-medium leading-8 text-fg-body">
+                      {formatAlertCode(alert.log_id)}
                     </span>
                     <span
                       className={cn(
-                        "tabular-nums text-[16px] font-semibold leading-[32px]",
-                        alert.confidence_score * 100 < 75 ? "text-danger" : "text-fg",
+                        "rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide",
+                        alert.detection_status === "Ongoing"
+                          ? "bg-warning text-canvas"
+                          : getAlertBadgeClass(alert.detection_status),
                       )}
                     >
-                      {formatAlertConfidence(alert.confidence_score)}
+                      {alert.detection_status}
                     </span>
                   </div>
 
-                  {alert.detection_status !== "Unverified" && (
-                    <div className="border-t border-border pt-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-[11px] font-normal uppercase tracking-wider text-fg-muted">
-                            Verified By
-                          </p>
-                          <p className="mt-0.5 text-xs text-fg">{alert.verified_by_name ?? "—"}</p>
+                  {/* Telemetry rows: horizontal key-value alignment */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                        TIMESTAMP
+                      </span>
+                      <span className="text-right tabular-nums text-[18px] sm:text-[19px] font-medium leading-8 text-white">
+                        {formatFullDateTime(alert.detected_at)}
+                        {isDelayed && alert.detection_status === "Unverified" ? (
+                          <span className="ml-2 inline-block text-[10px] font-medium text-warning">
+                            ({formatDuration(ageSeconds)} ago — delayed)
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                        CAMERA NAME
+                      </span>
+                      <span className="max-w-[65%] truncate text-right text-[18px] sm:text-[19px] font-medium uppercase leading-8 text-white">
+                        {alert.camera_name ?? `Camera ${alert.camera_id}`}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                        AI-CONFIDENCE SCORE
+                      </span>
+                      <span
+                        className={cn(
+                          "text-right tabular-nums text-[18px] sm:text-[19px] font-medium leading-8",
+                          alert.confidence_score * 100 < 75 ? "text-danger" : "text-white",
+                        )}
+                      >
+                        {formatAlertConfidence(alert.confidence_score)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-stroke-strong" />
+
+                  {/* Lower metadata: Verified By & Time Verified (or Closed info) */}
+                  {alert.detection_status !== "Unverified" ? (
+                    <div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col items-start">
+                          <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                            VERIFIED BY
+                          </span>
+                          <span className="max-w-full truncate text-[14px] font-medium leading-7 text-white">
+                            {alert.verified_by_name ?? "—"}
+                          </span>
                         </div>
-                        <div>
-                          <p className="text-[11px] font-normal uppercase tracking-wider text-fg-muted">
-                            Time Verified
-                          </p>
-                          <p className="mt-0.5 text-xs tabular-nums text-fg">
+                        <div className="flex flex-col items-start">
+                          <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                            TIME VERIFIED
+                          </span>
+                          <span className="max-w-full truncate tabular-nums text-[14px] font-medium leading-7 text-fg-body">
                             {formatFullDateTime(alert.verified_at)}
-                          </p>
+                          </span>
                         </div>
                       </div>
                       {isTerminal && (
-                        <div className="mt-2.5 grid grid-cols-2 gap-3">
-                          <div>
-                            <p className="text-[11px] font-normal uppercase tracking-wider text-fg-muted">
-                              Closed By
-                            </p>
-                            <p className="mt-0.5 text-xs text-fg">{alert.closed_by_name ?? "—"}</p>
+                        <div className="mt-3 grid grid-cols-2 gap-4">
+                          <div className="flex flex-col items-start">
+                            <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                              CLOSED BY
+                            </span>
+                            <span className="max-w-full truncate text-[14px] font-medium leading-7 text-white">
+                              {alert.closed_by_name ?? "—"}
+                            </span>
                           </div>
-                          <div>
-                            <p className="text-[11px] font-normal uppercase tracking-wider text-fg-muted">
+                          <div className="flex flex-col items-start">
+                            <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
                               {closedTimeLabel}
-                            </p>
-                            <p className="mt-0.5 text-xs tabular-nums text-fg">
+                            </span>
+                            <span className="max-w-full truncate tabular-nums text-[14px] font-medium leading-7 text-fg-body">
                               {formatFullDateTime(alert.closed_at)}
-                            </p>
+                            </span>
                           </div>
                         </div>
                       )}
                     </div>
-                  )}
+                  ) : null}
 
                   {notice ? <div className="pt-2">{notice}</div> : null}
                 </div>
