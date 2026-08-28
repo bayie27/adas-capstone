@@ -23,6 +23,18 @@ Intelligent Real-Time Road Accident Detection & Alert System. Three components: 
 
 Script reference, migration workflow, and CI jobs: [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Live Google Drive resources
+
+These are the team's shared, live artifacts. Treat them separately from local repository files
+and verify their current state before relying on or changing them.
+
+| Resource | Link |
+| --- | --- |
+| Capstone defense document | [Group 7 Defense Document](https://docs.google.com/document/d/1MkTrdBPrrXpw8JGC4xrS475wbF7Yn-9YCaXIN-xd0aw/edit) |
+| Test Execution and Validation Plan | [Capstone Test Execution and Validation](https://docs.google.com/document/d/1EAoDetxkq6a3gzihU4iqp8pEXm4LcXfxmb8p5bCnBow/edit) |
+| Test execution tracker | [ADAS Test Execution Tracker](https://docs.google.com/spreadsheets/d/1wrr6akHvGcUNteplcniixBsDg5Zb1K_YWZX6TfZF4ZY/edit) |
+| Test evidence library | [ADAS Test Evidence](https://drive.google.com/drive/folders/1oqXolcjA7Aeu_hTSbg7aH7-UX_gbc8a2) |
+
 ## Gotchas
 
 - **Run everything from the repo root.** The FastAPI CLI injects `backend/` into `sys.path` itself (no `backend/__init__.py`); `ai_engine` is not a package and uses flat `from config import ...` imports that rely on `ai_engine/` being the running script's own directory.
