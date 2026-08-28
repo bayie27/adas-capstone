@@ -223,7 +223,7 @@ export function GlobalAlerts() {
       // incident modal open must land on top of it, not behind it.
       overlayClassName="z-9999"
       backdropClassName="bg-backdrop-alert"
-      className="w-full max-w-[600px] overflow-hidden p-0"
+      className="w-full max-w-[1000px] overflow-hidden p-0 rounded-none sm:rounded-lg border-0"
       noEntrance
       outerContent={
         hasMultiple ? (
@@ -285,7 +285,7 @@ export function GlobalAlerts() {
         key={alert.log_id}
         onAnimationEnd={() => setSlideTransition(null)}
         className={cn(
-          "-mx-6 -mb-6",
+          "-mx-6 -mb-6 flex flex-col",
           slideTransition?.id === alert.log_id &&
             slideTransition.direction === "next" &&
             "animate-alert-slide-right",
@@ -295,128 +295,124 @@ export function GlobalAlerts() {
         )}
       >
         {/* ── Section 1: Header ─────────────────────────────────────────────
-              Edge-to-edge solid background header enforcing urgency.
-              Navigation chrome (arrows + breadcrumb) is rendered outside the
-              modal as fixed-position overlays — the header is always a plain
-              centered title regardless of queue length. */}
-        <div className="w-full bg-danger px-6 py-4">
-          <h2 className="text-center text-xl sm:text-2xl font-bold uppercase tracking-widest text-black">
+            Edge-to-edge solid background header enforcing urgency.
+            Text: ACCIDENT DETECTED, font size 24px, weight 700, line-height 36px, color #252529 */}
+        <div className="w-full h-[55px] bg-danger px-6 sm:px-[34px] flex items-center justify-center">
+          <h2 className="text-center text-[24px] font-bold font-sans uppercase leading-[36px] tracking-wide text-surface-3">
             Accident Detected
           </h2>
         </div>
 
-        {/* ── Core Telemetry Section Wrapper ──────────────────────────────
-              Relative positioning anchors the absolutely positioned Snooze button. */}
-        <div className="relative">
-          {/* Snooze Button placed top right in the telemetry section. Disabled once snoozed until expiry. */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "absolute right-4 top-4 z-10 rounded text-fg-muted hover:bg-surface-2 hover:text-fg",
-              isSnoozed &&
-                "cursor-not-allowed text-warning opacity-80 hover:bg-transparent hover:text-warning",
-            )}
-            title={isSnoozed ? "Alarm snoozed" : "Snooze Alarm"}
-            aria-label={isSnoozed ? "Alarm snoozed" : "Snooze alarm"}
-            disabled={busy || isSnoozed}
-            onClick={handleSnooze}
-          >
-            {isSnoozed ? <RiNotificationOffLine size={20} /> : <RiNotification2Line size={20} />}
-          </Button>
-
-          {/* ── Section 2a: Snapshot image ────────────────────────────────── */}
-          <div className="flex min-h-[220px] items-center justify-center bg-surface-3 p-6">
+        {/* ── Section 2: Split Body Layout (Snapshot Image + Telemetry Panel) ── */}
+        <div className="flex flex-col md:flex-row items-stretch w-full overflow-hidden">
+          {/* Left Column: Snapshot Image Preview */}
+          <div className="w-full md:w-[580px] lg:w-[658px] min-h-[260px] md:h-[370px] bg-canvas flex items-center justify-center overflow-hidden shrink-0">
             <SnapshotImage
               snapshotUrl={alert.snapshot_url}
               alt={`Accident snapshot for log ${alert.log_id}`}
-              className="max-h-56 w-auto rounded border border-stroke object-contain"
-              fallbackClassName="h-44 w-full rounded"
+              className="w-full h-full object-cover"
+              fallbackClassName="h-full w-full rounded-none"
             />
           </div>
 
-          {/* ── Section 3: Core Telemetry ─────────────────────────────────── */}
-          <div className="space-y-3.5 bg-surface-1 px-6 py-4 sm:py-5">
-            <div className="flex items-start justify-between gap-4">
-              <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                Timestamp
-              </span>
-              <span className="text-right text-sm tabular-nums text-fg">
-                {formatFullDateTime(alert.detected_at)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                Camera Name
-              </span>
-              <span className="text-sm font-bold uppercase text-fg">
-                {alert.camera_name ?? `Camera ${alert.camera_id}`}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                AI-Confidence Score
-              </span>
-              {/*
-                Red (danger) when the AI confidence is below 75 % — a low score means the
-                detection is less certain and warrants closer operator scrutiny.
-                White (text-fg) at 75 % and above signals a high-confidence event.
-              */}
-              <span
-                className={cn(
-                  "text-sm font-bold tabular-nums",
-                  alert.confidence_score * 100 < 75 ? "text-danger" : "text-fg",
-                )}
-              >
-                {formatAlertConfidence(alert.confidence_score)}
-              </span>
-            </div>
-          </div>
+          {/* Right Column: Telemetry & Actions */}
+          <div className="flex-1 flex flex-col justify-between bg-stroke min-w-0 relative">
+            {/* Snooze Button placed top right in the telemetry section. Disabled once snoozed until expiry. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "absolute right-4 top-4 z-10 rounded text-fg-muted hover:bg-surface-2 hover:text-fg",
+                isSnoozed &&
+                  "cursor-not-allowed text-warning opacity-80 hover:bg-transparent hover:text-warning",
+              )}
+              title={isSnoozed ? "Alarm snoozed" : "Snooze Alarm"}
+              aria-label={isSnoozed ? "Alarm snoozed" : "Snooze alarm"}
+              disabled={busy || isSnoozed}
+              onClick={handleSnooze}
+            >
+              {isSnoozed ? <RiNotificationOffLine size={20} /> : <RiNotification2Line size={20} />}
+            </Button>
 
-          {conflict ? (
-            <div className="bg-surface-1 px-6 pb-1 pt-1">
-              <IncidentHandledNotice info={conflict} />
+            {/* Telemetry metadata list */}
+            <div className="p-6 flex flex-col justify-center gap-6 flex-1">
+              <div className="flex flex-col justify-start items-start">
+                <span className="text-[12px] font-normal leading-[21px] uppercase tracking-wider text-fg-muted">
+                  TIMESTAMP
+                </span>
+                <span className="text-[16px] font-semibold leading-[32px] tabular-nums text-fg">
+                  {formatFullDateTime(alert.detected_at)}
+                </span>
+              </div>
+
+              <div className="flex flex-col justify-start items-start">
+                <span className="text-[12px] font-normal leading-[21px] uppercase tracking-wider text-fg-muted">
+                  CAMERA NAME
+                </span>
+                <span className="text-[16px] font-semibold leading-[32px] uppercase text-fg truncate max-w-full">
+                  {alert.camera_name ?? `Camera ${alert.camera_id}`}
+                </span>
+              </div>
+
+              <div className="flex flex-col justify-start items-start">
+                <span className="text-[12px] font-normal leading-[21px] uppercase tracking-wider text-fg-muted">
+                  AI-CONFIDENCE SCORE
+                </span>
+                <span
+                  className={cn(
+                    "text-[16px] font-semibold leading-[32px] tabular-nums",
+                    alert.confidence_score * 100 < 75 ? "text-danger" : "text-fg",
+                  )}
+                >
+                  {formatAlertConfidence(alert.confidence_score)}
+                </span>
+              </div>
+
+              {conflict ? (
+                <div className="pt-2">
+                  <IncidentHandledNotice info={conflict} />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 w-full"
+                    onClick={() => {
+                      setConflict(null)
+                      removeAlert(alert.log_id)
+                    }}
+                  >
+                    Dismiss this notice
+                  </Button>
+                </div>
+              ) : null}
+
+              {error ? (
+                <div className="pt-2">
+                  <p className="rounded border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
+                    {error}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            {/* ── Section 3: Footer Action Buttons ────────────────────────── */}
+            <div className="w-full bg-surface-1 px-6 py-3 flex items-center gap-4">
               <Button
-                variant="outline"
-                size="sm"
-                className="mb-3 w-full"
-                onClick={() => {
-                  setConflict(null)
-                  removeAlert(alert.log_id)
-                }}
+                variant="secondary"
+                className="flex-1 h-[44px] px-4 py-2 bg-border hover:bg-surface-2 text-fg text-[14px] font-medium leading-[20px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
+                disabled={busy}
+                onClick={() => runAction(dismissAlert, "Failed to dismiss alert.")}
               >
-                Dismiss this notice
+                {busy ? "…" : "Dismiss Accident"}
+              </Button>
+              <Button
+                className="flex-1 h-[44px] px-4 py-2 bg-fg-body hover:bg-fg text-surface-2 text-[14px] font-medium leading-[28px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
+                disabled={busy}
+                onClick={() => runAction(confirmAlert, "Failed to confirm alert.")}
+              >
+                {busy ? "…" : "Confirm Accident"}
               </Button>
             </div>
-          ) : null}
-
-          {error ? (
-            <div className="bg-surface-1 px-6 pb-3">
-              <p className="rounded border border-danger-border bg-danger-subtle px-3 py-2 text-xs text-danger">
-                {error}
-              </p>
-            </div>
-          ) : null}
-        </div>
-
-        {/* ── Section 5: Footer Action Buttons ──────────────────────────────
-            Full-width flex row with equal-width buttons (flex-1). */}
-        <div className="flex w-full items-center gap-3.5 border-t border-stroke bg-surface-1 p-4 sm:p-5">
-          <Button
-            variant="secondary"
-            className="flex-1 whitespace-nowrap rounded bg-surface-3 py-3 text-xs sm:text-sm font-medium uppercase tracking-wider text-fg hover:bg-surface-2"
-            disabled={busy}
-            onClick={() => runAction(dismissAlert, "Failed to dismiss alert.")}
-          >
-            {busy ? "…" : "Dismiss Accident"}
-          </Button>
-          <Button
-            className="flex-1 whitespace-nowrap rounded bg-primary py-3 text-xs sm:text-sm font-medium uppercase tracking-wider text-fg-on-primary hover:bg-primary-hover"
-            disabled={busy}
-            onClick={() => runAction(confirmAlert, "Failed to confirm alert.")}
-          >
-            {busy ? "…" : "Confirm Accident"}
-          </Button>
+          </div>
         </div>
       </div>
     </Modal>
