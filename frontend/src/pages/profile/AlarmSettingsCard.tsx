@@ -9,7 +9,11 @@ import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { getAlarmSettings, updateAlarmSettings } from "@/api/settings"
 import type { AlarmSettings } from "@/api/settings"
 import { getApiErrorMessage } from "@/api/client"
-import { previewDetectionSound, setDetectionSoundVolume } from "@/utils/detectionSound"
+import {
+  previewDetectionSound,
+  setDetectionSound,
+  setDetectionSoundVolume,
+} from "@/utils/detectionSound"
 import { toast } from "@/store/useToastStore"
 import { cn } from "@/utils/cn"
 
@@ -45,13 +49,12 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
 
   // Seed the editable form once, the moment the fetch resolves — same
   // pattern ProfileSettings uses for its own form, so a background refetch
-  // can't stomp on an in-progress edit. Also the first point this session
-  // learns the actor's real saved volume, so the alarm — hardcoded to the
-  // browser default until now — picks it up here.
+  // can't stomp on an in-progress edit. Also syncs the alarm sound and
+  // volume to the detection sound engine.
   if (settingsQuery.data && !form) {
     setForm(settingsQuery.data)
     setSnoozeInput(String(settingsQuery.data.snooze_duration))
-    setDetectionSoundVolume(settingsQuery.data.volume)
+    setDetectionSound(settingsQuery.data.alarm_sound, settingsQuery.data.volume)
   }
 
   const mutation = useMutation({
@@ -62,7 +65,7 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
       queryClient.setQueryData(ALARM_SETTINGS_QUERY_KEY, updated)
       setForm(updated)
       setSnoozeInput(String(updated.snooze_duration))
-      setDetectionSoundVolume(updated.volume)
+      setDetectionSound(updated.alarm_sound, updated.volume)
       setValidationError(null)
       toast.success("Alarm settings saved.")
     },
@@ -158,15 +161,7 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
               }))}
               onChange={(value) => {
                 updateField("alarm_sound", value)
-                // "Selecting a sound immediately previews it" -- reuses the
-                // same preview path the Test button already calls. There is
-                // only one real audio asset in this codebase today
-                // (detection_sound.mp3); every alarm_sound_keys entry plays
-                // it, since inventing per-sound audio files the backend
-                // doesn't back would be exactly the fabrication this task
-                // rules out. The picker itself is real; the preview is
-                // honest about there being one sound behind it so far.
-                if (form.volume > 0) previewDetectionSound(form.volume)
+                if (form.volume > 0) previewDetectionSound(value, form.volume)
               }}
               disabled={mutation.isPending}
               className="w-full"
@@ -184,7 +179,7 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
                 variant="outline"
                 size="sm"
                 disabled={form.volume === 0}
-                onClick={() => previewDetectionSound(form.volume)}
+                onClick={() => previewDetectionSound(form.alarm_sound, form.volume)}
               >
                 Test
               </Button>
@@ -195,7 +190,11 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
               max={100}
               value={form.volume}
               disabled={mutation.isPending}
-              onChange={(event) => updateField("volume", Number(event.target.value))}
+              onChange={(event) => {
+                const vol = Number(event.target.value)
+                updateField("volume", vol)
+                setDetectionSoundVolume(vol)
+              }}
               className="w-full disabled:cursor-not-allowed disabled:opacity-60"
             />
             {form.volume === 0 ? (

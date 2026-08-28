@@ -78,7 +78,12 @@ class Settings(BaseSettings):
     DSS_PASS: SecretStr | None = None
 
     # Alarm settings (D-004)
-    ALARM_SOUND_KEYS: Annotated[list[str], NoDecode] = ["default"]
+    ALARM_SOUND_KEYS: Annotated[list[str], NoDecode] = [
+        "default",
+        "buzzer",
+        "eas_siren",
+        "digital_alarm",
+    ]
     SNOOZE_MIN_SECONDS: int = 15
     SNOOZE_MAX_SECONDS: int = 60
     DISMISS_COOLDOWN_SECONDS: int = 60

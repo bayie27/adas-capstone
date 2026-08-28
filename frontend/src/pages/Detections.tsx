@@ -52,6 +52,7 @@ import {
 } from "@/utils/format"
 import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
+import { cn } from "@/utils/cn"
 import { RiEyeLine } from "@remixicon/react"
 
 // Starting page size. PAGE_SIZE_OPTIONS in PaginationFooter is
@@ -603,7 +604,12 @@ export default function Detections() {
                     {formatFullDateTime(item.detected_at)}
                   </TableCell>
                   <TableCell>{item.camera_name ?? "Unknown Camera"}</TableCell>
-                  <TableCell className="tabular-nums">
+                  <TableCell
+                    className={cn(
+                      "tabular-nums font-medium",
+                      item.confidence_score * 100 < 75 ? "text-danger" : "text-fg",
+                    )}
+                  >
                     {formatAlertConfidence(item.confidence_score)}
                   </TableCell>
                   <TableCell>

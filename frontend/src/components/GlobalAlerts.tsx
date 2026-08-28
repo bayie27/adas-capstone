@@ -358,14 +358,14 @@ export function GlobalAlerts() {
                 AI-Confidence Score
               </span>
               {/*
-                Red when the AI confidence is below 75 % — a low score means the
+                Red (danger) when the AI confidence is below 75 % — a low score means the
                 detection is less certain and warrants closer operator scrutiny.
-                Green (success) at 75 % and above signals a high-confidence event.
+                White (text-fg) at 75 % and above signals a high-confidence event.
               */}
               <span
                 className={cn(
                   "text-sm font-bold tabular-nums",
-                  alert.confidence_score * 100 < 75 ? "text-danger" : "text-success",
+                  alert.confidence_score * 100 < 75 ? "text-danger" : "text-fg",
                 )}
               >
                 {formatAlertConfidence(alert.confidence_score)}
