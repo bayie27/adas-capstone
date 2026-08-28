@@ -190,7 +190,7 @@ export function IncidentDetailModal({
                       <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
                         TIMESTAMP
                       </span>
-                      <span className="text-right tabular-nums text-[18px] sm:text-[19px] font-medium leading-8 text-white">
+                      <span className="text-right tabular-nums text-[16px] font-medium leading-8 text-white">
                         {formatFullDateTime(alert.detected_at)}
                         {isDelayed && alert.detection_status === "Unverified" ? (
                           <span className="ml-2 inline-block text-[10px] font-medium text-warning">
@@ -204,7 +204,7 @@ export function IncidentDetailModal({
                       <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
                         CAMERA NAME
                       </span>
-                      <span className="max-w-[65%] truncate text-right text-[18px] sm:text-[19px] font-medium uppercase leading-8 text-white">
+                      <span className="max-w-[65%] truncate text-right text-[16px] font-medium uppercase leading-8 text-white">
                         {alert.camera_name ?? `Camera ${alert.camera_id}`}
                       </span>
                     </div>
@@ -215,7 +215,7 @@ export function IncidentDetailModal({
                       </span>
                       <span
                         className={cn(
-                          "text-right tabular-nums text-[18px] sm:text-[19px] font-medium leading-8",
+                          "text-right tabular-nums text-[16px] font-medium leading-8",
                           alert.confidence_score * 100 < 75 ? "text-danger" : "text-white",
                         )}
                       >
