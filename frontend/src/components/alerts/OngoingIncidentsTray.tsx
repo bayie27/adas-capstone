@@ -118,12 +118,12 @@ function OngoingIncidentCard({
         </Button>
       </div>
 
-      {/* Glowing yellow bottom animation line */}
+      {/* Solid yellow bottom breathing animation line */}
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] overflow-hidden"
         aria-hidden="true"
       >
-        <div className="h-full w-full bg-gradient-to-r from-transparent via-warning to-transparent opacity-75 animate-pulse" />
+        <div className="h-full w-full bg-warning opacity-80 animate-pulse" />
       </div>
     </div>
   )
