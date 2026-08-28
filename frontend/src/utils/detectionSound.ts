@@ -1,9 +1,49 @@
 // Global singleton for the alarm sound so it can be controlled from anywhere.
 // Ownership lives with the alert store (which knows whether an active alert
 // exists), not the WebSocket transport.
-const detectionAudio = typeof Audio !== "undefined" ? new Audio("/detection_sound.mp3") : null
+
+export const SOUND_MAP: Record<string, string> = {
+  default: "/detection_sound.mp3",
+  buzzer: "/buzzer.mp3",
+  eas_siren: "/eas_siren.mp3",
+  digital_alarm: "/digital_alarm.mp3",
+}
+
+export const getSoundUrl = (key?: string): string => {
+  if (key && SOUND_MAP[key]) {
+    return SOUND_MAP[key]
+  }
+  return SOUND_MAP.default
+}
+
+let activeSoundKey = "default"
+let activeVolume = 80
+let previewAudio: HTMLAudioElement | null = null
+
+const detectionAudio = typeof Audio !== "undefined" ? new Audio(getSoundUrl(activeSoundKey)) : null
 if (detectionAudio) {
   detectionAudio.loop = true
+}
+
+export const setDetectionSound = (soundKey: string, volume?: number) => {
+  activeSoundKey = soundKey
+  if (detectionAudio) {
+    const nextUrl = getSoundUrl(soundKey)
+    if (!detectionAudio.src.endsWith(nextUrl)) {
+      const isPlaying = !detectionAudio.paused
+      detectionAudio.src = nextUrl
+      if (isPlaying) {
+        detectionAudio.play()?.catch(() => {})
+      }
+    }
+  }
+  if (volume !== undefined) {
+    setDetectionSoundVolume(volume)
+  }
+}
+
+export const setDetectionSoundKey = (soundKey: string) => {
+  setDetectionSound(soundKey)
 }
 
 export const playDetectionSound = () => {
@@ -28,20 +68,45 @@ export const stopDetectionSound = () => {
  * again after every successful save.
  */
 export const setDetectionSoundVolume = (volume: number) => {
+  activeVolume = Math.min(100, Math.max(0, volume))
   if (!detectionAudio) return
-  detectionAudio.volume = Math.min(100, Math.max(0, volume)) / 100
+  detectionAudio.volume = activeVolume / 100
 }
 
 /**
- * A one-shot, unlooped preview at a given volume — for the settings card's
- * "hear it now" affordance, distinct from the looped alarm instance so
- * previewing a volume never starts or stops a live alarm.
+ * A one-shot, unlooped preview at a given sound key and volume — for the
+ * settings card's "hear it now" affordance, distinct from the looped alarm
+ * instance so previewing a volume never starts or stops a live alarm.
+ * Stops any previously running preview so rapid clicks don't overlap audio.
  */
-export const previewDetectionSound = (volume: number) => {
+export const previewDetectionSound = (
+  soundKeyOrVolume: string | number = "default",
+  volume?: number,
+) => {
   if (typeof Audio === "undefined") return
-  const preview = new Audio("/detection_sound.mp3")
-  preview.volume = Math.min(100, Math.max(0, volume)) / 100
-  preview.play()?.catch((err) => {
+
+  let soundKey = activeSoundKey
+  let resolvedVolume = activeVolume
+
+  if (typeof soundKeyOrVolume === "number") {
+    resolvedVolume = soundKeyOrVolume
+  } else {
+    soundKey = soundKeyOrVolume
+    if (typeof volume === "number") {
+      resolvedVolume = volume
+    }
+  }
+
+  if (resolvedVolume <= 0) return
+
+  if (previewAudio) {
+    previewAudio.pause()
+    previewAudio.currentTime = 0
+  }
+
+  previewAudio = new Audio(getSoundUrl(soundKey))
+  previewAudio.volume = Math.min(100, Math.max(0, resolvedVolume)) / 100
+  previewAudio.play()?.catch((err) => {
     console.warn("[detectionSound] Preview blocked or failed:", err)
   })
 }
