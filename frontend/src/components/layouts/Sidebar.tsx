@@ -7,10 +7,10 @@ import { formatUserRole, getUserInitials } from "@/utils/format"
 import { formatDuration } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
 import { focusRing } from "@/components/ui/Button"
+import type { SVGProps, ComponentType } from "react"
 import {
   RiAlertLine,
   RiCameraLine,
-  RiDashboardLine,
   RiFileHistoryLine,
   RiFullscreenLine,
   RiGroupLine,
@@ -22,6 +22,30 @@ import {
   RiUserSettingsLine,
   RiWrenchLine,
 } from "@remixicon/react"
+
+/**
+ * Dashboard icon with exact 0px corner radius on all 4 rectangular shapes.
+ */
+function RiDashboardSharpLine({
+  size = 24,
+  color = "currentColor",
+  className = "",
+  ...props
+}: SVGProps<SVGSVGElement> & { size?: number | string; color?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      fill={color}
+      className={`remixicon ${className}`}
+      {...props}
+    >
+      <path d="M3 3H11V13H3V3ZM5 5V11H9V5H5ZM3 15H11V21H3V15ZM5 17V19H9V17H5ZM13 3H21V9H13V3ZM15 5V7H19V5H15ZM13 11H21V21H13V11ZM15 13V19H19V13H15Z" />
+    </svg>
+  )
+}
 
 /**
  * D-13: correct silently everywhere a relative time renders (useNow,
@@ -36,7 +60,7 @@ const CLOCK_SKEW_WARNING_MS = 60_000
 type NavLinkItem = {
   name: string
   to: string
-  icon: typeof RiDashboardLine
+  icon: ComponentType<{ size?: number | string; className?: string; color?: string }>
 }
 
 export function Sidebar() {
@@ -61,7 +85,7 @@ export function Sidebar() {
     {
       title: "OPERATIONS",
       links: [
-        { name: "Dashboard", to: basePath, icon: RiDashboardLine },
+        { name: "Dashboard", to: basePath, icon: RiDashboardSharpLine },
         { name: "Cameras", to: `${basePath}/cameras`, icon: RiCameraLine },
         { name: "Detections", to: `${basePath}/detections`, icon: RiFullscreenLine },
       ],
