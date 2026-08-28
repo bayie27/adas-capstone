@@ -109,7 +109,11 @@ class TestUpdateAlarmSettings:
         resp = client.put(
             "/api/settings/alarm",
             headers=headers,
-            json={"alarm_sound": "siren", "volume": 50, "snooze_duration": 30},
+            json={
+                "alarm_sound": "nonexistent_sound",
+                "volume": 50,
+                "snooze_duration": 30,
+            },
         )
         assert resp.status_code == 422
 
