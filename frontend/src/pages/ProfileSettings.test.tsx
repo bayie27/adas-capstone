@@ -28,6 +28,8 @@ vi.mock("@/api/settings", async () => {
         alarm_sound_keys: ["default", "chime"],
         snooze_min_seconds: 15,
         snooze_max_seconds: 60,
+        volume_min: 0,
+        volume_max: 100,
       },
     }),
     updateAlarmSettings: vi.fn(),
@@ -134,6 +136,8 @@ describe("ProfileSettings Page", () => {
         alarm_sound_keys: ["default", "chime"],
         snooze_min_seconds: 15,
         snooze_max_seconds: 60,
+        volume_min: 0,
+        volume_max: 100,
       },
     })
 
