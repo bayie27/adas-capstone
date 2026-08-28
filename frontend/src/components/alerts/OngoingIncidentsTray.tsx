@@ -94,9 +94,7 @@ function OngoingIncidentCard({
               <RiCameraLine size={12} className="shrink-0" />
               <span className="truncate">
                 AI Confidence:{" "}
-                <span
-                  className={cn("font-semibold", isHighConfidence ? "text-success" : "text-danger")}
-                >
+                <span className={cn("font-semibold", isHighConfidence ? "text-fg" : "text-danger")}>
                   {formatAlertConfidence(alert.confidence_score)}
                 </span>
               </span>

@@ -184,7 +184,7 @@ export function IncidentDetailModal({
                 <span
                   className={cn(
                     "text-sm font-bold",
-                    alert.confidence_score * 100 < 75 ? "text-danger" : "text-success",
+                    alert.confidence_score * 100 < 75 ? "text-danger" : "text-fg",
                   )}
                 >
                   {formatAlertConfidence(alert.confidence_score)}
