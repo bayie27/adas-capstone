@@ -306,11 +306,11 @@ export function GlobalAlerts() {
         {/* ── Section 2: Split Body Layout (Snapshot Image + Telemetry Panel) ── */}
         <div className="flex flex-col md:flex-row items-stretch w-full overflow-hidden">
           {/* Left Column: Snapshot Image Preview */}
-          <div className="w-full md:w-[560px] lg:w-[620px] min-h-[260px] md:h-[370px] bg-canvas flex items-center justify-center overflow-hidden shrink-0">
+          <div className="w-full md:w-[600px] lg:w-[658px] min-h-[260px] md:h-[370px] bg-canvas flex items-center justify-center overflow-hidden shrink-0">
             <SnapshotImage
               snapshotUrl={alert.snapshot_url}
               alt={`Accident snapshot for log ${alert.log_id}`}
-              className="w-full h-full object-contain bg-canvas"
+              className="w-full h-full object-cover"
               fallbackClassName="h-full w-full rounded-none"
             />
           </div>

@@ -155,14 +155,14 @@ export function IncidentDetailModal({
           <div
             className={cn(
               "flex min-h-[260px] w-full shrink-0 items-center justify-center overflow-hidden bg-canvas md:h-[370px]",
-              isUnverified ? "md:w-[560px] lg:w-[620px]" : "md:w-[540px] lg:w-[600px]",
+              isUnverified ? "md:w-[560px] lg:w-[658px]" : "md:w-[600px] lg:w-[658px]",
             )}
           >
             {alert ? (
               <SnapshotImage
                 snapshotUrl={alert.snapshot_url}
                 alt={`Accident snapshot for log ${alert.log_id}`}
-                className="h-full w-full object-contain bg-canvas"
+                className="h-full w-full object-cover"
                 fallbackClassName="h-full w-full rounded-none"
               />
             ) : (
