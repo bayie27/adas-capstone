@@ -10,10 +10,10 @@ import { focusRing } from "@/components/ui/Button"
 import {
   RiAlertLine,
   RiCameraLine,
+  RiDashboardLine,
   RiFileHistoryLine,
   RiFullscreenLine,
   RiGroupLine,
-  RiLayoutGridLine,
   RiLogoutBoxRLine,
   RiPulseLine,
   RiQuestionLine,
@@ -36,7 +36,7 @@ const CLOCK_SKEW_WARNING_MS = 60_000
 type NavLinkItem = {
   name: string
   to: string
-  icon: typeof RiLayoutGridLine
+  icon: typeof RiDashboardLine
 }
 
 export function Sidebar() {
@@ -61,7 +61,7 @@ export function Sidebar() {
     {
       title: "OPERATIONS",
       links: [
-        { name: "Dashboard", to: basePath, icon: RiLayoutGridLine },
+        { name: "Dashboard", to: basePath, icon: RiDashboardLine },
         { name: "Cameras", to: `${basePath}/cameras`, icon: RiCameraLine },
         { name: "Detections", to: `${basePath}/detections`, icon: RiFullscreenLine },
       ],
@@ -107,7 +107,7 @@ export function Sidebar() {
 
   // §2.8 — nav rest / hover / active, shared by the links and the two footer
   // buttons so the Help Center row cannot drift from the rows above it.
-  const navRow = "flex items-center gap-3 rounded px-3 py-2 transition-colors duration-150"
+  const navRow = "flex items-center gap-3 rounded-none px-3 py-2 transition-colors duration-150"
   const navInactive = "text-fg-muted hover:bg-surface-1 hover:text-fg-body"
   const navActive = "bg-surface-2 text-fg"
 
