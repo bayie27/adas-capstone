@@ -60,11 +60,15 @@ export function getAlertStatusTextClass(status: AlertStatus) {
 
 export function getAlertBadgeClass(status: AlertStatus) {
   if (status === "Ongoing") {
-    return "bg-warning text-fg-on-primary"
+    return "bg-warning text-canvas"
   }
 
   if (status === "Resolved") {
-    return "bg-success text-fg-on-primary"
+    return "bg-success text-canvas"
+  }
+
+  if (status === "Dismissed") {
+    return "bg-fg-muted text-canvas"
   }
 
   if (status === "Unverified") {

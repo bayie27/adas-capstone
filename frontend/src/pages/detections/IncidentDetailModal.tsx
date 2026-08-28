@@ -190,9 +190,7 @@ export function IncidentDetailModal({
                     <span
                       className={cn(
                         "rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide",
-                        alert.detection_status === "Ongoing"
-                          ? "bg-warning text-canvas"
-                          : getAlertBadgeClass(alert.detection_status),
+                        getAlertBadgeClass(alert.detection_status),
                       )}
                     >
                       {alert.detection_status}
