@@ -162,7 +162,7 @@ export function IncidentDetailModal({
               <SnapshotImage
                 snapshotUrl={alert.snapshot_url}
                 alt={`Accident snapshot for log ${alert.log_id}`}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-contain bg-canvas"
                 fallbackClassName="h-full w-full rounded-none"
               />
             ) : (

@@ -310,7 +310,7 @@ export function GlobalAlerts() {
             <SnapshotImage
               snapshotUrl={alert.snapshot_url}
               alt={`Accident snapshot for log ${alert.log_id}`}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain bg-canvas"
               fallbackClassName="h-full w-full rounded-none"
             />
           </div>
