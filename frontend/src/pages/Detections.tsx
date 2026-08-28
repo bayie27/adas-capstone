@@ -402,7 +402,7 @@ export default function Detections() {
     }
 
     return info
-  }, [selectedAlertId, handledByOther, selectedAlert?.detection_status])
+  }, [selectedAlertId, handledByOther, selectedAlert])
 
   const cameraOptions = [
     { value: "", label: "All cameras" },
