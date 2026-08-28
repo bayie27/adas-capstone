@@ -311,12 +311,15 @@ export default function Detections() {
   // The store's snoozedUntil map is the live truth — SNOOZE_ACTIVATED and
   // RE_ALARM update it directly without invalidating this table's REST
   // query, so a row's own snoozed_until field can be stale between
-  // refetches. Only tick the clock while something on the visible page is
-  // actually counting down.
-  const anyRowSnoozed = currentRows.some((row) => isSnoozedNow(row.log_id, snoozedUntilMap))
+  // refetches. Only tick the clock while an Unverified alert on the visible page is
+  // actually counting down (snooze does not apply to Ongoing or closed incidents).
+  const anyRowSnoozed = currentRows.some(
+    (row) => row.detection_status === "Unverified" && isSnoozedNow(row.log_id, snoozedUntilMap),
+  )
   const now = useNow(anyRowSnoozed, 1000)
 
   function describeSnoozedRow(row: AlertLog): string | null {
+    if (row.detection_status !== "Unverified") return null
     if (!isSnoozedNow(row.log_id, snoozedUntilMap)) return null
     // SNOOZE_ACTIVATED has carried a real display name since P21 Step 3, for
     // every role — no admin-only lookup needed when this tab actually saw

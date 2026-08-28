@@ -175,12 +175,32 @@ export const useAlertStore = create<AlertState>((set, get) => ({
       }
 
       // If the incident is Ongoing, it belongs in the active OngoingIncidentsTray;
-      // un-suppress it from handledIds if it was previously placed there by old session storage.
-      if (alert.detection_status === "Ongoing" && state.handledIds.has(alert.log_id)) {
-        const nextHandled = new Set(state.handledIds)
-        nextHandled.delete(alert.log_id)
-        writeHandledIds(nextHandled)
-      } else if (state.handledIds.has(alert.log_id)) {
+      // un-suppress it from handledIds if it was previously placed there by old session storage,
+      // and clear any previous snooze state because mute/snooze only applies to unverified alerts.
+      if (alert.detection_status === "Ongoing") {
+        cancelSnoozeTimer(alert.log_id)
+        if (state.handledIds.has(alert.log_id)) {
+          const nextHandled = new Set(state.handledIds)
+          nextHandled.delete(alert.log_id)
+          writeHandledIds(nextHandled)
+        }
+
+        const existingIndex = state.alerts.findIndex((a) => a.log_id === alert.log_id)
+        const nextAlerts = [...state.alerts]
+        if (existingIndex !== -1) {
+          nextAlerts[existingIndex] = alert
+        } else {
+          nextAlerts.unshift(alert)
+        }
+
+        return {
+          alerts: nextAlerts,
+          snoozedUntil: withoutSnooze(state.snoozedUntil, alert.log_id),
+          snoozedBy: withoutSnooze(state.snoozedBy, alert.log_id),
+        }
+      }
+
+      if (state.handledIds.has(alert.log_id)) {
         return state
       }
 
