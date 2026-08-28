@@ -30,10 +30,12 @@ vi.mock("@/api/settings", async () => {
         snooze_max_seconds: 60,
       },
     }),
+    updateAlarmSettings: vi.fn(),
   }
 })
 
 import { getMyProfile, updateMyProfile } from "@/api/users"
+import { updateAlarmSettings } from "@/api/settings"
 import { ToastContainer } from "@/components/ui/ToastContainer"
 import { toast } from "@/store/useToastStore"
 
@@ -119,5 +121,40 @@ describe("ProfileSettings Page", () => {
     await user.click(changePasswordButton)
 
     expect(screen.getByRole("heading", { name: "Change Password" })).toBeInTheDocument()
+  })
+
+  it("allows clearing and typing a new snooze duration without leading zero bug", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getMyProfile).mockResolvedValue(mockProfile)
+    vi.mocked(updateAlarmSettings).mockResolvedValue({
+      alarm_sound: "default",
+      volume: 80,
+      snooze_duration: 15,
+      options: {
+        alarm_sound_keys: ["default", "chime"],
+        snooze_min_seconds: 15,
+        snooze_max_seconds: 60,
+      },
+    })
+
+    renderProfileSettings()
+
+    const snoozeInput = await screen.findByLabelText("Snooze Duration (seconds)")
+    expect(snoozeInput).toHaveValue(30)
+
+    await user.clear(snoozeInput)
+    expect(snoozeInput).toHaveValue(null)
+
+    await user.type(snoozeInput, "15")
+    expect(snoozeInput).toHaveValue(15)
+
+    const saveAlarmButton = screen.getByRole("button", { name: "Save Alarm Settings" })
+    await user.click(saveAlarmButton)
+
+    expect(updateAlarmSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        snooze_duration: 15,
+      }),
+    )
   })
 })
