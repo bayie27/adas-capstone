@@ -392,17 +392,17 @@ export function GlobalAlerts() {
             </div>
 
             {/* ── Section 3: Footer Action Buttons ────────────────────────── */}
-            <div className="w-full bg-surface-1 px-5 sm:px-6 py-3 flex items-center gap-3 sm:gap-4">
+            <div className="w-full bg-surface-1 px-4 sm:px-5 py-3 flex items-center gap-3">
               <Button
                 variant="secondary"
-                className="flex-1 whitespace-nowrap h-[44px] px-3 sm:px-4 py-2 bg-border hover:bg-surface-3 text-fg text-xs sm:text-[14px] font-medium leading-[20px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
+                className="flex-1 whitespace-nowrap h-[44px] px-3 py-2 bg-border hover:bg-surface-3 text-fg text-xs sm:text-[14px] font-medium leading-[20px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
                 disabled={busy}
                 onClick={() => runAction(dismissAlert, "Failed to dismiss alert.")}
               >
                 {busy ? "…" : "Dismiss Accident"}
               </Button>
               <Button
-                className="flex-1 whitespace-nowrap h-[44px] px-3 sm:px-4 py-2 bg-fg-body hover:bg-fg text-surface-2 text-xs sm:text-[14px] font-medium leading-[28px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
+                className="flex-1 whitespace-nowrap h-[44px] px-3 py-2 bg-fg-body hover:bg-fg text-surface-2 text-xs sm:text-[14px] font-medium leading-[28px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
                 disabled={busy}
                 onClick={() => runAction(confirmAlert, "Failed to confirm alert.")}
               >

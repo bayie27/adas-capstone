@@ -289,13 +289,13 @@ export function IncidentDetailModal({
 
                 {/* ── Section 3: Footer Action Buttons ──────────────────────── */}
                 {!isTerminal && (
-                  <div className="flex w-full items-center gap-3 sm:gap-4 bg-surface-1 px-5 sm:px-6 py-3">
+                  <div className="flex w-full items-center gap-3 bg-surface-1 px-4 sm:px-5 py-3">
                     {alert.detection_status === "Unverified" ? (
                       <>
                         {snoozeAction}
                         <Button
                           variant="secondary"
-                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-border px-3 sm:px-4 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[20px] tracking-wide text-fg hover:bg-surface-3"
+                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-border px-3 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[20px] tracking-wide text-fg hover:bg-surface-3"
                           disabled={isTransitionPending}
                           isLoading={isDismissing}
                           loadingLabel="…"
@@ -304,7 +304,7 @@ export function IncidentDetailModal({
                           Dismiss Accident
                         </Button>
                         <Button
-                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-fg-body px-3 sm:px-4 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[28px] tracking-wide text-surface-2 hover:bg-fg"
+                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-fg-body px-3 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[28px] tracking-wide text-surface-2 hover:bg-fg"
                           disabled={isTransitionPending}
                           isLoading={isConfirming}
                           loadingLabel="…"
@@ -317,7 +317,7 @@ export function IncidentDetailModal({
                       <>
                         <Button
                           variant="secondary"
-                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-border px-3 sm:px-4 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[20px] tracking-wide text-fg hover:bg-surface-3"
+                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-border px-3 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[20px] tracking-wide text-fg hover:bg-surface-3"
                           disabled={isTransitionPending}
                           isLoading={isDismissing}
                           loadingLabel="…"
@@ -326,7 +326,7 @@ export function IncidentDetailModal({
                           Dismiss Accident
                         </Button>
                         <Button
-                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-fg-body px-3 sm:px-4 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[28px] tracking-wide text-surface-2 hover:bg-fg"
+                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-fg-body px-3 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[28px] tracking-wide text-surface-2 hover:bg-fg"
                           disabled={isTransitionPending}
                           isLoading={isResolving}
                           loadingLabel="…"
