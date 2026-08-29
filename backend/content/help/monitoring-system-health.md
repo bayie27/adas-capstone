@@ -23,7 +23,10 @@ glance:
 
 ## The four key numbers
 
-- **Server Uptime** — how long the backend has been running without a restart.
+- **Server Uptime** — how long the server machine itself has been powered on and running,
+  with a smaller "Backend process" line underneath showing how long the ADAS backend
+  software specifically has been running without a restart (which can be shorter than
+  the machine's own uptime).
 - **Inference Latency** — how long the AI takes, on average, to process a frame across
   every camera currently reporting.
 - **Processing Speed** — average frames per second being processed right now.
@@ -35,9 +38,11 @@ is healthy, amber or red means it's worth a closer look.
 
 ## History charts
 
-Switch between "Last 48 Hours" and "30-Day Trend" to see CPU usage, GPU usage, GPU
-temperature, RAM usage, CPU temperature, and GPU memory over time. Each chart plots a
-peak line (the worst moment in each time period) and a lighter average line, so a brief
-spike is visible even if the average looks fine. Some readings — CPU temperature in
-particular — may show "Unavailable — not reported on this host" if the server's
-hardware doesn't expose that sensor; that's a hardware limitation, not an error.
+Switch between "Last 48 Hours" and "30-Day Trend" to see six charts: CPU usage, GPU
+usage, GPU temperature, RAM usage, CPU temperature, and GPU memory over time. CPU
+temperature and GPU memory each plot two lines — a peak line (the worst moment in each
+time period) and a lighter average line — so a brief spike is visible even if the
+average looks fine. The other four charts (CPU usage, GPU usage, GPU temperature, RAM
+usage) show a single line. Some readings — CPU temperature in particular — may show
+"Unavailable — not reported on this host" if the server's hardware doesn't expose that
+sensor; that's a hardware limitation, not an error.
