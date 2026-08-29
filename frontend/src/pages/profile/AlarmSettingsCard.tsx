@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/Button"
@@ -13,6 +13,7 @@ import {
   previewDetectionSound,
   setDetectionSound,
   setDetectionSoundVolume,
+  stopPreviewDetectionSound,
 } from "@/utils/detectionSound"
 import { toast } from "@/store/useToastStore"
 import { cn } from "@/utils/cn"
@@ -41,6 +42,12 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
   const [form, setForm] = useState<AlarmSettings | null>(null)
   const [snoozeInput, setSnoozeInput] = useState<string>("")
   const [validationError, setValidationError] = useState<string | null>(null)
+
+  useEffect(() => {
+    return () => {
+      stopPreviewDetectionSound()
+    }
+  }, [])
 
   const settingsQuery = useQuery({
     queryKey: ALARM_SETTINGS_QUERY_KEY,
