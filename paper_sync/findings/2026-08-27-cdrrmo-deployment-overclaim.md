@@ -350,8 +350,8 @@ Done by Codex.
 
 Package ID: `PS-20260827-CDRRMO-DEPLOYMENT-OVERCLAIM`
 
-| Target | Approved scope | Applied/read back | Skipped/pending | Blocked |
-| --- | --- | --- | --- | --- |
-| Defense paper | blocks 1–14 and their attached comments | blocks 1–14 and 14 anchored comments, verified 2026-08-27 | — | — |
-| ADAS_Paper_Audit plus tracker | no live write proposed; existing Action Stream items 0.13 and 1.0 remain the live tracking records | — | — | — |
-| Standalone comments | none; every comment is attached to its corresponding defense-paper replacement | — | — | — |
+| Target                        | Approved scope                                                                                     | Applied/read back                                         | Skipped/pending | Blocked |
+| ----------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------- | ------- |
+| Defense paper                 | blocks 1–14 and their attached comments                                                            | blocks 1–14 and 14 anchored comments, verified 2026-08-27 | —               | —       |
+| ADAS_Paper_Audit plus tracker | no live write proposed; existing Action Stream items 0.13 and 1.0 remain the live tracking records | —                                                         | —               | —       |
+| Standalone comments           | none; every comment is attached to its corresponding defense-paper replacement                     | —                                                         | —               | —       |

@@ -374,8 +374,8 @@ Done by Codex.
 
 Package ID: `PS-20260827-TENSE-COMPLETION`
 
-| Target | Approved scope | Applied/read back | Skipped/pending | Blocked |
-| --- | --- | --- | --- | --- |
-| Defense paper | blocks 1–15 and their attached comments | blocks 1–15 and 15 anchored comments, verified 2026-08-27 | — | — |
-| ADAS_Paper_Audit plus tracker | no live write proposed; related tracker item 0.13 remains the current live record | — | — | — |
-| Standalone comments | none; every comment is attached to its corresponding defense-paper replacement | — | — | — |
+| Target                        | Approved scope                                                                    | Applied/read back                                         | Skipped/pending | Blocked |
+| ----------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------- | ------- |
+| Defense paper                 | blocks 1–15 and their attached comments                                           | blocks 1–15 and 15 anchored comments, verified 2026-08-27 | —               | —       |
+| ADAS_Paper_Audit plus tracker | no live write proposed; related tracker item 0.13 remains the current live record | —                                                         | —               | —       |
+| Standalone comments           | none; every comment is attached to its corresponding defense-paper replacement    | —                                                         | —               | —       |
