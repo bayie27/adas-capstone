@@ -1,0 +1,43 @@
+---
+slug: monitoring-system-health
+title: Monitoring System Health
+category: Monitoring
+roles: [Admin, Operator]
+summary: The status banner, key numbers, and history charts on the System Health page.
+sort_order: 15
+is_faq: false
+---
+
+## The status banner
+
+At the top of the page, one banner tells you the overall state of the system at a
+glance:
+
+- **Green ("All systems normal")** — everything is within expected ranges. Shows current
+  processing speed and how many cameras are actively reporting.
+- **Amber or red (a warning)** — something needs attention, such as disk space running
+  low or a metric crossing a threshold. The most urgent issue is shown first, with a
+  "+N more issues" link if there's more than one.
+- **Amber ("data may be out of date")** — the page hasn't received a fresh sample
+  recently. This isn't necessarily a problem by itself; it refreshes automatically.
+
+## The four key numbers
+
+- **Server Uptime** — how long the backend has been running without a restart.
+- **Inference Latency** — how long the AI takes, on average, to process a frame across
+  every camera currently reporting.
+- **Processing Speed** — average frames per second being processed right now.
+- **Disk Storage Usage** — how much of the server's storage is used, with the exact
+  free/total space underneath. Turns amber, then red, as it approaches capacity.
+
+A small colored dot next to a number is a quick health indicator for that metric — green
+is healthy, amber or red means it's worth a closer look.
+
+## History charts
+
+Switch between "Last 48 Hours" and "30-Day Trend" to see CPU usage, GPU usage, GPU
+temperature, RAM usage, CPU temperature, and GPU memory over time. Each chart plots a
+peak line (the worst moment in each time period) and a lighter average line, so a brief
+spike is visible even if the average looks fine. Some readings — CPU temperature in
+particular — may show "Unavailable — not reported on this host" if the server's
+hardware doesn't expose that sensor; that's a hardware limitation, not an error.
