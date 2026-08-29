@@ -74,8 +74,8 @@ export function Tooltip({
           id={tooltipId}
           role="tooltip"
           className={cn(
-            "pointer-events-none absolute z-50 whitespace-normal rounded-md border border-stroke bg-surface-3 px-2.5 py-1.5 text-xs font-normal text-fg-body shadow-lg",
-            "animate-alert-fade-in min-w-[120px] max-w-xs",
+            "pointer-events-none absolute z-50 w-72 max-w-xs whitespace-normal rounded-md border border-stroke bg-surface-3 px-3 py-2 text-xs font-normal leading-relaxed text-fg-body shadow-lg",
+            "animate-alert-fade-in",
             SIDE_CLASSES[side],
             ALIGN_CLASSES[side][align],
             className,
