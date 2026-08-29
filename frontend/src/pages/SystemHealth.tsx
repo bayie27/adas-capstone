@@ -565,11 +565,11 @@ export default function SystemHealth() {
         />
         <StatCard
           icon={RiTimerLine}
-          title="Inference Latency"
+          title="AI Processing Time"
           value={renderInferenceLatencyValue(live)}
           isLoading={liveQuery.isLoading}
           subtext={formatSampleCameraSubtext(live)}
-          tooltip="How fast the AI reviews each camera frame to detect accidents. Shows N/A when no cameras are actively connected."
+          tooltip="How fast the AI reviews each camera frame to detect accidents (also known as inference latency). Shows N/A when no cameras are actively connected."
         />
         <StatCard
           icon={RiDashboard3Line}

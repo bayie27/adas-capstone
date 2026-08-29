@@ -84,13 +84,13 @@ describe("SystemHealth page refactored view", () => {
 
     // Retained 4 KPI StatCards
     expect(screen.getByText("Server Uptime")).toBeInTheDocument()
-    expect(screen.getByText("Inference Latency")).toBeInTheDocument()
+    expect(screen.getByText("AI Processing Time")).toBeInTheDocument()
     expect(screen.getByText("Processing Speed")).toBeInTheDocument()
     expect(screen.getByText("Disk Storage Usage")).toBeInTheDocument()
 
     // Tooltip info triggers for 4 KPI StatCards
     expect(screen.getByRole("button", { name: "About Server Uptime" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "About Inference Latency" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "About AI Processing Time" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "About Processing Speed" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "About Disk Storage Usage" })).toBeInTheDocument()
   })
