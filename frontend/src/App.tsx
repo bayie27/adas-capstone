@@ -1,4 +1,5 @@
 import { Suspense, lazy } from "react"
+import { HelpCenterPageSkeleton } from "@/pages/help/HelpCenterPageSkeleton"
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
 import AppLayout from "@/components/layouts/AppLayout"
 import AuthLayout from "@/components/layouts/AuthLayout"
@@ -31,6 +32,17 @@ function RouteFallback() {
     <div className="flex min-h-screen items-center justify-center bg-canvas text-sm text-fg-muted">
       Loading...
     </div>
+  )
+}
+
+/** A nested Suspense boundary scoped to just this one route, so a cold
+ * visit to Help Center shows its own skeleton instead of the generic
+ * text-based RouteFallback every other lazy route still uses. */
+function HelpCenterRoute() {
+  return (
+    <Suspense fallback={<HelpCenterPageSkeleton />}>
+      <HelpCenter />
+    </Suspense>
   )
 }
 
@@ -81,7 +93,7 @@ function App() {
               <Route path="health" element={<SystemHealth />} />
               <Route path="ai" element={<AiPerformance />} />
               <Route path="profile" element={<ProfileSettings />} />
-              <Route path="help" element={<HelpCenter />} />
+              <Route path="help" element={<HelpCenterRoute />} />
               <Route path="users" element={<Users />} />
               <Route path="audit" element={<AuditLog />} />
               <Route path="maintenance" element={<Maintenance />} />
@@ -101,7 +113,7 @@ function App() {
               <Route path="health" element={<SystemHealth />} />
               <Route path="ai" element={<AiPerformance />} />
               <Route path="profile" element={<ProfileSettings />} />
-              <Route path="help" element={<HelpCenter />} />
+              <Route path="help" element={<HelpCenterRoute />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
