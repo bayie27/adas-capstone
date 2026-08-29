@@ -8,6 +8,9 @@ sort_order: 50
 is_faq: false
 ---
 
+![The Detections list with the search box and date, status, camera, and
+operator filters above a table of incidents](/help/detections-filters.png)
+
 ## Filtering the incident list
 
 The incident history list can be narrowed down by:

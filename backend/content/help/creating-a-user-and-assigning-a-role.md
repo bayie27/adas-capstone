@@ -8,6 +8,9 @@ sort_order: 10
 is_faq: false
 ---
 
+![The Add User dialog with a Role choice, name fields, username, and
+password entry](/help/create-user-modal.png)
+
 ## Creating an account
 
 A new account needs a unique username, a first and last name, a role, and an initial

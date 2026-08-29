@@ -8,6 +8,9 @@ sort_order: 15
 is_faq: false
 ---
 
+![The System Health page showing a warning banner, the four KPI cards, and
+the history charts below](/help/system-health.png)
+
 ## The status banner
 
 At the top of the page, one banner tells you the overall state of the system at a

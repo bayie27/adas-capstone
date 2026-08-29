@@ -8,6 +8,10 @@ sort_order: 5
 is_faq: false
 ---
 
+![The full-screen accident alert panel showing the snapshot, timestamp,
+camera name, and confidence score, with Dismiss and Confirm buttons and an
+"Alert 1 of 3" queue indicator](/help/accident-alert-popup.png)
+
 ## What happens when the AI detects a possible accident
 
 A red "ACCIDENT DETECTED" panel takes over the screen, showing the camera's name, the

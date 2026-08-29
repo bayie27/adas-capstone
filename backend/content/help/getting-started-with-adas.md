@@ -10,6 +10,9 @@ is_faq: false
 
 ## What this system does
 
+![The dashboard, with the sidebar showing every section available to your
+account](/help/dashboard-kpis.png)
+
 ADAS watches your road-camera feeds and uses an AI model to spot possible vehicle
 accidents automatically. When it thinks it has found one, it doesn't act on its own —
 it raises an alert and waits for a person to look at the snapshot and decide. That

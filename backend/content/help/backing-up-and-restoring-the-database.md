@@ -8,6 +8,9 @@ sort_order: 50
 is_faq: false
 ---
 
+![The Maintenance page's backup list, showing each backup's date, origin,
+size, and Valid status](/help/maintenance-backup.png)
+
 ## Automatic and manual backups
 
 The system takes scheduled backups on its own, and keeps up to 30 daily backups and 10

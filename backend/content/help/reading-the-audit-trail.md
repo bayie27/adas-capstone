@@ -8,6 +8,9 @@ sort_order: 40
 is_faq: false
 ---
 
+![The Audit Log listing each recorded action with its actor, action type,
+target, and result](/help/audit-log.png)
+
 ## Who can see it
 
 The audit trail is visible to Administrators only.

@@ -8,6 +8,10 @@ sort_order: 35
 is_faq: false
 ---
 
+![The Ongoing Incidents side panel, listing each open incident's camera,
+detection time, and confidence, with a Review & Resolve
+button](/help/ongoing-incidents-tray.png)
+
 ## The ONGOING button
 
 Whenever at least one incident is confirmed and still open, a small "ONGOING" button

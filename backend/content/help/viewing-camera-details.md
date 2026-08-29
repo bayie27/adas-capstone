@@ -8,6 +8,9 @@ sort_order: 22
 is_faq: false
 ---
 
+![The camera detail panel showing Identity, State, Convergence, and Engine
+Telemetry sections](/help/camera-detail-panel.png)
+
 ## Opening the detail panel
 
 Clicking a camera in the Cameras list opens a side panel with more detail than the list

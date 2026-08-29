@@ -8,6 +8,9 @@ sort_order: 10
 is_faq: false
 ---
 
+![The dashboard's three headline numbers alongside the peak-hours and
+per-camera charts](/help/dashboard-kpis.png)
+
 ## The three headline numbers
 
 - **Ongoing** — accidents currently confirmed and not yet resolved.

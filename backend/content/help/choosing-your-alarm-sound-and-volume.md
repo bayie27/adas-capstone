@@ -8,6 +8,9 @@ sort_order: 85
 is_faq: false
 ---
 
+![The Alarm Settings card on the Profile page, showing the sound dropdown,
+volume slider, and snooze duration field](/help/alarm-settings.png)
+
 ## Where to find it
 
 On your Profile page, the **Alarm Settings** card lets you personalize how the accident

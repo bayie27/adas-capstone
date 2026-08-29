@@ -8,6 +8,10 @@ sort_order: 20
 is_faq: false
 ---
 
+![The camera list showing Connection Status and AI Detection Status as
+separate columns, with explanatory notes like "Held for an open incident" and
+"Detection turned off for this camera"](/help/camera-list-status.png)
+
 ## Two separate things
 
 Every camera shows two statuses, and they answer different questions:
