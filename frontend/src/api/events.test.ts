@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest"
 
-import { asMaintenanceNoticeData, asSnoozeActivatedData, parseEventEnvelope } from "@/api/events"
+import {
+  asCameraStatusUpdateData,
+  asIncidentPayload,
+  asMaintenanceNoticeData,
+  asSnoozeActivatedData,
+  parseEventEnvelope,
+} from "@/api/events"
 
 // MAINTENANCE_NOTICE was absent from three places at once: the
 // RealtimeEventType union, the EVENT_TYPES runtime array backing
@@ -18,6 +24,63 @@ function envelope(type: unknown, data: Record<string, unknown>) {
     data,
   }
 }
+
+describe("backend realtime event contracts", () => {
+  it("accepts a NEW_DETECTION envelope emitted by the backend", () => {
+    const parsed = parseEventEnvelope(
+      envelope("NEW_DETECTION", {
+        log_id: 42,
+        source_event_id: "11111111-1111-1111-1111-111111111111",
+        camera_id: 3,
+        camera_name: "Intersection 3",
+        detected_at: "2026-08-15T12:00:00+00:00",
+        confidence_score: 0.94,
+        detection_status: "Unverified",
+        snapshot_url: "/api/alerts/42/snapshot",
+        verified_by_id: null,
+        verified_by_name: null,
+        verified_at: null,
+        closed_by_id: null,
+        closed_by_name: null,
+        closed_at: null,
+        snoozed_until: null,
+        snoozed_by_id: null,
+        created_at: "2026-08-15T12:00:00+00:00",
+        updated_at: "2026-08-15T12:00:00+00:00",
+      }),
+    )
+
+    expect(parsed?.type).toBe("NEW_DETECTION")
+    expect(parsed && asIncidentPayload(parsed.data)).toMatchObject({
+      log_id: 42,
+      camera_id: 3,
+      detection_status: "Unverified",
+    })
+  })
+
+  it("accepts a CAMERA_STATUS_UPDATE envelope emitted by the backend", () => {
+    const parsed = parseEventEnvelope(
+      envelope("CAMERA_STATUS_UPDATE", {
+        camera_id: 3,
+        camera_name: "Intersection 3",
+        is_enabled: true,
+        desired_ai_state: "Paused",
+        desired_state_reason: "incident",
+        connection_status: "Connected",
+        ai_status: "Active",
+        cooldown_until: null,
+        config_version: 2,
+      }),
+    )
+
+    expect(parsed?.type).toBe("CAMERA_STATUS_UPDATE")
+    expect(parsed && asCameraStatusUpdateData(parsed.data)).toMatchObject({
+      camera_id: 3,
+      desired_ai_state: "Paused",
+      config_version: 2,
+    })
+  })
+})
 
 describe("parseEventEnvelope — MAINTENANCE_NOTICE", () => {
   it("accepts the envelope now that the type is in the runtime allowlist", () => {
