@@ -144,6 +144,49 @@ describe("GlobalAlerts", () => {
     expect(useAlertStore.getState().snoozedUntil[102]).toBe(futureDate)
   })
 
+  it("resets and synchronizes the snooze expiration timestamp for both existing snoozed alerts and newly arrived alerts", async () => {
+    const user = userEvent.setup()
+    const initialExpiry = new Date(Date.now() + 15_000).toISOString()
+    const refreshedExpiry = new Date(Date.now() + 60_000).toISOString()
+
+    const mockAlert2: AlertLog = {
+      ...mockAlert,
+      log_id: 102,
+      camera_name: "Rear Exit Cam",
+    }
+
+    // Alert 101 was already snoozed earlier with 15s remaining
+    useAlertStore.setState({
+      alerts: [mockAlert, mockAlert2],
+      snoozedUntil: { 101: initialExpiry },
+      snoozedBy: { 101: "testoperator" },
+    })
+
+    vi.mocked(alertsApi.snoozeAlert).mockImplementation(async (id: number) => ({
+      ...mockAlert,
+      log_id: id,
+      snoozed_until: refreshedExpiry,
+    }))
+
+    render(renderWithProviders(<GlobalAlerts />))
+
+    const snoozeButton = screen.getByRole("button", { name: /snooze alarm/i })
+    expect(snoozeButton).not.toBeDisabled()
+
+    // Operator clicks snooze to mute the siren triggered by Alert 102
+    await user.click(snoozeButton)
+
+    await waitFor(() => {
+      // Both alerts should be called to refresh their snooze duration
+      expect(alertsApi.snoozeAlert).toHaveBeenCalledWith(101)
+      expect(alertsApi.snoozeAlert).toHaveBeenCalledWith(102)
+    })
+
+    // Both Alert 101 and Alert 102 now share the new synchronized refreshed expiry
+    expect(useAlertStore.getState().snoozedUntil[101]).toBe(refreshedExpiry)
+    expect(useAlertStore.getState().snoozedUntil[102]).toBe(refreshedExpiry)
+  })
+
   it("clicking dismiss accident removes alert from store and closes modal", async () => {
     const user = userEvent.setup()
     vi.mocked(alertsApi.dismissAlert).mockResolvedValueOnce({

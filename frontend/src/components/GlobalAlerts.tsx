@@ -172,7 +172,7 @@ export function GlobalAlerts() {
   async function handleSnooze() {
     if (allSnoozed) return
     setSlideTransition(null)
-    const targets = unsnoozedAlerts.length > 0 ? unsnoozedAlerts : [alert]
+    const targets = unverifiedAlerts.length > 0 ? unverifiedAlerts : [alert]
     const primaryId = alert.log_id
     setLoadingId(primaryId)
     setError(null)
