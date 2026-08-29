@@ -498,7 +498,7 @@ export default function SystemHealth() {
           value={formatUptime(live?.host_uptime_seconds)}
           isLoading={liveQuery.isLoading}
           subtext={formatServerUptimeSubtext(live)}
-          tooltip="TODO: explain this metric"
+          tooltip="How long the server has been running without a restart. 'Backend process' shows how long the ADAS software itself has been active — this can be shorter than server uptime if the app was restarted without rebooting the whole server."
         />
         <StatCard
           icon={RiTimerLine}
@@ -515,7 +515,7 @@ export default function SystemHealth() {
           }
           isLoading={liveQuery.isLoading}
           subtext={formatSampleCameraSubtext(live)}
-          tooltip="TODO: explain this metric"
+          tooltip="How fast the AI reviews each camera frame to detect accidents. Shows N/A when no cameras are actively connected."
         />
         <StatCard
           icon={RiDashboard3Line}
@@ -532,7 +532,7 @@ export default function SystemHealth() {
           }
           isLoading={liveQuery.isLoading}
           subtext={formatSampleCameraSubtext(live)}
-          tooltip="TODO: explain this metric"
+          tooltip="How many video frames per second the system is processing from live camera feeds. Shows N/A when no cameras are actively streaming."
         />
         <StatCard
           icon={RiHardDrive2Line}
@@ -549,7 +549,7 @@ export default function SystemHealth() {
           }
           isLoading={liveQuery.isLoading}
           subtext={formatDiskSubtext(live)}
-          tooltip="TODO: explain this metric"
+          tooltip="Storage used for accident snapshots, logs, and exported reports. Turns yellow or red when space is running low."
         />
       </div>
 
