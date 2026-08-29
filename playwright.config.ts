@@ -2,6 +2,13 @@ import { defineConfig, devices } from "@playwright/test"
 
 // E2E spans both the backend and the frontend, so this lives at the repo
 // root rather than inside frontend/. CI-only — excluded from `pnpm check`.
+const isLiveDeployment = process.env.E2E_LIVE_DEPLOYMENT === "1"
+if (isLiveDeployment && !process.env.E2E_BASE_URL) {
+  throw new Error("E2E_BASE_URL must be set when E2E_LIVE_DEPLOYMENT=1")
+}
+
+const baseURL = isLiveDeployment ? process.env.E2E_BASE_URL : "http://127.0.0.1:5173"
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -10,7 +17,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
-    baseURL: "http://127.0.0.1:5173",
+    baseURL,
     trace: "on-first-retry",
   },
   // The comment this replaces claimed 1% "absorbs antialiasing without hiding a
@@ -74,21 +81,23 @@ export default defineConfig({
       },
     },
   ],
-  webServer: [
-    {
-      command: "uv run fastapi run backend/app/main.py --port 8000",
-      url: "http://127.0.0.1:8000/docs",
-      reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
-    },
-    {
-      // --host 127.0.0.1 is required: Vite's default `localhost` host resolves
-      // to the IPv6 loopback here, which 127.0.0.1 (used below and by the
-      // backend's hardcoded CORS allowlist) can't reach.
-      command: "pnpm --filter frontend dev --port 5173 --host 127.0.0.1",
-      url: "http://127.0.0.1:5173",
-      reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
-    },
-  ],
+  webServer: isLiveDeployment
+    ? []
+    : [
+        {
+          command: "uv run fastapi run backend/app/main.py --port 8000",
+          url: "http://127.0.0.1:8000/docs",
+          reuseExistingServer: !process.env.CI,
+          timeout: 60_000,
+        },
+        {
+          // --host 127.0.0.1 is required: Vite's default `localhost` host resolves
+          // to the IPv6 loopback here, which 127.0.0.1 (used below and by the
+          // backend's hardcoded CORS allowlist) can't reach.
+          command: "pnpm --filter frontend dev --port 5173 --host 127.0.0.1",
+          url: "http://127.0.0.1:5173",
+          reuseExistingServer: !process.env.CI,
+          timeout: 60_000,
+        },
+      ],
 })
