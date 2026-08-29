@@ -30,7 +30,8 @@ export const EMPTY_CAMERA_FORM: CameraFormState = {
  */
 export function validateCameraForm(form: CameraFormState) {
   const cameraName = form.camera_name.trim()
-  const channelId = Number.parseInt(form.channel_id.trim(), 10)
+  const channelText = form.channel_id.trim()
+  const channelId = Number(channelText)
   const errors: CameraFieldErrors = {}
 
   if (!cameraName) {
@@ -39,7 +40,7 @@ export function validateCameraForm(form: CameraFormState) {
     errors.camera_name = "Camera name must be 100 characters or fewer."
   }
 
-  if (!Number.isInteger(channelId) || channelId <= 0) {
+  if (!/^\d+$/.test(channelText) || !Number.isSafeInteger(channelId) || channelId <= 0) {
     errors.channel_id = "Channel number must be a positive whole number."
   }
 
