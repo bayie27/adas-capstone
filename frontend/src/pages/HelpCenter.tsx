@@ -1,4 +1,6 @@
 import {
+  useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -6,7 +8,7 @@ import {
   type ImgHTMLAttributes,
   type ReactNode,
 } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useSearchParams } from "react-router-dom"
 import ReactMarkdown from "react-markdown"
 import rehypeSanitize from "rehype-sanitize"
@@ -58,6 +60,68 @@ function truncateForDisplay(term: string, max = 60): string {
   return term.length > max ? `${term.slice(0, max)}…` : term
 }
 
+const EMPTY_ARTICLES: HelpArticleSummary[] = []
+const EMPTY_SLUGS: ReadonlySet<string> = new Set()
+const GRID_LEAVE_MS = 200
+
+/**
+ * A search or category change swaps the entire result set at once (it's a
+ * new server query, not a client-side filter), so React would otherwise
+ * unmount the cards that no longer match instantly rather than letting them
+ * fade out. This keeps a just-removed card mounted (in `.animate-grid-item-
+ * leave`, matched to GRID_LEAVE_MS) until its exit animation has actually
+ * played, then drops it. Cards that stay or arrive need no equivalent
+ * "entering" bookkeeping — they either keep their existing DOM node (key
+ * unchanged, animation already played, doesn't replay) or are genuinely new
+ * (key unchanged from unmounted, plays `.animate-grid-item-enter` on mount
+ * for free) — React's own keyed reconciliation already does the right thing
+ * for both.
+ */
+function useAnimatedArticles(items: HelpArticleSummary[], leaveMs = GRID_LEAVE_MS) {
+  const [rendered, setRendered] = useState(items)
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(EMPTY_SLUGS)
+  const renderedRef = useRef(items)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const nextSlugs = new Set(items.map((a) => a.slug))
+    const removed = renderedRef.current.filter((a) => !nextSlugs.has(a.slug))
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+
+    if (removed.length === 0) {
+      renderedRef.current = items
+      setRendered(items)
+      setLeaving(EMPTY_SLUGS)
+      return
+    }
+
+    const merged = [...items, ...removed]
+    renderedRef.current = merged
+    setRendered(merged)
+    setLeaving(new Set(removed.map((a) => a.slug)))
+
+    timeoutRef.current = setTimeout(() => {
+      renderedRef.current = items
+      setRendered(items)
+      setLeaving(EMPTY_SLUGS)
+      timeoutRef.current = null
+    }, leaveMs)
+  }, [items, leaveMs])
+
+  useEffect(
+    () => () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    },
+    [],
+  )
+
+  return { items: rendered, isLeaving: (slug: string) => leaving.has(slug) }
+}
+
 /**
  * No Figma frame (D-5). Follows the same list-then-detail shape as
  * Detections/Users rather than inventing a new idiom: a toolbar (search +
@@ -98,6 +162,11 @@ export default function HelpCenter() {
         search: debouncedSearch || undefined,
         category: category || undefined,
       }),
+    // Keeps the previous result set on screen (and `isLoading` false) while
+    // a new search or category refetches, instead of the whole grid
+    // dropping out to a "Loading articles…" flash on every keystroke — the
+    // grid then only ever has to animate a card in or out, never blink.
+    placeholderData: keepPreviousData,
   })
 
   const articleQuery = useQuery({
@@ -106,12 +175,14 @@ export default function HelpCenter() {
     enabled: selectedSlug !== null,
   })
 
-  const items = listQuery.data?.items ?? []
-  const topFaqs = listQuery.data?.top_faqs ?? []
+  const items = listQuery.data?.items ?? EMPTY_ARTICLES
+  const topFaqs = listQuery.data?.top_faqs ?? EMPTY_ARTICLES
   // Mirrors the backend's own condition exactly (`searched and not articles`
   // in routes/help.py) rather than reinventing when the fallback applies —
   // it must never appear on a plain browse or a category-only filter.
   const showFaqFallback = debouncedSearch !== "" && items.length === 0 && topFaqs.length > 0
+  const displayedItems = showFaqFallback ? topFaqs : items
+  const animatedGrid = useAnimatedArticles(displayedItems)
 
   function openArticle(slug: string) {
     setSearchParams((prev) => {
@@ -145,13 +216,18 @@ export default function HelpCenter() {
 
       {selectedSlug ? (
         <ArticleDetail
+          key={selectedSlug}
           query={articleQuery}
           onBack={closeArticle}
           onNavigateToSlug={openArticle}
           onNavigateToCategory={goToCategory}
         />
       ) : (
-        <>
+        // `animate-modal-enter` plays once whenever this branch (re)mounts —
+        // switching back from reading an article, or the page's first
+        // load — rather than on every keystroke, since React keeps this
+        // same DOM node across re-renders within the branch.
+        <div className="animate-modal-enter">
           {/* One toolbar row (search + category), matching the
               search-plus-filters convention every other list page in this
               app already uses (e.g. Cameras.tsx) rather than the two
@@ -178,23 +254,34 @@ export default function HelpCenter() {
               />
             ) : listQuery.isLoading ? (
               <p className="py-8 text-center text-caption text-fg-muted">Loading articles…</p>
-            ) : showFaqFallback ? (
-              <div>
-                <p className="mb-4 break-words text-caption text-fg-muted">
-                  No articles matched &ldquo;{truncateForDisplay(debouncedSearch)}&rdquo;. Here are
-                  some frequently asked questions:
-                </p>
-                <ArticleGrid articles={topFaqs} onSelect={openArticle} />
-              </div>
-            ) : items.length === 0 ? (
-              <p className="py-8 text-center text-caption text-fg-muted">
-                No articles found for the current filters.
-              </p>
             ) : (
-              <ArticleGrid articles={items} onSelect={openArticle} />
+              <>
+                {showFaqFallback ? (
+                  <p className="mb-4 break-words text-caption text-fg-muted">
+                    No articles matched &ldquo;{truncateForDisplay(debouncedSearch)}&rdquo;. Here
+                    are some frequently asked questions:
+                  </p>
+                ) : displayedItems.length === 0 ? (
+                  <p className="py-8 text-center text-caption text-fg-muted">
+                    No articles found for the current filters.
+                  </p>
+                ) : null}
+                {/* Renders the outgoing set's leftover cards too (fading
+                    out) alongside whatever just matched — see
+                    useAnimatedArticles — so narrowing a search or category
+                    reads as the grid settling into its new shape rather
+                    than an instant swap. */}
+                {animatedGrid.items.length > 0 ? (
+                  <ArticleGrid
+                    articles={animatedGrid.items}
+                    onSelect={openArticle}
+                    isLeaving={animatedGrid.isLeaving}
+                  />
+                ) : null}
+              </>
             )}
           </div>
-        </>
+        </div>
       )}
     </div>
   )
@@ -219,6 +306,17 @@ function CategoryTabs({
   className?: string
 }) {
   const options = ["", ...categories]
+  const buttonRefs = useRef(new Map<string, HTMLButtonElement>())
+  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null)
+
+  // Measures synchronously before paint, so the indicator never flashes at
+  // a stale position for a frame — it just slides to wherever the selected
+  // tab actually is, including the first time the category list loads in
+  // (which changes every button's position at once).
+  useLayoutEffect(() => {
+    const el = buttonRefs.current.get(optionKey(value))
+    if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth })
+  }, [value, options.length])
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const index = options.findIndex((option) => option === value)
@@ -241,24 +339,38 @@ function CategoryTabs({
       aria-label="Help article categories"
       onKeyDown={onKeyDown}
       className={cn(
-        "inline-flex h-9 flex-wrap items-center justify-start gap-1 rounded-md bg-surface-2 p-1",
+        "relative inline-flex h-9 flex-wrap items-center justify-start gap-1 rounded-md bg-surface-2 p-1",
         className,
       )}
     >
+      {/* One shared sliding indicator instead of each tab drawing its own
+          selected-state box, so switching categories reads as one control
+          moving rather than two unrelated tabs blinking off/on. */}
+      {indicator ? (
+        <div
+          aria-hidden="true"
+          className="absolute top-1 bottom-1 left-0 rounded bg-canvas shadow-sm transition-[transform,width] duration-200 ease-out"
+          style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }}
+        />
+      ) : null}
       {options.map((option) => {
         const selected = option === value
         const Icon = option ? categoryIcon(option) : RiCompassLine
         return (
           <button
-            key={option || "all"}
+            key={optionKey(option)}
+            ref={(el) => {
+              if (el) buttonRefs.current.set(optionKey(option), el)
+              else buttonRefs.current.delete(optionKey(option))
+            }}
             type="button"
             role="tab"
             aria-selected={selected}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(option)}
             className={cn(
-              "flex items-center justify-center gap-1.5 rounded px-3 py-1 text-caption font-medium transition-all duration-150",
-              selected ? "bg-canvas text-fg shadow-sm" : "bg-transparent text-fg-muted",
+              "relative z-10 flex items-center justify-center gap-1.5 rounded px-3 py-1 text-caption font-medium transition-colors duration-150",
+              selected ? "text-fg" : "text-fg-muted",
               focusRing,
             )}
           >
@@ -271,23 +383,40 @@ function CategoryTabs({
   )
 }
 
+function optionKey(option: string): string {
+  return option || "all"
+}
+
 function ArticleGrid({
   articles,
   onSelect,
+  isLeaving,
 }: {
   articles: HelpArticleSummary[]
   onSelect: (slug: string) => void
+  /** Cards leaving on their way out (no longer part of the actual matched
+   * set) get the leave animation and stop being interactive; everything
+   * else gets the plain entrance treatment, which only visibly plays for
+   * cards genuinely new to the DOM — see useAnimatedArticles. */
+  isLeaving?: (slug: string) => boolean
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
       {articles.map((article) => {
         const CategoryIcon = categoryIcon(article.category)
+        const leaving = isLeaving?.(article.slug) ?? false
         return (
           <button
             key={article.slug}
             type="button"
+            disabled={leaving}
+            aria-hidden={leaving}
+            tabIndex={leaving ? -1 : 0}
             onClick={() => onSelect(article.slug)}
-            className="flex h-full flex-col items-start rounded-lg border border-stroke bg-surface-1 p-5 text-left shadow-sm transition-all duration-150 hover:border-stroke-strong hover:bg-surface-2 hover:shadow-lg"
+            className={cn(
+              "flex h-full flex-col items-start rounded-lg border border-stroke bg-surface-1 p-5 text-left shadow-sm transition-all duration-150 hover:border-stroke-strong hover:bg-surface-2 hover:shadow-lg",
+              leaving ? "animate-grid-item-leave pointer-events-none" : "animate-grid-item-enter",
+            )}
           >
             <div className="mb-3 flex w-full items-center justify-between gap-2">
               <Badge variant="subtle" tone="neutral">
@@ -466,7 +595,7 @@ function ArticleDetail({
   }
 
   return (
-    <div>
+    <div className="animate-modal-enter">
       <nav
         aria-label="Breadcrumb"
         className="mb-6 flex flex-wrap items-center gap-1.5 text-caption font-medium text-fg-muted"
