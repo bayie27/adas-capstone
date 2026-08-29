@@ -36,6 +36,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { formatPercent } from "@/utils/format"
 import { getApiErrorMessage } from "@/api/client"
 import { toast } from "@/store/useToastStore"
+import { cn } from "@/utils/cn"
 import { RiCarLine, RiCloseCircleLine, RiDashboard3Line, RiFocus3Line } from "@remixicon/react"
 
 const PERFORMANCE_QUERY_KEY = ["performance-analytics"] as const
@@ -447,9 +448,14 @@ export default function AiPerformance() {
                     {formatPercent(item.precision_score)}
                   </TableCell>
                   <TableCell
-                    className={`text-right font-medium ${
-                      item.avg_accident_confidence === null ? "text-fg-muted" : "text-success"
-                    }`}
+                    className={cn(
+                      "text-right font-medium",
+                      item.avg_accident_confidence === null
+                        ? "text-fg-muted"
+                        : item.avg_accident_confidence * 100 >= 75
+                          ? "text-fg"
+                          : "text-danger",
+                    )}
                   >
                     {formatPercent(item.avg_accident_confidence)}
                   </TableCell>

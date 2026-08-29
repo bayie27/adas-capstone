@@ -16,9 +16,12 @@ export const getSoundUrl = (key?: string): string => {
   return SOUND_MAP.default
 }
 
+export const PREVIEW_DURATION_MS = 4000
+
 let activeSoundKey = "default"
 let activeVolume = 80
 let previewAudio: HTMLAudioElement | null = null
+let previewTimeoutId: ReturnType<typeof setTimeout> | null = null
 
 const detectionAudio = typeof Audio !== "undefined" ? new Audio(getSoundUrl(activeSoundKey)) : null
 if (detectionAudio) {
@@ -60,6 +63,18 @@ export const stopDetectionSound = () => {
   detectionAudio.currentTime = 0
 }
 
+export const stopPreviewDetectionSound = () => {
+  if (previewTimeoutId !== null) {
+    clearTimeout(previewTimeoutId)
+    previewTimeoutId = null
+  }
+  if (previewAudio) {
+    previewAudio.pause()
+    previewAudio.currentTime = 0
+    previewAudio = null
+  }
+}
+
 /**
  * `volume` is 0-100 (the API's scale, and the settings card's slider);
  * `HTMLMediaElement.volume` is 0-1. This was hardcoded to the browser
@@ -74,14 +89,16 @@ export const setDetectionSoundVolume = (volume: number) => {
 }
 
 /**
- * A one-shot, unlooped preview at a given sound key and volume — for the
- * settings card's "hear it now" affordance, distinct from the looped alarm
- * instance so previewing a volume never starts or stops a live alarm.
+ * A one-shot, unlooped preview at a given sound key and volume with a 4-second
+ * duration cap — for the settings card's "hear it now" and dropdown selection
+ * affordance, distinct from the looped alarm instance so previewing never
+ * starts or stops a live alarm.
  * Stops any previously running preview so rapid clicks don't overlap audio.
  */
 export const previewDetectionSound = (
   soundKeyOrVolume: string | number = "default",
   volume?: number,
+  durationMs: number = PREVIEW_DURATION_MS,
 ) => {
   if (typeof Audio === "undefined") return
 
@@ -97,16 +114,28 @@ export const previewDetectionSound = (
     }
   }
 
-  if (resolvedVolume <= 0) return
-
-  if (previewAudio) {
-    previewAudio.pause()
-    previewAudio.currentTime = 0
+  if (resolvedVolume <= 0) {
+    stopPreviewDetectionSound()
+    return
   }
 
-  previewAudio = new Audio(getSoundUrl(soundKey))
-  previewAudio.volume = Math.min(100, Math.max(0, resolvedVolume)) / 100
-  previewAudio.play()?.catch((err) => {
+  stopPreviewDetectionSound()
+
+  const audio = new Audio(getSoundUrl(soundKey))
+  previewAudio = audio
+  audio.volume = Math.min(100, Math.max(0, resolvedVolume)) / 100
+  audio.play()?.catch((err) => {
     console.warn("[detectionSound] Preview blocked or failed:", err)
   })
+
+  if (durationMs > 0) {
+    previewTimeoutId = setTimeout(() => {
+      if (previewAudio === audio) {
+        previewAudio.pause()
+        previewAudio.currentTime = 0
+        previewAudio = null
+      }
+      previewTimeoutId = null
+    }, durationMs)
+  }
 }

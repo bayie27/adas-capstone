@@ -113,6 +113,38 @@ describe("OngoingIncidentsTray", () => {
     })
   })
 
+  it("keeps the side panel tray open when opening and closing the incident detail modal", async () => {
+    const user = userEvent.setup()
+    useAlertStore.setState({ alerts: [mockOngoingAlert] })
+    render(renderWithProviders(<OngoingIncidentsTray />))
+
+    // Open tray
+    await user.click(screen.getByRole("button", { name: /ongoing incidents tray/i }))
+    expect(screen.getByText("Ongoing Incidents")).toBeInTheDocument()
+
+    // Click Review & Resolve
+    const reviewBtn = screen.getByRole("button", { name: /review & resolve/i })
+    await user.click(reviewBtn)
+
+    // Modal opens
+    expect(screen.getByRole("button", { name: /resolve accident/i })).toBeInTheDocument()
+
+    // Side panel tray remains open in the document behind modal (both tray card and modal have camera name)
+    expect(screen.getByText("Ongoing Incidents")).toBeInTheDocument()
+    expect(screen.getAllByText("Highway Intersection")).toHaveLength(2)
+
+    // Close modal without resolving
+    const closeBtn = screen.getByRole("button", { name: /close incident details/i })
+    await user.click(closeBtn)
+
+    // Modal is closed
+    expect(screen.queryByRole("button", { name: /resolve accident/i })).not.toBeInTheDocument()
+
+    // Tray is still open
+    expect(screen.getByText("Ongoing Incidents")).toBeInTheDocument()
+    expect(screen.getByText("Highway Intersection")).toBeInTheDocument()
+  })
+
   it("removes incident from tray in real-time when another operator resolves it", () => {
     useAlertStore.setState({ alerts: [mockOngoingAlert] })
     const { rerender } = render(renderWithProviders(<OngoingIncidentsTray />))
