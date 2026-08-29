@@ -70,4 +70,26 @@ describe("StatCard", () => {
     expect(screen.getByText("…")).toBeInTheDocument()
     expect(screen.queryByText("12")).not.toBeInTheDocument()
   })
+
+  it("renders info icon button when tooltip is provided", () => {
+    render(
+      <StatCard
+        icon={DummyIcon}
+        title="Inference Latency"
+        value="25ms"
+        tooltip="Time to process one frame"
+      />,
+    )
+
+    const infoButton = screen.getByRole("button", { name: "About Inference Latency" })
+    expect(infoButton).toBeInTheDocument()
+  })
+
+  it("omits info icon button when tooltip is not provided", () => {
+    render(<StatCard icon={DummyIcon} title="Inference Latency" value="25ms" />)
+
+    expect(
+      screen.queryByRole("button", { name: "About Inference Latency" }),
+    ).not.toBeInTheDocument()
+  })
 })
