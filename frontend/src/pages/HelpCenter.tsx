@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { useSearchParams } from "react-router-dom"
 import ReactMarkdown from "react-markdown"
 import rehypeSanitize from "rehype-sanitize"
 import {
@@ -58,7 +59,12 @@ function categoryIcon(category: string): RemixiconComponentType {
 export default function HelpCenter() {
   const [searchTerm, setSearchTerm] = useState("")
   const [category, setCategory] = useState("")
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
+  // The open article lives in the URL, not local state, so it gets its own
+  // browser-history entry — otherwise the browser's Back button has nothing
+  // of ours to pop and skips straight past the Help Center to whatever page
+  // was open before it, which is the bug this fixes.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedSlug = searchParams.get("article")
   const debouncedSearch = useDebouncedValue(searchTerm.trim(), 300)
 
   // Categories need the *unfiltered* population, independent of whatever
@@ -99,11 +105,23 @@ export default function HelpCenter() {
   const showFaqFallback = debouncedSearch !== "" && items.length === 0 && topFaqs.length > 0
 
   function openArticle(slug: string) {
-    setSelectedSlug(slug)
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set("article", slug)
+      return next
+    })
+  }
+
+  function closeArticle() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete("article")
+      return next
+    })
   }
 
   function goToCategory(nextCategory: string) {
-    setSelectedSlug(null)
+    closeArticle()
     setCategory(nextCategory)
   }
 
@@ -119,7 +137,7 @@ export default function HelpCenter() {
       {selectedSlug ? (
         <ArticleDetail
           query={articleQuery}
-          onBack={() => setSelectedSlug(null)}
+          onBack={closeArticle}
           onNavigateToSlug={openArticle}
           onNavigateToCategory={goToCategory}
         />
