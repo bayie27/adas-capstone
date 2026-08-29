@@ -104,7 +104,7 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
             onChange={(value) => updateField("confirm_password", value)}
           />
 
-          <p className="text-[10px] text-fg-muted">
+          <p className="text-[12px] text-fg-muted">
             Must be at least 8 characters long and contain at least 1 number.
           </p>
         </div>

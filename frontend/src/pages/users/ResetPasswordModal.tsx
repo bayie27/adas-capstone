@@ -101,7 +101,7 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
             disabled={mutation.isPending}
             onChange={(value) => updateField("confirm_password", value)}
           />
-          <div className="mt-2 mb-2 text-[10px] text-fg-muted">
+          <div className="mt-2 mb-2 text-[12px] text-fg-muted">
             Must be at least 8 characters long and contain at least 1 number.
           </div>
         </div>
