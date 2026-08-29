@@ -1,8 +1,11 @@
 import type { ElementType, ReactNode } from "react"
+import { RiInformationLine } from "@remixicon/react"
 
 import { cn } from "@/utils/cn"
 import { Badge } from "@/components/ui/Badge"
+import { focusRing } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
+import { Tooltip } from "@/components/ui/Tooltip"
 
 /**
  * The KPI card as drawn on `37:74` and `38:82`: an icon tile at --radius-lg
@@ -34,6 +37,8 @@ interface StatCardProps {
   elevated?: boolean
   isLoading?: boolean
   className?: string
+  /** Optional tooltip content explaining what the metric means. */
+  tooltip?: ReactNode
 }
 
 export function StatCard({
@@ -46,6 +51,7 @@ export function StatCard({
   elevated = false,
   isLoading = false,
   className,
+  tooltip,
 }: StatCardProps) {
   return (
     <Card
@@ -61,9 +67,23 @@ export function StatCard({
         >
           <Icon size={17} className="text-fg-muted" />
         </div>
-        <h4 className="mb-2 min-h-[32px] text-xs font-medium uppercase tracking-wider text-fg-muted">
-          {title}
-        </h4>
+        <div className="mb-2 flex min-h-[32px] items-center gap-1.5">
+          <h4 className="text-xs font-medium uppercase tracking-wider text-fg-muted">{title}</h4>
+          {tooltip ? (
+            <Tooltip content={tooltip}>
+              <button
+                type="button"
+                aria-label={`About ${title}`}
+                className={cn(
+                  "inline-flex items-center justify-center rounded-sm text-fg-muted transition-colors hover:text-fg",
+                  focusRing,
+                )}
+              >
+                <RiInformationLine size={14} aria-hidden="true" />
+              </button>
+            </Tooltip>
+          ) : null}
+        </div>
         <div className="flex items-end gap-2.5">
           <div className="text-3xl font-semibold leading-none tracking-tight text-fg">
             {isLoading ? "…" : value}
