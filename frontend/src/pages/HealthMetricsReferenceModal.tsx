@@ -18,7 +18,7 @@ const AI_PROCESSING_TIME_THRESHOLDS = [
     tone: "warning" as const,
     state: "Acceptable",
     range: "45–70ms",
-    meaning: "Common on CPU or multi-stream workloads; still real-time",
+    meaning: "Still operating in real-time, but near the upper threshold for optimal performance",
   },
   {
     tone: "neutral" as const,

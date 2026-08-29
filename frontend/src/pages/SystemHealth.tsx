@@ -592,8 +592,8 @@ export default function SystemHealth() {
                 <BadgeDot tone="success" className="mx-0.5 inline-block align-middle" />
                 ). Acceptable: 45–70ms (
                 <BadgeDot tone="warning" className="mx-0.5 inline-block align-middle" />
-                ), common on CPU or multi-stream workloads. Shows grey when no cameras are
-                connected, red if the AI engine fails while cameras are active.
+                ), still operating in real-time. Shows grey when no cameras are connected, red if
+                the AI engine fails while cameras are active.
               </p>
               <div className="mt-2.5 border-t border-stroke/60 pt-1.5 text-right">
                 <button
