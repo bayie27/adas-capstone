@@ -588,9 +588,12 @@ export default function SystemHealth() {
           tooltip={
             <div>
               <p>
-                How fast the AI reviews each camera frame to detect accidents. Optimal: 15–45ms
-                (🟢). Acceptable: 45–70ms (🟡), common on CPU or multi-stream workloads. Shows grey
-                when no cameras are connected, red if the AI engine fails while cameras are active.
+                How fast the AI reviews each camera frame to detect accidents. Optimal: 15–45ms (
+                <BadgeDot tone="success" className="mx-0.5 inline-block align-middle" />
+                ). Acceptable: 45–70ms (
+                <BadgeDot tone="warning" className="mx-0.5 inline-block align-middle" />
+                ), common on CPU or multi-stream workloads. Shows grey when no cameras are
+                connected, red if the AI engine fails while cameras are active.
               </p>
               <div className="mt-2.5 border-t border-stroke/60 pt-1.5 text-right">
                 <button
@@ -615,9 +618,12 @@ export default function SystemHealth() {
             <div>
               <p>
                 How many video frames per second the system captures and processes from live
-                cameras. Optimal: 10.0–15.0 fps (🟢), matching the system's calibrated target band.
-                Below 10.0 fps (🟡) may mean the stream is lagging or hardware-constrained. Shows
-                grey when no streams are active, red if a connected camera's stream stalls.
+                cameras. Optimal: 10.0–15.0 fps (
+                <BadgeDot tone="success" className="mx-0.5 inline-block align-middle" />
+                ), matching the system's calibrated target band. Below 10.0 fps (
+                <BadgeDot tone="warning" className="mx-0.5 inline-block align-middle" />) may mean
+                the stream is lagging or hardware-constrained. Shows grey when no streams are
+                active, red if a connected camera's stream stalls.
               </p>
               <div className="mt-2.5 border-t border-stroke/60 pt-1.5 text-right">
                 <button

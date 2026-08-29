@@ -79,12 +79,18 @@ export function Badge({
 }
 
 /** The filled dot the Figma Online/Offline pill carries. */
-export function BadgeDot({ tone = "neutral" }: { tone?: BadgeTone }) {
+export function BadgeDot({
+  tone = "neutral",
+  className,
+}: {
+  tone?: BadgeTone
+  className?: string
+}) {
   const fill: Record<BadgeTone, string> = {
     neutral: "bg-fg-muted",
     success: "bg-success",
     warning: "bg-warning",
     danger: "bg-danger",
   }
-  return <span className={cn("h-2 w-2 rounded-full", fill[tone])} aria-hidden="true" />
+  return <span className={cn("h-2 w-2 rounded-full", fill[tone], className)} aria-hidden="true" />
 }
