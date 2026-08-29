@@ -127,13 +127,18 @@ export function GlobalAlerts() {
 
   const alert = alerts[clampedIndex]
   const busy = loadingId === alert.log_id
-  const isSnoozed = isSnoozedNow(alert.log_id, snoozedUntil)
+  const unverifiedAlerts = alerts.filter((a) => a.detection_status === "Unverified")
+  const unsnoozedAlerts = unverifiedAlerts.filter((a) => !isSnoozedNow(a.log_id, snoozedUntil))
+  const allSnoozed = unverifiedAlerts.length > 0 && unsnoozedAlerts.length === 0
 
   function invalidateAlerts() {
     queryClient.invalidateQueries({ queryKey: ["alerts"] })
+    queryClient.invalidateQueries({ queryKey: ["dashboard-analytics"] })
+    queryClient.invalidateQueries({ queryKey: ["performance-analytics"] })
   }
 
   async function runAction(action: (logId: number) => Promise<unknown>, failure: string) {
+    setSlideTransition(null)
     const logId = alert.log_id
     setLoadingId(logId)
     setError(null)
@@ -146,21 +151,12 @@ export function GlobalAlerts() {
         removeAlert(logId)
       }
       setSlideTransition(null)
-      // Stay at the same position; if the tail was removed, clampedIndex will
-      // naturally back up to the new last element on the next render. We only
-      // need to explicitly correct when the raw selectedIndex now overshoots.
       const newLength = alerts.length - 1
       if (newLength > 0 && selectedIndex >= newLength) {
         setSelectedIndex(newLength - 1)
-      } else {
-        setSelectedIndex(clampedIndex)
       }
       invalidateAlerts()
     } catch (err) {
-      // A lost race is not a failure to retry — a colleague already decided.
-      // Name them, drop the incident from this queue, and let the operator
-      // move to the next alert rather than re-clicking a button that cannot
-      // succeed.
       const raceLost = getIncidentConflict(err)
       if (raceLost) {
         setConflict(raceLost)
@@ -174,37 +170,40 @@ export function GlobalAlerts() {
   }
 
   async function handleSnooze() {
-    if (isSnoozed) return
+    if (allSnoozed) return
     setSlideTransition(null)
-    const logId = alert.log_id
-    setLoadingId(logId)
+    const targets = unverifiedAlerts.length > 0 ? unverifiedAlerts : [alert]
+    const primaryId = alert.log_id
+    setLoadingId(primaryId)
     setError(null)
     setConflict(null)
     try {
-      const snoozed = await snoozeAlert(logId)
-      // Applied directly from the response rather than waiting for the
-      // SNOOZE_ACTIVATED broadcast — this tab acted, so it shouldn't need
-      // to hear its own echo to mute. Other connected tabs still get it via
-      // the broadcast, same as every other transition in this component.
-      // The broadcast carries a formatted name (P21 Step 3); this tab has no
-      // equivalent lookup for its own actor without an extra fetch, so it
-      // uses the session's own username as "who" for its own action.
-      if (snoozed.snoozed_until) {
-        activateSnooze(logId, snoozed.snoozed_until, username)
+      const results = await Promise.allSettled(targets.map((t) => snoozeAlert(t.log_id)))
+      let lastConflict: IncidentHandledInfo | null = null
+      let lastError: unknown = null
+
+      for (let i = 0; i < results.length; i++) {
+        const res = results[i]
+        const target = targets[i]
+        if (res.status === "fulfilled") {
+          if (res.value.snoozed_until) {
+            activateSnooze(target.log_id, res.value.snoozed_until, username)
+          }
+        } else {
+          const raceLost = getIncidentConflict(res.reason)
+          if (raceLost) {
+            lastConflict = raceLost
+          } else {
+            lastError = res.reason
+          }
+        }
       }
-    } catch (err) {
-      // Same distinction runAction makes for confirm/dismiss/resolve: a lost
-      // race (409 CONFLICT_STATE) names the colleague who got there first,
-      // via the same already-handled dialog. A 400 PRECONDITION_FAILED —
-      // the incident is no longer Unverified — is not a race to explain;
-      // its own plain-string detail ("Only an 'Unverified' incident can be
-      // snoozed.") is specific enough to render as-is.
-      const raceLost = getIncidentConflict(err)
-      if (raceLost) {
-        setConflict(raceLost)
+
+      if (lastConflict) {
+        setConflict(lastConflict)
         invalidateAlerts()
-      } else {
-        setError(getApiErrorMessage(err, "Failed to snooze alert."))
+      } else if (lastError) {
+        setError(getApiErrorMessage(lastError, "Failed to snooze alert."))
       }
     } finally {
       setLoadingId(null)
@@ -219,8 +218,6 @@ export function GlobalAlerts() {
       closeOnBackdrop={false}
       role="alertdialog"
       ariaLabel="Accident detected"
-      // Above every other overlay: an alert firing while an operator has an
-      // incident modal open must land on top of it, not behind it.
       overlayClassName="z-9999"
       backdropClassName="bg-backdrop-alert"
       className="w-full max-w-[1060px] overflow-hidden p-0 rounded-none sm:rounded-lg border-0"
@@ -228,37 +225,37 @@ export function GlobalAlerts() {
       outerContent={
         hasMultiple ? (
           <>
-            {/* ── Left Navigation Arrow (Previous alert) ── */}
+            {/* ── Left arrow floating on modal left edge ── */}
             <button
               type="button"
-              aria-label="Previous alert"
-              disabled={isFirst}
               onClick={() => navigate(-1)}
+              disabled={isFirst || busy}
+              aria-label="Previous alert"
               className={cn(
-                "absolute -left-14 sm:-left-16 md:-left-20 top-1/2 z-[10000] -translate-y-1/2",
-                "flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full border border-white/20",
-                "bg-surface-1/90 text-white shadow-2xl backdrop-blur-md transition-all",
-                isFirst
-                  ? "cursor-not-allowed opacity-20"
-                  : "opacity-90 hover:scale-110 hover:bg-surface-2 hover:border-white/40 hover:opacity-100 active:scale-95",
+                "absolute -left-6 sm:-left-8 md:-left-16 top-1/2 -translate-y-1/2 z-50",
+                "flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full",
+                "bg-black/80 hover:bg-black/95 text-white border border-white/20 shadow-2xl",
+                "transition-all duration-150 backdrop-blur-md",
+                (isFirst || busy) &&
+                  "opacity-30 pointer-events-none cursor-not-allowed hover:bg-black/80",
               )}
             >
               <RiArrowLeftSLine size={32} aria-hidden />
             </button>
 
-            {/* ── Right Navigation Arrow (Next alert) ── */}
+            {/* ── Right arrow floating on modal right edge ── */}
             <button
               type="button"
-              aria-label="Next alert"
-              disabled={isLast}
               onClick={() => navigate(1)}
+              disabled={isLast || busy}
+              aria-label="Next alert"
               className={cn(
-                "absolute -right-14 sm:-right-16 md:-right-20 top-1/2 z-[10000] -translate-y-1/2",
-                "flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full border border-white/20",
-                "bg-surface-1/90 text-white shadow-2xl backdrop-blur-md transition-all",
-                isLast
-                  ? "cursor-not-allowed opacity-20"
-                  : "opacity-90 hover:scale-110 hover:bg-surface-2 hover:border-white/40 hover:opacity-100 active:scale-95",
+                "absolute -right-6 sm:-right-8 md:-right-16 top-1/2 -translate-y-1/2 z-50",
+                "flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full",
+                "bg-black/80 hover:bg-black/95 text-white border border-white/20 shadow-2xl",
+                "transition-all duration-150 backdrop-blur-md",
+                (isLast || busy) &&
+                  "opacity-30 pointer-events-none cursor-not-allowed hover:bg-black/80",
               )}
             >
               <RiArrowRightSLine size={32} aria-hidden />
@@ -317,21 +314,21 @@ export function GlobalAlerts() {
 
           {/* Right Column: Telemetry & Actions */}
           <div className="flex-1 flex flex-col justify-between bg-surface-2 min-w-0 sm:min-w-[380px] relative">
-            {/* Snooze Button placed top right in the telemetry section. Disabled once snoozed until expiry. */}
+            {/* Snooze Button placed top right in the telemetry section. Snoozes all active unverified alerts for the configured duration. */}
             <Button
               variant="ghost"
               size="icon"
               className={cn(
                 "absolute right-4 top-4 z-10 rounded text-fg-muted hover:bg-surface-3 hover:text-fg",
-                isSnoozed &&
+                allSnoozed &&
                   "cursor-not-allowed text-warning opacity-80 hover:bg-transparent hover:text-warning",
               )}
-              title={isSnoozed ? "Alarm snoozed" : "Snooze Alarm"}
-              aria-label={isSnoozed ? "Alarm snoozed" : "Snooze alarm"}
-              disabled={busy || isSnoozed}
+              title={allSnoozed ? "Alarms snoozed" : "Snooze Alarm"}
+              aria-label={allSnoozed ? "Alarms snoozed" : "Snooze alarm"}
+              disabled={busy || allSnoozed}
               onClick={handleSnooze}
             >
-              {isSnoozed ? <RiNotificationOffLine size={20} /> : <RiNotification2Line size={20} />}
+              {allSnoozed ? <RiNotificationOffLine size={20} /> : <RiNotification2Line size={20} />}
             </Button>
 
             {/* Telemetry metadata list */}
