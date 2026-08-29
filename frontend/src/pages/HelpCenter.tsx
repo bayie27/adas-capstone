@@ -115,7 +115,21 @@ export default function HelpCenter() {
   return (
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6">
-        <h1 className="mb-0.5 text-xl font-semibold text-fg">Help Center</h1>
+        <h1 className="mb-0.5 text-xl font-semibold text-fg">
+          {/* Clickable, not styled as a button — same "plain text that
+              happens to react to a click" treatment as the breadcrumb's own
+              "Help Center" crumb in ArticleDetail. Returns to the article
+              list from wherever you are on the page, the way a page
+              title/logo commonly does; a no-op when you're on the list
+              already. */}
+          <button
+            type="button"
+            onClick={closeArticle}
+            className="text-left transition-colors duration-150 hover:text-fg-muted"
+          >
+            Help Center
+          </button>
+        </h1>
         <p className="text-xs text-fg-muted">
           Role-filtered operating guides: search, browse by category, or read an article
         </p>
