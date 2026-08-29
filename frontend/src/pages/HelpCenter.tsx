@@ -25,7 +25,7 @@ import { getHelpArticle, getHelpArticles } from "@/api/help"
 import type { HelpArticleSummary } from "@/api/help"
 import { Badge } from "@/components/ui/Badge"
 import { focusRing } from "@/components/ui/Button"
-import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
+import { OverlayErrorBanner } from "@/components/ui/OverlayErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 import { getApiErrorMessage } from "@/api/client"
@@ -158,31 +158,34 @@ export default function HelpCenter() {
             className="mb-6"
           />
 
-          {listQuery.isError ? (
-            <QueryErrorBanner
-              error={listQuery.error}
-              fallback="Unable to load help articles."
-              onRetry={() => listQuery.refetch()}
-            />
-          ) : null}
-
-          {listQuery.isLoading ? (
-            <p className="py-8 text-center text-caption text-fg-muted">Loading articles…</p>
-          ) : showFaqFallback ? (
-            <div>
-              <p className="mb-4 text-caption text-fg-muted">
-                No articles matched &ldquo;{debouncedSearch}&rdquo;. Here are some frequently asked
-                questions:
+          {/* `relative` so a failed list query overlays this region instead
+              of pushing it down and back up every time the query fails or
+              recovers — see OverlayErrorBanner. */}
+          <div className="relative">
+            {listQuery.isError ? (
+              <OverlayErrorBanner
+                error={listQuery.error}
+                fallback="Unable to load help articles."
+                onRetry={() => listQuery.refetch()}
+              />
+            ) : listQuery.isLoading ? (
+              <p className="py-8 text-center text-caption text-fg-muted">Loading articles…</p>
+            ) : showFaqFallback ? (
+              <div>
+                <p className="mb-4 text-caption text-fg-muted">
+                  No articles matched &ldquo;{debouncedSearch}&rdquo;. Here are some frequently
+                  asked questions:
+                </p>
+                <ArticleGrid articles={topFaqs} onSelect={openArticle} />
+              </div>
+            ) : items.length === 0 ? (
+              <p className="py-8 text-center text-caption text-fg-muted">
+                No articles found for the current filters.
               </p>
-              <ArticleGrid articles={topFaqs} onSelect={openArticle} />
-            </div>
-          ) : items.length === 0 ? (
-            <p className="py-8 text-center text-caption text-fg-muted">
-              No articles found for the current filters.
-            </p>
-          ) : (
-            <ArticleGrid articles={items} onSelect={openArticle} />
-          )}
+            ) : (
+              <ArticleGrid articles={items} onSelect={openArticle} />
+            )}
+          </div>
         </>
       )}
     </div>
