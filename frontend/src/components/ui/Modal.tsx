@@ -93,7 +93,7 @@ export function Modal({
         >
           {(title || icon) && (
             <div className="px-6 pt-6 pb-4 flex items-start justify-between">
-              <div className="flex items-start gap-4">
+              <div className="flex items-center gap-4">
                 {icon}
                 <div>
                   {title && (
