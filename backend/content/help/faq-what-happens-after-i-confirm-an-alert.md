@@ -17,7 +17,7 @@ event. It stays that way until you either resolve it (scene cleared) or dismiss 
 correction (it wasn't a real accident after all).
 
 The incident also shows up right away in the floating **ONGOING** tray, so you (or any
-other operator) can find it again without hunting through the full incident list — see
+other operator) can find it again without hunting through the full incident list. See
 [Reviewing Ongoing Incidents in the Tray](reviewing-ongoing-incidents-in-the-tray), and
 [Confirming an Accident Alert](confirming-an-accident-alert) for what to check before
 confirming in the first place.

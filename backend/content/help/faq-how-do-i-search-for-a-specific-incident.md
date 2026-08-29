@@ -11,12 +11,12 @@ is_faq: true
 ![The Detections list's search box, alongside date, status, camera, and operator
 filters](/help/detections-filters.png)
 
-Use the search box on the incident list — it matches against the incident number and
+Use the search box on the incident list. It matches against the incident number and
 against camera names. You can combine it with the date, status, camera, and operator
 filters to narrow things down further; searching and filtering work together rather
 than one replacing the other.
 
 If you're not sure of the exact incident number, a partial camera name is usually
-faster than guessing digits — see [Viewing and Filtering
+faster than guessing digits. See [Viewing and Filtering
 Incidents](viewing-and-filtering-incidents) for the full set of filters available and a
 tip on which one to reach for first.

@@ -14,7 +14,7 @@ volume slider, and snooze duration field](/help/alarm-settings.png)
 ## Where to find it
 
 On your Profile page, the **Alarm Settings** card lets you personalize how the accident
-alarm sounds for you specifically — this is a per-person setting, not shared across the
+alarm sounds for you specifically. This is a per-person setting, not shared across the
 team. If several operators use the same shared workstation across shifts, each person's
 own login carries their own alarm preferences, so switching accounts also switches
 which sound and volume plays for that session.
@@ -27,7 +27,7 @@ so you can hear it before saving, as long as your volume isn't muted.
 
 ## Volume
 
-Drag the slider from 0 to 100. Setting it to 0 mutes the alarm entirely — the alert
+Drag the slider from 0 to 100. Setting it to 0 mutes the alarm entirely: the alert
 popup itself still appears and still needs a decision, but no sound plays. A warning
 under the slider reminds you when you've muted it. Use the **Test** button at any time
 to hear the current sound at the current volume without waiting for a real alert.
@@ -35,7 +35,7 @@ to hear the current sound at the current volume without waiting for a real alert
 ## Snooze duration
 
 This is how long the alarm stays quiet after you press the snooze button on a live
-alert — see [The Accident Alert Popup and the Alarm](the-accident-alert-popup-and-the-alarm).
+alert. See [The Accident Alert Popup and the Alarm](the-accident-alert-popup-and-the-alarm).
 The field enforces a minimum and maximum number of seconds, shown as a hint under the
 field; entering something outside that range is rejected before it's saved.
 
@@ -48,7 +48,7 @@ change.
 ## A practical tip
 
 Test your chosen sound and volume at the start of a shift, in the actual room you'll be
-working in, rather than assuming it'll be loud enough — a volume that sounds fine on
+working in, rather than assuming it'll be loud enough. A volume that sounds fine on
 headphones can be too quiet over the room's ambient noise, and the whole point of the
 alarm is that you notice it. See [The Accident Alert Popup and the
 Alarm](the-accident-alert-popup-and-the-alarm) for what the alarm actually sounds like
