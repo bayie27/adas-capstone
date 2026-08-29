@@ -179,8 +179,8 @@ describe("SystemHealth page refactored view", () => {
 
     expect(await screen.findByText("System Health")).toBeInTheDocument()
 
-    // Inference Latency and Processing Speed should show "Engine error"
-    const engineErrors = await screen.findAllByText("Engine error")
-    expect(engineErrors.length).toBe(2)
+    // Inference Latency should show "Engine error" and Processing Speed should show "Stream error"
+    expect(await screen.findByText("Engine error")).toBeInTheDocument()
+    expect(await screen.findByText("Stream error")).toBeInTheDocument()
   })
 })

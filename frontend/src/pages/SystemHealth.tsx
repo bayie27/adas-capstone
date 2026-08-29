@@ -135,7 +135,7 @@ function renderProcessingSpeedValue(live: SystemHealthLiveResponse | undefined):
   if (live.avg_fps === null) {
     return (
       <span className="inline-flex items-center gap-[14px]">
-        <span className="text-xl font-semibold text-danger sm:text-2xl">Engine error</span>
+        <span className="text-xl font-semibold text-danger sm:text-2xl">Stream error</span>
         <BadgeDot tone="danger" />
       </span>
     )
