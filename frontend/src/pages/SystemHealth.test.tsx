@@ -87,6 +87,12 @@ describe("SystemHealth page refactored view", () => {
     expect(screen.getByText("Inference Latency")).toBeInTheDocument()
     expect(screen.getByText("Processing Speed")).toBeInTheDocument()
     expect(screen.getByText("Disk Storage Usage")).toBeInTheDocument()
+
+    // Tooltip info triggers for 4 KPI StatCards
+    expect(screen.getByRole("button", { name: "About Server Uptime" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "About Inference Latency" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "About Processing Speed" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "About Disk Storage Usage" })).toBeInTheDocument()
   })
 
   it("renders retained performance charts and range tabs directly on the page", async () => {

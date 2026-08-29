@@ -498,6 +498,7 @@ export default function SystemHealth() {
           value={formatUptime(live?.host_uptime_seconds)}
           isLoading={liveQuery.isLoading}
           subtext={formatServerUptimeSubtext(live)}
+          tooltip="TODO: explain this metric"
         />
         <StatCard
           icon={RiTimerLine}
@@ -514,6 +515,7 @@ export default function SystemHealth() {
           }
           isLoading={liveQuery.isLoading}
           subtext={formatSampleCameraSubtext(live)}
+          tooltip="TODO: explain this metric"
         />
         <StatCard
           icon={RiDashboard3Line}
@@ -530,6 +532,7 @@ export default function SystemHealth() {
           }
           isLoading={liveQuery.isLoading}
           subtext={formatSampleCameraSubtext(live)}
+          tooltip="TODO: explain this metric"
         />
         <StatCard
           icon={RiHardDrive2Line}
@@ -546,6 +549,7 @@ export default function SystemHealth() {
           }
           isLoading={liveQuery.isLoading}
           subtext={formatDiskSubtext(live)}
+          tooltip="TODO: explain this metric"
         />
       </div>
 
