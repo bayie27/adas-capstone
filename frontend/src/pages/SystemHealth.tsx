@@ -87,6 +87,69 @@ function formatFps(value: number | null | undefined): string {
 }
 
 /**
+ * Distinguishes normal idle behavior (0 cameras reporting -> neutral grey dot + N/A)
+ * from genuine AI engine failure (cameras connected/reporting, but inference is null -> red dot + "Engine error")
+ * from normal healthy state (cameras reporting + latency measured -> green dot + ms value).
+ */
+function renderInferenceLatencyValue(live: SystemHealthLiveResponse | undefined): ReactNode {
+  if (!live) return formatMs(undefined)
+
+  if (live.sample_camera_count === 0) {
+    return (
+      <span className="inline-flex items-center gap-[14px]">
+        {formatMs(null)}
+        <BadgeDot tone="neutral" />
+      </span>
+    )
+  }
+
+  if (live.avg_inference_latency_ms === null) {
+    return (
+      <span className="inline-flex items-center gap-[14px]">
+        <span className="text-xl font-semibold text-danger sm:text-2xl">Engine error</span>
+        <BadgeDot tone="danger" />
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-[14px]">
+      {formatMs(live.avg_inference_latency_ms)}
+      <BadgeDot tone="success" />
+    </span>
+  )
+}
+
+function renderProcessingSpeedValue(live: SystemHealthLiveResponse | undefined): ReactNode {
+  if (!live) return formatFps(undefined)
+
+  if (live.sample_camera_count === 0) {
+    return (
+      <span className="inline-flex items-center gap-[14px]">
+        {formatFps(null)}
+        <BadgeDot tone="neutral" />
+      </span>
+    )
+  }
+
+  if (live.avg_fps === null) {
+    return (
+      <span className="inline-flex items-center gap-[14px]">
+        <span className="text-xl font-semibold text-danger sm:text-2xl">Engine error</span>
+        <BadgeDot tone="danger" />
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-[14px]">
+      {formatFps(live.avg_fps)}
+      <BadgeDot tone="success" />
+    </span>
+  )
+}
+
+/**
  * Three distinct states the backend reports and nothing distinguished
  * before this: `collected_at: null` (the collector hasn't finished its
  * first sample — not an error, the page has only just started), `stale:
@@ -503,16 +566,7 @@ export default function SystemHealth() {
         <StatCard
           icon={RiTimerLine}
           title="Inference Latency"
-          value={
-            live ? (
-              <span className="inline-flex items-center gap-[14px]">
-                {formatMs(live.avg_inference_latency_ms)}
-                <BadgeDot tone={live.sample_camera_count > 0 ? "success" : "danger"} />
-              </span>
-            ) : (
-              formatMs(undefined)
-            )
-          }
+          value={renderInferenceLatencyValue(live)}
           isLoading={liveQuery.isLoading}
           subtext={formatSampleCameraSubtext(live)}
           tooltip="How fast the AI reviews each camera frame to detect accidents. Shows N/A when no cameras are actively connected."
@@ -520,16 +574,7 @@ export default function SystemHealth() {
         <StatCard
           icon={RiDashboard3Line}
           title="Processing Speed"
-          value={
-            live ? (
-              <span className="inline-flex items-center gap-[14px]">
-                {formatFps(live.avg_fps)}
-                <BadgeDot tone={live.sample_camera_count > 0 ? "success" : "danger"} />
-              </span>
-            ) : (
-              formatFps(undefined)
-            )
-          }
+          value={renderProcessingSpeedValue(live)}
           isLoading={liveQuery.isLoading}
           subtext={formatSampleCameraSubtext(live)}
           tooltip="How many video frames per second the system is processing from live camera feeds. Shows N/A when no cameras are actively streaming."

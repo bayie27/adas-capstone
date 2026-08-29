@@ -143,4 +143,44 @@ describe("SystemHealth page refactored view", () => {
     // GPU Section removed (standalone table header / empty state)
     expect(screen.queryByText("No GPU detected on this machine.")).not.toBeInTheDocument()
   })
+
+  it("renders neutral dot and N/A when 0 cameras are reporting (idle state)", async () => {
+    const idleLive: SystemHealthLiveResponse = {
+      ...mockLive,
+      sample_camera_count: 0,
+      avg_inference_latency_ms: null,
+      avg_fps: null,
+    }
+    vi.mocked(getSystemHealthLive).mockResolvedValue(idleLive)
+    vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
+
+    const { container } = renderSystemHealth()
+
+    expect(await screen.findByText("No cameras currently reporting")).toBeInTheDocument()
+
+    // Inference Latency should show N/A, not "Engine error"
+    expect(screen.queryByText("Engine error")).not.toBeInTheDocument()
+    // Should have neutral dot indicators
+    const neutralDots = container.querySelectorAll(".bg-fg-muted.rounded-full")
+    expect(neutralDots.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("renders Engine error and red dot when cameras are connected but inference has failed", async () => {
+    const errorLive: SystemHealthLiveResponse = {
+      ...mockLive,
+      sample_camera_count: 2,
+      avg_inference_latency_ms: null,
+      avg_fps: null,
+    }
+    vi.mocked(getSystemHealthLive).mockResolvedValue(errorLive)
+    vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
+
+    renderSystemHealth()
+
+    expect(await screen.findByText("System Health")).toBeInTheDocument()
+
+    // Inference Latency and Processing Speed should show "Engine error"
+    const engineErrors = await screen.findAllByText("Engine error")
+    expect(engineErrors.length).toBe(2)
+  })
 })
