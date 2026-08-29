@@ -218,6 +218,7 @@ cython_debug/
 # Codex and Antigravity both read, so it is tracked; everything else here is local.
 .agents/*
 !.agents/skills/
+.worktrees/
 skills-lock.json
 .uv-cache/
 
