@@ -528,7 +528,7 @@ export default function SystemHealth() {
     queryFn: getSystemHealthLive,
     refetchInterval: (query) =>
       // Stop polling if the endpoint doesn't exist yet (404/500)
-      query.state.error ? false : 15_000,
+      query.state.error ? false : 5_000,
     retry: 1,
   })
 
