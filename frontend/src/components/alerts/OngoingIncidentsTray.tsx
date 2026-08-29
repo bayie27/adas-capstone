@@ -163,7 +163,6 @@ export function OngoingIncidentsTray() {
     : null
 
   function handleOpenDetails(alert: AlertLog) {
-    setIsOpen(false)
     setThumbHover(null)
     setActiveDetailAlert(alert)
     // Filter out stale "Now Ongoing" notices from when the incident was initially
