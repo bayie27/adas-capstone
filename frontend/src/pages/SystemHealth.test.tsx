@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { render, screen, fireEvent } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
 import SystemHealth from "./SystemHealth"
@@ -182,5 +182,60 @@ describe("SystemHealth page refactored view", () => {
     // Inference Latency should show "Engine error" and Processing Speed should show "Stream error"
     expect(await screen.findByText("Engine error")).toBeInTheDocument()
     expect(await screen.findByText("Stream error")).toBeInTheDocument()
+  })
+
+  it("renders warning amber dot for AI Processing Time when latency is between 45ms and 70ms", async () => {
+    const warningLive: SystemHealthLiveResponse = {
+      ...mockLive,
+      sample_camera_count: 2,
+      avg_inference_latency_ms: 55.0,
+      avg_fps: 15.0,
+    }
+    vi.mocked(getSystemHealthLive).mockResolvedValue(warningLive)
+    vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
+
+    const { container } = renderSystemHealth()
+
+    expect(await screen.findByText("55ms")).toBeInTheDocument()
+    const warningDots = container.querySelectorAll(".bg-warning.rounded-full")
+    expect(warningDots.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("renders warning amber dot for Processing Speed when frame rate is below 10.0 fps", async () => {
+    const lowFpsLive: SystemHealthLiveResponse = {
+      ...mockLive,
+      sample_camera_count: 2,
+      avg_inference_latency_ms: 25.0,
+      avg_fps: 8.5,
+    }
+    vi.mocked(getSystemHealthLive).mockResolvedValue(lowFpsLive)
+    vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
+
+    const { container } = renderSystemHealth()
+
+    expect(await screen.findByText("8.5 fps")).toBeInTheDocument()
+    const warningDots = container.querySelectorAll(".bg-warning.rounded-full")
+    expect(warningDots.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("opens performance metrics reference modal when clicking Learn more inside tooltip", async () => {
+    vi.mocked(getSystemHealthLive).mockResolvedValue(mockLive)
+    vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
+
+    renderSystemHealth()
+
+    expect(await screen.findByText("System Health")).toBeInTheDocument()
+
+    // Trigger tooltip by hovering/focusing the info icon for AI Processing Time
+    const infoButton = screen.getByRole("button", { name: "About AI Processing Time" })
+    fireEvent.mouseEnter(infoButton.parentElement!)
+
+    // Click Learn more button inside tooltip
+    const learnMoreButtons = await screen.findAllByRole("button", { name: /Learn more/i })
+    fireEvent.click(learnMoreButtons[0])
+
+    // Modal dialog should appear
+    expect(await screen.findByRole("dialog")).toBeInTheDocument()
+    expect(screen.getByText("Performance Metrics Reference")).toBeInTheDocument()
   })
 })
