@@ -294,8 +294,8 @@ export function GlobalAlerts() {
         {/* ── Section 1: Header ─────────────────────────────────────────────
             Edge-to-edge solid background header enforcing urgency.
             Text: ACCIDENT DETECTED, font size 24px, weight 700, line-height 36px, color #252529 */}
-        <div className="w-full h-[55px] bg-danger px-6 sm:px-[34px] flex items-center justify-center">
-          <h2 className="text-center text-[24px] font-bold font-sans uppercase leading-[36px] tracking-wide text-surface-3">
+        <div className="w-full h-[55px] bg-danger px-6 sm:px-[34px] flex items-center justify-start">
+          <h2 className="text-left text-[24px] font-bold font-sans uppercase leading-[36px] tracking-wide text-surface-3">
             Accident Detected
           </h2>
         </div>
