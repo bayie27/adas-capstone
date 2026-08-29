@@ -200,4 +200,21 @@ describe("SystemHealth page refactored view", () => {
     const warningDots = container.querySelectorAll(".bg-warning.rounded-full")
     expect(warningDots.length).toBeGreaterThanOrEqual(1)
   })
+
+  it("renders warning amber dot for Processing Speed when frame rate is below 10.0 fps", async () => {
+    const lowFpsLive: SystemHealthLiveResponse = {
+      ...mockLive,
+      sample_camera_count: 2,
+      avg_inference_latency_ms: 25.0,
+      avg_fps: 8.5,
+    }
+    vi.mocked(getSystemHealthLive).mockResolvedValue(lowFpsLive)
+    vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
+
+    const { container } = renderSystemHealth()
+
+    expect(await screen.findByText("8.5 fps")).toBeInTheDocument()
+    const warningDots = container.querySelectorAll(".bg-warning.rounded-full")
+    expect(warningDots.length).toBeGreaterThanOrEqual(1)
+  })
 })

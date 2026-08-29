@@ -124,6 +124,13 @@ function renderInferenceLatencyValue(live: SystemHealthLiveResponse | undefined)
   )
 }
 
+/**
+ * Four-state indicator for Processing Speed:
+ * - 0 cameras reporting -> neutral grey dot + N/A (idle)
+ * - cameras reporting, fps is null -> danger red dot + "Stream error" (fault)
+ * - fps < 10.0 -> warning amber dot (sub-optimal / low fps)
+ * - fps >= 10.0 (10.0–15.0 fps) -> success green dot (optimal)
+ */
 function renderProcessingSpeedValue(live: SystemHealthLiveResponse | undefined): ReactNode {
   if (!live) return formatFps(undefined)
 
@@ -145,10 +152,12 @@ function renderProcessingSpeedValue(live: SystemHealthLiveResponse | undefined):
     )
   }
 
+  const tone = live.avg_fps < 10.0 ? "warning" : "success"
+
   return (
     <span className="inline-flex items-center gap-[14px]">
       {formatFps(live.avg_fps)}
-      <BadgeDot tone="success" />
+      <BadgeDot tone={tone} />
     </span>
   )
 }
