@@ -1,9 +1,9 @@
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { MemoryRouter } from "react-router-dom"
 
 import { Sidebar } from "./Sidebar"
+import { renderWithProviders } from "@/test/wrapper"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useAlertStore } from "@/store/useAlertStore"
 import * as authApi from "@/api/auth"
@@ -22,12 +22,23 @@ vi.mock("@/api/auth", () => ({
   logoutUser: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock("@/api/users", () => ({
+  getMyProfile: vi.fn().mockResolvedValue({
+    user_id: 1,
+    username: "admin",
+    first_name: "System",
+    last_name: "Administrator",
+    role: "Admin",
+    is_active: true,
+  }),
+}))
+
 describe("Sidebar", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useAuthStore.setState({
       role: "Admin",
-      username: "olivia.quinn",
+      username: "admin",
     })
     useAlertStore.setState({
       clockOffsetMs: 0,
@@ -35,14 +46,11 @@ describe("Sidebar", () => {
     })
   })
 
-  it("renders user information and inline logout button with hover styling", () => {
-    render(
-      <MemoryRouter>
-        <Sidebar />
-      </MemoryRouter>,
-    )
+  it("renders user information and initials matching profile data", async () => {
+    render(renderWithProviders(<Sidebar />))
 
-    expect(screen.getByText("olivia.quinn")).toBeInTheDocument()
+    expect(await screen.findByText("System Administrator")).toBeInTheDocument()
+    expect(screen.getByText("SA")).toBeInTheDocument()
     expect(screen.getByText("Administrator")).toBeInTheDocument()
 
     const logoutButton = screen.getByRole("button", { name: "Log Out" })
@@ -54,11 +62,7 @@ describe("Sidebar", () => {
   it("calls logoutUser, clears session, and navigates to /login when clicked", async () => {
     const user = userEvent.setup()
 
-    render(
-      <MemoryRouter>
-        <Sidebar />
-      </MemoryRouter>,
-    )
+    render(renderWithProviders(<Sidebar />))
 
     const logoutButton = screen.getByRole("button", { name: "Log Out" })
     await user.click(logoutButton)
@@ -71,11 +75,7 @@ describe("Sidebar", () => {
   it("renders navigation items according to user role", () => {
     useAuthStore.setState({ role: "Operator" })
 
-    render(
-      <MemoryRouter>
-        <Sidebar />
-      </MemoryRouter>,
-    )
+    render(renderWithProviders(<Sidebar />))
 
     expect(screen.getByText("Dashboard")).toBeInTheDocument()
     expect(screen.getByText("Cameras")).toBeInTheDocument()
@@ -87,11 +87,7 @@ describe("Sidebar", () => {
   it("displays clock skew warning when clockOffsetMs exceeds threshold", () => {
     useAlertStore.setState({ clockOffsetMs: 75_000 })
 
-    render(
-      <MemoryRouter>
-        <Sidebar />
-      </MemoryRouter>,
-    )
+    render(renderWithProviders(<Sidebar />))
 
     expect(screen.getByRole("status")).toHaveTextContent("This device's clock is off by")
   })

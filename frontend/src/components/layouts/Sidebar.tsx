@@ -1,9 +1,11 @@
+import { useQuery } from "@tanstack/react-query"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 
 import { logoutUser } from "@/api/auth"
+import { getMyProfile } from "@/api/users"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
-import { formatUserRole, getUserInitials } from "@/utils/format"
+import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/format"
 import { formatDuration } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
 import { focusRing } from "@/components/ui/Button"
@@ -114,10 +116,23 @@ export function Sidebar() {
     },
   ]
 
-  const displayName = username || "guest"
-  const displayRole = formatUserRole(role)
+  const profileQuery = useQuery({
+    queryKey: ["my-profile"],
+    queryFn: getMyProfile,
+    enabled: Boolean(username),
+    staleTime: 60_000,
+  })
 
-  const initials = getUserInitials("", "", displayName)
+  const profile = profileQuery.data
+
+  const displayName = profile ? getUserFullName(profile) || profile.username : username || "guest"
+  const displayRole = formatUserRole(profile?.role ?? role)
+
+  const initials = getUserInitials(
+    profile?.first_name ?? "",
+    profile?.last_name ?? "",
+    profile?.username ?? username ?? "",
+  )
 
   const handleLogout = () => {
     // Best-effort — clear the local session either way. The cookie may
