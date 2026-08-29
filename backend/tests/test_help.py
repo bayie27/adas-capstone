@@ -277,6 +277,38 @@ class TestSearch:
         slugs = [a["slug"] for a in resp.json()["items"]]
         assert slugs[0] == "strong-match"
 
+    def test_ranking_prefers_title_match_over_denser_body_match(
+        self, client: TestClient, session: Session
+    ):
+        """A title match must outrank a body-only match even when the body
+        repeats the term far more densely — the bug this guards against: an
+        article whose *title* is the real answer (e.g. "Viewing Camera
+        Details") losing to one that just happens to mention the search term
+        several times in ordinary prose (e.g. an unrelated FAQ). Regression
+        test for the bm25() column-weight fix in _fts_search."""
+        make_operator(session)
+        _seed_rows(
+            session,
+            [
+                {
+                    "slug": "body-only-match",
+                    "title": "Something Else Entirely",
+                    "body_markdown": "camera camera camera camera camera camera",
+                },
+                {
+                    "slug": "title-match",
+                    "title": "Viewing Camera Details",
+                    "body_markdown": "What you see when you click into a camera.",
+                },
+            ],
+        )
+        headers = auth_headers(client, "operator", "Operator123")
+        resp = client.get(
+            "/api/help/articles", params={"search": "camera"}, headers=headers
+        )
+        slugs = [a["slug"] for a in resp.json()["items"]]
+        assert slugs[0] == "title-match"
+
     def test_category_filter_combines_with_role_filter(
         self, client: TestClient, session: Session
     ):

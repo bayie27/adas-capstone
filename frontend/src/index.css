@@ -211,3 +211,36 @@
 .animate-toast-in {
   animation: toastSlideIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* --- Help Center grid item filtering (search/category narrows the set) --- */
+@keyframes gridItemEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes gridItemLeave {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+.animate-grid-item-enter {
+  animation: gridItemEnter 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-grid-item-leave {
+  /* ease-in, the mirror of the entrance curve above, so a card leaving
+     feels like it's settling out rather than bouncing away. */
+  animation: gridItemLeave 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}

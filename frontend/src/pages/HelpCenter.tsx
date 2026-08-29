@@ -1,24 +1,27 @@
-import { useMemo, useState, type AnchorHTMLAttributes, type ReactNode } from "react"
-import { useQuery } from "@tanstack/react-query"
-import ReactMarkdown from "react-markdown"
-import rehypeSanitize from "rehype-sanitize"
-import {
-  RiArrowLeftLine,
-  RiArrowRightSLine,
-  RiBookOpenLine,
-  RiQuestionLine,
-} from "@remixicon/react"
+import { useMemo, useState } from "react"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
+import { useSearchParams } from "react-router-dom"
 
 import { getHelpArticle, getHelpArticles } from "@/api/help"
-import type { HelpArticleSummary } from "@/api/help"
-import { Badge } from "@/components/ui/Badge"
-import { FilterSelect } from "@/components/ui/FilterSelect"
-import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
+import { OverlayErrorBanner } from "@/components/ui/OverlayErrorBanner"
 import { SearchInput } from "@/components/ui/SearchInput"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
-import { getApiErrorMessage } from "@/api/client"
+import { ArticleDetail } from "./help/ArticleDetail"
+import { ArticleGrid } from "./help/ArticleGrid"
+import { ArticleGridSkeleton } from "./help/ArticleGridSkeleton"
+import { CategoryTabs } from "./help/CategoryTabs"
+import { EMPTY_ARTICLES, useAnimatedArticles } from "./help/useAnimatedArticles"
 
 const HELP_CATEGORIES_QUERY_KEY = ["help-categories"] as const
+
+/** A search term echoed back into an empty-state sentence can otherwise run
+ * the full width of the page (up to the 200-char backend limit) with no
+ * spaces to wrap on, e.g. a pasted string with no word breaks. Truncating
+ * what's displayed (never what's actually searched) keeps that sentence
+ * readable regardless of what was typed. */
+function truncateForDisplay(term: string, max = 60): string {
+  return term.length > max ? `${term.slice(0, max)}…` : term
+}
 
 /**
  * No Figma frame (D-5). Follows the same list-then-detail shape as
@@ -26,11 +29,22 @@ const HELP_CATEGORIES_QUERY_KEY = ["help-categories"] as const
  * category), a card grid of articles, and a detail view that replaces the
  * grid rather than opening a modal — an article is prose meant to be read
  * at length, which a modal is the wrong shape for.
+ *
+ * The page itself only owns state, data-fetching, and layout — every visual
+ * piece (the category tablist, the grid, an article's own reading view, and
+ * their loading skeletons) lives in ./help/ as its own component, so this
+ * file stays a short orchestrator rather than growing every time one of
+ * those pieces gets more detailed.
  */
 export default function HelpCenter() {
   const [searchTerm, setSearchTerm] = useState("")
   const [category, setCategory] = useState("")
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
+  // The open article lives in the URL, not local state, so it gets its own
+  // browser-history entry — otherwise the browser's Back button has nothing
+  // of ours to pop and skips straight past the Help Center to whatever page
+  // was open before it, which is the bug this fixes.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedSlug = searchParams.get("article")
   const debouncedSearch = useDebouncedValue(searchTerm.trim(), 300)
 
   // Categories need the *unfiltered* population, independent of whatever
@@ -43,13 +57,10 @@ export default function HelpCenter() {
     staleTime: 5 * 60_000,
   })
 
-  const categoryOptions = useMemo(() => {
-    const unique = [...new Set((categoriesQuery.data?.items ?? []).map((a) => a.category))].sort()
-    return [
-      { value: "", label: "All categories" },
-      ...unique.map((name) => ({ value: name, label: name })),
-    ]
-  }, [categoriesQuery.data])
+  const categoryValues = useMemo(
+    () => [...new Set((categoriesQuery.data?.items ?? []).map((a) => a.category))].sort(),
+    [categoriesQuery.data],
+  )
 
   const listQuery = useQuery({
     queryKey: ["help-articles", debouncedSearch, category],
@@ -58,6 +69,11 @@ export default function HelpCenter() {
         search: debouncedSearch || undefined,
         category: category || undefined,
       }),
+    // Keeps the previous result set on screen (and `isLoading` false) while
+    // a new search or category refetches, instead of the whole grid
+    // dropping out to a loading skeleton on every keystroke — the grid then
+    // only ever has to animate a card in or out, never blink.
+    placeholderData: keepPreviousData,
   })
 
   const articleQuery = useQuery({
@@ -66,270 +82,128 @@ export default function HelpCenter() {
     enabled: selectedSlug !== null,
   })
 
-  const items = listQuery.data?.items ?? []
-  const topFaqs = listQuery.data?.top_faqs ?? []
+  const items = listQuery.data?.items ?? EMPTY_ARTICLES
+  const topFaqs = listQuery.data?.top_faqs ?? EMPTY_ARTICLES
   // Mirrors the backend's own condition exactly (`searched and not articles`
   // in routes/help.py) rather than reinventing when the fallback applies —
   // it must never appear on a plain browse or a category-only filter.
   const showFaqFallback = debouncedSearch !== "" && items.length === 0 && topFaqs.length > 0
+  const displayedItems = showFaqFallback ? topFaqs : items
+  const animatedGrid = useAnimatedArticles(displayedItems)
 
   function openArticle(slug: string) {
-    setSelectedSlug(slug)
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set("article", slug)
+      return next
+    })
+  }
+
+  function closeArticle() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete("article")
+      return next
+    })
+  }
+
+  function goToCategory(nextCategory: string) {
+    closeArticle()
+    setCategory(nextCategory)
   }
 
   return (
     <div className="mx-auto max-w-[1400px] p-8">
       <div className="mb-6">
-        <h1 className="mb-0.5 text-xl font-semibold text-fg">Help Center</h1>
+        <h1 className="mb-0.5 text-xl font-semibold text-fg">
+          {/* Clickable, not styled as a button — same "plain text that
+              happens to react to a click" treatment as the breadcrumb's own
+              "Help Center" crumb in ArticleDetail. Returns to the article
+              list from wherever you are on the page, the way a page
+              title/logo commonly does; a no-op when you're on the list
+              already. */}
+          <button
+            type="button"
+            onClick={closeArticle}
+            className="text-left transition-colors duration-150 hover:text-fg-muted"
+          >
+            Help Center
+          </button>
+        </h1>
         <p className="text-xs text-fg-muted">
-          Role-filtered operating guides — search, browse by category, or read an article
+          Role-filtered operating guides: search, browse by category, or read an article
         </p>
       </div>
 
       {selectedSlug ? (
         <ArticleDetail
+          key={selectedSlug}
           query={articleQuery}
-          onBack={() => setSelectedSlug(null)}
+          onBack={closeArticle}
           onNavigateToSlug={openArticle}
+          onNavigateToCategory={goToCategory}
         />
       ) : (
-        <>
+        // `animate-modal-enter` plays once whenever this branch (re)mounts —
+        // switching back from reading an article, or the page's first
+        // load — rather than on every keystroke, since React keeps this
+        // same DOM node across re-renders within the branch.
+        <div className="animate-modal-enter">
+          {/* One toolbar row (search + category), matching the
+              search-plus-filters convention every other list page in this
+              app already uses (e.g. Cameras.tsx) rather than the two
+              stacked full-width rows this page used to have. */}
           <div className="mb-6 flex flex-wrap items-center gap-2.5">
             <SearchInput
               value={searchTerm}
               onChange={setSearchTerm}
               placeholder="Search articles..."
+              maxLength={200}
             />
-            <FilterSelect value={category} options={categoryOptions} onChange={setCategory} />
+            <CategoryTabs categories={categoryValues} value={category} onChange={setCategory} />
           </div>
 
-          {listQuery.isError ? (
-            <QueryErrorBanner
-              error={listQuery.error}
-              fallback="Unable to load help articles."
-              onRetry={() => listQuery.refetch()}
-            />
-          ) : null}
-
-          {listQuery.isLoading ? (
-            <p className="py-8 text-center text-caption text-fg-muted">Loading articles…</p>
-          ) : showFaqFallback ? (
-            <div>
-              <p className="mb-4 text-caption text-fg-muted">
-                No articles matched &ldquo;{debouncedSearch}&rdquo;. Here are some frequently asked
-                questions:
-              </p>
-              <ArticleGrid articles={topFaqs} onSelect={openArticle} />
-            </div>
-          ) : items.length === 0 ? (
-            <p className="py-8 text-center text-caption text-fg-muted">
-              No articles found for the current filters.
-            </p>
-          ) : (
-            <ArticleGrid articles={items} onSelect={openArticle} />
-          )}
-        </>
+          {/* `relative` so a failed list query overlays this region instead
+              of pushing it down and back up every time the query fails or
+              recovers — see OverlayErrorBanner. */}
+          <div className="relative">
+            {listQuery.isError ? (
+              <OverlayErrorBanner
+                error={listQuery.error}
+                fallback="Unable to load help articles."
+                onRetry={() => listQuery.refetch()}
+              />
+            ) : listQuery.isLoading ? (
+              <ArticleGridSkeleton />
+            ) : (
+              <>
+                {showFaqFallback ? (
+                  <p className="mb-4 break-words text-caption text-fg-muted">
+                    No articles matched &ldquo;{truncateForDisplay(debouncedSearch)}&rdquo;. Here
+                    are some frequently asked questions:
+                  </p>
+                ) : displayedItems.length === 0 ? (
+                  <p className="py-8 text-center text-caption text-fg-muted">
+                    No articles found for the current filters.
+                  </p>
+                ) : null}
+                {/* Renders the outgoing set's leftover cards too (fading
+                    out) alongside whatever just matched — see
+                    useAnimatedArticles — so narrowing a search or category
+                    reads as the grid settling into its new shape rather
+                    than an instant swap. */}
+                {animatedGrid.items.length > 0 ? (
+                  <ArticleGrid
+                    articles={animatedGrid.items}
+                    onSelect={openArticle}
+                    isLeaving={animatedGrid.isLeaving}
+                  />
+                ) : null}
+              </>
+            )}
+          </div>
+        </div>
       )}
-    </div>
-  )
-}
-
-function ArticleGrid({
-  articles,
-  onSelect,
-}: {
-  articles: HelpArticleSummary[]
-  onSelect: (slug: string) => void
-}) {
-  return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {articles.map((article) => (
-        <button
-          key={article.slug}
-          type="button"
-          onClick={() => onSelect(article.slug)}
-          className="flex flex-col items-start rounded-lg border border-stroke bg-surface-1 p-5 text-left transition-colors duration-150 hover:border-stroke-strong hover:bg-surface-2"
-        >
-          <div className="mb-3 flex w-full items-center justify-between gap-2">
-            <Badge variant="subtle" tone="neutral">
-              {article.category}
-            </Badge>
-            {article.is_faq ? (
-              <RiQuestionLine size={15} className="shrink-0 text-fg-muted" aria-label="FAQ" />
-            ) : null}
-          </div>
-          <h3 className="text-secondary font-semibold text-fg">{article.title}</h3>
-          {article.summary ? (
-            <p className="mt-2 text-caption text-fg-muted">{article.summary}</p>
-          ) : null}
-          <span className="mt-4 flex items-center gap-1 text-caption font-medium text-fg-body">
-            Read article <RiArrowRightSLine size={14} />
-          </span>
-        </button>
-      ))}
-    </div>
-  )
-}
-
-/**
- * A body-relative link — e.g. `[Correcting a Mistaken
- * Confirmation](correcting-a-mistaken-confirmation)`, the cross-reference
- * shape the seeded articles actually use — is a slug, not a browsable URL:
- * this SPA has no route for it, so letting the browser navigate there
- * verbatim would 404 the whole app. Anything absolute (a real external URL,
- * or `mailto:`) opens normally in a new tab instead.
- */
-function isInternalSlugHref(href: string) {
-  return !/^([a-z][a-z0-9+.-]*:)/i.test(href)
-}
-
-function MarkdownLink({
-  href,
-  children,
-  onNavigateToSlug,
-}: AnchorHTMLAttributes<HTMLAnchorElement> & {
-  onNavigateToSlug: (slug: string) => void
-}) {
-  if (href && isInternalSlugHref(href)) {
-    return (
-      <button
-        type="button"
-        onClick={() => onNavigateToSlug(href)}
-        className="font-medium text-fg underline underline-offset-2 hover:text-fg-body"
-      >
-        {children}
-      </button>
-    )
-  }
-
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="font-medium text-fg underline underline-offset-2 hover:text-fg-body"
-    >
-      {children}
-    </a>
-  )
-}
-
-/** Markdown element styling — this app has no Tailwind Typography plugin, so
- * each block maps onto the same tokens the rest of the app already uses
- * rather than pulling in a second styling system for one page. */
-function markdownComponents(onNavigateToSlug: (slug: string) => void) {
-  return {
-    h1: ({ children }: { children?: ReactNode }) => (
-      <h2 className="mt-6 mb-3 text-lg font-semibold text-fg first:mt-0">{children}</h2>
-    ),
-    h2: ({ children }: { children?: ReactNode }) => (
-      <h3 className="mt-6 mb-3 text-base font-semibold text-fg first:mt-0">{children}</h3>
-    ),
-    h3: ({ children }: { children?: ReactNode }) => (
-      <h4 className="mt-5 mb-2 text-secondary font-semibold text-fg first:mt-0">{children}</h4>
-    ),
-    p: ({ children }: { children?: ReactNode }) => (
-      <p className="mb-4 text-secondary leading-relaxed text-fg-body last:mb-0">{children}</p>
-    ),
-    ul: ({ children }: { children?: ReactNode }) => (
-      <ul className="mb-4 list-disc space-y-1.5 pl-5 text-secondary text-fg-body last:mb-0">
-        {children}
-      </ul>
-    ),
-    ol: ({ children }: { children?: ReactNode }) => (
-      <ol className="mb-4 list-decimal space-y-1.5 pl-5 text-secondary text-fg-body last:mb-0">
-        {children}
-      </ol>
-    ),
-    li: ({ children }: { children?: ReactNode }) => <li>{children}</li>,
-    strong: ({ children }: { children?: ReactNode }) => (
-      <strong className="font-semibold text-fg">{children}</strong>
-    ),
-    blockquote: ({ children }: { children?: ReactNode }) => (
-      <blockquote className="mb-4 border-l-2 border-stroke pl-4 text-fg-muted italic last:mb-0">
-        {children}
-      </blockquote>
-    ),
-    hr: () => <hr className="my-6 border-stroke" />,
-    code: ({ children }: { children?: ReactNode }) => (
-      <code className="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption text-fg">
-        {children}
-      </code>
-    ),
-    pre: ({ children }: { children?: ReactNode }) => (
-      <pre className="mb-4 overflow-x-auto rounded-md bg-surface-2 p-4 font-mono text-caption text-fg-body last:mb-0">
-        {children}
-      </pre>
-    ),
-    a: (props: AnchorHTMLAttributes<HTMLAnchorElement>) => (
-      <MarkdownLink {...props} onNavigateToSlug={onNavigateToSlug} />
-    ),
-  }
-}
-
-function ArticleDetail({
-  query,
-  onBack,
-  onNavigateToSlug,
-}: {
-  query: ReturnType<typeof useQuery<Awaited<ReturnType<typeof getHelpArticle>>>>
-  onBack: () => void
-  onNavigateToSlug: (slug: string) => void
-}) {
-  const components = useMemo(() => markdownComponents(onNavigateToSlug), [onNavigateToSlug])
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-6 flex items-center gap-1.5 text-caption font-medium text-fg-muted transition-colors duration-150 hover:text-fg"
-      >
-        <RiArrowLeftLine size={14} />
-        Back to articles
-      </button>
-
-      {query.isLoading ? (
-        <p className="py-8 text-center text-caption text-fg-muted">Loading article…</p>
-      ) : query.isError ? (
-        // A restricted slug 404s rather than 403ing, specifically so this
-        // response can never confirm the article exists. Render the
-        // backend's own message verbatim — softening it into "you don't
-        // have access to this" would undo that.
-        <p className="py-8 text-center text-caption text-danger">
-          {getApiErrorMessage(query.error, "Unable to load this article.")}
-        </p>
-      ) : query.data ? (
-        <article className="rounded-lg border border-stroke bg-surface-1 p-6">
-          <div className="mb-4 flex items-center gap-2">
-            <Badge variant="subtle" tone="neutral">
-              {query.data.category}
-            </Badge>
-            {query.data.is_faq ? (
-              <Badge variant="outline" tone="neutral">
-                FAQ
-              </Badge>
-            ) : null}
-          </div>
-          <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold text-fg">
-            <RiBookOpenLine size={18} className="shrink-0 text-fg-muted" />
-            {query.data.title}
-          </h2>
-          {query.data.summary ? (
-            <p className="mb-6 text-caption text-fg-muted">{query.data.summary}</p>
-          ) : null}
-          {/*
-            rehype-sanitize strips anything outside its safe-tag allowlist
-            before render. Article content is admin-authored and seeded, not
-            user-generated, which lowers the XSS risk but doesn't eliminate
-            it — the backend's own doc comment says as much: it never
-            renders HTML from article content, so this is the only place
-            that does, and it does so defensively.
-          */}
-          <ReactMarkdown rehypePlugins={[rehypeSanitize]} components={components}>
-            {query.data.body_markdown}
-          </ReactMarkdown>
-        </article>
-      ) : null}
     </div>
   )
 }

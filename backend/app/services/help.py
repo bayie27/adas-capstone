@@ -214,7 +214,16 @@ def _fts_match_query(terms: list[str]) -> str:
 def _fts_search(session: Session, raw_query: str) -> list[HelpArticle] | None:
     """Returns ranked articles, `[]` for no matches, or `None` if the FTS5
     virtual table is unavailable (edge case 6.17) so the caller can fall
-    back to LIKE."""
+    back to LIKE.
+
+    bm25()'s column weights (10 / 3 / 1, matching the table's own
+    title/summary/body_markdown column order) make a title match dominate
+    the ranking. Without them every column defaults to weight 1, and an
+    article whose long body happens to repeat the search term many times in
+    ordinary prose outranks the one article whose *title* is the actual
+    match — e.g. a search for "camera" put "How Do I Search for a Specific
+    Incident?" ahead of "Viewing Camera Details" before this was added.
+    """
     terms = _extract_terms(raw_query)
     if not terms:
         return []
@@ -227,7 +236,7 @@ def _fts_search(session: Session, raw_query: str) -> list[HelpArticle] | None:
                 FROM help_article_fts
                 JOIN help_article ha ON ha.article_id = help_article_fts.rowid
                 WHERE help_article_fts MATCH :query
-                ORDER BY bm25(help_article_fts), ha.sort_order, ha.title
+                ORDER BY bm25(help_article_fts, 10.0, 3.0, 1.0), ha.sort_order, ha.title
                 """
             ),
             {"query": _fts_match_query(terms)},

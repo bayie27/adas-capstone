@@ -236,6 +236,9 @@ __marimo__/
 *.jpg
 *.jpeg
 *.png
+# Help Center article screenshots are intentional, tracked content, not
+# incidental media.
+!frontend/public/help/*.png
 
 # Frontend
 # Logs
