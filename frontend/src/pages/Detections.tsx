@@ -61,11 +61,6 @@ import { RiEyeLine } from "@remixicon/react"
 // this problem at a page size of 8).
 const ALERTS_PAGE_SIZE = 10
 
-// Export always covers the historical closed-incident archive. Ongoing
-// accidents are excluded regardless of the current status filter so that a
-// live export is never inflated by in-progress incidents.
-const EXPORT_STATUSES: AlertStatus[] = ["Dismissed", "Resolved"]
-
 // Status dropdown options. An empty value means "no filter" (all statuses).
 const STATUS_OPTIONS = [
   { value: "", label: "All statuses" },
@@ -188,11 +183,7 @@ export default function Detections() {
     mutationFn: (format: ExportFormat) =>
       exportAlerts(
         {
-          // Export always covers the historical archive only — Ongoing
-          // incidents are excluded regardless of the current view filter.
-          // The same order as the screen is preserved so a CSV of a
-          // confidence-sorted view does not silently revert to detected_at.
-          status: EXPORT_STATUSES,
+          status: statusFilter ? ([statusFilter] as AlertStatus[]) : undefined,
           search: debouncedLogSearch || undefined,
           sort_by: sort.key,
           sort_order: sort.order,
@@ -507,11 +498,7 @@ export default function Detections() {
         {/*
           `total_filtered` is already on the list response, so the count is
           free and needs no extra request. It is the count for the SAME
-          filter set the export sends — note export always targets
-          EXPORT_STATUSES (Dismissed + Resolved), not the current status chip,
-          so the count shown here may differ when an Ongoing/Unverified filter
-          is active. A follow-up can conditionally suppress the button in
-          those cases.
+          filter set the export sends.
         */}
         <ExportButton
           rowCount={alertsQuery.data?.total_filtered}
@@ -523,7 +510,7 @@ export default function Detections() {
             exportJobMutation.mutateAsync({
               report_type: "incidents",
               format,
-              status: EXPORT_STATUSES,
+              status: statusFilter ? ([statusFilter] as AlertStatus[]) : undefined,
               search: debouncedLogSearch || undefined,
               sort_by: sort.key,
               sort_order: sort.order,
