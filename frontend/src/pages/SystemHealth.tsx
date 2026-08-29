@@ -26,9 +26,11 @@ import {
   RiCheckboxCircleLine,
   RiDashboard3Line,
   RiHardDrive2Line,
+  RiInformationLine,
   RiServerLine,
   RiTimerLine,
 } from "@remixicon/react"
+import { HealthMetricsReferenceModal } from "./HealthMetricsReferenceModal"
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -519,6 +521,7 @@ function DualHealthChart({
 
 export default function SystemHealth() {
   const [activeTab, setActiveTab] = useState<"48h" | "30d">("48h")
+  const [isReferenceModalOpen, setIsReferenceModalOpen] = useState(false)
 
   const liveQuery = useQuery({
     queryKey: ["system-health-live"],
@@ -582,7 +585,25 @@ export default function SystemHealth() {
           value={renderInferenceLatencyValue(live)}
           isLoading={liveQuery.isLoading}
           subtext={formatSampleCameraSubtext(live)}
-          tooltip="How fast the AI reviews each camera frame to detect accidents. Optimal: 15–45ms (🟢). Acceptable: 45–70ms (🟡), common on CPU or multi-stream workloads. Shows grey when no cameras are connected, red if the AI engine fails while cameras are active."
+          tooltip={
+            <div>
+              <p>
+                How fast the AI reviews each camera frame to detect accidents. Optimal: 15–45ms
+                (🟢). Acceptable: 45–70ms (🟡), common on CPU or multi-stream workloads. Shows grey
+                when no cameras are connected, red if the AI engine fails while cameras are active.
+              </p>
+              <div className="mt-2.5 border-t border-stroke/60 pt-1.5 text-right">
+                <button
+                  type="button"
+                  onClick={() => setIsReferenceModalOpen(true)}
+                  className="inline-flex items-center gap-1 font-medium text-fg underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-stroke-strong focus:outline-none"
+                >
+                  <span>Learn more</span>
+                  <RiInformationLine size={12} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          }
         />
         <StatCard
           icon={RiDashboard3Line}
@@ -590,7 +611,26 @@ export default function SystemHealth() {
           value={renderProcessingSpeedValue(live)}
           isLoading={liveQuery.isLoading}
           subtext={formatSampleCameraSubtext(live)}
-          tooltip="How many video frames per second the system captures and processes from live cameras. Optimal: 10.0–15.0 fps (🟢), matching the system's calibrated target band. Below 10.0 fps (🟡) may mean the stream is lagging or hardware-constrained. Shows grey when no streams are active, red if a connected camera's stream stalls."
+          tooltip={
+            <div>
+              <p>
+                How many video frames per second the system captures and processes from live
+                cameras. Optimal: 10.0–15.0 fps (🟢), matching the system's calibrated target band.
+                Below 10.0 fps (🟡) may mean the stream is lagging or hardware-constrained. Shows
+                grey when no streams are active, red if a connected camera's stream stalls.
+              </p>
+              <div className="mt-2.5 border-t border-stroke/60 pt-1.5 text-right">
+                <button
+                  type="button"
+                  onClick={() => setIsReferenceModalOpen(true)}
+                  className="inline-flex items-center gap-1 font-medium text-fg underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-stroke-strong focus:outline-none"
+                >
+                  <span>Learn more</span>
+                  <RiInformationLine size={12} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          }
         />
         <StatCard
           icon={RiHardDrive2Line}
@@ -724,6 +764,11 @@ export default function SystemHealth() {
           isLoading={historyQuery.isLoading}
         />
       </div>
+
+      <HealthMetricsReferenceModal
+        isOpen={isReferenceModalOpen}
+        onClose={() => setIsReferenceModalOpen(false)}
+      />
     </div>
   )
 }

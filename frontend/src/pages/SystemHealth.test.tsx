@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { render, screen, fireEvent } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
 import SystemHealth from "./SystemHealth"
@@ -216,5 +216,26 @@ describe("SystemHealth page refactored view", () => {
     expect(await screen.findByText("8.5 fps")).toBeInTheDocument()
     const warningDots = container.querySelectorAll(".bg-warning.rounded-full")
     expect(warningDots.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("opens performance metrics reference modal when clicking Learn more inside tooltip", async () => {
+    vi.mocked(getSystemHealthLive).mockResolvedValue(mockLive)
+    vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
+
+    renderSystemHealth()
+
+    expect(await screen.findByText("System Health")).toBeInTheDocument()
+
+    // Trigger tooltip by hovering/focusing the info icon for AI Processing Time
+    const infoButton = screen.getByRole("button", { name: "About AI Processing Time" })
+    fireEvent.mouseEnter(infoButton.parentElement!)
+
+    // Click Learn more button inside tooltip
+    const learnMoreButtons = await screen.findAllByRole("button", { name: /Learn more/i })
+    fireEvent.click(learnMoreButtons[0])
+
+    // Modal dialog should appear
+    expect(await screen.findByRole("dialog")).toBeInTheDocument()
+    expect(screen.getByText("Performance Metrics Reference")).toBeInTheDocument()
   })
 })

@@ -58,13 +58,33 @@ export function Tooltip({
     }
   }
 
+  const handleBlur = (e: React.FocusEvent) => {
+    if (
+      !e.relatedTarget ||
+      !(e.relatedTarget instanceof Node) ||
+      !e.currentTarget.contains(e.relatedTarget)
+    ) {
+      setIsOpen(false)
+    }
+  }
+
+  const handleMouseLeave = (e: React.MouseEvent) => {
+    if (
+      !e.relatedTarget ||
+      !(e.relatedTarget instanceof Node) ||
+      !e.currentTarget.contains(e.relatedTarget)
+    ) {
+      setIsOpen(false)
+    }
+  }
+
   return (
     <span
       className="relative inline-flex items-center"
       onMouseEnter={() => setIsOpen(true)}
-      onMouseLeave={() => setIsOpen(false)}
+      onMouseLeave={handleMouseLeave}
       onFocus={() => setIsOpen(true)}
-      onBlur={() => setIsOpen(false)}
+      onBlur={handleBlur}
       onKeyDown={handleKeyDown}
       aria-describedby={isOpen ? tooltipId : undefined}
     >
@@ -74,7 +94,7 @@ export function Tooltip({
           id={tooltipId}
           role="tooltip"
           className={cn(
-            "pointer-events-none absolute z-50 w-72 max-w-xs whitespace-normal rounded-md border border-stroke bg-surface-3 px-3 py-2 text-xs font-normal leading-relaxed text-fg-body shadow-lg",
+            "pointer-events-auto absolute z-50 w-72 max-w-xs whitespace-normal rounded-md border border-stroke bg-surface-3 px-3 py-2 text-xs font-normal leading-relaxed text-fg-body shadow-lg",
             "animate-alert-fade-in",
             SIDE_CLASSES[side],
             ALIGN_CLASSES[side][align],

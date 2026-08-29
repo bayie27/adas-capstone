@@ -69,4 +69,28 @@ describe("Tooltip", () => {
     fireEvent.keyDown(wrapper, { key: "Escape" })
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument()
   })
+
+  it("keeps tooltip open when focusing interactive content inside it", () => {
+    render(
+      <Tooltip
+        content={
+          <div>
+            <span>Details</span>
+            <button type="button">Learn more</button>
+          </div>
+        }
+      >
+        <button type="button">Trigger</button>
+      </Tooltip>,
+    )
+
+    const trigger = screen.getByRole("button", { name: "Trigger" })
+    const wrapper = trigger.parentElement!
+
+    fireEvent.focus(wrapper)
+    expect(screen.getByRole("tooltip")).toBeInTheDocument()
+
+    const learnMore = screen.getByRole("button", { name: "Learn more" })
+    expect(learnMore).toBeInTheDocument()
+  })
 })
