@@ -49,6 +49,15 @@ function categoryIcon(category: string): RemixiconComponentType {
   return CATEGORY_ICONS[category] ?? RiBookOpenLine
 }
 
+/** A search term echoed back into an empty-state sentence can otherwise run
+ * the full width of the page (up to the 200-char backend limit) with no
+ * spaces to wrap on, e.g. a pasted string with no word breaks. Truncating
+ * what's displayed (never what's actually searched) keeps that sentence
+ * readable regardless of what was typed. */
+function truncateForDisplay(term: string, max = 60): string {
+  return term.length > max ? `${term.slice(0, max)}…` : term
+}
+
 /**
  * No Figma frame (D-5). Follows the same list-then-detail shape as
  * Detections/Users rather than inventing a new idiom: a toolbar (search +
@@ -130,7 +139,7 @@ export default function HelpCenter() {
       <div className="mb-6">
         <h1 className="mb-0.5 text-xl font-semibold text-fg">Help Center</h1>
         <p className="text-xs text-fg-muted">
-          Role-filtered operating guides — search, browse by category, or read an article
+          Role-filtered operating guides: search, browse by category, or read an article
         </p>
       </div>
 
@@ -143,20 +152,19 @@ export default function HelpCenter() {
         />
       ) : (
         <>
-          <div className="mb-5">
+          {/* One toolbar row (search + category), matching the
+              search-plus-filters convention every other list page in this
+              app already uses (e.g. Cameras.tsx) rather than the two
+              stacked full-width rows this page used to have. */}
+          <div className="mb-6 flex flex-wrap items-center gap-2.5">
             <SearchInput
               value={searchTerm}
               onChange={setSearchTerm}
               placeholder="Search articles..."
+              maxLength={200}
             />
+            <CategoryTabs categories={categoryValues} value={category} onChange={setCategory} />
           </div>
-
-          <CategoryTabs
-            categories={categoryValues}
-            value={category}
-            onChange={setCategory}
-            className="mb-6"
-          />
 
           {/* `relative` so a failed list query overlays this region instead
               of pushing it down and back up every time the query fails or
@@ -172,9 +180,9 @@ export default function HelpCenter() {
               <p className="py-8 text-center text-caption text-fg-muted">Loading articles…</p>
             ) : showFaqFallback ? (
               <div>
-                <p className="mb-4 text-caption text-fg-muted">
-                  No articles matched &ldquo;{debouncedSearch}&rdquo;. Here are some frequently
-                  asked questions:
+                <p className="mb-4 break-words text-caption text-fg-muted">
+                  No articles matched &ldquo;{truncateForDisplay(debouncedSearch)}&rdquo;. Here are
+                  some frequently asked questions:
                 </p>
                 <ArticleGrid articles={topFaqs} onSelect={openArticle} />
               </div>
@@ -233,7 +241,7 @@ function CategoryTabs({
       aria-label="Help article categories"
       onKeyDown={onKeyDown}
       className={cn(
-        "inline-flex flex-wrap items-center justify-start gap-1 rounded-md bg-surface-2 p-1",
+        "inline-flex h-9 flex-wrap items-center justify-start gap-1 rounded-md bg-surface-2 p-1",
         className,
       )}
     >
@@ -249,7 +257,7 @@ function CategoryTabs({
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(option)}
             className={cn(
-              "flex items-center justify-center gap-1.5 rounded px-3 py-2 text-caption font-medium transition-all duration-150",
+              "flex items-center justify-center gap-1.5 rounded px-3 py-1 text-caption font-medium transition-all duration-150",
               selected ? "bg-canvas text-fg shadow-sm" : "bg-transparent text-fg-muted",
               focusRing,
             )}
@@ -279,7 +287,7 @@ function ArticleGrid({
             key={article.slug}
             type="button"
             onClick={() => onSelect(article.slug)}
-            className="flex flex-col items-start rounded-lg border border-stroke bg-surface-1 p-5 text-left transition-colors duration-150 hover:border-stroke-strong hover:bg-surface-2"
+            className="flex h-full flex-col items-start rounded-lg border border-stroke bg-surface-1 p-5 text-left shadow-sm transition-all duration-150 hover:border-stroke-strong hover:bg-surface-2 hover:shadow-lg"
           >
             <div className="mb-3 flex w-full items-center justify-between gap-2">
               <Badge variant="subtle" tone="neutral">
@@ -292,9 +300,9 @@ function ArticleGrid({
             </div>
             <h3 className="text-secondary font-semibold text-fg">{article.title}</h3>
             {article.summary ? (
-              <p className="mt-2 text-caption text-fg-muted">{article.summary}</p>
+              <p className="mt-2 line-clamp-2 text-caption text-fg-muted">{article.summary}</p>
             ) : null}
-            <span className="mt-4 flex items-center gap-1 text-caption font-medium text-fg-body">
+            <span className="mt-auto flex items-center gap-1 pt-4 text-caption font-medium text-fg-body">
               Read article <RiArrowRightSLine size={14} />
             </span>
           </button>
