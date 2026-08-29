@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { act, render, screen, fireEvent } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
 import SystemHealth from "./SystemHealth"
@@ -237,5 +237,33 @@ describe("SystemHealth page refactored view", () => {
     // Modal dialog should appear
     expect(await screen.findByRole("dialog")).toBeInTheDocument()
     expect(screen.getByText("Performance Metrics Reference")).toBeInTheDocument()
+  })
+
+  it("refreshes the displayed processing speed after five seconds", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const firstSample: SystemHealthLiveResponse = { ...mockLive, avg_fps: 11 }
+    const refreshedSample: SystemHealthLiveResponse = { ...mockLive, avg_fps: 12 }
+    vi.mocked(getSystemHealthLive)
+      .mockResolvedValueOnce(firstSample)
+      .mockResolvedValueOnce(refreshedSample)
+    vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
+
+    const view = renderSystemHealth()
+    try {
+      expect(await screen.findByText("11.0 fps")).toBeInTheDocument()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_000)
+      })
+      expect(screen.getByText("11.0 fps")).toBeInTheDocument()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      expect(await screen.findByText("12.0 fps")).toBeInTheDocument()
+    } finally {
+      view.unmount()
+      vi.useRealTimers()
+    }
   })
 })
