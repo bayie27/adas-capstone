@@ -111,7 +111,7 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
             />
           </div>
 
-          <div className="text-sm font-normal text-fg-muted">
+          <div className="text-[12px] font-normal text-fg-muted">
             Must be at least 8 characters long and contain at least 1 number.
           </div>
 

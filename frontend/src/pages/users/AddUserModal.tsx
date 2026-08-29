@@ -192,7 +192,7 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
                 labelClassName="text-sm font-medium text-fg"
               />
             </div>
-            <div className="text-sm font-normal text-fg-muted">
+            <div className="text-[12px] font-normal text-fg-muted">
               Must be at least 8 characters long and contain at least 1 number.
             </div>
           </div>

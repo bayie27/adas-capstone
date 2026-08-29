@@ -102,15 +102,15 @@ export function IncidentDetailModal({
       hideClose
       overlayClassName={cn("z-[9500]", overlayClassName)}
       className={cn(
-        "w-full overflow-hidden p-0 rounded-none sm:rounded-lg border-0",
+        "w-full overflow-hidden p-0 rounded-none sm:rounded-[4px] border-0",
         isUnverified ? "max-w-[1060px]" : "max-w-[1220px]",
       )}
     >
       <div className="-mx-6 -mb-6 flex flex-col">
         {/* ── Section 1: Header ───────────────────────────────────────────── */}
         {isUnverified ? (
-          <div className="relative flex h-[55px] w-full items-center justify-center bg-danger px-6 sm:px-[34px]">
-            <h2 className="text-center font-sans text-[24px] font-bold uppercase leading-[36px] tracking-wide text-surface-3">
+          <div className="relative flex h-[55px] w-full items-center justify-start bg-danger px-6 sm:px-[34px]">
+            <h2 className="text-left font-sans text-[24px] font-bold uppercase leading-[36px] tracking-wide text-surface-3">
               Accident Detected
             </h2>
             <button
@@ -289,13 +289,13 @@ export function IncidentDetailModal({
 
                 {/* ── Section 3: Footer Action Buttons ──────────────────────── */}
                 {!isTerminal && (
-                  <div className="flex w-full items-center gap-3 sm:gap-4 bg-surface-1 px-5 sm:px-6 py-3">
+                  <div className="flex w-full items-center gap-3 bg-surface-1 px-4 sm:px-5 py-3">
                     {alert.detection_status === "Unverified" ? (
                       <>
                         {snoozeAction}
                         <Button
                           variant="secondary"
-                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-border px-3 sm:px-4 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[20px] tracking-wide text-fg hover:bg-surface-3"
+                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-border px-3 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[20px] tracking-wide text-fg hover:bg-surface-3"
                           disabled={isTransitionPending}
                           isLoading={isDismissing}
                           loadingLabel="…"
@@ -304,7 +304,7 @@ export function IncidentDetailModal({
                           Dismiss Accident
                         </Button>
                         <Button
-                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-fg-body px-3 sm:px-4 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[28px] tracking-wide text-surface-2 hover:bg-fg"
+                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-fg-body px-3 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[28px] tracking-wide text-surface-2 hover:bg-fg"
                           disabled={isTransitionPending}
                           isLoading={isConfirming}
                           loadingLabel="…"
@@ -317,7 +317,7 @@ export function IncidentDetailModal({
                       <>
                         <Button
                           variant="secondary"
-                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-border px-3 sm:px-4 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[20px] tracking-wide text-fg hover:bg-surface-3"
+                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-border px-3 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[20px] tracking-wide text-fg hover:bg-surface-3"
                           disabled={isTransitionPending}
                           isLoading={isDismissing}
                           loadingLabel="…"
@@ -326,7 +326,7 @@ export function IncidentDetailModal({
                           Dismiss Accident
                         </Button>
                         <Button
-                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-fg-body px-3 sm:px-4 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[28px] tracking-wide text-surface-2 hover:bg-fg"
+                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-fg-body px-3 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[28px] tracking-wide text-surface-2 hover:bg-fg"
                           disabled={isTransitionPending}
                           isLoading={isResolving}
                           loadingLabel="…"

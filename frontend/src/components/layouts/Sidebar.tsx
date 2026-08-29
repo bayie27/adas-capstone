@@ -164,7 +164,7 @@ export function Sidebar() {
           .filter((group) => group.links.length > 0)
           .map((group) => (
             <div key={group.title}>
-              <h3 className="mb-1.5 px-3 text-xs font-semibold tracking-widest text-fg-muted">
+              <h3 className="mb-1.5 px-3 text-xs font-normal tracking-widest text-fg-muted">
                 {group.title}
               </h3>
               <ul className="space-y-0.5">

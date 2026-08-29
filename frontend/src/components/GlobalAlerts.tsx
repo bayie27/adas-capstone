@@ -220,7 +220,7 @@ export function GlobalAlerts() {
       ariaLabel="Accident detected"
       overlayClassName="z-9999"
       backdropClassName="bg-backdrop-alert"
-      className="w-full max-w-[1060px] overflow-hidden p-0 rounded-none sm:rounded-lg border-0"
+      className="w-full max-w-[1060px] overflow-hidden p-0 rounded-none sm:rounded-[4px] border-0"
       noEntrance
       outerContent={
         hasMultiple ? (
@@ -294,8 +294,8 @@ export function GlobalAlerts() {
         {/* ── Section 1: Header ─────────────────────────────────────────────
             Edge-to-edge solid background header enforcing urgency.
             Text: ACCIDENT DETECTED, font size 24px, weight 700, line-height 36px, color #252529 */}
-        <div className="w-full h-[55px] bg-danger px-6 sm:px-[34px] flex items-center justify-center">
-          <h2 className="text-center text-[24px] font-bold font-sans uppercase leading-[36px] tracking-wide text-surface-3">
+        <div className="w-full h-[55px] bg-danger px-6 sm:px-[34px] flex items-center justify-start">
+          <h2 className="text-left text-[24px] font-bold font-sans uppercase leading-[36px] tracking-wide text-surface-3">
             Accident Detected
           </h2>
         </div>
@@ -392,17 +392,17 @@ export function GlobalAlerts() {
             </div>
 
             {/* ── Section 3: Footer Action Buttons ────────────────────────── */}
-            <div className="w-full bg-surface-1 px-5 sm:px-6 py-3 flex items-center gap-3 sm:gap-4">
+            <div className="w-full bg-surface-1 px-4 sm:px-5 py-3 flex items-center gap-3">
               <Button
                 variant="secondary"
-                className="flex-1 whitespace-nowrap h-[44px] px-3 sm:px-4 py-2 bg-border hover:bg-surface-3 text-fg text-xs sm:text-[14px] font-medium leading-[20px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
+                className="flex-1 whitespace-nowrap h-[44px] px-3 py-2 bg-border hover:bg-surface-3 text-fg text-xs sm:text-[14px] font-medium leading-[20px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
                 disabled={busy}
                 onClick={() => runAction(dismissAlert, "Failed to dismiss alert.")}
               >
                 {busy ? "…" : "Dismiss Accident"}
               </Button>
               <Button
-                className="flex-1 whitespace-nowrap h-[44px] px-3 sm:px-4 py-2 bg-fg-body hover:bg-fg text-surface-2 text-xs sm:text-[14px] font-medium leading-[28px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
+                className="flex-1 whitespace-nowrap h-[44px] px-3 py-2 bg-fg-body hover:bg-fg text-surface-2 text-xs sm:text-[14px] font-medium leading-[28px] rounded-[4px] flex items-center justify-center uppercase tracking-wide transition-colors"
                 disabled={busy}
                 onClick={() => runAction(confirmAlert, "Failed to confirm alert.")}
               >

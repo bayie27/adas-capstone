@@ -137,7 +137,7 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
   return (
     <Card className={cn("p-8", className)}>
       <div className="mb-6">
-        <h2 className="text-h3 font-semibold text-fg">Alarm Settings</h2>
+        <h2 className="text-[18px] font-semibold text-fg">Alarm Settings</h2>
         <p className="text-secondary text-fg-muted">
           Control the sound and volume of the accident alarm, and how long an unverified incident
           stays muted when you snooze it.
