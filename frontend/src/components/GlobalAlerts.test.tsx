@@ -105,10 +105,43 @@ describe("GlobalAlerts", () => {
 
     // Button updates to snoozed state and is disabled (cannot be unmuted manually)
     await waitFor(() => {
-      const snoozedBtn = screen.getByRole("button", { name: /alarm snoozed/i })
+      const snoozedBtn = screen.getByRole("button", { name: /alarms snoozed/i })
       expect(snoozedBtn).toBeInTheDocument()
       expect(snoozedBtn).toBeDisabled()
     })
+  })
+
+  it("clicking snooze when multiple unverified alerts are active snoozes all of them simultaneously", async () => {
+    const user = userEvent.setup()
+    const futureDate = new Date(Date.now() + 60_000).toISOString()
+    const mockAlert2: AlertLog = {
+      ...mockAlert,
+      log_id: 102,
+      camera_name: "Rear Exit Cam",
+    }
+    vi.mocked(alertsApi.snoozeAlert).mockImplementation(async (id: number) => ({
+      ...mockAlert,
+      log_id: id,
+      snoozed_until: futureDate,
+    }))
+
+    useAlertStore.setState({ alerts: [mockAlert, mockAlert2] })
+    render(renderWithProviders(<GlobalAlerts />))
+
+    const snoozeButton = screen.getByRole("button", { name: /snooze alarm/i })
+    expect(snoozeButton).not.toBeDisabled()
+
+    // Click snooze
+    await user.click(snoozeButton)
+
+    await waitFor(() => {
+      expect(alertsApi.snoozeAlert).toHaveBeenCalledWith(101)
+      expect(alertsApi.snoozeAlert).toHaveBeenCalledWith(102)
+    })
+
+    // Both should be in snoozed store
+    expect(useAlertStore.getState().snoozedUntil[101]).toBe(futureDate)
+    expect(useAlertStore.getState().snoozedUntil[102]).toBe(futureDate)
   })
 
   it("clicking dismiss accident removes alert from store and closes modal", async () => {
