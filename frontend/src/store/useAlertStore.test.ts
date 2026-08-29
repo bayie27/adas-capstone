@@ -103,4 +103,33 @@ describe("useAlertStore", () => {
       vi.useRealTimers()
     }
   })
+
+  it("plays alarm when a new alert arrives while existing alerts are snoozed", () => {
+    const alert1 = { ...mockUnverifiedAlert, log_id: 101 }
+    const alert2 = { ...mockUnverifiedAlert, log_id: 102 }
+    const alert3 = { ...mockUnverifiedAlert, log_id: 103 }
+
+    // Add alert 1 & 2
+    useAlertStore.getState().addAlert(alert1)
+    useAlertStore.getState().addAlert(alert2)
+    expect(soundModule.playDetectionSound).toHaveBeenCalledTimes(1)
+
+    // Snooze both alert 1 & 2
+    const futureDate = new Date(Date.now() + 60_000).toISOString()
+    useAlertStore.getState().activateSnooze(101, futureDate, "Operator")
+    // Still 1 unsnoozed alert (102), so sound has not stopped yet
+    expect(soundModule.stopDetectionSound).not.toHaveBeenCalled()
+
+    useAlertStore.getState().activateSnooze(102, futureDate, "Operator")
+    // Now all alerts snoozed, sound stops
+    expect(soundModule.stopDetectionSound).toHaveBeenCalledTimes(1)
+
+    // Alert 3 arrives (fresh/unsnoozed) -> alarm sounds again!
+    useAlertStore.getState().addAlert(alert3)
+    expect(soundModule.playDetectionSound).toHaveBeenCalledTimes(2)
+
+    // Snooze alert 3 -> alarm stops again
+    useAlertStore.getState().activateSnooze(103, futureDate, "Operator")
+    expect(soundModule.stopDetectionSound).toHaveBeenCalledTimes(2)
+  })
 })
