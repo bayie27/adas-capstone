@@ -52,6 +52,7 @@ import {
 } from "@/utils/format"
 import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
+import { cn } from "@/utils/cn"
 import { RiEyeLine } from "@remixicon/react"
 
 // Starting page size. PAGE_SIZE_OPTIONS in PaginationFooter is
@@ -310,12 +311,15 @@ export default function Detections() {
   // The store's snoozedUntil map is the live truth — SNOOZE_ACTIVATED and
   // RE_ALARM update it directly without invalidating this table's REST
   // query, so a row's own snoozed_until field can be stale between
-  // refetches. Only tick the clock while something on the visible page is
-  // actually counting down.
-  const anyRowSnoozed = currentRows.some((row) => isSnoozedNow(row.log_id, snoozedUntilMap))
+  // refetches. Only tick the clock while an Unverified alert on the visible page is
+  // actually counting down (snooze does not apply to Ongoing or closed incidents).
+  const anyRowSnoozed = currentRows.some(
+    (row) => row.detection_status === "Unverified" && isSnoozedNow(row.log_id, snoozedUntilMap),
+  )
   const now = useNow(anyRowSnoozed, 1000)
 
   function describeSnoozedRow(row: AlertLog): string | null {
+    if (row.detection_status !== "Unverified") return null
     if (!isSnoozedNow(row.log_id, snoozedUntilMap)) return null
     // SNOOZE_ACTIVATED has carried a real display name since P21 Step 3, for
     // every role — no admin-only lookup needed when this tab actually saw
@@ -603,7 +607,12 @@ export default function Detections() {
                     {formatFullDateTime(item.detected_at)}
                   </TableCell>
                   <TableCell>{item.camera_name ?? "Unknown Camera"}</TableCell>
-                  <TableCell className="tabular-nums">
+                  <TableCell
+                    className={cn(
+                      "tabular-nums font-medium",
+                      item.confidence_score * 100 < 75 ? "text-danger" : "text-fg",
+                    )}
+                  >
                     {formatAlertConfidence(item.confidence_score)}
                   </TableCell>
                   <TableCell>

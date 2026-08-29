@@ -195,4 +195,33 @@ describe("GlobalAlerts", () => {
     expect(screen.getByText("Alert 2 of 2")).toBeInTheDocument()
     expect(screen.getByText("Rear Exit Cam")).toBeInTheDocument()
   })
+
+  it("renders telemetry labels (TIMESTAMP, CAMERA NAME, AI-CONFIDENCE SCORE) and snapshot image", () => {
+    useAlertStore.setState({ alerts: [mockAlert] })
+    render(renderWithProviders(<GlobalAlerts />))
+
+    expect(screen.getByText("TIMESTAMP")).toBeInTheDocument()
+    expect(screen.getByText("CAMERA NAME")).toBeInTheDocument()
+    expect(screen.getByText("AI-CONFIDENCE SCORE")).toBeInTheDocument()
+    expect(screen.getByText("95.0%")).toBeInTheDocument()
+
+    const img = screen.getByAltText("Accident snapshot for log 101")
+    expect(img).toBeInTheDocument()
+  })
+
+  it("renders confidence score in danger color when confidence is below 75%", () => {
+    useAlertStore.setState({
+      alerts: [
+        {
+          ...mockAlert,
+          confidence_score: 0.63,
+        },
+      ],
+    })
+    render(renderWithProviders(<GlobalAlerts />))
+
+    const scoreEl = screen.getByText("63.0%")
+    expect(scoreEl).toBeInTheDocument()
+    expect(scoreEl).toHaveClass("text-danger")
+  })
 })

@@ -4,12 +4,7 @@ import { Button, focusRing } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { SnapshotImage } from "@/components/ui/SnapshotImage"
 import type { AlertLog } from "@/api/alerts"
-import {
-  formatAlertCode,
-  formatAlertConfidence,
-  getAlertBadgeClass,
-  getAlertBorderClass,
-} from "@/utils/format"
+import { formatAlertCode, formatAlertConfidence, getAlertBadgeClass } from "@/utils/format"
 import { formatDuration, formatFullDateTime, secondsSince } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
 import { RiCloseLine } from "@remixicon/react"
@@ -91,6 +86,15 @@ export function IncidentDetailModal({
   // the row above it. `closed_at` is a distinct field from `verified_at`.
   const closedTimeLabel = alert?.detection_status === "Resolved" ? "TIME RESOLVED" : "TIME CLOSED"
 
+  const statusBorderClass =
+    alert?.detection_status === "Ongoing"
+      ? "border-t-warning"
+      : alert?.detection_status === "Resolved"
+        ? "border-t-success"
+        : "border-t-stroke-strong"
+
+  const isUnverified = alert?.detection_status === "Unverified"
+
   return (
     <Modal
       isOpen={isOpen}
@@ -98,199 +102,250 @@ export function IncidentDetailModal({
       hideClose
       overlayClassName={cn("z-[9500]", overlayClassName)}
       className={cn(
-        "w-full max-w-[590px] overflow-hidden p-0 border-t-4",
-        alert ? getAlertBorderClass(alert.detection_status) : "border-t-stroke-strong",
+        "w-full overflow-hidden p-0 rounded-none sm:rounded-lg border-0",
+        isUnverified ? "max-w-[1060px]" : "max-w-[1220px]",
       )}
     >
-      <div className="-mx-6 -mb-6">
+      <div className="-mx-6 -mb-6 flex flex-col">
         {/* ── Section 1: Header ───────────────────────────────────────────── */}
-        <div className="flex items-center justify-between border-b border-stroke px-6 py-4">
-          <div>
-            <p className="text-base font-bold uppercase tracking-widest text-fg">
-              {alert?.detection_status === "Unverified" ? "Accident Detected" : "Accident Details"}
-            </p>
+        {isUnverified ? (
+          <div className="relative flex h-[55px] w-full items-center justify-center bg-danger px-6 sm:px-[34px]">
+            <h2 className="text-center font-sans text-[24px] font-bold uppercase leading-[36px] tracking-wide text-surface-3">
+              Accident Detected
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close incident details"
+              className={cn(
+                "absolute right-4 top-1/2 -translate-y-1/2 rounded p-1 text-surface-3 transition-colors duration-150 hover:text-canvas",
+                focusRing,
+              )}
+            >
+              <RiCloseLine size={24} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close incident details"
+        ) : (
+          <div
             className={cn(
-              "rounded text-fg-muted transition-colors duration-150 hover:text-fg",
-              focusRing,
+              "flex h-[60px] items-center justify-between border-t-4 bg-surface-1 px-6 sm:px-7",
+              statusBorderClass,
             )}
           >
-            <RiCloseLine size={20} />
-          </button>
-        </div>
-
-        {/* ── Section 2a: Snapshot image ────────────────────────────────── */}
-        <div className="flex min-h-[220px] items-center justify-center bg-surface-3 p-6">
-          {alert ? (
-            <SnapshotImage
-              snapshotUrl={alert.snapshot_url}
-              alt={`Accident snapshot for log ${alert.log_id}`}
-              className="max-h-52 w-auto rounded border-2 border-stroke object-contain"
-              fallbackClassName="h-40 w-full rounded"
-            />
-          ) : (
-            <div className="text-xs text-fg-muted">Loading preview…</div>
-          )}
-        </div>
-
-        {alert ? (
-          <>
-            {/* ── Section 2b: Accident ID + Status Badge ────────────────────── */}
-            <div className="flex items-center justify-between bg-surface-1 px-6 py-3">
-              <span className="text-2xl font-semibold text-fg">
-                {formatAlertCode(alert.log_id)}
-              </span>
-              <span
-                className={cn(
-                  "rounded-full px-3 py-1 text-xs font-semibold",
-                  getAlertBadgeClass(alert.detection_status),
-                )}
-              >
-                {alert.detection_status.toUpperCase()}
-              </span>
-            </div>
-
-            {/* ── Section 3: Core Telemetry ─────────────────────────────────── */}
-            <div className="space-y-3 bg-surface-1 px-6 pb-4">
-              <div className="flex items-start justify-between">
-                <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                  Timestamp
-                </span>
-                <span className="text-right text-sm tabular-nums text-fg">
-                  <span className="block">{formatFullDateTime(alert.detected_at)}</span>
-                  {isDelayed && alert.detection_status === "Unverified" ? (
-                    <span className="mt-0.5 block text-[10px] font-medium text-warning">
-                      {formatDuration(ageSeconds)} ago — delivered late
-                    </span>
-                  ) : null}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                  Camera Name
-                </span>
-                <span className="text-sm font-bold uppercase text-fg">
-                  {alert.camera_name ?? `Camera ${alert.camera_id}`}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                  AI-Confidence Score
-                </span>
-                <span
-                  className={cn(
-                    "text-sm font-bold",
-                    alert.confidence_score * 100 < 75 ? "text-danger" : "text-success",
-                  )}
-                >
-                  {formatAlertConfidence(alert.confidence_score)}
-                </span>
-              </div>
-
-              {alert.detection_status !== "Unverified" && (
-                <>
-                  <hr className="border-border my-[14px]" />
-                  <div className="mt-2 grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                        Verified By
-                      </p>
-                      <p className="mt-1 text-sm text-fg">{alert.verified_by_name ?? "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                        Time Verified
-                      </p>
-                      <p className="mt-1 text-sm text-fg">
-                        {formatFullDateTime(alert.verified_at)}
-                      </p>
-                    </div>
-                  </div>
-                  {isTerminal && (
-                    <div className="mt-4 grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                          Closed By
-                        </p>
-                        <p className="mt-1 text-sm text-fg">{alert.closed_by_name ?? "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-normal uppercase tracking-wider text-fg-muted">
-                          {closedTimeLabel}
-                        </p>
-                        <p className="mt-1 text-sm text-fg">
-                          {formatFullDateTime(alert.closed_at)}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </>
+            <h2 className="font-sans text-[21px] font-bold uppercase leading-[36px] tracking-wide text-fg-body">
+              Accident Details
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close incident details"
+              className={cn(
+                "rounded p-1 text-fg-muted transition-colors duration-150 hover:text-fg",
+                focusRing,
               )}
-            </div>
-
-            {notice ? <div className="bg-surface-1 px-6 pb-1 pt-1">{notice}</div> : null}
-
-            {/* ── Section 5: Footer Action Buttons ────────────────────────────── */}
-            {!isTerminal && (
-              <div className="flex w-full items-center gap-3 sm:gap-3.5 border-t border-stroke bg-surface-1 p-4 sm:p-5">
-                {alert.detection_status === "Unverified" ? (
-                  <>
-                    {snoozeAction}
-                    <Button
-                      variant="secondary"
-                      className="flex-1 whitespace-nowrap rounded bg-surface-3 py-3 px-3 text-xs sm:text-sm font-medium uppercase tracking-wider text-fg hover:bg-surface-2"
-                      disabled={isTransitionPending}
-                      isLoading={isDismissing}
-                      loadingLabel="…"
-                      onClick={() => onDismiss(alert.log_id)}
-                    >
-                      Dismiss Accident
-                    </Button>
-                    <Button
-                      className="flex-1 whitespace-nowrap rounded bg-primary py-3 px-3 text-xs sm:text-sm font-medium uppercase tracking-wider text-fg-on-primary hover:bg-primary-hover"
-                      disabled={isTransitionPending}
-                      isLoading={isConfirming}
-                      loadingLabel="…"
-                      onClick={() => onConfirm(alert.log_id)}
-                    >
-                      Confirm Accident
-                    </Button>
-                  </>
-                ) : alert.detection_status === "Ongoing" ? (
-                  <>
-                    <Button
-                      variant="secondary"
-                      className="flex-1 whitespace-nowrap rounded bg-surface-3 py-3 px-3 text-xs sm:text-sm font-medium uppercase tracking-wider text-fg hover:bg-surface-2"
-                      disabled={isTransitionPending}
-                      isLoading={isDismissing}
-                      loadingLabel="…"
-                      onClick={() => onDismiss(alert.log_id)}
-                    >
-                      Dismiss Accident
-                    </Button>
-                    <Button
-                      className="flex-1 whitespace-nowrap rounded bg-primary py-3 px-3 text-xs sm:text-sm font-medium uppercase tracking-wider text-fg-on-primary hover:bg-primary-hover"
-                      disabled={isTransitionPending}
-                      isLoading={isResolving}
-                      loadingLabel="…"
-                      onClick={() => onResolve(alert.log_id)}
-                    >
-                      Resolve Accident
-                    </Button>
-                  </>
-                ) : null}
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="bg-surface-1 py-12 text-center text-sm text-fg-muted">
-            Loading alert details…
+            >
+              <RiCloseLine size={24} />
+            </button>
           </div>
         )}
+
+        {/* ── Section 2: Split Body Layout (Snapshot Image + Telemetry Panel) ── */}
+        <div className="flex w-full flex-col items-stretch overflow-hidden md:flex-row">
+          {/* Left Column: Snapshot Image Preview */}
+          <div
+            className={cn(
+              "flex min-h-[260px] w-full shrink-0 overflow-hidden bg-canvas self-stretch",
+              isUnverified ? "md:w-[560px] lg:w-[658px]" : "md:w-[600px] lg:w-[658px]",
+            )}
+          >
+            {alert ? (
+              <SnapshotImage
+                snapshotUrl={alert.snapshot_url}
+                alt={`Accident snapshot for log ${alert.log_id}`}
+                className="h-full w-full min-h-full object-cover block"
+                fallbackClassName="h-full w-full rounded-none"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-xs text-fg-muted">
+                Loading preview…
+              </div>
+            )}
+          </div>
+
+          {/* Right Column: Telemetry & Actions */}
+          <div
+            className={cn(
+              "relative flex flex-1 flex-col justify-between bg-surface-2 min-w-0",
+              isUnverified ? "sm:min-w-[380px]" : "sm:min-w-[480px] lg:min-w-[540px]",
+            )}
+          >
+            {alert ? (
+              <>
+                <div className="custom-scrollbar flex flex-1 flex-col justify-between gap-4 overflow-y-auto p-6 sm:p-7">
+                  {/* Top Row: Accident ID + Status Badge */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-sans text-[28px] font-medium leading-8 text-fg-body">
+                      {formatAlertCode(alert.log_id)}
+                    </span>
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide",
+                        getAlertBadgeClass(alert.detection_status),
+                      )}
+                    >
+                      {alert.detection_status}
+                    </span>
+                  </div>
+
+                  {/* Telemetry rows: horizontal key-value alignment */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                        TIMESTAMP
+                      </span>
+                      <span className="text-right tabular-nums text-[16px] font-medium leading-8 text-white">
+                        {formatFullDateTime(alert.detected_at)}
+                        {isDelayed && alert.detection_status === "Unverified" ? (
+                          <span className="ml-2 inline-block text-[10px] font-medium text-warning">
+                            ({formatDuration(ageSeconds)} ago — delayed)
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                        CAMERA NAME
+                      </span>
+                      <span className="max-w-[75%] truncate text-right text-[16px] font-medium uppercase leading-8 text-white">
+                        {alert.camera_name ?? `Camera ${alert.camera_id}`}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                        AI-CONFIDENCE SCORE
+                      </span>
+                      <span
+                        className={cn(
+                          "text-right tabular-nums text-[16px] font-medium leading-8",
+                          alert.confidence_score * 100 < 75 ? "text-danger" : "text-white",
+                        )}
+                      >
+                        {formatAlertConfidence(alert.confidence_score)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-stroke-strong" />
+
+                  {/* Lower metadata: Verified By & Time Verified (or Closed info) */}
+                  {alert.detection_status !== "Unverified" ? (
+                    <div>
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="flex flex-col items-start">
+                          <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                            VERIFIED BY
+                          </span>
+                          <span className="max-w-full truncate text-[14px] font-medium leading-7 text-white">
+                            {alert.verified_by_name ?? "—"}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-start">
+                          <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                            TIME VERIFIED
+                          </span>
+                          <span className="max-w-full truncate tabular-nums text-[14px] font-medium leading-7 text-fg-body">
+                            {formatFullDateTime(alert.verified_at)}
+                          </span>
+                        </div>
+                      </div>
+                      {isTerminal && (
+                        <div className="mt-3 grid grid-cols-2 gap-4">
+                          <div className="flex flex-col items-start">
+                            <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                              CLOSED BY
+                            </span>
+                            <span className="max-w-full truncate text-[14px] font-medium leading-7 text-white">
+                              {alert.closed_by_name ?? "—"}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-start">
+                            <span className="text-[12px] font-normal uppercase leading-[21px] tracking-wider text-fg-muted">
+                              {closedTimeLabel}
+                            </span>
+                            <span className="max-w-full truncate tabular-nums text-[14px] font-medium leading-7 text-fg-body">
+                              {formatFullDateTime(alert.closed_at)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {notice ? <div className="pt-2">{notice}</div> : null}
+                </div>
+
+                {/* ── Section 3: Footer Action Buttons ──────────────────────── */}
+                {!isTerminal && (
+                  <div className="flex w-full items-center gap-3 sm:gap-4 bg-surface-1 px-5 sm:px-6 py-3">
+                    {alert.detection_status === "Unverified" ? (
+                      <>
+                        {snoozeAction}
+                        <Button
+                          variant="secondary"
+                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-border px-3 sm:px-4 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[20px] tracking-wide text-fg hover:bg-surface-3"
+                          disabled={isTransitionPending}
+                          isLoading={isDismissing}
+                          loadingLabel="…"
+                          onClick={() => onDismiss(alert.log_id)}
+                        >
+                          Dismiss Accident
+                        </Button>
+                        <Button
+                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-fg-body px-3 sm:px-4 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[28px] tracking-wide text-surface-2 hover:bg-fg"
+                          disabled={isTransitionPending}
+                          isLoading={isConfirming}
+                          loadingLabel="…"
+                          onClick={() => onConfirm(alert.log_id)}
+                        >
+                          Confirm Accident
+                        </Button>
+                      </>
+                    ) : alert.detection_status === "Ongoing" ? (
+                      <>
+                        <Button
+                          variant="secondary"
+                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-border px-3 sm:px-4 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[20px] tracking-wide text-fg hover:bg-surface-3"
+                          disabled={isTransitionPending}
+                          isLoading={isDismissing}
+                          loadingLabel="…"
+                          onClick={() => onDismiss(alert.log_id)}
+                        >
+                          Dismiss Accident
+                        </Button>
+                        <Button
+                          className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-fg-body px-3 sm:px-4 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[28px] tracking-wide text-surface-2 hover:bg-fg"
+                          disabled={isTransitionPending}
+                          isLoading={isResolving}
+                          loadingLabel="…"
+                          onClick={() => onResolve(alert.log_id)}
+                        >
+                          Resolve Accident
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex flex-1 items-center justify-center p-6 text-sm text-fg-muted">
+                Loading alert details…
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </Modal>
   )
