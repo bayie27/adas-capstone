@@ -87,9 +87,11 @@ function formatFps(value: number | null | undefined): string {
 }
 
 /**
- * Distinguishes normal idle behavior (0 cameras reporting -> neutral grey dot + N/A)
- * from genuine AI engine failure (cameras connected/reporting, but inference is null -> red dot + "Engine error")
- * from normal healthy state (cameras reporting + latency measured -> green dot + ms value).
+ * Four-state indicator for AI Processing Time:
+ * - 0 cameras reporting -> neutral grey dot + N/A (idle)
+ * - cameras reporting, latency is null -> danger red dot + "Engine error" (fault)
+ * - latency between 15ms–45ms -> success green dot (optimal)
+ * - latency > 45ms (45ms–70ms) -> warning amber dot (sub-optimal)
  */
 function renderInferenceLatencyValue(live: SystemHealthLiveResponse | undefined): ReactNode {
   if (!live) return formatMs(undefined)
@@ -112,10 +114,12 @@ function renderInferenceLatencyValue(live: SystemHealthLiveResponse | undefined)
     )
   }
 
+  const tone = live.avg_inference_latency_ms > 45 ? "warning" : "success"
+
   return (
     <span className="inline-flex items-center gap-[14px]">
       {formatMs(live.avg_inference_latency_ms)}
-      <BadgeDot tone="success" />
+      <BadgeDot tone={tone} />
     </span>
   )
 }

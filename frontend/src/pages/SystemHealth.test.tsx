@@ -183,4 +183,21 @@ describe("SystemHealth page refactored view", () => {
     expect(await screen.findByText("Engine error")).toBeInTheDocument()
     expect(await screen.findByText("Stream error")).toBeInTheDocument()
   })
+
+  it("renders warning amber dot for AI Processing Time when latency is between 45ms and 70ms", async () => {
+    const warningLive: SystemHealthLiveResponse = {
+      ...mockLive,
+      sample_camera_count: 2,
+      avg_inference_latency_ms: 55.0,
+      avg_fps: 15.0,
+    }
+    vi.mocked(getSystemHealthLive).mockResolvedValue(warningLive)
+    vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
+
+    const { container } = renderSystemHealth()
+
+    expect(await screen.findByText("55ms")).toBeInTheDocument()
+    const warningDots = container.querySelectorAll(".bg-warning.rounded-full")
+    expect(warningDots.length).toBeGreaterThanOrEqual(1)
+  })
 })
