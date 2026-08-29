@@ -1,15 +1,25 @@
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   getSoundUrl,
   SOUND_MAP,
+  PREVIEW_DURATION_MS,
   setDetectionSound,
   setDetectionSoundVolume,
   previewDetectionSound,
   playDetectionSound,
   stopDetectionSound,
+  stopPreviewDetectionSound,
 } from "./detectionSound"
 
 describe("detectionSound utility", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it("resolves correct URLs for known sound keys and falls back to default", () => {
     expect(getSoundUrl("default")).toBe("/detection_sound.mp3")
     expect(getSoundUrl("buzzer")).toBe("/buzzer.mp3")
@@ -26,13 +36,28 @@ describe("detectionSound utility", () => {
     expect(() => stopDetectionSound()).not.toThrow()
   })
 
-  it("previews sound by key and volume", () => {
+  it("previews sound by key and volume with 4-second cap", () => {
+    expect(PREVIEW_DURATION_MS).toBe(4000)
+
     const playSpy = vi
       .spyOn(window.HTMLMediaElement.prototype, "play")
       .mockImplementation(() => Promise.resolve())
+    const pauseSpy = vi
+      .spyOn(window.HTMLMediaElement.prototype, "pause")
+      .mockImplementation(() => {})
+
     expect(() => previewDetectionSound("buzzer", 60)).not.toThrow()
-    expect(() => previewDetectionSound(80)).not.toThrow()
+    expect(playSpy).toHaveBeenCalled()
+
+    // Advance time by 4 seconds to trigger automatic pause
+    vi.advanceTimersByTime(4000)
+    expect(pauseSpy).toHaveBeenCalled()
+
+    // Test zero volume stopping preview
     expect(() => previewDetectionSound("buzzer", 0)).not.toThrow()
+    expect(() => stopPreviewDetectionSound()).not.toThrow()
+
     playSpy.mockRestore()
+    pauseSpy.mockRestore()
   })
 })
