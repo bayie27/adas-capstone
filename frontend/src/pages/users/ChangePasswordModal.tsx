@@ -82,7 +82,7 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
           <RiLockPasswordLine size={28} className="text-fg" />
         </div>
       }
-      className="bg-surface-1"
+      className="bg-surface-1 sm:max-w-[540px]"
     >
       <form onSubmit={handleSubmit} className="flex flex-col">
         <hr className="border-t border-stroke mb-6 -mx-6" />
@@ -127,7 +127,7 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
 
         <hr className="border-t border-stroke my-6 -mx-6" />
 
-        <div className="flex items-center justify-between gap-6">
+        <div className="flex items-center justify-between gap-4">
           <div className="text-[12px] font-normal text-fg-muted leading-relaxed shrink-0">
             Last Changes: {formatShortDateTime(user.password_changed_at ?? null)}
           </div>

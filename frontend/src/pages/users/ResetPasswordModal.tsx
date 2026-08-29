@@ -81,6 +81,7 @@ export function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordMo
           <RiLockLine size={20} className="text-fg" />
         </div>
       }
+      className="bg-surface-1 sm:max-w-[540px]"
     >
       <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-6">
         <div className="h-px w-full bg-surface-3" />
