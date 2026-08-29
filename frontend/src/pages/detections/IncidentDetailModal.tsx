@@ -102,15 +102,15 @@ export function IncidentDetailModal({
       hideClose
       overlayClassName={cn("z-[9500]", overlayClassName)}
       className={cn(
-        "w-full overflow-hidden p-0 rounded-none sm:rounded-lg border-0",
+        "w-full overflow-hidden p-0 rounded-none sm:rounded-[4px] border-0",
         isUnverified ? "max-w-[1060px]" : "max-w-[1220px]",
       )}
     >
       <div className="-mx-6 -mb-6 flex flex-col">
         {/* ── Section 1: Header ───────────────────────────────────────────── */}
         {isUnverified ? (
-          <div className="relative flex h-[55px] w-full items-center justify-center bg-danger px-6 sm:px-[34px]">
-            <h2 className="text-center font-sans text-[24px] font-bold uppercase leading-[36px] tracking-wide text-surface-3">
+          <div className="relative flex h-[55px] w-full items-center justify-start bg-danger px-6 sm:px-[34px]">
+            <h2 className="text-left font-sans text-[24px] font-bold uppercase leading-[36px] tracking-wide text-surface-3">
               Accident Detected
             </h2>
             <button

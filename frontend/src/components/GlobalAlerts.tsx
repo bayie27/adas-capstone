@@ -220,7 +220,7 @@ export function GlobalAlerts() {
       ariaLabel="Accident detected"
       overlayClassName="z-9999"
       backdropClassName="bg-backdrop-alert"
-      className="w-full max-w-[1060px] overflow-hidden p-0 rounded-none sm:rounded-lg border-0"
+      className="w-full max-w-[1060px] overflow-hidden p-0 rounded-none sm:rounded-[4px] border-0"
       noEntrance
       outerContent={
         hasMultiple ? (
