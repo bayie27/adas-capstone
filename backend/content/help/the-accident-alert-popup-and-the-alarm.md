@@ -16,7 +16,9 @@ camera name, and confidence score, with Dismiss and Confirm buttons and an
 
 A red "ACCIDENT DETECTED" panel takes over the screen, showing the camera's name, the
 timestamp, the snapshot, and the AI's confidence score. An alarm sound plays and keeps
-looping until the alert is handled.
+looping until the alert is handled. The snapshot is the actual frame the AI flagged —
+look at it closely before deciding, since it's the main evidence you have for the call
+you're about to make.
 
 This popup is deliberately hard to get rid of:
 
@@ -53,3 +55,10 @@ currently viewing removes it from the queue and moves you to the next one.
 If a colleague confirms or dismisses the same alert a moment before you do, your action
 is rejected and a short notice tells you who acted and what they did — see [What Happens
 if Another Operator Already Acted?](faq-what-happens-if-another-operator-already-acted).
+
+## If you don't respond right away
+
+The popup and its alarm don't time out — see [What Happens if I Don't Respond to an
+Alert?](faq-what-happens-if-i-dont-respond-to-an-alert). Nothing auto-resolves in your
+absence, which is exactly why the alarm keeps looping rather than playing once and going
+quiet.

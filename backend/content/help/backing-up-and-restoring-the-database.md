@@ -11,6 +11,20 @@ is_faq: false
 ![The Maintenance page's backup list, showing each backup's date, origin,
 size, and Valid status](/help/maintenance-backup.png)
 
+## The automatic restore service banner
+
+Near the top of the page, a banner labeled **Automatic restore service** shows whether
+restoring is currently possible at all:
+
+- **Ready** — you can select a valid backup and restore it right now.
+- **Busy** — a restore is already in progress; wait for it to finish before starting
+  another.
+- **Unavailable** — the background service that actually performs a restore isn't
+  running, so the Restore action on every backup row is disabled until it comes back.
+  This isn't something you can fix from this page — it means the maintenance service
+  itself needs attention, which is a job for whoever administers the server, not a
+  setting you can toggle here.
+
 ## Automatic and manual backups
 
 The system takes scheduled backups on its own, and keeps up to 30 daily backups and 10

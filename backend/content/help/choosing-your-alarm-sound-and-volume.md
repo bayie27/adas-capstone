@@ -15,7 +15,9 @@ volume slider, and snooze duration field](/help/alarm-settings.png)
 
 On your Profile page, the **Alarm Settings** card lets you personalize how the accident
 alarm sounds for you specifically — this is a per-person setting, not shared across the
-team.
+team. If several operators use the same shared workstation across shifts, each person's
+own login carries their own alarm preferences, so switching accounts also switches
+which sound and volume plays for that session.
 
 ## Alarm sound
 
@@ -42,3 +44,12 @@ field; entering something outside that range is rejected before it's saved.
 Nothing is saved until you press **Save Alarm Settings**. If you haven't actually
 changed anything, saving does nothing and tells you so rather than writing a no-op
 change.
+
+## A practical tip
+
+Test your chosen sound and volume at the start of a shift, in the actual room you'll be
+working in, rather than assuming it'll be loud enough — a volume that sounds fine on
+headphones can be too quiet over the room's ambient noise, and the whole point of the
+alarm is that you notice it. See [The Accident Alert Popup and the
+Alarm](the-accident-alert-popup-and-the-alarm) for what the alarm actually sounds like
+when a real alert arrives, including what the snooze button does and doesn't do.

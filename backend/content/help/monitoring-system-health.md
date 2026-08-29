@@ -37,7 +37,21 @@ glance:
   free/total space underneath. Turns amber, then red, as it approaches capacity.
 
 A small colored dot next to a number is a quick health indicator for that metric — green
-is healthy, amber or red means it's worth a closer look.
+is healthy, amber or red means it's worth a closer look. For Inference Latency and
+Processing Speed specifically, the dot also reflects whether any cameras are currently
+reporting data at all — if nothing is reporting, there's nothing to average, and the
+dot turns red even though "N/A" isn't itself a bad number.
+
+## What to do when you see a warning
+
+A warning here is a prompt to check the specific thing it names, not necessarily an
+emergency. Disk space running low, for instance, is worth acting on before it becomes a
+problem (old backups and exports can usually be cleared — see [Backing Up and Restoring
+the Database](backing-up-and-restoring-the-database)), but it rarely means anything is
+failing right this moment. If a warning names a specific camera or component, check that
+camera's own detail panel next — see [Viewing Camera Details](viewing-camera-details) —
+since the system-wide banner here is meant to tell you _that_ something needs attention,
+while the camera-level detail tells you _what_.
 
 ## History charts
 

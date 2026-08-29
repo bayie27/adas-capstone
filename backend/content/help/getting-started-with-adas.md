@@ -58,3 +58,18 @@ A full-screen alert appears with a siren, no matter which page you're on, and it
 on screen until you make a decision. See [The Accident Alert Popup and the
 Alarm](the-accident-alert-popup-and-the-alarm) for exactly how that works and what your
 options are.
+
+## Before your first shift
+
+A few things worth doing before you're relying on this system for real:
+
+1. Open your **Profile** page and set an alarm sound and volume you'll actually notice
+   — see [Choosing Your Alarm Sound and Volume](choosing-your-alarm-sound-and-volume).
+2. Check the **Cameras** page so you know what's currently being monitored and what
+   each camera is called — see [Camera Connection Status vs. AI Status](camera-connection-vs-ai-status).
+3. Skim [Confirming an Accident Alert](confirming-an-accident-alert) and [Dismissing a
+   False Positive](dismissing-a-false-positive) so the two most common actions aren't
+   unfamiliar the first time an alert actually arrives.
+
+None of this is required to use the system — it'll work without it — but it means the
+first real alert you handle won't be the first time you've seen any of this.
