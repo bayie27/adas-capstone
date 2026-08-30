@@ -25,6 +25,7 @@ from sqlmodel import Session, col, select
 from app.core.config import Settings
 from app.core.db import init_db
 from app.dev.profiles import (
+    UAT_CAMERA_NAMES,
     UAT_RESTORE_ANCHOR_LABEL,
     UAT_TRAY_ALERT_LABEL,
     build_uat_alert_specs,
@@ -164,17 +165,10 @@ def _require_uat_baseline(session: Session) -> tuple[dict[int, Camera], Detectio
         )
         if camera.is_active
     }
-    expected_names = {
-        1: "UAT Channel 1 - Genuine Alert Cam",
-        2: "UAT Channel 2 - False Alert Cam",
-        3: "UAT Channel 3 - Recovery Cam",
-        4: "UAT Channel 4 - Readiness Cam",
-        5: "UAT Channel 5 - Reference Cam",
-        6: "UAT Channel 6 - Tray Review Cam",
-    }
     if any(
-        channel not in cameras or cameras[channel].camera_name != name
-        for channel, name in expected_names.items()
+        channel not in cameras
+        or cameras[channel].camera_name != UAT_CAMERA_NAMES[channel]
+        for channel in UAT_CAMERA_NAMES
     ):
         raise UatProfileRequired(
             "Load the 'uat' seed profile before preparing a UAT session."
