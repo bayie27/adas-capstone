@@ -8,7 +8,7 @@ rows reviewable and diffable in the repo.
 
 Rows marked **unsynced** have not been copied into the sheet by anyone yet.
 
-13 finding(s), 10 unsynced.
+14 finding(s), 11 unsynced.
 
 | Section / Chapter | Page Number | Required Revision | Notes | Status | Assigned to | Synced | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -25,3 +25,4 @@ Rows marked **unsynced** have not been copied into the sheet by anyone yet.
 | System Maintenance / Database Restoration | pp. 152–154; 🚩 Action Stream!A67:H67 | Mark the existing button-driven database-restore tracker item complete | The live defense paper already describes dashboard initiation, external Windows/Linux orchestration, rollback, and audit logging. Only the existing tracker row needs completion; no duplicate row or defense-paper replacement is proposed. | Not started | Daniboy | no | [2026-08-26-p27-button-driven-restore.md](findings/2026-08-26-p27-button-driven-restore.md) |
 | Project Development Model and Deployment Architecture | unconfirmed rendered pages; TOC pp. 54 and 129 | Replace completed CDRRMO installation, integration, and rollout claims with a clearly labelled target-production design. | The completed proof of concept was evaluated on researcher-controlled hardware. No live CDRRMO deployment, citywide rollout, or staff handover is claimed. | Not started | Enjey | 2026-08-27 | [2026-08-27-cdrrmo-deployment-overclaim.md](findings/2026-08-27-cdrrmo-deployment-overclaim.md) |
 | Whole paper — completion-oriented tense | unconfirmed rendered pages; TOC pp. 22, 30, 41, 45, 48, 58, 92, 94, 105, 129, 142 | Replace future/proposal wording with completed-study or present-system wording while retaining the documented proof-of-concept and target-production boundary. | This package supersedes the wording scope of live tracker item 0.13. It does not claim a production CDRRMO deployment; it reports the user-confirmed completed TensorRT export at batch size 32. | Not started | Enjey | 2026-08-27 | [2026-08-27-tense-completion.md](findings/2026-08-27-tense-completion.md) |
+| Use Case 6 and System Health telemetry | unconfirmed | Align the documented live System Health polling cadence with the five-second implementation. | NFR-05 already correctly requires a five-second refresh; this package corrects the conflicting UC-6 and audit wording only. | In progress | Daniboy | no | [2026-08-30-system-health-five-second-refresh.md](findings/2026-08-30-system-health-five-second-refresh.md) |
