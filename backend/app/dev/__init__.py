@@ -12,12 +12,13 @@ from app.dev.profiles import (
     PERF_TARGET_INCIDENT_COUNT,
     PROFILES,
     SEED_PROFILES,
+    UAT_PROFILE,
     SeedAlertSpec,
     SeedProfile,
     build_alert_specs,
     get_profile,
 )
-from app.dev.seed import SeedResult, seed_perf_data, seed_profile
+from app.dev.seed import SeedResult, seed_perf_data, seed_profile, seed_source_event_id
 
 __all__ = [
     "DEFAULT_SEED_PROFILE",
@@ -25,6 +26,7 @@ __all__ = [
     "PERF_TARGET_INCIDENT_COUNT",
     "PROFILES",
     "SEED_PROFILES",
+    "UAT_PROFILE",
     "SeedAlertSpec",
     "SeedProfile",
     "SeedResult",
@@ -32,5 +34,6 @@ __all__ = [
     "get_profile",
     "seed_perf_data",
     "seed_profile",
+    "seed_source_event_id",
     "write_snapshot",
 ]

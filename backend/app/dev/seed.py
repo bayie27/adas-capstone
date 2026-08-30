@@ -103,7 +103,7 @@ def _collect_result(
 _SEED_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "adas-capstone-seed-data")
 
 
-def _seed_source_event_id(label: str) -> str:
+def seed_source_event_id(label: str) -> str:
     return str(uuid.uuid5(_SEED_NAMESPACE, label))
 
 
@@ -205,7 +205,7 @@ def ensure_alert(
     snoozed_at: datetime | None = None,
     snoozed_until: datetime | None = None,
 ) -> DetectionLog:
-    source_event_id = _seed_source_event_id(label)
+    source_event_id = seed_source_event_id(label)
     alert = session.exec(
         select(DetectionLog).where(DetectionLog.source_event_id == source_event_id)
     ).first()
@@ -474,7 +474,7 @@ def seed_export_jobs(session: Session, *, requested_by: User, now: datetime) -> 
         created_at = now - timedelta(hours=index * 6 + 1)
         rows.append(
             ExportJob(
-                job_id=_seed_source_event_id(f"export_{report_type}_{status}"),
+                job_id=seed_source_event_id(f"export_{report_type}_{status}"),
                 requested_by_id=requested_by.user_id,
                 report_type=report_type,
                 format=fmt,
@@ -607,7 +607,7 @@ def seed_profile(
             else:
                 snoozed_by = None
 
-            source_event_id = _seed_source_event_id(spec.label)
+            source_event_id = seed_source_event_id(spec.label)
             snapshot_key = make_snapshot(
                 camera.camera_id, spec.detected_at, source_event_id
             )
@@ -810,7 +810,7 @@ def _build_perf_rows(
         rows.append(
             {
                 "camera_id": camera_id,
-                "source_event_id": _seed_source_event_id(f"perf_{i}"),
+                "source_event_id": seed_source_event_id(f"perf_{i}"),
                 "detected_at": detected_at,
                 "snapshot_key": snapshot_key,
                 "confidence_score": confidence_score,

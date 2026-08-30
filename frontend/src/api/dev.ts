@@ -51,6 +51,16 @@ export interface DevCameraStatePayload {
   clear_cooldown?: boolean
 }
 
+export type DevUatPhase = "operator" | "administrator" | "administrator_healthy"
+
+export interface DevUatResetResult {
+  phase: DevUatPhase
+  removed_session_detections: number
+  preserved_audit_rows: number
+  tray_status: string
+  readiness_camera_enabled: boolean
+}
+
 // Paths are relative to the shared instance's baseURL, which already ends
 // in `/api` (see utils/env.ts) — same convention as every other service
 // here, e.g. cameras.ts uses "/cameras/". Prefixing "/api" again produces
@@ -96,4 +106,9 @@ export async function generateHealthHistory(days: number): Promise<number> {
     days,
   })
   return data.rows_written
+}
+
+export async function resetUatSession(phase: DevUatPhase): Promise<DevUatResetResult> {
+  const { data } = await api.post<DevUatResetResult>("/dev/uat/reset", { phase })
+  return data
 }

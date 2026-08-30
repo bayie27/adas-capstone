@@ -6,7 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from verify_uat_export import ExportVerificationError, verify_incident_export
+from verify_incident_export import ExportVerificationError, verify_incident_export
 
 HEADER = [
     "Log ID",

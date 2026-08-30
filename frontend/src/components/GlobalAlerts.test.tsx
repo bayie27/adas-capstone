@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -270,6 +270,38 @@ describe("GlobalAlerts", () => {
 
     expect(screen.getByText("Alert 2 of 2")).toBeInTheDocument()
     expect(screen.getByText("Rear Exit Cam")).toBeInTheDocument()
+  })
+
+  it("submits the alert ID currently rendered after a concurrent alert is prepended", async () => {
+    const user = userEvent.setup()
+    const mockAlert2: AlertLog = {
+      ...mockAlert,
+      log_id: 102,
+      camera_name: "Selected Cam",
+    }
+    const arrivingAlert: AlertLog = {
+      ...mockAlert,
+      log_id: 103,
+      camera_name: "Arriving Cam",
+    }
+    vi.mocked(alertsApi.confirmAlert).mockImplementation(async (logId) => ({
+      ...mockAlert,
+      log_id: logId,
+      detection_status: "Ongoing",
+    }))
+
+    useAlertStore.setState({ alerts: [mockAlert, mockAlert2] })
+    render(renderWithProviders(<GlobalAlerts />))
+
+    await user.click(screen.getByRole("button", { name: /next alert/i }))
+    expect(screen.getByText("Selected Cam")).toBeInTheDocument()
+
+    act(() => useAlertStore.getState().addAlert(arrivingAlert))
+
+    await waitFor(() => expect(screen.getByText("Front Gate Cam")).toBeInTheDocument())
+    await user.click(screen.getByRole("button", { name: /confirm accident/i }))
+
+    await waitFor(() => expect(alertsApi.confirmAlert).toHaveBeenCalledWith(101))
   })
 
   it("renders telemetry labels (TIMESTAMP, CAMERA NAME, AI-CONFIDENCE SCORE) and snapshot image", () => {

@@ -11,6 +11,7 @@ import {
   injectDetection,
   loginAs,
   reseedProfile,
+  resetUatSession,
   setCameraState,
   type DevSeedResult,
   type DevSessionUser,
@@ -34,7 +35,7 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
   const navigate = useNavigate()
   const [notice, setNotice] = useState<NoticeState | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
-  const [confirmingSlow, setConfirmingSlow] = useState(false)
+  const [pendingReseedProfile, setPendingReseedProfile] = useState<string | null>(null)
   const [cameraId, setCameraId] = useState("")
   const [confidence, setConfidence] = useState(87)
 
@@ -111,16 +112,7 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
   }
 
   function handleReseed(profile: string) {
-    if (profile === SLOW_PROFILE && !confirmingSlow) {
-      setConfirmingSlow(true)
-      setNotice({
-        tone: "error",
-        message: "perf seeds 100,000 incidents (~15s). Click again to confirm.",
-      })
-      return
-    }
-    setConfirmingSlow(false)
-
+    setPendingReseedProfile(null)
     return run(`reseed:${profile}`, async () => {
       // Awaiting the reseed is necessary but NOT sufficient, which is what
       // driving this in a real browser showed: the wipe deletes every
@@ -156,6 +148,21 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
     )
   }
 
+  function handleUatReset(
+    phase: "operator" | "administrator" | "administrator_healthy",
+    label: string,
+  ) {
+    return run(`uat:${phase}`, async () => {
+      const result = await resetUatSession(phase)
+      useAlertStore.getState().clearAlerts()
+      await queryClient.invalidateQueries()
+      return (
+        `${label} ready. Cleared ${result.removed_session_detections} prior session ` +
+        `detection(s) and preserved ${result.preserved_audit_rows} audit row(s).`
+      )
+    })
+  }
+
   return (
     <SidePanel
       isOpen={isOpen}
@@ -174,8 +181,13 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
           {profiles.map((profile) => (
             <button
               key={profile.name}
+              type="button"
               disabled={busy !== null}
-              onClick={() => handleReseed(profile.name)}
+              aria-pressed={pendingReseedProfile === profile.name}
+              onClick={() => {
+                setNotice(null)
+                setPendingReseedProfile(profile.name)
+              }}
               className="rounded-lg border border-stroke bg-surface-1 px-3 py-2 text-left transition-colors hover:border-stroke-strong disabled:opacity-50"
             >
               <span className="text-sm font-medium text-fg">
@@ -192,6 +204,40 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
             </button>
           ))}
         </div>
+
+        {pendingReseedProfile && (
+          <div
+            role="alert"
+            className="mt-3 rounded-lg border border-danger-border bg-danger-subtle p-3"
+          >
+            <p className="text-sm font-semibold text-danger">Confirm destructive reseed</p>
+            <p className="mt-1 text-xs leading-relaxed text-danger">
+              Reseeding &apos;{pendingReseedProfile}&apos; permanently replaces the development
+              database and active sessions. This cannot be undone from this panel.
+              {pendingReseedProfile === SLOW_PROFILE
+                ? " The perf profile also writes 100,000 incidents and can take about 15 seconds."
+                : ""}
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => handleReseed(pendingReseedProfile)}
+                className="flex-1 rounded-lg border border-danger-border bg-danger px-3 py-2 text-xs font-semibold text-surface-3 disabled:opacity-50"
+              >
+                Confirm reseed &apos;{pendingReseedProfile}&apos;
+              </button>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => setPendingReseedProfile(null)}
+                className="rounded-lg border border-stroke bg-surface-1 px-3 py-2 text-xs text-fg disabled:opacity-50"
+              >
+                Cancel reseed
+              </button>
+            </div>
+          </div>
+        )}
       </Section>
 
       <Section title="Simulate">
@@ -286,6 +332,39 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
           </PanelButton>
         </div>
       </Section>
+
+      {profiles.some((profile) => profile.name === "uat") && (
+        <Section title="UAT session preparation">
+          <p className="mb-3 text-xs text-fg-muted">
+            Use these after seeding uat. They restore journey fixtures without erasing earlier
+            participant audit evidence.
+          </p>
+          <div className="flex flex-col gap-2">
+            <PanelButton
+              disabled={busy !== null}
+              onClick={() => handleUatReset("operator", "Operator session")}
+            >
+              {busy === "uat:operator" ? "Preparing..." : "Prepare next Operator"}
+            </PanelButton>
+            <PanelButton
+              disabled={busy !== null}
+              onClick={() => handleUatReset("administrator", "Administrator session")}
+            >
+              {busy === "uat:administrator" ? "Preparing..." : "Prepare next Administrator"}
+            </PanelButton>
+            <PanelButton
+              disabled={busy !== null}
+              onClick={() =>
+                handleUatReset("administrator_healthy", "Administrator healthy baseline")
+              }
+            >
+              {busy === "uat:administrator_healthy"
+                ? "Restoring..."
+                : "Restore AD-J02 healthy baseline"}
+            </PanelButton>
+          </div>
+        </Section>
+      )}
 
       <Section title="Session">
         <div className="flex flex-wrap gap-2">
