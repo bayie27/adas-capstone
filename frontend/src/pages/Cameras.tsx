@@ -37,7 +37,6 @@ import { shouldApplyCameraEvent } from "@/utils/merge"
 import { describeCameraDesiredState, isCameraInCooldown } from "@/utils/format"
 import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
-import { CameraDetailPanel } from "@/pages/cameras/CameraDetailPanel"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"
 import { toast } from "@/store/useToastStore"
 import {
@@ -98,10 +97,6 @@ export default function Cameras() {
   // today's behavior exactly rather than sending an explicit "true".
   const [activeFilter, setActiveFilter] = useState<"active" | "false" | "null">("active")
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
-  // An id, not the row itself — so the panel re-derives against the live
-  // query below and reflects a toggle or a broadcast landing while it's open,
-  // rather than showing a snapshot frozen at the moment of the click.
-  const [detailCameraId, setDetailCameraId] = useState<number | null>(null)
 
   const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
 
@@ -288,7 +283,6 @@ export default function Cameras() {
   const rangeEndValue = rangeEnd(cameras.length)
   // Only the cooldown reason counts down; the clock stays still otherwise.
   const now = useNow(cameras.some(isCameraInCooldown))
-  const detailCamera = cameras.find((camera) => camera.camera_id === detailCameraId) ?? null
 
   return (
     <div className="mx-auto max-w-[1400px] p-8">
@@ -458,13 +452,7 @@ export default function Cameras() {
                   restoreCameraMutation.variables === camera.camera_id
 
                 return (
-                  <TableRow
-                    key={camera.camera_id}
-                    className={camera.is_active ? "cursor-pointer" : undefined}
-                    onClick={() => {
-                      if (camera.is_active) setDetailCameraId(camera.camera_id)
-                    }}
-                  >
+                  <TableRow key={camera.camera_id}>
                     <TableCell className="font-medium text-fg">
                       {camera.camera_name}
                       {!camera.is_active ? (
@@ -550,13 +538,6 @@ export default function Cameras() {
           </TableBody>
         </Table>
       </TableContainer>
-
-      <CameraDetailPanel
-        camera={detailCamera}
-        isOpen={detailCameraId !== null}
-        onClose={() => setDetailCameraId(null)}
-        now={now}
-      />
 
       {modal.kind === "add" && (
         <AddCameraModal
