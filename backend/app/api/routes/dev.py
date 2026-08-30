@@ -36,7 +36,13 @@ from app.core.errors import AppHTTPException
 from app.core.security import create_session_token, set_session_cookie
 from app.dev import PROFILES, write_snapshot
 from app.dev.seed import seed_health_history
-from app.dev.service import reseed as reseed_service
+from app.dev.service import (
+    UatProfileRequired,
+    reset_uat_session,
+)
+from app.dev.service import (
+    reseed as reseed_service,
+)
 from app.models import Camera, DetectionLog, DetectionStatus, User
 from app.schemas import DetectionLogCreateV2
 from app.schemas.dev import (
@@ -51,6 +57,8 @@ from app.schemas.dev import (
     DevReseedResponse,
     DevSessionUser,
     DevStatusResponse,
+    DevUatResetRequest,
+    DevUatResetResponse,
 )
 from app.services.cameras import ObservedReport, apply_observed
 from app.services.events import camera_status_update_event, new_detection_event
@@ -365,3 +373,25 @@ def dev_health_history(
     profile that already seeded history."""
     written = seed_health_history(session, days=body.days, now=datetime.now(UTC))
     return DevHealthHistoryResponse(rows_written=written)
+
+
+@router.post("/uat/reset", response_model=DevUatResetResponse)
+async def dev_uat_reset(
+    body: DevUatResetRequest,
+    request: Request,
+    _current_user: User = Depends(get_current_admin),
+    manager: RealtimeManager = Depends(get_realtime_manager),
+    scheduler=Depends(get_scheduler),
+) -> DevUatResetResponse:
+    """Prepare the next UAT state without wiping participant audit evidence."""
+    try:
+        result = await reset_uat_session(
+            request.app.state.engine,
+            phase=body.phase,
+            scheduler=scheduler,
+            snapshot_root=_app_settings(request).SNAPSHOT_ROOT,
+            manager=manager,
+        )
+    except UatProfileRequired as exc:
+        raise AppHTTPException(409, str(exc), code="CONFLICT_STATE") from exc
+    return DevUatResetResponse(**result.__dict__)

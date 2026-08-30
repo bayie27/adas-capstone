@@ -261,6 +261,48 @@ def test_edge_seeds_the_confidence_score_boundaries(seeded):
     assert cooldowns
 
 
+def test_uat_profile_matches_the_journey_baseline(seeded):
+    engine, _, result = seeded["uat"]
+    with Session(engine) as session:
+        users = session.exec(select(User)).all()
+        cameras = session.exec(select(Camera)).all()
+        detections = session.exec(select(DetectionLog)).all()
+        audit = session.exec(select(AuditLog)).all()
+        alarms = session.exec(select(AlarmSettings)).all()
+
+    usernames = {user.username for user in users}
+    assert {f"uat_op{number:02d}" for number in range(1, 7)} <= usernames
+    assert {"uat_adm01", "uat_adm02"} <= usernames
+    assert "uat_replacement01" not in usernames
+    assert "uat_replacement02" not in usernames
+
+    by_channel = {camera.channel_id: camera for camera in cameras}
+    assert set(by_channel) == set(range(1, 7))
+    assert by_channel[4].is_enabled is False
+    assert all(by_channel[channel].is_enabled for channel in (1, 2, 3, 5, 6))
+
+    open_rows = [row for row in detections if row.detection_status in OPEN_STATUSES]
+    assert len(open_rows) == 1
+    assert open_rows[0].camera_id == by_channel[6].camera_id
+    assert open_rows[0].detection_status == "Ongoing"
+    assert all(
+        row.detection_status not in OPEN_STATUSES
+        for row in detections
+        if row.camera_id in {by_channel[n].camera_id for n in (1, 2, 3)}
+    )
+
+    operator_ids = {
+        user.user_id for user in users if user.username.startswith("uat_op")
+    }
+    operator_alarms = [alarm for alarm in alarms if alarm.user_id in operator_ids]
+    assert len(operator_alarms) == 6
+    assert {alarm.volume for alarm in operator_alarms} == {50}
+    assert {alarm.snooze_duration for alarm in operator_alarms} == {30}
+    assert audit == []
+    assert result.detections == 16
+    assert result.health_samples > 0
+
+
 # ---------------------------------------------------------------------------
 # 4. Snapshots resolve
 # ---------------------------------------------------------------------------

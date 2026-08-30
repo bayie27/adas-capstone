@@ -36,13 +36,14 @@ describe("dev service request paths", () => {
     await dev.injectDetection({})
     await dev.setCameraState(1, { stale_heartbeat: true })
     await dev.generateHealthHistory(7)
+    await dev.resetUatSession("operator")
 
     const paths = [
       ...vi.mocked(api.get).mock.calls.map((call) => call[0]),
       ...vi.mocked(api.post).mock.calls.map((call) => call[0]),
     ]
 
-    expect(paths).toHaveLength(6)
+    expect(paths).toHaveLength(7)
     for (const path of paths) {
       expect(path).not.toMatch(/^\/api\//)
       expect(path).toMatch(/^\/dev\//)
@@ -67,6 +68,11 @@ describe("dev service request paths", () => {
     await dev.setCameraState(42, { clear_cooldown: true })
     expect(api.post).toHaveBeenCalledWith("/dev/cameras/42/state", {
       clear_cooldown: true,
+    })
+
+    await dev.resetUatSession("administrator_healthy")
+    expect(api.post).toHaveBeenCalledWith("/dev/uat/reset", {
+      phase: "administrator_healthy",
     })
   })
 })

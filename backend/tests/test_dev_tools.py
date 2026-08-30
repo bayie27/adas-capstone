@@ -120,6 +120,11 @@ def test_unauthenticated_cannot_reseed(dev_client: TestClient):
     assert resp.status_code == 401
 
 
+def test_unauthenticated_cannot_reset_uat(dev_client: TestClient):
+    resp = dev_client.post("/api/dev/uat/reset", json={"phase": "operator"})
+    assert resp.status_code == 401
+
+
 def test_operator_cannot_reseed(dev_client: TestClient):
     login_admin(dev_client)
     dev_client.post("/api/dev/reseed", json={"profile": "demo"})
@@ -135,10 +140,25 @@ def test_operator_cannot_reseed(dev_client: TestClient):
     )
 
 
+def test_operator_cannot_reset_uat(dev_client: TestClient):
+    login_admin(dev_client)
+    dev_client.post("/api/dev/reseed", json={"profile": "uat"})
+    assert login(dev_client, "uat_op01", "UATOperator2026!").status_code == 200
+    resp = dev_client.post("/api/dev/uat/reset", json={"phase": "operator"})
+    assert resp.status_code == 403
+
+
 def test_an_unknown_profile_is_a_404(dev_client: TestClient):
     login_admin(dev_client)
     resp = dev_client.post("/api/dev/reseed", json={"profile": "nope"})
     assert resp.status_code == 404
+
+
+def test_uat_reset_requires_the_uat_profile(dev_client: TestClient):
+    login_admin(dev_client)
+    dev_client.post("/api/dev/reseed", json={"profile": "empty"})
+    resp = dev_client.post("/api/dev/uat/reset", json={"phase": "operator"})
+    assert resp.status_code == 409
 
 
 def test_request_bodies_forbid_unknown_fields(dev_client: TestClient):
@@ -205,6 +225,68 @@ def test_the_server_keeps_running_and_the_schema_survives(dev_client: TestClient
         }
     assert "alembic_version" in tables
     assert {"camera", "detection_log", "audit_log"} <= tables
+
+
+def test_uat_reset_rearms_fixtures_and_preserves_audit_evidence(
+    dev_client: TestClient,
+):
+    login_admin(dev_client)
+    reseed = dev_client.post("/api/dev/reseed", json={"profile": "uat"})
+    assert reseed.status_code == 200, reseed.text
+
+    with Session(engine_of(dev_client)) as session:
+        cameras = {camera.channel_id: camera for camera in session.exec(select(Camera))}
+        seeded_detection_ids = {
+            row.log_id for row in session.exec(select(DetectionLog))
+        }
+
+    injected = dev_client.post(
+        "/api/dev/detections", json={"camera_id": cameras[1].camera_id}
+    )
+    assert injected.status_code == 201, injected.text
+    injected_id = injected.json()["log_id"]
+
+    # Real authentication creates the evidence AD-J06 later reviews.
+    assert login(dev_client, "uat_op01", "UATOperator2026!").status_code == 200
+    assert login(dev_client, "admin", ADMIN_PASSWORD).status_code == 200
+    with Session(engine_of(dev_client)) as session:
+        audit_before = len(session.exec(select(AuditLog)).all())
+    assert audit_before > 0
+
+    reset = dev_client.post("/api/dev/uat/reset", json={"phase": "operator"})
+    assert reset.status_code == 200, reset.text
+    body = reset.json()
+    assert body["removed_session_detections"] == 1
+    assert body["preserved_audit_rows"] == audit_before
+    assert body["tray_status"] == "Ongoing"
+    assert body["readiness_camera_enabled"] is False
+
+    with Session(engine_of(dev_client)) as session:
+        detection_ids = {row.log_id for row in session.exec(select(DetectionLog))}
+        assert injected_id not in detection_ids
+        assert seeded_detection_ids <= detection_ids
+        assert len(session.exec(select(AuditLog)).all()) == audit_before
+        refreshed = {
+            camera.channel_id: camera for camera in session.exec(select(Camera))
+        }
+        assert refreshed[4].is_enabled is False
+        assert refreshed[6].desired_state_reason == "incident"
+
+    admin_ready = dev_client.post("/api/dev/uat/reset", json={"phase": "administrator"})
+    assert admin_ready.status_code == 200, admin_ready.text
+    assert admin_ready.json()["tray_status"] == "Dismissed"
+
+    healthy = dev_client.post(
+        "/api/dev/uat/reset", json={"phase": "administrator_healthy"}
+    )
+    assert healthy.status_code == 200, healthy.text
+    assert healthy.json()["readiness_camera_enabled"] is True
+    with Session(engine_of(dev_client)) as session:
+        readiness = session.exec(select(Camera).where(Camera.channel_id == 4)).one()
+        assert readiness.is_enabled is True
+        assert readiness.connection_status == "Connected"
+        assert readiness.ai_status == "Active"
+        assert len(session.exec(select(AuditLog)).all()) == audit_before
 
 
 # ---------------------------------------------------------------------------
