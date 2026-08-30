@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 import pytest
 from app.core.config import Settings
 from app.core.db import create_db_engine
-from app.dev import PROFILES, seed_perf_data, seed_profile
+from app.dev import PROFILES, UAT_CAMERA_NAMES, seed_perf_data, seed_profile
 from app.models import (
     AUDIT_ACTIONS,
     AlarmSettings,
@@ -278,6 +278,9 @@ def test_uat_profile_matches_the_journey_baseline(seeded):
 
     by_channel = {camera.channel_id: camera for camera in cameras}
     assert set(by_channel) == set(range(1, 7))
+    assert {
+        channel: camera.camera_name for channel, camera in by_channel.items()
+    } == UAT_CAMERA_NAMES
     assert by_channel[4].is_enabled is False
     assert all(by_channel[channel].is_enabled for channel in (1, 2, 3, 5, 6))
 

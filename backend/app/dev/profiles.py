@@ -32,6 +32,14 @@ DISMISS_COOLDOWN_MINUTES = max(1, settings.DISMISS_COOLDOWN_SECONDS // 60)
 DEFAULT_SEED_PROFILE = "demo"
 PERF_PROFILE = "perf"
 UAT_PROFILE = "uat"
+UAT_CAMERA_NAMES: dict[int, str] = {
+    1: "Crossing-Banaybanay",
+    2: "Air Base Intersection",
+    3: "Lipa Town Center-Tambo",
+    4: "Petron Banaybanay",
+    5: "Unitop",
+    6: "STAR Tollway",
+}
 
 UAT_OPERATOR_PASSWORD = "UATOperator2026!"
 UAT_ADMIN_PASSWORD = "UATAdmin2026!"
@@ -643,6 +651,8 @@ def build_default_users() -> list[SeedUserSpec]:
 def build_uat_cameras() -> list[SeedCameraSpec]:
     """The frozen UAT topology used by mediamtx-uat.yml and the journeys.
 
+    Human-facing names mirror the six named Lipa deployment points in the
+    defense-document audit; journey roles stay in the UAT tracker.
     Channels 1-3 are intentionally free of open seeded incidents because
     the AI engine raises the participant-facing alerts there. Channel 4 is
     the single, deterministic readiness problem used by OP-J03 and AD-J02.
@@ -658,25 +668,25 @@ def build_uat_cameras() -> list[SeedCameraSpec]:
     return [
         SeedCameraSpec(
             key="uat_genuine",
-            camera_name="UAT Channel 1 - Genuine Alert Cam",
+            camera_name=UAT_CAMERA_NAMES[1],
             channel_id=1,
             **healthy,
         ),
         SeedCameraSpec(
             key="uat_false",
-            camera_name="UAT Channel 2 - False Alert Cam",
+            camera_name=UAT_CAMERA_NAMES[2],
             channel_id=2,
             **healthy,
         ),
         SeedCameraSpec(
             key="uat_recovery",
-            camera_name="UAT Channel 3 - Recovery Cam",
+            camera_name=UAT_CAMERA_NAMES[3],
             channel_id=3,
             **healthy,
         ),
         SeedCameraSpec(
             key="uat_readiness",
-            camera_name="UAT Channel 4 - Readiness Cam",
+            camera_name=UAT_CAMERA_NAMES[4],
             channel_id=4,
             connection_status=ConnectionStatus.DISCONNECTED,
             ai_status=AIStatus.INACTIVE,
@@ -684,13 +694,13 @@ def build_uat_cameras() -> list[SeedCameraSpec]:
         ),
         SeedCameraSpec(
             key="uat_reference",
-            camera_name="UAT Channel 5 - Reference Cam",
+            camera_name=UAT_CAMERA_NAMES[5],
             channel_id=5,
             **healthy,
         ),
         SeedCameraSpec(
             key="uat_tray",
-            camera_name="UAT Channel 6 - Tray Review Cam",
+            camera_name=UAT_CAMERA_NAMES[6],
             channel_id=6,
             **healthy,
         ),
