@@ -420,6 +420,92 @@ class TestGetAlerts:
 
 
 class TestExportAlerts:
+    def test_export_alerts_philippine_date_bounds_match_list_and_audit(
+        self, client: TestClient, session: Session
+    ):
+        """An offset-aware Philippine day has inclusive bounds in both routes."""
+        _, headers = operator_with_headers(client, session, username="phtparity")
+        camera = make_camera(session, name="PHT Parity Cam", channel_id=1)
+
+        before = make_alert(
+            session,
+            camera,
+            status=DetectionStatus.RESOLVED,
+            detected_at=datetime(2026, 8, 29, 15, 59, 59, 999999, tzinfo=UTC),
+        )
+        at_start = make_alert(
+            session,
+            camera,
+            status=DetectionStatus.RESOLVED,
+            detected_at=datetime(2026, 8, 29, 16, 0, 0, tzinfo=UTC),
+        )
+        at_end = make_alert(
+            session,
+            camera,
+            status=DetectionStatus.RESOLVED,
+            detected_at=datetime(2026, 8, 30, 15, 59, 59, 999999, tzinfo=UTC),
+        )
+        after = make_alert(
+            session,
+            camera,
+            status=DetectionStatus.RESOLVED,
+            detected_at=datetime(2026, 8, 30, 16, 0, 0, tzinfo=UTC),
+        )
+        params = {
+            "start_date": "2026-08-30T00:00:00+08:00",
+            "end_date": "2026-08-30T23:59:59.999999+08:00",
+        }
+
+        list_response = client.get(
+            "/api/alerts/", params=params | {"limit": 100}, headers=headers
+        )
+        export_response = client.get(
+            "/api/alerts/export", params=params, headers=headers
+        )
+
+        assert list_response.status_code == 200
+        assert export_response.status_code == 200
+        list_ids = [row["log_id"] for row in list_response.json()["logs"]]
+        csv_rows = list(csv.reader(StringIO(export_response.text[1:])))
+        csv_ids = [int(row[0]) for row in csv_rows[1:]]
+        assert list_ids == csv_ids == [at_end.log_id, at_start.log_id]
+        assert before.log_id not in csv_ids
+        assert after.log_id not in csv_ids
+
+        audit_row = session.exec(
+            select(AuditLog).where(AuditLog.action == "REPORT_EXPORT")
+        ).one()
+        detail = json.loads(audit_row.detail or "{}")
+        assert detail["row_count"] == len(csv_ids) == 2
+        assert datetime.fromisoformat(detail["filters"]["start_date"]).astimezone(
+            UTC
+        ) == datetime(2026, 8, 29, 16, 0, 0, tzinfo=UTC)
+        assert datetime.fromisoformat(detail["filters"]["end_date"]).astimezone(
+            UTC
+        ) == datetime(2026, 8, 30, 15, 59, 59, 999999, tzinfo=UTC)
+
+    def test_export_alerts_rejects_reversed_date_range_without_a_success_audit(
+        self, client: TestClient, session: Session
+    ):
+        _, headers = operator_with_headers(client, session, username="invalidexport")
+
+        response = client.get(
+            "/api/alerts/export",
+            params={
+                "start_date": "2026-08-31T00:00:00+08:00",
+                "end_date": "2026-08-30T23:59:59.999999+08:00",
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == 422
+        assert (
+            session.exec(
+                select(AuditLog).where(AuditLog.action == "REPORT_EXPORT")
+            ).all()
+            == []
+        )
+
     def test_export_alerts_csv(self, client: TestClient, session: Session):
         operator, headers = operator_with_headers(client, session)
         camera = make_camera(session, name="CSV Cam", channel_id=1)
