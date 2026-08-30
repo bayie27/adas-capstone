@@ -31,6 +31,12 @@ DISMISS_COOLDOWN_MINUTES = max(1, settings.DISMISS_COOLDOWN_SECONDS // 60)
 
 DEFAULT_SEED_PROFILE = "demo"
 PERF_PROFILE = "perf"
+UAT_PROFILE = "uat"
+
+UAT_OPERATOR_PASSWORD = "UATOperator2026!"
+UAT_ADMIN_PASSWORD = "UATAdmin2026!"
+UAT_TRAY_ALERT_LABEL = "uat_preexisting_misidentified_ongoing"
+UAT_RESTORE_ANCHOR_LABEL = "uat_restore_anchor_resolved"
 
 # 10_PKG_migration_evidence.md Step 2 — NFR-08's 100,000-incident dataset.
 PERF_TARGET_INCIDENT_COUNT = 100_000
@@ -634,6 +640,163 @@ def build_default_users() -> list[SeedUserSpec]:
     ]
 
 
+def build_uat_cameras() -> list[SeedCameraSpec]:
+    """The frozen UAT topology used by mediamtx-uat.yml and the journeys.
+
+    Channels 1-3 are intentionally free of open seeded incidents because
+    the AI engine raises the participant-facing alerts there. Channel 4 is
+    the single, deterministic readiness problem used by OP-J03 and AD-J02.
+    Channel 6 owns the separate Ongoing incident needed by OP-J07.
+    """
+    healthy = {
+        "connection_status": ConnectionStatus.CONNECTED,
+        "ai_status": AIStatus.ACTIVE,
+        "last_heartbeat_minutes_ago": 0,
+        "measured_fps": 15.0,
+        "inference_latency_ms": 54.0,
+    }
+    return [
+        SeedCameraSpec(
+            key="uat_genuine",
+            camera_name="UAT Channel 1 - Genuine Alert Cam",
+            channel_id=1,
+            **healthy,
+        ),
+        SeedCameraSpec(
+            key="uat_false",
+            camera_name="UAT Channel 2 - False Alert Cam",
+            channel_id=2,
+            **healthy,
+        ),
+        SeedCameraSpec(
+            key="uat_recovery",
+            camera_name="UAT Channel 3 - Recovery Cam",
+            channel_id=3,
+            **healthy,
+        ),
+        SeedCameraSpec(
+            key="uat_readiness",
+            camera_name="UAT Channel 4 - Readiness Cam",
+            channel_id=4,
+            connection_status=ConnectionStatus.DISCONNECTED,
+            ai_status=AIStatus.INACTIVE,
+            is_enabled=False,
+        ),
+        SeedCameraSpec(
+            key="uat_reference",
+            camera_name="UAT Channel 5 - Reference Cam",
+            channel_id=5,
+            **healthy,
+        ),
+        SeedCameraSpec(
+            key="uat_tray",
+            camera_name="UAT Channel 6 - Tray Review Cam",
+            channel_id=6,
+            **healthy,
+        ),
+    ]
+
+
+def build_uat_users() -> list[SeedUserSpec]:
+    """Coded participant accounts only; replacement users are created in UAT."""
+    sounds = tuple(settings.ALARM_SOUND_KEYS) or ("default",)
+    users = [
+        SeedUserSpec(
+            key=f"uat_op{number:02d}",
+            username=f"uat_op{number:02d}",
+            first_name="UAT Operator",
+            last_name=f"{number:02d}",
+            role=UserRole.OPERATOR,
+            password=UAT_OPERATOR_PASSWORD,
+            alarm_sound=sounds[0],
+            alarm_volume=50,
+            # Deliberately differs from the standardized 15 seconds so
+            # OP-J02 observes a real saved change.
+            alarm_snooze_duration=30,
+        )
+        for number in range(1, 7)
+    ]
+    users.extend(
+        SeedUserSpec(
+            key=f"uat_adm{number:02d}",
+            username=f"uat_adm{number:02d}",
+            first_name="UAT Administrator",
+            last_name=f"{number:02d}",
+            role=UserRole.ADMIN,
+            password=UAT_ADMIN_PASSWORD,
+        )
+        for number in range(1, 3)
+    )
+    return users
+
+
+def build_uat_alert_specs(now: datetime) -> list[SeedAlertSpec]:
+    """Closed history plus the two named fixtures the UAT runbook relies on."""
+    operator_keys = tuple(f"uat_op{number:02d}" for number in range(1, 7))
+    camera_keys = (
+        "uat_genuine",
+        "uat_false",
+        "uat_recovery",
+        "uat_reference",
+    )
+    specs: list[SeedAlertSpec] = []
+
+    # Two weeks of deterministic, filterable data gives Dashboard,
+    # Detections and AI Performance meaningful CSV/PDF exports in OP-J09.
+    for day in range(14):
+        verifier = operator_keys[day % len(operator_keys)]
+        closer = operator_keys[(day + 1) % len(operator_keys)]
+        status = DetectionStatus.RESOLVED if day % 3 != 1 else DetectionStatus.DISMISSED
+        specs.append(
+            SeedAlertSpec(
+                label=f"uat_history_{day + 1:02d}",
+                camera_key=camera_keys[day % len(camera_keys)],
+                detected_at=seeded_timestamp(
+                    now,
+                    days_ago=day,
+                    hour=7 + (day % 10),
+                    minute=(day * 7) % 60,
+                ),
+                confidence_score=0.52 + (day % 6) * 0.07,
+                detection_status=status,
+                verified_by_key=verifier
+                if status is DetectionStatus.RESOLVED
+                else None,
+                verified_after_minutes=(
+                    2 + (day % 4) if status is DetectionStatus.RESOLVED else None
+                ),
+                closed_by_key=closer,
+                closed_after_minutes=12 + (day % 5) * 5,
+            )
+        )
+
+    specs.extend(
+        [
+            SeedAlertSpec(
+                label=UAT_RESTORE_ANCHOR_LABEL,
+                camera_key="uat_reference",
+                detected_at=seeded_timestamp(now, days_ago=21, hour=10, minute=15),
+                confidence_score=0.91,
+                detection_status=DetectionStatus.RESOLVED,
+                verified_by_key="uat_op01",
+                verified_after_minutes=3,
+                closed_by_key="uat_op02",
+                closed_after_minutes=24,
+            ),
+            SeedAlertSpec(
+                label=UAT_TRAY_ALERT_LABEL,
+                camera_key="uat_tray",
+                detected_at=seeded_timestamp(now, days_ago=1, hour=14, minute=20),
+                confidence_score=0.71,
+                detection_status=DetectionStatus.ONGOING,
+                verified_by_key="uat_op01",
+                verified_after_minutes=4,
+            ),
+        ]
+    )
+    return specs
+
+
 def build_default_audit_specs(now: datetime) -> list[SeedAuditSpec]:
     """Representative audit_log rows so the audit viewer has something to
     page through. `now` is accepted for signature parity with the other
@@ -962,6 +1125,15 @@ def _no_audit(now: datetime) -> list[SeedAuditSpec]:
 
 
 PROFILES: dict[str, SeedProfile] = {
+    UAT_PROFILE: SeedProfile(
+        name=UAT_PROFILE,
+        description="Frozen UAT baseline with coded accounts and reusable journey fixtures.",
+        cameras=build_uat_cameras,
+        users=build_uat_users,
+        alerts=build_uat_alert_specs,
+        audit=_no_audit,
+        health_days=30,
+    ),
     "demo": SeedProfile(
         name="demo",
         description="Balanced dataset for manual testing and demos.",

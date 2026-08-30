@@ -5,6 +5,7 @@ typo'd field is a 422 rather than a silently ignored one.
 """
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -91,3 +92,17 @@ class DevHealthHistoryRequest(BaseModel):
 
 class DevHealthHistoryResponse(BaseModel):
     rows_written: int
+
+
+class DevUatResetRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    phase: Literal["operator", "administrator", "administrator_healthy"]
+
+
+class DevUatResetResponse(BaseModel):
+    phase: str
+    removed_session_detections: int
+    preserved_audit_rows: int
+    tray_status: str
+    readiness_camera_enabled: bool
