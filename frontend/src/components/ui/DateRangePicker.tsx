@@ -66,7 +66,7 @@ export function DateRangePicker({
         value={start}
         max={end || undefined}
         disabled={disabled}
-        onChange={(event) => onStartChange(event.target.value)}
+        onInput={(event) => onStartChange(event.currentTarget.value)}
         aria-label={`${label} start`}
         className={fieldClass}
       />
@@ -88,7 +88,7 @@ export function DateRangePicker({
         value={end}
         min={start || undefined}
         disabled={disabled}
-        onChange={(event) => onEndChange(event.target.value)}
+        onInput={(event) => onEndChange(event.currentTarget.value)}
         aria-label={`${label} end`}
         className={fieldClass}
       />

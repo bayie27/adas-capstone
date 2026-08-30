@@ -41,7 +41,14 @@ import { toast } from "@/store/useToastStore"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { isSnoozedNow, useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
-import type { AlertLog, AlertSortField, AlertStatus, ExportFormat, SortOrder } from "@/api/alerts"
+import type {
+  AlertLog,
+  AlertSortField,
+  AlertStatus,
+  ExportFormat,
+  GetAlertsParams,
+  SortOrder,
+} from "@/api/alerts"
 import {
   describeSnoozeStatus,
   formatAlertCode,
@@ -53,6 +60,7 @@ import {
 import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
+import { isReversedDateRange, toPhilippineDayEnd, toPhilippineDayStart } from "@/utils/dateRange"
 import { RiEyeLine } from "@remixicon/react"
 
 // Starting page size. PAGE_SIZE_OPTIONS in PaginationFooter is
@@ -139,37 +147,30 @@ export default function Detections() {
   const pagination = usePagination(seenTotal, ALERTS_PAGE_SIZE)
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT)
 
+  const isDateRangeInvalid = isReversedDateRange(startDate, endDate)
+  const activeIncidentFilters = useMemo<GetAlertsParams>(
+    () => ({
+      status: statusFilter ? ([statusFilter] as AlertStatus[]) : undefined,
+      search: debouncedLogSearch || undefined,
+      sort_by: sort.key,
+      sort_order: sort.order,
+      start_date: toPhilippineDayStart(startDate),
+      end_date: toPhilippineDayEnd(endDate),
+      camera_id: cameraId ? [Number(cameraId)] : undefined,
+      user_id: userId ? [Number(userId)] : undefined,
+    }),
+    [cameraId, debouncedLogSearch, endDate, sort.key, sort.order, startDate, statusFilter, userId],
+  )
+
   const alertsQuery = useQuery({
-    queryKey: [
-      "alerts",
-      "list",
-      statusFilter,
-      debouncedLogSearch,
-      pagination.offset,
-      pagination.pageSize,
-      startDate,
-      endDate,
-      cameraId,
-      userId,
-      sort.key,
-      sort.order,
-    ],
+    queryKey: ["alerts", "list", activeIncidentFilters, pagination.offset, pagination.pageSize],
     queryFn: () =>
       getAlerts({
-        // Pass a single-element array when a specific status is chosen;
-        // omit the field entirely for "All statuses" so the backend
-        // returns every status without needing to enumerate them here.
-        status: statusFilter ? ([statusFilter] as AlertStatus[]) : undefined,
-        search: debouncedLogSearch || undefined,
-        sort_by: sort.key,
-        sort_order: sort.order,
+        ...activeIncidentFilters,
         limit: pagination.pageSize,
         offset: pagination.offset,
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-        camera_id: cameraId ? [Number(cameraId)] : undefined,
-        user_id: userId ? [Number(userId)] : undefined,
       }),
+    enabled: !isDateRangeInvalid,
     placeholderData: (previousData) => previousData,
   })
 
@@ -180,23 +181,23 @@ export default function Detections() {
   })
 
   const exportMutation = useMutation({
-    mutationFn: (format: ExportFormat) =>
-      exportAlerts(
-        {
-          status: statusFilter ? ([statusFilter] as AlertStatus[]) : undefined,
-          search: debouncedLogSearch || undefined,
-          sort_by: sort.key,
-          sort_order: sort.order,
-          start_date: startDate || undefined,
-          end_date: endDate || undefined,
-          camera_id: cameraId ? [Number(cameraId)] : undefined,
-          user_id: userId ? [Number(userId)] : undefined,
-        },
-        format,
-      ),
+    mutationFn: (format: ExportFormat) => exportAlerts(activeIncidentFilters, format),
   })
 
   const exportJobMutation = useExportJobSubmit()
+
+  const handleExport = (format: ExportFormat) => {
+    if (!isDateRangeInvalid) exportMutation.mutate(format)
+  }
+
+  const handleExportJob = (format: ExportFormat) => {
+    if (isDateRangeInvalid) return
+    return exportJobMutation.mutateAsync({
+      report_type: "incidents",
+      format,
+      ...activeIncidentFilters,
+    })
+  }
 
   const handleMutationSuccess = (updatedAlert: AlertLog, action: string) => {
     queryClient.setQueryData(["alert-details", updatedAlert.log_id], updatedAlert)
@@ -455,6 +456,11 @@ export default function Detections() {
             }}
             label="Filter incidents by date"
           />
+          {isDateRangeInvalid ? (
+            <p className="text-sm text-destructive" role="alert">
+              Start date must be on or before end date.
+            </p>
+          ) : null}
           <FilterSelect
             value={statusFilter}
             options={STATUS_OPTIONS}
@@ -504,22 +510,10 @@ export default function Detections() {
           rowCount={alertsQuery.data?.total_filtered}
           isExporting={exportMutation.isPending}
           exportHasError={exportMutation.isError}
-          onExport={(format) => exportMutation.mutate(format)}
+          onExport={handleExport}
           isSubmittingJob={exportJobMutation.isPending}
-          onExportJob={(format) =>
-            exportJobMutation.mutateAsync({
-              report_type: "incidents",
-              format,
-              status: statusFilter ? ([statusFilter] as AlertStatus[]) : undefined,
-              search: debouncedLogSearch || undefined,
-              sort_by: sort.key,
-              sort_order: sort.order,
-              start_date: startDate || undefined,
-              end_date: endDate || undefined,
-              camera_id: cameraId ? [Number(cameraId)] : undefined,
-              user_id: userId ? [Number(userId)] : undefined,
-            })
-          }
+          onExportJob={handleExportJob}
+          disabled={isDateRangeInvalid}
         />
       </div>
 
