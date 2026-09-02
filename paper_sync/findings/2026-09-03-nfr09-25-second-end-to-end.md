@@ -44,11 +44,11 @@ Page/s: TOC p. 17 hint; native range `30528–30827`, tab `t.y7ms6bhlk4qn`; rend
 
 #### NEW
 
-The interval between the physical occurrence of a road accident and the moment the Lipa CDRRMO becomes aware of it. Under the current pipeline of citizen and inter-agency reporting this interval reaches several minutes. For this study, the operational target is to reduce the measured interval from the accident first becoming visible on camera to a verified operator decision to within twenty-five seconds, supporting faster initiation of manual dispatch or endorsement procedures.
+The interval between the physical occurrence of a road accident and the moment the Lipa CDRRMO becomes aware of it. Under the current pipeline of citizen and inter-agency reporting this interval reaches several minutes. For this study, the operational target is an interval of no more than 25 seconds from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision, supporting faster initiation of manual dispatch or endorsement procedures.
 
 #### Evidence
 
-The live definition still describes the central objective as under fifteen seconds. The revised definition makes the measurement boundary explicit: the operational clock begins when the accident first becomes visible on the monitored camera feed and ends when the operator records Confirm or Dismiss. This matches the approved end-to-end target while retaining the notification-gap rationale.
+The live definition still describes the central objective as under fifteen seconds. The revised definition makes the measurement boundary explicit: the operational clock begins at the collision’s first visible frame on the monitored camera and ends at the operator’s recorded Confirm or Dismiss decision. This matches the approved end-to-end target while retaining the notification-gap rationale.
 
 #### Proposed comment (same gate as associated replacement)
 
@@ -140,11 +140,11 @@ Page/s: unconfirmed; native range `234472–234634`, tab `t.y7ms6bhlk4qn`
 
 #### NEW
 
-The Operator is able to visually identify the UI alert, verify the snapshot using available CCTV/DSS evidence, and click either "Confirm" or "Dismiss" within 25 seconds from the moment the collision first becomes visible on camera.
+The Operator is able to visually identify the UI alert, verify the snapshot using available CCTV/DSS evidence, and produce a recorded Confirm or Dismiss decision within 25 seconds from the collision’s first visible frame on the monitored camera.
 
 #### Evidence
 
-The live test case measures the operator endpoint but still uses the superseded 15-second figure, only the Confirm path, and the ambiguous “actual detection” start. The revised text aligns the test case with NFR-09 and the approved visible-on-camera start while keeping the operator decision as the endpoint.
+The live test case measures the operator endpoint but still uses the superseded 15-second figure, only the Confirm path, and the ambiguous “actual detection” start. The revised text aligns the test case with NFR-09 and the approved collision’s first visible frame on the monitored camera start and recorded Confirm or Dismiss endpoint.
 
 #### Proposed comment (same gate as associated replacement)
 
@@ -284,13 +284,17 @@ Done by Codex.
 
 ### 12. Local test-execution validation plan — operational efficiency criterion
 
-Page/s: `test-execution-validation-plan.md:118-119,502`
+Page/s: `test-execution-validation-plan.md:118-120,473,502,639`
 
 #### OLD
 
 > The end-to-end detection-to-dispatch timing objective is measured during this activity.
 >
+> | 12 | Operational efficiency (detection to dispatch decision) | Timed observation during UAT: elapsed time from the collision becoming visible in the simulated feed to the operator's verification decision, repeated across all operators and multiple incidents | Timing table with per-operator means, overall mean, and worst case |
+>
 > | **Operational efficiency** | Detection-to-dispatch-decision mean ≤ 15 seconds across operators; worst case reported alongside the mean. |
+>
+> | User Acceptance Testing | UAT scenario results; detection-to-dispatch timing table; defect list; **signed acceptance form** |
 
 #### NEW
 
@@ -298,13 +302,23 @@ The end-to-end collision-visible-to-operator-decision timing target is measured 
 
 | **Operational efficiency** | Collision-visible-to-operator-decision mean ≤ 25 seconds across operators, measured from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision; worst case reported alongside the mean. |
 
+| 12 | Operational efficiency (collision-visible to operator decision) | Timed observation during UAT: elapsed time from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision, repeated across all operators and multiple incidents | Timing table with per-operator means, overall mean, and worst case |
+
+| User Acceptance Testing | UAT scenario results; collision-visible-to-operator-decision timing table; defect list; **signed acceptance form** |
+
 #### Evidence
 
-This local execution plan is the operative acceptance-criteria source for the test team. It now uses the same start and stop events as NFR-09; it records a target, not a measured result.
+This local execution plan is the operative acceptance-criteria source for the test team. Its activity definition, acceptance criterion, and evidence inventory now use the same start and stop events as NFR-09; they record a target and required artifact, not a measured result.
 
 #### Proposed comment (same gate as associated replacement)
 
 Previous: The end-to-end detection-to-dispatch timing objective is measured during this activity.
+
+Previous: | 12 | Operational efficiency (detection to dispatch decision) | Timed observation during UAT: elapsed time from the collision becoming visible in the simulated feed to the operator's verification decision, repeated across all operators and multiple incidents | Timing table with per-operator means, overall mean, and worst case |
+
+Previous: | **Operational efficiency** | Detection-to-dispatch-decision mean ≤ 15 seconds across operators; worst case reported alongside the mean. |
+
+Previous: | User Acceptance Testing | UAT scenario results; detection-to-dispatch timing table; defect list; **signed acceptance form** |
 
 Codex ID: PS-20260903-NFR09-25-SECOND-E2E
 
