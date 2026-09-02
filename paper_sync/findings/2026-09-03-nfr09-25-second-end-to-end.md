@@ -1,8 +1,8 @@
 ---
 section: Objectives, Definition of Terms, Research Design, NFR-09, and Testing
-page/s: "13, 17, 53, 65; TC-S-103 and Operator Training unconfirmed"
+page/s: "TOC pp. 13, 17, 53, 65 hints; rendered PDF mapping unconfirmed; TC-S-103 and Operator Training unconfirmed"
 required_revision: Replace the superseded 15-second target with the approved 25-second end-to-end CDRRMO verification target.
-notes: The 25-second target covers approximately 3 seconds of detector accumulation, 2 seconds of alert propagation, and 20 seconds for CCTV/DSS verification plus Confirm/Dismiss; it supports faster manual dispatch initiation without claiming automatic dispatch or direct DSS integration.
+notes: The 25-second target is measured from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision. It covers approximately 3 seconds of detector accumulation, 2 seconds of alert propagation, and 20 seconds for CCTV/DSS verification plus the decision; it supports faster manual dispatch initiation without claiming automatic dispatch or direct DSS integration. The applied/read-back entries below record historical live-document operations; this Git commit performs no live Drive write.
 status: In progress
 assigned_to: Daniboy
 synced: false
@@ -12,7 +12,7 @@ synced: false
 
 ### 1. Defense paper — Objectives of the Study, Objective 3
 
-Page/s: p. 13 per the live document table of contents; native range `15965–16302`, tab `t.y7ms6bhlk4qn`; rendered PDF mapping unconfirmed
+Page/s: TOC p. 13 hint; native range `15965–16302`, tab `t.y7ms6bhlk4qn`; rendered PDF mapping unconfirmed
 
 #### OLD
 
@@ -20,7 +20,7 @@ Page/s: p. 13 per the live document table of contents; native range `15965–163
 
 #### NEW
 
-To validate the system’s performance by achieving a minimum Mean Average Precision (mAP) of 85% (at IoU ≥ 0.50) and a 25-second end-to-end collision-to-operator-decision latency, reducing the notification gap and supporting faster initiation of the CDRRMO’s manual dispatch or endorsement procedures to mitigate injury severity and traffic congestion.
+To validate the system’s performance by achieving a minimum Mean Average Precision (mAP) of 85% (at IoU ≥ 0.50) and an end-to-end interval of no more than 25 seconds from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision, reducing the notification gap and supporting faster initiation of the CDRRMO’s manual dispatch or endorsement procedures to mitigate injury severity and traffic congestion.
 
 #### Evidence
 
@@ -36,7 +36,7 @@ Done by Codex.
 
 ### 2. Defense paper — Definition of Terms, “Notification Gap” definition
 
-Page/s: p. 17 per the live document table of contents; native range `30528–30827`, tab `t.y7ms6bhlk4qn`; rendered PDF mapping unconfirmed
+Page/s: TOC p. 17 hint; native range `30528–30827`, tab `t.y7ms6bhlk4qn`; rendered PDF mapping unconfirmed
 
 #### OLD
 
@@ -60,7 +60,7 @@ Done by Codex.
 
 ### 3. Defense paper — Research Design, Phase 4: Testing and System Integration
 
-Page/s: p. 53 per the live document table of contents; native range `87543–88765`, tab `t.y7ms6bhlk4qn`; rendered PDF mapping unconfirmed
+Page/s: TOC p. 53 hint; native range `87543–88765`, tab `t.y7ms6bhlk4qn`; rendered PDF mapping unconfirmed
 
 #### OLD
 
@@ -68,7 +68,7 @@ Page/s: p. 53 per the live document table of contents; native range `87543–887
 
 #### NEW
 
-In this phase, the parallel development lifecycles formally converge for rigorous end-to-end validation. With the YOLO model weights finalized and optimized, it is integrated directly into the AI engine and FastAPI backend. The fully assembled software architecture is then subjected to comprehensive system testing within a simulated LAN environment. Rather than evaluating static datasets, the system processes simulated live RTSP video feeds to validate real-time inference stability, track continuous hardware resource utilization, and ensure that AI detections successfully propagate through the SQLite database to deliver WebSocket alerts to the dashboard within the 2-second target, thereby validating the system’s ability to support the 25-second end-to-end collision-to-operator-decision workflow and faster initiation of manual dispatch or endorsement procedures. This quality assurance process also verifies the complete HITL resolution workflow and strictly enforces RBAC routing between Operators and Administrators. Finally, the phase concludes with formal UAT, allowing Lipa CDRRMO dispatchers to interact with the system in a staging environment to validate UI/UX efficiency, operational readiness, and the successful fulfillment of all defined project requirements prior to physical deployment.
+In this phase, the parallel development lifecycles formally converge for rigorous end-to-end validation. With the YOLO model weights finalized and optimized, it is integrated directly into the AI engine and FastAPI backend. The fully assembled software architecture is then subjected to comprehensive system testing within a simulated LAN environment. Rather than evaluating static datasets, the system processes simulated live RTSP video feeds to validate real-time inference stability, track continuous hardware resource utilization, and ensure that AI detections successfully propagate through the SQLite database to deliver WebSocket alerts to the dashboard within the 2-second target, thereby validating the system’s ability to support an end-to-end interval of no more than 25 seconds from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision, together with faster initiation of manual dispatch or endorsement procedures. This quality assurance process also verifies the complete HITL resolution workflow and strictly enforces RBAC routing between Operators and Administrators. Finally, the phase concludes with formal UAT, allowing Lipa CDRRMO dispatchers to interact with the system in a staging environment to validate UI/UX efficiency, operational readiness, and the successful fulfillment of all defined project requirements prior to physical deployment.
 
 #### Evidence
 
@@ -84,7 +84,7 @@ Done by Codex.
 
 ### 4. Defense paper — Non-Functional Requirements Specification, NFR-09 heading
 
-Page/s: p. 65 per the live document table of contents; native range `101308–101361`, tab `t.y7ms6bhlk4qn`; rendered PDF mapping unconfirmed
+Page/s: TOC p. 65 hint; native range `101308–101361`, tab `t.y7ms6bhlk4qn`; rendered PDF mapping unconfirmed
 
 #### OLD
 
@@ -92,7 +92,7 @@ Page/s: p. 65 per the live document table of contents; native range `101308–10
 
 #### NEW
 
-NFR-09 Operational Efficiency (Collision-to-Operator Decision)
+NFR-09 Operational Efficiency (Collision-Visible-to-Operator Decision)
 
 #### Evidence
 
@@ -116,7 +116,7 @@ Page/s: p. 65 per the live document table of contents; native range `101363–10
 
 #### NEW
 
-The system shall reduce the notification gap by enabling the CDRRMO to receive an accident alert, verify the event through available CCTV/DSS evidence, and record a Confirm or Dismiss decision within 25 seconds of the accident first becoming visible in the monitored camera feed. This shortened time to verified awareness is intended to support faster initiation of the CDRRMO’s manual dispatch or endorsement procedures.
+The system shall reduce the notification gap by enabling the CDRRMO to receive an accident alert, verify the event through available CCTV/DSS evidence, and record a Confirm or Dismiss decision within 25 seconds from the collision’s first visible frame on the monitored camera. This shortened time to verified awareness is intended to support faster initiation of the CDRRMO’s manual dispatch or endorsement procedures.
 
 #### Evidence
 
@@ -164,7 +164,7 @@ Page/s: unconfirmed; native range `247415–247682`, tab `t.y7ms6bhlk4qn`
 
 #### NEW
 
-Operator Training: Dispatchers are trained on the HITL workflow, specifically how to rapidly evaluate, confirm, or dismiss alerts within the 25-second end-to-end target to reduce the notification gap and support faster initiation of manual dispatch procedures. They are also instructed on generating historical reports and reading system health telemetry.
+Operator Training: Dispatchers are trained on the HITL workflow, specifically how to rapidly evaluate, confirm, or dismiss alerts within the 25-second end-to-end target measured from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision. This target is intended to reduce the notification gap and support faster initiation of manual dispatch procedures. They are also instructed on generating historical reports and reading system health telemetry.
 
 #### Evidence
 
@@ -188,7 +188,7 @@ Page/s: unconfirmed; native range `4413–4694`, tab `t.0`
 
 #### NEW
 
-Decision: use one consistent framing. Approximately 3 s is the detector-accumulation component; 2 s is the backend→WebSocket→UI alert-propagation budget (NFR-04); 25 s is the end-to-end collision-visible-to-operator-decision budget (NFR-09), including CCTV/DSS verification and Confirm/Dismiss. Objective 3 and Phase 4 should cite the 25 s end-to-end figure as supporting faster initiation of manual CDRRMO dispatch or endorsement procedures, not as "alert propagation."
+Decision: use one consistent framing. Approximately 3 s is the detector-accumulation component; 2 s is the backend→WebSocket→UI alert-propagation budget (NFR-04); 25 s is the end-to-end interval from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision (NFR-09), including CCTV/DSS verification. Objective 3 and Phase 4 should cite the 25 s end-to-end figure as supporting faster initiation of manual CDRRMO dispatch or endorsement procedures, not as "alert propagation."
 
 #### Evidence
 
@@ -212,7 +212,7 @@ Page/s: unconfirmed; native range `72866–73257`, tab `t.0`
 
 #### NEW
 
-For the rewrite: "…click either 'Confirm' or 'Dismiss' within 25 seconds from the moment the collision first becomes visible on camera." This is the metric supporting the study's central claim of reducing the notification gap from minutes to seconds and enabling faster manual dispatch initiation, so it includes detector accumulation, alert propagation, CCTV/DSS verification, and operator decision time. The UAT logger should use the first visible collision frame as the start event; `detected_at` in the database is an approximate collision timestamp (`ai_engine/accident.py:47-52`) and should not be treated as a substitute when validating this wall-clock target.
+For the rewrite: "…click either 'Confirm' or 'Dismiss' within 25 seconds from the collision’s first visible frame on the monitored camera." This is the metric supporting the study's central claim of reducing the notification gap from minutes to seconds and enabling faster manual dispatch initiation, so it includes detector accumulation, alert propagation, CCTV/DSS verification, and operator decision time. The UAT logger should use the first visible collision frame as the start event; `detected_at` in the database is an approximate collision timestamp (`ai_engine/accident.py:47-52`) and should not be treated as a substitute when validating this wall-clock target.
 
 #### Evidence
 
@@ -236,11 +236,11 @@ Page/s: unconfirmed; native range `73259–73453`, tab `t.0`
 
 #### NEW
 
-Budget check for 25 s: ~3 s detector accumulation + 2 s alert propagation leaves approximately 20 s for CCTV/DSS verification and the operator’s Confirm/Dismiss decision. The end-to-end target should be timed from the accident’s first visible frame to the operator’s decision and reported per trial, alongside mean and worst-case results.
+Budget check for 25 s: ~3 s detector accumulation + 2 s alert propagation leaves approximately 20 s for CCTV/DSS verification and the operator’s Confirm/Dismiss decision. The end-to-end target should be timed from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision and reported per trial, alongside mean and worst-case results.
 
 #### Evidence
 
-The live audit budget check still allocates only approximately 10 seconds to the operator under the superseded 15-second target. The approved 25-second allocation leaves approximately 20 seconds after the detector and alert-propagation components. The current local test plan still says detection-to-dispatch-decision mean ≤15 seconds at `test-execution-validation-plan.md:502`; that companion execution-plan wording is outside the three native Drive write gates in this package and remains a follow-up sync item.
+The live audit budget check still allocates only approximately 10 seconds to the operator under the superseded 15-second target. The approved 25-second allocation leaves approximately 20 seconds after the detector and alert-propagation components. The local execution plan and dry-run handoff now use the canonical collision-visible-to-operator-decision boundary; the live audit’s historical 15-second quotation remains as the OLD text above and is not an execution result.
 
 #### Proposed comment (same gate as associated replacement)
 
@@ -260,9 +260,9 @@ Page/s: `🚩 Action Stream`!A6:H6
 
 #### NEW
 
-| Change Type | Section / Chapter                                                                     | Page Number                 | Required Revision                                              | Notes                                                                                                                                                                                                                                                   | Status      | Assigned to | Reviewed by |
-| ----------- | ------------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ----------- | ----------- |
-| Major       | Objective 3, Definition of Terms, NFR-04/NFR-09, Phase 4, TC-S-103, Operator Training | 13, 17, 53, 65, unconfirmed | 0.4 Clarify the alert-delivery and end-to-end decision targets | 2 s is the backend/WebSocket/UI alert-propagation budget; 25 s is the collision-visible-to-operator-decision budget, including CCTV/DSS verification and Confirm/Dismiss, to reduce the notification gap and support faster manual dispatch initiation. | In progress | Paulo       | Daniboy     |
+| Change Type | Section / Chapter                                                                     | Page Number                                           | Required Revision                                              | Notes                                                                                                                                                                                                                                                                                                                  | Status      | Assigned to | Reviewed by |
+| ----------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ----------- | ----------- |
+| Major       | Objective 3, Definition of Terms, NFR-04/NFR-09, Phase 4, TC-S-103, Operator Training | TOC pp. 13, 17, 53, 65 hints; PDF mapping unconfirmed | 0.4 Clarify the alert-delivery and end-to-end decision targets | 2 s is the backend/WebSocket/UI alert-propagation budget; 25 s is the interval from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision, including CCTV/DSS verification, to reduce the notification gap and support faster manual dispatch initiation. | In progress | Paulo       | Daniboy     |
 
 #### Evidence
 
@@ -282,16 +282,93 @@ Done by Codex.
 - The paper’s scope and evaluation-boundary passages already state that the proof of concept does not integrate its UI with, modify, or administer Dahua DSS and does not automate emergency dispatch. They remain as written and constrain the interpretation of the new NFR-09 wording.
 - The live audit’s quoted OLD values in §0.1 and §0.4 are historical evidence of the inconsistency; this package changes the recommendation and TC-S-103 guidance, not the historical quotations.
 
+### 12. Local test-execution validation plan — operational efficiency criterion
+
+Page/s: `test-execution-validation-plan.md:118-119,502`
+
+#### OLD
+
+> The end-to-end detection-to-dispatch timing objective is measured during this activity.
+>
+> | **Operational efficiency** | Detection-to-dispatch-decision mean ≤ 15 seconds across operators; worst case reported alongside the mean. |
+
+#### NEW
+
+The end-to-end collision-visible-to-operator-decision timing target is measured during this activity.
+
+| **Operational efficiency** | Collision-visible-to-operator-decision mean ≤ 25 seconds across operators, measured from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision; worst case reported alongside the mean. |
+
+#### Evidence
+
+This local execution plan is the operative acceptance-criteria source for the test team. It now uses the same start and stop events as NFR-09; it records a target, not a measured result.
+
+#### Proposed comment (same gate as associated replacement)
+
+Previous: The end-to-end detection-to-dispatch timing objective is measured during this activity.
+
+Codex ID: PS-20260903-NFR09-25-SECOND-E2E
+
+Done by Codex.
+
+### 13. UAT dry-run handoff — OP-J05 metric
+
+Page/s: `UAT_READINESS_DRY_RUN_HANDOFF.md:548`
+
+#### OLD
+
+> | OP-J05 NFR-09 detection-to-dispatch | Visible collision/observable alert onset through manual dispatch decision after confirm, per UAT Journeys | Manual dispatch decision included; snooze excluded | No participant and no controlled timer anchored to visible collision | Not measured — browser/DB timestamps are not a valid human NFR-09 measurement | <=15 seconds | Not run |
+
+#### NEW
+
+| OP-J05 NFR-09 collision-visible-to-operator-decision | Collision’s first visible frame on the monitored camera | Operator records Confirm or Dismiss | Detector accumulation, alert propagation, CCTV/DSS verification, and decision; snooze excluded | Not measured — no participant or controlled timer was anchored to the first visible collision frame | ≤25 seconds target | Not run |
+
+#### Evidence
+
+The dry-run contains no valid human timing measurement, so the target is recorded without converting the historical `<=15 seconds` placeholder into a result.
+
+#### Proposed comment (same gate as associated replacement)
+
+Previous: | OP-J05 NFR-09 detection-to-dispatch | Visible collision/observable alert onset through manual dispatch decision after confirm, per UAT Journeys | Manual dispatch decision included; snooze excluded | No participant and no controlled timer anchored to visible collision | Not measured — browser/DB timestamps are not a valid human NFR-09 measurement | <=15 seconds | Not run |
+
+Codex ID: PS-20260903-NFR09-25-SECOND-E2E
+
+Done by Codex.
+
+### 14. Local traceability — Evaluation Scope cross-reference
+
+Page/s: `be_plan/TRACEABILITY.md:290-292`
+
+#### OLD
+
+> 5. **Internal numbering**: the Evaluation Scope cites **NFR-03** for the two-second alert target — it is **NFR-04**. It also cites **NFR-06** for the fifteen-second detection-to-dispatch target — it is **NFR-09**.
+
+#### NEW
+
+5. **Internal numbering**: the Evaluation Scope’s alert-delivery target is **NFR-04** (not NFR-03), and its end-to-end collision-visible-to-operator-decision target is **NFR-09** (not NFR-06). The 25-second target is measured from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision.
+
+#### Evidence
+
+The Evaluation Scope prose is already covered by the historical, applied Block 4 in `paper_sync/findings/2026-08-27-tense-completion.md`; this local traceability mirror was the remaining stale cross-reference.
+
+#### Proposed comment (same gate as associated replacement)
+
+Previous: 5. **Internal numbering**: the Evaluation Scope cites **NFR-03** for the two-second alert target — it is **NFR-04**. It also cites **NFR-06** for the fifteen-second detection-to-dispatch target — it is **NFR-09**.
+
+Codex ID: PS-20260903-NFR09-25-SECOND-E2E
+
+Done by Codex.
+
 ## Companion follow-up outside this package
 
-- The local `test-execution-validation-plan.md:502` and the live UAT OP-J05/tracker wording still carry the prior ≤15-second execution criterion. They should be synchronized to the approved 25-second start/end boundary before final UAT reporting, but no changes to those artifacts are proposed under the three native Drive write gates in this paper-sync package.
+- Live UAT participant execution and the live tracker’s blocked Sheet comment remain outside this Git commit. The local execution plan, dry-run metric, and traceability mirror are synchronized above; no participant timing result or live Sheet write is inferred.
 
 ## Approval / sync ledger
 
 Package ID: `PS-20260903-NFR09-25-SECOND-E2E`
 
-| Target                        | Approved scope                          | Applied/read back                                                                                                                                            | Skipped/pending | Blocked                                                                                                            |
-| ----------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Defense paper                 | Blocks 1–7 and their attached comments  | Blocks 1–7 and comments `AAACGdvWZuU`, `AAACGdvw4f8`, `AAACGdvw4go`, `AAACGdvyHWE`, `AAACGdvyHWM`, `AAACGdvyHWU`, `AAACGdwBjVE`; anchors verified 2026-09-03 | —               | Block 3 returned a truncated quoted-text preview from the connector; exact comment body and native anchor verified |
-| ADAS_Paper_Audit plus tracker | Blocks 8–11 and their attached comments | Blocks 8–10 and comments `AAACGcFzcpM`, `AAACGcFzcpY`, `AAACGcFzcpk`; tracker row `🚩 Action Stream`!A6:G6 read back                                         | —               | Block 11 Sheet comment: connector returned no provider-valid native anchor; comment not created                    |
-| Standalone comments           | None proposed                           | —                                                                                                                                                            | None            | —                                                                                                                  |
+| Target                        | Approved scope                          | Applied/read back                                                                                                                                                                                                                                                                           | Skipped/pending                                                                                         | Blocked                                                                                         |
+| ----------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Defense paper                 | Blocks 1–7 and their attached comments  | Historical live write/readback for Blocks 1–7 and comments `AAACGdvWZuU`, `AAACGdvw4f8`, `AAACGdvw4go`, `AAACGdvyHWE`, `AAACGdvyHWM`, `AAACGdvyHWU`, `AAACGdwBjVE`; anchors verified 2026-09-03; Block 3’s exact body and native anchor were verified despite a truncated connector preview | —                                                                                                       | —                                                                                               |
+| ADAS_Paper_Audit plus tracker | Blocks 8–11 and their attached comments | Historical live write/readback for Blocks 8–10 and comments `AAACGcFzcpM`, `AAACGcFzcpY`, `AAACGcFzcpk`; no complete A6:H6 readback is recorded in this package                                                                                                                             | Block 11 tracker range and live Sheet comment remain pending; A6:H6 includes manual `Reviewed by` state | Block 11 Sheet comment: connector returned no provider-valid native anchor; comment not created |
+| Local companion records       | Blocks 12–14                            | Blocks 12–14 applied in this Git commit; live UAT participant results remain unmodified                                                                                                                                                                                                     | —                                                                                                       | —                                                                                               |
+| Standalone comments           | None proposed                           | —                                                                                                                                                                                                                                                                                           | None                                                                                                    | —                                                                                               |

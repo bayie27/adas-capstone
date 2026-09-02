@@ -1,8 +1,8 @@
 ---
 section: Objectives of the Study
-page/s: "13 (live TOC; native range 15501–15720)"
+page/s: "TOC p. 13 hint; native range 15501–15720; rendered PDF mapping unconfirmed"
 required_revision: Reframe Objective 1 around the integrated AI detection pipeline rather than the YOLO model alone.
-notes: The selected wording makes YOLO the core detector within a broader multi-camera detection pipeline. Objective 2 separately covers dashboard alerts.
+notes: The selected wording makes YOLO the core detector within a broader multi-camera detection pipeline. Objective 2 separately covers dashboard alerts. This finding records a historical Defense Document write/readback completed on 2026-09-02; the current Git commit only records that result locally and performs no live Drive write.
 status: Not started
 assigned_to: Daniboy
 synced: 2026-09-02
@@ -12,7 +12,7 @@ synced: 2026-09-02
 
 ### 1. Defense paper — Objectives of the Study, Objective 1
 
-Page/s: 13 per the live document table of contents; native range `15501–15720`, tab `t.y7ms6bhlk4qn`
+Page/s: TOC p. 13 hint; native range `15501–15720`, tab `t.y7ms6bhlk4qn`; rendered PDF mapping unconfirmed
 
 #### OLD
 
@@ -36,7 +36,7 @@ Done by Codex.
 
 ### 2. Defense paper — Definition of Terms, “YOLO (You Only Look Once)”
 
-Page/s: 17 per the live document table of contents; native range `35150–35345`, tab `t.y7ms6bhlk4qn`
+Page/s: TOC p. 17 hint; native range `35150–35345`, tab `t.y7ms6bhlk4qn`; rendered PDF mapping unconfirmed
 
 #### OLD
 
@@ -48,7 +48,7 @@ The custom-trained AI computer vision model at the core of the edge server’s c
 
 #### Evidence
 
-The live definition assigns autonomous collision detection directly to the YOLO model. The implementation separates model inference from the broader detection engine: `ai_engine/detector.py:70-105` owns the YOLO model and returns per-frame detections, while the pipeline and event-processing layers determine when a collision event is emitted. This is a direct consistency edit with the revised Objective 1; it does not change the model’s role as the pipeline’s core detector.
+The live definition assigns autonomous collision detection directly to the YOLO model. The implementation separates model inference from the broader detection engine: `ai_engine/detector.py:70-105` owns the YOLO model and returns per-frame detections, `ai_engine/accumulate.py:77-137` accumulates linked temporal evidence, `ai_engine/pipeline.py:184-207` routes fired events, and `ai_engine/accident.py:40-80` creates the annotated snapshot and durable event payload. This is a direct consistency edit with the revised Objective 1; it does not change the model’s role as the pipeline’s core detector.
 
 #### Proposed comment (same gate as associated replacement)
 
@@ -60,7 +60,7 @@ Done by Codex.
 
 ### 3. Defense paper — System Architecture and Design, opening paragraph
 
-Page/s: 89 per the live document table of contents; native range `134518–134886`, tab `t.y7ms6bhlk4qn`
+Page/s: TOC p. 89 hint; native range `134518–134886`, tab `t.y7ms6bhlk4qn`; rendered PDF mapping unconfirmed
 
 #### OLD
 
@@ -84,7 +84,7 @@ Done by Codex.
 
 ### 4. Defense paper — System Architecture and Design, Operations and Warning Division paragraph
 
-Page/s: 89 per the live document table of contents; native range `134887–135362`, tab `t.y7ms6bhlk4qn`
+Page/s: TOC p. 89 hint; native range `134887–135362`, tab `t.y7ms6bhlk4qn`; rendered PDF mapping unconfirmed
 
 #### OLD
 
@@ -116,8 +116,10 @@ Done by Codex.
 
 ## Approval / sync ledger
 
-| Target                        | Approved scope                                                                         | Applied/read back                                       | Skipped/pending | Blocked |
-| ----------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------- | --------------- | ------- |
-| Defense paper                 | Blocks 1–4 and their attached comments                                                 | Blocks 1–4 and 4 anchored comments, verified 2026-09-02 | —               | —       |
-| ADAS_Paper_Audit plus tracker | No live write proposed; existing Action Stream row 74 remains the live tracking record | —                                                       | —               | —       |
-| Standalone comments           | None; every comment is attached to its corresponding defense-paper replacement         | —                                                       | —               | —       |
+Package ID: `PS-20260902-OBJECTIVE-1-DETECTION-PIPELINE`
+
+| Target                        | Approved scope                                                                         | Applied/read back                                                                                                               | Skipped/pending | Blocked |
+| ----------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------- | ------- |
+| Defense paper                 | Blocks 1–4 and their attached comments                                                 | Historical live write/readback for Blocks 1–4 and 4 anchored comments, verified 2026-09-02; this commit records it locally only | —               | —       |
+| ADAS_Paper_Audit plus tracker | No live write proposed; existing Action Stream row 74 remains the live tracking record | —                                                                                                                               | —               | —       |
+| Standalone comments           | None; every comment is attached to its corresponding defense-paper replacement         | —                                                                                                                               | —               | —       |

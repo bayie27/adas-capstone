@@ -287,9 +287,11 @@ not done from a code session**, per this package's hard rules:
 4. **Use Case 5 step 10** says the status becomes "Closed"; the canonical
    status is `Resolved` (D-002). `Closed` is not a stored value anywhere in
    this schema.
-5. **Internal numbering**: the Evaluation Scope cites **NFR-03** for the
-   two-second alert target — it is **NFR-04**. It also cites **NFR-06** for
-   the fifteen-second detection-to-dispatch target — it is **NFR-09**.
+5. **Internal numbering**: the Evaluation Scope’s alert-delivery target is
+   **NFR-04** (not NFR-03), and its end-to-end collision-visible-to-operator-
+   decision target is **NFR-09** (not NFR-06). The 25-second target is measured
+   from the collision’s first visible frame on the monitored camera to the
+   operator’s recorded Confirm or Dismiss decision.
 
 ---
 

@@ -115,8 +115,9 @@ dashboard, using the System Usability Scale supplemented by task observation and
 
 **10. User Acceptance Testing.** Scenario-based validation by CDRRMO operators and
 administrators that the system supports their actual operational workflow, concluding in a
-formal acceptance decision. The end-to-end detection-to-dispatch timing objective is
-measured during this activity.
+formal acceptance decision. The end-to-end collision-visible-to-operator-decision timing target
+is measured during this activity, from the collision’s first visible frame on the monitored camera
+to the operator’s recorded Confirm or Dismiss decision.
 
 ---
 
@@ -499,7 +500,7 @@ researcher-executed activities compress; they do not move with it.
 | **Usability**                        | SUS mean score ≥ 68.                                                                                                                                                                                                                                           |
 | **Workflow efficiency**              | Operator completes verification in 3 clicks or fewer.                                                                                                                                                                                                          |
 | **Learnability**                     | A new operator processes and verifies an alert unaided within 15 minutes of briefing.                                                                                                                                                                          |
-| **Operational efficiency**           | Detection-to-dispatch-decision mean ≤ 15 seconds across operators; worst case reported alongside the mean.                                                                                                                                                     |
+| **Operational efficiency**           | Collision-visible-to-operator-decision mean ≤ 25 seconds across operators, measured from the collision’s first visible frame on the monitored camera to the operator’s recorded Confirm or Dismiss decision; worst case reported alongside the mean.           |
 | **User Acceptance Testing**          | ≥ 95% of UAT scenarios accepted, zero open Critical or Major defects, and formal sign-off obtained from an authorized CDRRMO representative.                                                                                                                   |
 
 **Pass rate** is computed as executed cases passed divided by executed cases, expressed as a
@@ -635,7 +636,7 @@ supporting evidence in the final paper.
 | Backup & Recovery Testing       | Backup and restore drill record — phase-separated timings, database integrity verification, service resumption confirmation                                           |
 | Security Testing                | Completed security checklist with per-item evidence; audit trail extracts; transport and header inspection records                                                    |
 | Usability Testing               | SUS response sheets; computed per-participant and mean scores; task observation notes; click-path counts; learnability timing records                                 |
-| User Acceptance Testing         | UAT scenario results; detection-to-dispatch timing table; defect list; **signed acceptance form**                                                                     |
+| User Acceptance Testing         | UAT scenario results; collision-visible-to-operator-decision timing table; defect list; **signed acceptance form**                                                    |
 | **Cross-cutting**               | **Requirements Traceability Matrix** — every functional and non-functional requirement mapped to its test cases, evidence artifact, and status                        |
 | **Cross-cutting**               | **Defect Log** — all defects with severity, status, and resolution                                                                                                    |
 | **Cross-cutting**               | **Test Summary Report** — consolidated results, pass rates per activity, acceptance criteria outcomes, and stated limitations                                         |
