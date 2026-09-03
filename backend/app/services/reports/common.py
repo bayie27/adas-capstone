@@ -104,14 +104,65 @@ def format_audit_target(target_type: str | None, target_ref: str | None) -> str 
     return f"{type_label}: {target_ref}" if target_ref else type_label
 
 
+# Keys that carry no meaning for a CDRRMO reader, or are redundant once
+# their friendlier counterpart is shown ("camera_id" duplicates the names
+# already listed under "Cameras") — dropped outright rather than translated.
+_DETAIL_SKIP_KEYS = {"mode", "camera_id"}
+
+_REPORT_TYPE_LABELS = {
+    "incidents": "Incident Report",
+    "dashboard": "Dashboard Report",
+    "performance": "AI Performance Report",
+    "audit": "Audit Log Report",
+}
+_FORMAT_LABELS = {"pdf": "PDF", "csv": "Spreadsheet (CSV)"}
+_SORT_ORDER_LABELS = {"asc": "Oldest first", "desc": "Newest first"}
+
+
+def _humanize_iso_value(value: object) -> str:
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return str(value)
+    return format_export_datetime(dt) or str(value)
+
+
+def _humanize_detail_value(key: str, value: object) -> tuple[str, str] | None:
+    """Key-specific rendering for the export-attempt fields that make up
+    the bulk of the audit trail (every REPORT_EXPORT/AUDIT_EXPORT row
+    carries the same shape), so the most common entries read as plain
+    sentences rather than "Format: pdf". Returns None for anything else,
+    which falls back to the generic snake_case -> Title Case transform."""
+    if key == "report_type" and isinstance(value, str):
+        return "Report", _REPORT_TYPE_LABELS.get(value, value.replace("_", " ").title())
+    if key == "format" and isinstance(value, str):
+        return "File type", _FORMAT_LABELS.get(value, value.upper())
+    if key == "row_count":
+        return "Records included", str(value)
+    if key == "job_id":
+        return "Export reference", str(value)
+    if key == "sort_by" and isinstance(value, str):
+        return "Sorted by", value.replace("_", " ").title()
+    if key == "sort_order" and isinstance(value, str):
+        return "Order", _SORT_ORDER_LABELS.get(value, value.title())
+    if key in ("start_date", "end_date"):
+        return ("From" if key == "start_date" else "To"), _humanize_iso_value(value)
+    if key == "search":
+        return "Search text", str(value)
+    if key == "camera_names" and isinstance(value, dict):
+        return "Cameras", ", ".join(str(name) for name in value.values())
+    return None
+
+
 def format_audit_detail(raw: str | None) -> str:
     """Turns the audit trail's raw JSON `detail` blob into a plain-language
-    list, e.g. `{"report_type": "audit", "format": "pdf", "row_count": 12}`
-    becomes "Report type: audit; Format: pdf; Row count: 12" — a generic
-    transform (snake_case -> Title Case, drop empty/null values) rather
-    than a per-action template, so it stays correct as new action types
-    and detail shapes are added without this function needing to know
-    about them."""
+    list, e.g. `{"report_type": "dashboard", "format": "pdf", "mode":
+    "job", "row_count": 5, "job_id": "..."}` becomes "Report: Dashboard
+    Report; File type: PDF; Records included: 5; Export reference: ...".
+    Known export-attempt keys get a specific label and value (see
+    `_humanize_detail_value`); anything else falls back to a generic
+    transform (snake_case -> Title Case, drop empty/null values) so this
+    stays correct for action types this function doesn't know about."""
     if not raw:
         return "No additional details"
     try:
@@ -127,12 +178,17 @@ def format_audit_detail(raw: str | None) -> str:
 def _humanize_detail_pairs(data: dict) -> list[str]:
     parts: list[str] = []
     for key, value in data.items():
-        if value in (None, "", [], {}):
+        if key in _DETAIL_SKIP_KEYS or value in (None, "", [], {}):
             continue
-        # Nested dicts (e.g. "filters", "sort") are flattened one level
-        # rather than prefixed with the parent key's label — "sort_by" is
-        # already self-explanatory, and prefixing would read as "Sort
-        # Sort by: ...".
+        override = _humanize_detail_value(key, value)
+        if override is not None:
+            label, text = override
+            parts.append(f"{label}: {text}")
+            continue
+        # Nested dicts (e.g. "filters", "sort") not covered by a specific
+        # key above are flattened one level rather than prefixed with the
+        # parent key's label — "sort_by" is already self-explanatory, and
+        # prefixing would read as "Sort Sort by: ...".
         if isinstance(value, dict):
             parts.extend(_humanize_detail_pairs(value))
             continue
