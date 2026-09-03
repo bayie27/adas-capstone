@@ -59,6 +59,15 @@ def format_local_display(value: datetime, tz_name: str = "") -> str:
     return value.astimezone(tz).strftime("%b %d, %Y %I:%M %p %Z")
 
 
+def _format_hour_label(hour: int) -> str:
+    """0-23 -> "12 AM" / "1 AM" / ... / "11 PM" — a 24-hour integer is a
+    database convention, not something a CDRRMO reader should have to
+    convert in their head."""
+    period = "AM" if hour < 12 else "PM"
+    display_hour = hour % 12 or 12
+    return f"{display_hour} {period}"
+
+
 class ReportPDF(FPDF):
     """Shared layout for all four P6 reports. Landscape A4 — the incident
     and audit tables are wide (many columns), and consistent orientation
@@ -371,15 +380,30 @@ def build_dashboard_pdf(
     pdf.add_table(
         ["Camera Name", "Accident Count"],
         [[row["camera_name"], row["accident_count"]] for row in frequency_by_location],
-        col_widths=(120, 40),
+        col_widths=(220, 57),
     )
 
     pdf.ln(4)
-    pdf.add_section_label("Peak Accident Times (Local Hour of Day)")
+    pdf.add_section_label("Peak Accident Times (UTC Hour of Day)")
+    # 24 single "Hour | Count" rows would spill this report onto extra,
+    # nearly-empty pages for no reason -- six hours per row keeps the
+    # whole day on one compact grid instead.
+    pairs_per_row = 6
+    hours = list(peak_accident_times)
+    grid_headers = ["Hour", "Count"] * pairs_per_row
+    grid_rows = []
+    for i in range(0, len(hours), pairs_per_row):
+        chunk = hours[i : i + pairs_per_row]
+        row: list[object] = []
+        for entry in chunk:
+            row.extend([_format_hour_label(entry["hour"]), entry["count"]])
+        while len(row) < pairs_per_row * 2:
+            row.extend(["", ""])
+        grid_rows.append(row)
     pdf.add_table(
-        ["Hour", "Count"],
-        [[row["hour"], row["count"]] for row in peak_accident_times],
-        col_widths=(40, 40),
+        grid_headers,
+        grid_rows,
+        col_widths=(29, 17) * pairs_per_row,
     )
     return pdf.output_bytes()
 
