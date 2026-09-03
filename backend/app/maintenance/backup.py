@@ -30,6 +30,15 @@ from app.maintenance.manifest import (
     validate_backup_id,
     write_manifest,
 )
+from app.maintenance.storage import (
+    STORAGE_REASON_FULL,
+    STORAGE_TIER_DEGRADED,
+    STORAGE_TIER_PROTECTED,
+    StorageTargetProvider,
+    probe_protected_storage,
+    reason_for_publish_failure,
+    validate_storage_tier,
+)
 
 logger = logging.getLogger("adas.maintenance")
 
@@ -49,6 +58,22 @@ class MaintenanceBusyError(RuntimeError):
     """Raised when a backup or restore is already running in this process.
     The API layer (routes/maintenance.py) turns this into 409 CONFLICT_BUSY
     (edge cases 1.12, 1.13)."""
+
+
+class BackupTargetsFailedError(RuntimeError):
+    """Both the protected target and the local fallback failed.
+
+    Only stable reason codes are retained so an orchestrator can safely
+    display this exception without leaking target paths or raw OS errors.
+    """
+
+    def __init__(self, protected_reason: str, fallback_reason: str):
+        self.protected_reason = protected_reason
+        self.fallback_reason = fallback_reason
+        super().__init__(
+            "Protected and degraded backup targets both failed "
+            f"({protected_reason}; {fallback_reason})."
+        )
 
 
 # The thread lock remains useful for immediate same-process 409 responses,
@@ -179,6 +204,12 @@ def _default_backup_dir() -> Path:
     return settings.BACKUP_DIR
 
 
+def _target_failure_reason(exc: BaseException) -> str:
+    if isinstance(exc, InsufficientDiskSpaceError):
+        return STORAGE_REASON_FULL
+    return reason_for_publish_failure(exc)
+
+
 def try_acquire_maintenance_lock(backup_dir: Path | None = None) -> bool:
     """For a caller (the API route) that must know synchronously, before
     committing to any further work, whether a backup/restore is already
@@ -230,6 +261,7 @@ def maintenance_lock(backup_dir: Path | None = None):
 class RetentionConfig:
     daily: int
     manual: int
+    pre_restore: int = 3
 
 
 def resolve_sqlite_db_path(database_url: str) -> Path:
@@ -319,6 +351,29 @@ def _remove_sidecars(path: Path) -> None:
         path.with_name(path.name + suffix).unlink(missing_ok=True)
 
 
+def _cleanup_unpublished_artifacts(artifact_dir: Path) -> None:
+    """Remove only temporary protected-root publications.
+
+    This intentionally does not match ``.db`` or ``.json`` files.  A
+    protected device can lose power after a temp file is created; the next
+    attempt may safely clean that unpublished residue without touching any
+    previously valid restore point.  Local legacy artifacts are never swept
+    by this helper.
+    """
+    if not artifact_dir.exists():
+        return
+    for pattern in (
+        "adas_backup_*.tmp",
+        "adas_backup_*.tmp-wal",
+        "adas_backup_*.tmp-shm",
+    ):
+        for path in artifact_dir.glob(pattern):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("Could not clean an unpublished backup artifact.")
+
+
 def _run_sqlite_backup(db_path: Path, tmp_path: Path) -> None:
     """The WAL-safe online backup itself. Source is opened read-only so this
     can never itself become a writer against the live database."""
@@ -343,7 +398,12 @@ def _run_sqlite_backup(db_path: Path, tmp_path: Path) -> None:
 
 
 def _perform_backup_write(
-    db_path: Path, backup_dir: Path, origin: str
+    db_path: Path,
+    backup_dir: Path,
+    origin: str,
+    *,
+    storage_tier: str = STORAGE_TIER_DEGRADED,
+    storage_reason: str | None = None,
 ) -> BackupManifest:
     """Steps 3-6 only: write-to-temp, validate, atomic rename, manifest.
     No disk-space check and no locking — the caller (`create_backup` for a
@@ -352,12 +412,14 @@ def _perform_backup_write(
     restore sequence) is responsible for both."""
     if origin not in VALID_ORIGINS:
         raise ValueError(f"Unknown backup origin: {origin!r}")
+    validate_storage_tier(storage_tier)
 
     backup_dir.mkdir(parents=True, exist_ok=True)
     backup_id = new_backup_id()
     tmp_path = tmp_path_for(backup_dir, backup_id)
     final_path = db_path_for(backup_dir, backup_id)
 
+    published = False
     try:
         _run_sqlite_backup(db_path, tmp_path)
         checks = verify.validate_backup(tmp_path, full=False)
@@ -373,29 +435,42 @@ def _perform_backup_write(
         # complete and validated (Step 1.4/1.5). Never leaves a file at the
         # final path if anything above raised.
         tmp_path.replace(final_path)
+        published = True
+        schema_revision = read_schema_revision(final_path)
+        _remove_sidecars(final_path)
+        manifest = BackupManifest(
+            backup_id=backup_id,
+            filename=final_path.name,
+            created_at=datetime.now(UTC).isoformat(),
+            origin=origin,
+            app_version=APP_VERSION,
+            schema_revision=schema_revision,
+            file_size=file_size,
+            sha256=sha256,
+            checks=checks,
+            storage_tier=storage_tier,
+            storage_reason=storage_reason,
+        )
+
+        if not manifest.valid:
+            logger.error(
+                "Backup %s failed validation after creation: %s", backup_id, checks
+            )
+        write_manifest(backup_dir, manifest)
+        return manifest
     except Exception:
+        # A database file without its manifest is not a published restore
+        # point.  Remove just this attempt; older valid artifacts survive.
         tmp_path.unlink(missing_ok=True)
         _remove_sidecars(tmp_path)
+        if published:
+            _remove_sidecars(final_path)
+            final_path.unlink(missing_ok=True)
+            manifest_path_for(backup_dir, backup_id).unlink(missing_ok=True)
+            manifest_path_for(backup_dir, backup_id).with_suffix(".json.tmp").unlink(
+                missing_ok=True
+            )
         raise
-
-    manifest = BackupManifest(
-        backup_id=backup_id,
-        filename=final_path.name,
-        created_at=datetime.now(UTC).isoformat(),
-        origin=origin,
-        app_version=APP_VERSION,
-        schema_revision=read_schema_revision(final_path),
-        file_size=file_size,
-        sha256=sha256,
-        checks=checks,
-    )
-
-    if not manifest.valid:
-        logger.error(
-            "Backup %s failed validation after creation: %s", backup_id, checks
-        )
-    write_manifest(backup_dir, manifest)
-    return manifest
 
 
 def create_backup(
@@ -404,22 +479,158 @@ def create_backup(
     backup_dir: Path,
     origin: str = ORIGIN_MANUAL,
     retention: RetentionConfig | None = None,
+    protected_backup_dir: Path | None = None,
+    storage_provider: StorageTargetProvider | None = None,
 ) -> BackupManifest:
-    """The full online backup sequence (Step 1), 1:1 with D-011's ordering:
-    check disk space, take the exclusive lock, write+validate+publish, then
-    prune only once the new backup is confirmed valid. Raises
-    `MaintenanceBusyError` if a backup or restore is already in progress —
-    never removes an older valid backup because this one failed."""
+    """Create a backup under one local maintenance lease.
+
+    Manual and scheduled backups prefer the explicitly configured protected
+    root.  Any unavailable or failed protected attempt falls back once to the
+    local root and records a path-free reason.  Pre-restore backups are always
+    local because the emergency reserve must survive loss of the external
+    device.
+    """
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     with maintenance_lock(backup_dir):
-        _ensure_restore_not_active(backup_dir)
-        _check_disk_space(db_path, backup_dir)
-        manifest = _perform_backup_write(db_path, backup_dir, origin)
-        if retention is not None and manifest.valid:
-            _prune_backups_unlocked(backup_dir, retention=retention)
+        manifest = _create_backup_unlocked(
+            db_path=db_path,
+            backup_dir=backup_dir,
+            origin=origin,
+            retention=retention,
+            protected_backup_dir=protected_backup_dir,
+            storage_provider=storage_provider,
+        )
 
     return manifest
+
+
+def _create_backup_unlocked(
+    *,
+    db_path: Path,
+    backup_dir: Path,
+    origin: str,
+    retention: RetentionConfig | None,
+    protected_backup_dir: Path | None,
+    storage_provider: StorageTargetProvider | None,
+) -> BackupManifest:
+    """Protected-first selection for a caller already holding the lease."""
+    _ensure_restore_not_active(backup_dir)
+    configured_protected = (
+        None if protected_backup_dir is None else Path(protected_backup_dir)
+    )
+
+    # Emergency backups are deliberately local: losing the USB after the
+    # swap must not also remove the only rollback state.
+    if origin == "pre-restore":
+        _check_disk_space(db_path, backup_dir)
+        manifest = _perform_backup_write(
+            db_path,
+            backup_dir,
+            origin,
+            storage_tier=STORAGE_TIER_DEGRADED,
+            storage_reason="pre_restore_emergency",
+        )
+        if retention is not None and manifest.valid:
+            _prune_backups_unlocked(backup_dir, retention=retention)
+        return manifest
+
+    protected_attempted = configured_protected is not None
+    protected_reason = "not_configured"
+    if configured_protected is not None:
+        _cleanup_unpublished_artifacts(configured_protected)
+        try:
+            same_root = configured_protected.resolve() == Path(backup_dir).resolve()
+        except OSError:
+            same_root = False
+        probe = (
+            None
+            if same_root
+            else probe_protected_storage(
+                configured_protected,
+                live_db_path=db_path,
+                required_bytes=_required_backup_bytes(db_path),
+                provider=storage_provider,
+            )
+        )
+        if same_root:
+            protected_reason = "same_device"
+        elif probe is not None:
+            protected_reason = probe.reason or "available"
+        if probe is not None and probe.available:
+            _cleanup_unpublished_artifacts(configured_protected)
+            try:
+                _check_disk_space(db_path, configured_protected)
+                manifest = _perform_backup_write(
+                    db_path,
+                    configured_protected,
+                    origin,
+                    storage_tier=STORAGE_TIER_PROTECTED,
+                )
+                if not manifest.valid:
+                    _remove_backup_files(configured_protected, manifest.backup_id)
+                    raise RuntimeError("protected backup validation failed")
+                if retention is not None:
+                    try:
+                        _prune_backups_unlocked(
+                            configured_protected,
+                            retention=retention,
+                            storage_tier=STORAGE_TIER_PROTECTED,
+                        )
+                    except OSError:
+                        # A valid protected restore point is still a success
+                        # if retention cleanup loses the media or permissions.
+                        # Never create a duplicate degraded point merely
+                        # because old protected files could not be pruned.
+                        logger.warning(
+                            "Protected backup retention cleanup could not complete."
+                        )
+                return manifest
+            except Exception as exc:
+                protected_reason = _target_failure_reason(exc)
+                _cleanup_unpublished_artifacts(configured_protected)
+                logger.warning(
+                    "Protected backup target failed; using degraded fallback "
+                    "(reason=%s).",
+                    protected_reason,
+                )
+        else:
+            _cleanup_unpublished_artifacts(configured_protected)
+            logger.warning(
+                "Protected backup target unavailable; using degraded fallback "
+                "(reason=%s).",
+                protected_reason,
+            )
+
+    try:
+        _check_disk_space(db_path, backup_dir)
+        manifest = _perform_backup_write(
+            db_path,
+            backup_dir,
+            origin,
+            storage_tier=STORAGE_TIER_DEGRADED,
+            storage_reason=protected_reason,
+        )
+        if not manifest.valid:
+            raise RuntimeError("degraded backup validation failed")
+        if retention is not None:
+            _prune_backups_unlocked(backup_dir, retention=retention)
+        return manifest
+    except Exception as exc:
+        fallback_reason = _target_failure_reason(exc)
+        if protected_attempted:
+            raise BackupTargetsFailedError(
+                protected_reason,
+                fallback_reason,
+            ) from exc
+        raise
+
+
+def _required_backup_bytes(db_path: Path) -> int:
+    try:
+        return max(1, int(db_path.stat().st_size * _DISK_SPACE_FACTOR))
+    except OSError:
+        return 1
 
 
 def perform_backup_assuming_lock_held(
@@ -428,6 +639,8 @@ def perform_backup_assuming_lock_held(
     origin: str,
     *,
     retention: RetentionConfig | None = None,
+    protected_backup_dir: Path | None = None,
+    storage_provider: StorageTargetProvider | None = None,
 ) -> BackupManifest:
     """For a caller that has already acquired `maintenance_lock`/
     `try_acquire_maintenance_lock` itself — the manual-backup API route
@@ -435,27 +648,28 @@ def perform_backup_assuming_lock_held(
     409) and runs this in a background task afterwards. Calling
     `create_backup()` there instead would try to re-acquire the same
     (non-reentrant) lock and immediately raise `MaintenanceBusyError`."""
-    _ensure_restore_not_active(backup_dir)
-    manifest = _perform_backup_write(db_path, backup_dir, origin)
-    if retention is not None and manifest.valid:
-        _prune_backups_unlocked(backup_dir, retention=retention)
-    return manifest
+    return _create_backup_unlocked(
+        db_path=db_path,
+        backup_dir=backup_dir,
+        origin=origin,
+        retention=retention,
+        protected_backup_dir=protected_backup_dir,
+        storage_provider=storage_provider,
+    )
 
 
-def list_backup_candidates(backup_dir: Path) -> list[BackupManifest]:
-    """Return inspectable manifest rows, including invalid restore points.
-
-    The dashboard needs to explain why a point is unusable.  Every artifact
-    is still rechecked at read time, and malformed/path-unsafe IDs are
-    ignored, so exposing an invalid row never makes it a filesystem input.
-    """
+def _list_backup_candidates_from_root(
+    artifact_dir: Path,
+    *,
+    storage_tier: str,
+) -> list[BackupManifest]:
     listed: list[BackupManifest] = []
-    for manifest in list_manifests(backup_dir):
+    for manifest in list_manifests(artifact_dir):
         try:
             validate_backup_id(manifest.backup_id)
         except ValueError:
             continue
-        path = db_path_for(backup_dir, manifest.backup_id)
+        path = db_path_for(artifact_dir, manifest.backup_id)
         checks = dict(manifest.checks)
         try:
             checks["checksum"] = path.exists() and (
@@ -469,35 +683,115 @@ def list_backup_candidates(backup_dir: Path) -> list[BackupManifest]:
             checks["checksum"] = False
             checks["file_size"] = False
             checks["artifact_name"] = False
-        listed.append(
-            BackupManifest(
-                backup_id=manifest.backup_id,
-                filename=manifest.filename,
-                created_at=manifest.created_at,
-                origin=manifest.origin,
-                app_version=manifest.app_version,
-                schema_revision=manifest.schema_revision,
-                file_size=manifest.file_size,
-                sha256=manifest.sha256,
-                checks=checks,
-            )
+        item = BackupManifest(
+            backup_id=manifest.backup_id,
+            filename=manifest.filename,
+            created_at=manifest.created_at,
+            origin=manifest.origin,
+            app_version=manifest.app_version,
+            schema_revision=manifest.schema_revision,
+            file_size=manifest.file_size,
+            sha256=manifest.sha256,
+            checks=checks,
+            # The root is authoritative.  A malicious/mistagged local
+            # manifest can never turn itself into a protected restore point.
+            storage_tier=storage_tier,
+            storage_reason=manifest.storage_reason
+            or ("legacy_local" if not manifest.storage_tier_explicit else None),
         )
+        object.__setattr__(
+            item, "_storage_tier_explicit", manifest.storage_tier_explicit
+        )
+        listed.append(item)
     return listed
 
 
-def list_backups(backup_dir: Path) -> list[BackupManifest]:
+def list_backup_candidates(
+    backup_dir: Path,
+    *,
+    protected_backup_dir: Path | None = None,
+    db_path: Path | None = None,
+    storage_provider: StorageTargetProvider | None = None,
+) -> list[BackupManifest]:
+    """Return inspectable manifest rows, including invalid restore points.
+
+    The dashboard needs to explain why a point is unusable.  Every artifact
+    is still rechecked at read time, and malformed/path-unsafe IDs are
+    ignored, so exposing an invalid row never makes it a filesystem input.
+    """
+    listed = _list_backup_candidates_from_root(
+        Path(backup_dir), storage_tier=STORAGE_TIER_DEGRADED
+    )
+    configured_protected = (
+        None if protected_backup_dir is None else Path(protected_backup_dir)
+    )
+    if configured_protected is not None:
+        if db_path is None:
+            try:
+                from app.core.config import settings
+
+                db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
+            except (ImportError, ValueError, AttributeError):
+                db_path = None
+        if db_path is not None:
+            probe = probe_protected_storage(
+                configured_protected,
+                live_db_path=Path(db_path),
+                required_bytes=1,
+                provider=storage_provider,
+            )
+            if probe.available:
+                listed.extend(
+                    _list_backup_candidates_from_root(
+                        configured_protected,
+                        storage_tier=STORAGE_TIER_PROTECTED,
+                    )
+                )
+    listed.sort(key=lambda item: (item.created_at, item.storage_tier), reverse=True)
+    return listed
+
+
+def list_backups(
+    backup_dir: Path,
+    *,
+    protected_backup_dir: Path | None = None,
+    db_path: Path | None = None,
+    storage_provider: StorageTargetProvider | None = None,
+) -> list[BackupManifest]:
     """Newest first, restricted to backups that are still verifiably intact."""
     return [
-        manifest for manifest in list_backup_candidates(backup_dir) if manifest.valid
+        manifest
+        for manifest in list_backup_candidates(
+            backup_dir,
+            protected_backup_dir=protected_backup_dir,
+            db_path=db_path,
+            storage_provider=storage_provider,
+        )
+        if manifest.valid
     ]
 
 
-def get_valid_backup(backup_dir: Path, backup_id: str) -> BackupManifest | None:
+def get_valid_backup(
+    backup_dir: Path,
+    backup_id: str,
+    storage_tier: str = STORAGE_TIER_DEGRADED,
+    *,
+    protected_backup_dir: Path | None = None,
+    db_path: Path | None = None,
+    storage_provider: StorageTargetProvider | None = None,
+) -> BackupManifest | None:
     """A single-item version of `list_backups`'s live re-verification, used
     by the restore-request path to confirm a specific id is still a valid,
     uncorrupted restore point."""
-    for manifest in list_backups(backup_dir):
-        if manifest.backup_id == backup_id:
+    validate_backup_id(backup_id)
+    validate_storage_tier(storage_tier)
+    for manifest in list_backups(
+        backup_dir,
+        protected_backup_dir=protected_backup_dir,
+        db_path=db_path,
+        storage_provider=storage_provider,
+    ):
+        if manifest.backup_id == backup_id and manifest.storage_tier == storage_tier:
             return manifest
     return None
 
@@ -507,12 +801,17 @@ def prune_backups(
     *,
     retention: RetentionConfig,
     protected_ids: frozenset[str] = frozenset(),
+    storage_tier: str = STORAGE_TIER_DEGRADED,
 ) -> list[str]:
     """Prune under the same cross-process lease used by backup/restore."""
+    validate_storage_tier(storage_tier)
     with maintenance_lock(backup_dir):
         _ensure_restore_not_active(backup_dir)
         return _prune_backups_unlocked(
-            backup_dir, retention=retention, protected_ids=protected_ids
+            backup_dir,
+            retention=retention,
+            protected_ids=protected_ids,
+            storage_tier=storage_tier,
         )
 
 
@@ -521,6 +820,7 @@ def _prune_backups_unlocked(
     *,
     retention: RetentionConfig,
     protected_ids: frozenset[str] = frozenset(),
+    storage_tier: str = STORAGE_TIER_DEGRADED,
 ) -> list[str]:
     """Step 3 — keeps the newest `retention.daily` scheduled backups and the
     newest `retention.manual` manual backups; only runs after the caller's
@@ -530,6 +830,7 @@ def _prune_backups_unlocked(
     verified regardless of count. Anything in `protected_ids` (an active
     restore candidate or the current emergency file) is skipped regardless
     of age."""
+    validate_storage_tier(storage_tier)
     protected_ids = frozenset(
         {*protected_ids, *_active_restore_protected_ids(backup_dir)}
     )
@@ -544,8 +845,12 @@ def _prune_backups_unlocked(
             m
             for m in manifests
             if m.origin == origin
+            and m.storage_tier == storage_tier
             and m.valid
             and m.backup_id not in protected_ids
+            # A pre-P30 local artifact is classified as degraded for display,
+            # but is never deleted merely because protected storage was added.
+            and (storage_tier != STORAGE_TIER_DEGRADED or m.storage_tier_explicit)
             and _is_safe_manifest_id(m.backup_id)
         ]
         # list_manifests() already sorts newest-first.
@@ -562,6 +867,49 @@ def _remove_backup_files(backup_dir: Path, backup_id: str) -> None:
     _remove_sidecars(db_file)
     db_file.unlink(missing_ok=True)
     manifest_path_for(backup_dir, backup_id).unlink(missing_ok=True)
+
+
+def prune_pre_restore_backups(
+    backup_dir: Path,
+    *,
+    keep: int = 3,
+    protected_ids: frozenset[str] = frozenset(),
+) -> list[str]:
+    """Bound emergency-reserve retention after a restore outcome.
+
+    The active emergency id is always protected by the durable restore state;
+    once the outcome is terminal, older pre-restore artifacts can be pruned
+    without allowing them to accumulate forever.
+    """
+    with maintenance_lock(backup_dir):
+        return _prune_pre_restore_backups_unlocked(
+            backup_dir, keep=keep, protected_ids=protected_ids
+        )
+
+
+def _prune_pre_restore_backups_unlocked(
+    backup_dir: Path,
+    *,
+    keep: int,
+    protected_ids: frozenset[str] = frozenset(),
+) -> list[str]:
+    protected_ids = frozenset(
+        {*protected_ids, *_active_restore_protected_ids(backup_dir)}
+    )
+    candidates = [
+        manifest
+        for manifest in list_manifests(backup_dir)
+        if manifest.origin == "pre-restore"
+        and manifest.storage_tier == STORAGE_TIER_DEGRADED
+        and manifest.valid
+        and manifest.backup_id not in protected_ids
+        and _is_safe_manifest_id(manifest.backup_id)
+    ]
+    removed: list[str] = []
+    for stale in candidates[max(0, keep) :]:
+        _remove_backup_files(backup_dir, stale.backup_id)
+        removed.append(stale.backup_id)
+    return removed
 
 
 def _is_safe_manifest_id(backup_id: str) -> bool:

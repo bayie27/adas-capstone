@@ -20,6 +20,8 @@ class BackupRead(SQLModel):
     file_size: int
     valid: bool
     checks: dict[str, bool]
+    storage_tier: Literal["protected", "degraded"]
+    storage_reason: str | None = None
 
 
 class BackupListResponse(SQLModel):
@@ -33,6 +35,7 @@ class BackupTriggerResponse(SQLModel):
 
 class RestoreRequestIn(SQLModel):
     backup_id: str
+    storage_tier: Literal["protected", "degraded"]
     current_password: str
     confirmation: str
 
@@ -56,6 +59,7 @@ class RestoreRequestIn(SQLModel):
 class RestoreTriggerResponse(SQLModel):
     detail: str
     backup_id: str
+    storage_tier: Literal["protected", "degraded"]
     request_id: str
     status: Literal["requested"] = "requested"
 
@@ -72,10 +76,12 @@ class RestoreStepRead(SQLModel):
 class RestoreStateRead(SQLModel):
     status: str
     backup_id: str
+    storage_tier: Literal["protected", "degraded"] = "degraded"
     requested_at: datetime
     requested_by: str | None = None
     request_id: str | None = None
     emergency_backup_id: str | None = None
+    emergency_storage_tier: Literal["protected", "degraded"] = "degraded"
     steps: list[RestoreStepRead] = Field(default_factory=list)
     error: str | None = None
     completed_at: datetime | None = None
@@ -83,6 +89,7 @@ class RestoreStateRead(SQLModel):
 
 class BackupSummaryRead(SQLModel):
     backup_id: str
+    storage_tier: Literal["protected", "degraded"] = "degraded"
     created_at: datetime
     valid: bool
 
@@ -121,3 +128,9 @@ class MaintenanceStatusRead(SQLModel):
     last_restart: LastRestartRead | None = None
     latest_restore: RestoreStateRead | None = None
     restore_coordinator: RestoreCoordinatorRead
+    protected_backup_available: bool
+    protected_backup_reason: str | None = None
+    protection_state: Literal["protected", "degraded", "unavailable"]
+    latest_protected_backup: BackupSummaryRead | None = None
+    protected_backup_overdue: bool
+    backup_warning: str | None = None

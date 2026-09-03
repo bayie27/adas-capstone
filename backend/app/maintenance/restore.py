@@ -27,7 +27,9 @@ from pathlib import Path
 
 from app.maintenance.backup import (
     MaintenanceBusyError,
+    _check_disk_space,
     _perform_backup_write,
+    _prune_pre_restore_backups_unlocked,
     _remove_sidecars,
     maintenance_lock,
 )
@@ -36,6 +38,12 @@ from app.maintenance.manifest import (
     db_path_for,
     read_manifest,
     validate_backup_id,
+)
+from app.maintenance.storage import (
+    STORAGE_TIER_DEGRADED,
+    StorageTargetProvider,
+    probe_protected_storage,
+    validate_storage_tier,
 )
 from app.maintenance.verify import (
     compute_sha256,
@@ -57,6 +65,7 @@ STATUS_DB_RESTORED = "db_restored"
 STATUS_COMPLETED = "completed"
 STATUS_FAILED = "failed"
 STATUS_ROLLED_BACK = "rolled_back"
+STATUS_MANUAL_INTERVENTION = "manual_intervention"
 VALID_RESTORE_STATUSES = frozenset(
     {
         STATUS_REQUESTED,
@@ -65,6 +74,7 @@ VALID_RESTORE_STATUSES = frozenset(
         STATUS_COMPLETED,
         STATUS_FAILED,
         STATUS_ROLLED_BACK,
+        STATUS_MANUAL_INTERVENTION,
     }
 )
 
@@ -100,6 +110,7 @@ __all__ = [
     "STATUS_IN_PROGRESS",
     "STATUS_REQUESTED",
     "STATUS_ROLLED_BACK",
+    "STATUS_MANUAL_INTERVENTION",
     "VALID_RESTORE_STATUSES",
     "finalize_restore",
     "perform_offline_restore",
@@ -127,11 +138,13 @@ class RestoreState:
     status: str
     backup_id: str
     requested_at: str
+    storage_tier: str = STORAGE_TIER_DEGRADED
     requested_by: str | None = None
     request_id: str | None = None
     execute_after: str | None = None
     claimed_at: str | None = None
     emergency_backup_id: str | None = None
+    emergency_storage_tier: str = STORAGE_TIER_DEGRADED
     steps: list[dict] = field(default_factory=list)
     error: str | None = None
     completed_at: str | None = None
@@ -174,6 +187,21 @@ def read_restore_state(backup_dir: Path) -> RestoreState | None:
     ):
         return None
     try:
+        validate_backup_id(data["backup_id"])
+        if data.get("emergency_backup_id") is not None:
+            validate_backup_id(data["emergency_backup_id"])
+    except (TypeError, ValueError):
+        return None
+    try:
+        storage_tier = validate_storage_tier(
+            data.get("storage_tier", STORAGE_TIER_DEGRADED)
+        )
+        emergency_storage_tier = validate_storage_tier(
+            data.get("emergency_storage_tier", STORAGE_TIER_DEGRADED)
+        )
+    except (TypeError, ValueError):
+        return None
+    try:
         requested_at = datetime.fromisoformat(data["requested_at"])
     except (TypeError, ValueError):
         return None
@@ -194,6 +222,16 @@ def read_restore_state(backup_dir: Path) -> RestoreState | None:
         not isinstance(step, dict) for step in data.get("steps", [])
     ):
         return None
+    safe_steps = []
+    for step in data.get("steps", []):
+        safe_step = dict(step)
+        for key in ("name", "detail"):
+            value = safe_step.get(key)
+            if isinstance(value, str) and (
+                "\\" in value or "/" in value or len(value) > 256
+            ):
+                safe_step[key] = "operation_failed"
+        safe_steps.append(safe_step)
     fields = {
         "status",
         "backup_id",
@@ -207,9 +245,24 @@ def read_restore_state(backup_dir: Path) -> RestoreState | None:
         "error",
         "completed_at",
     }
+    safe_error = data.get("error")
+    if isinstance(safe_error, str) and (
+        "\\" in safe_error or "/" in safe_error or len(safe_error) > 256
+    ):
+        safe_error = "restore_failed"
     try:
         return RestoreState(
-            **{key: value for key, value in data.items() if key in fields}
+            **{
+                **{
+                    key: value
+                    for key, value in data.items()
+                    if key in fields and key not in {"error", "steps"}
+                },
+                "storage_tier": storage_tier,
+                "emergency_storage_tier": emergency_storage_tier,
+                "error": safe_error,
+                "steps": safe_steps,
+            }
         )
     except (TypeError, ValueError):
         return None
@@ -228,10 +281,21 @@ def _as_aware_utc(value: datetime | str) -> datetime:
     return parsed.astimezone(UTC)
 
 
+def _safe_restore_error(exc: BaseException) -> str:
+    """Keep path-bearing OS messages out of restore state/API responses."""
+    if isinstance(exc, RestoreError):
+        return str(exc)
+    return type(exc).__name__
+
+
 def write_restore_request(
     backup_dir: Path,
     *,
     backup_id: str,
+    storage_tier: str = STORAGE_TIER_DEGRADED,
+    protected_backup_dir: Path | None = None,
+    db_path: Path | None = None,
+    storage_provider: StorageTargetProvider | None = None,
     requested_by: str | None,
     grace_seconds: int = RESTORE_REQUEST_GRACE_SECONDS,
     now: datetime | None = None,
@@ -246,6 +310,7 @@ def write_restore_request(
 
     with nullcontext() if assume_lock_held else maintenance_lock(backup_dir):
         validate_backup_id(backup_id)
+        validate_storage_tier(storage_tier)
         if restore_state_is_unreadable(backup_dir):
             raise RestoreStateUnreadableError(
                 "Restore state is unreadable; refusing to publish a new request."
@@ -259,7 +324,14 @@ def write_restore_request(
             raise RestoreRequestBusyError(
                 "A restore request is already active; wait for it to finish."
             )
-        manifest = get_valid_backup(backup_dir, backup_id)
+        manifest = get_valid_backup(
+            backup_dir,
+            backup_id,
+            storage_tier,
+            protected_backup_dir=protected_backup_dir,
+            db_path=db_path,
+            storage_provider=storage_provider,
+        )
         if manifest is None:
             raise RestoreCandidateInvalidError(
                 f"{backup_id} is not a valid, currently-listed restore point."
@@ -270,6 +342,7 @@ def write_restore_request(
             status=STATUS_REQUESTED,
             backup_id=backup_id,
             requested_at=requested_at.isoformat(),
+            storage_tier=storage_tier,
             requested_by=requested_by,
             request_id=uuid.uuid4().hex,
             execute_after=(
@@ -293,8 +366,77 @@ def _is_revision_compatible(revision: str) -> bool:
     return is_known_schema_revision(app_settings, revision)
 
 
+def _selected_artifact_root(
+    backup_dir: Path,
+    *,
+    storage_tier: str,
+    protected_backup_dir: Path | None,
+    db_path: Path,
+    storage_provider: StorageTargetProvider | None,
+) -> Path:
+    validate_storage_tier(storage_tier)
+    if storage_tier == STORAGE_TIER_DEGRADED:
+        return Path(backup_dir)
+    if protected_backup_dir is None:
+        raise RestoreCandidateInvalidError(
+            "The selected protected backup storage is not configured."
+        )
+    probe = probe_protected_storage(
+        protected_backup_dir,
+        live_db_path=db_path,
+        required_bytes=1,
+        provider=storage_provider,
+    )
+    if not probe.available:
+        raise RestoreCandidateInvalidError(
+            "The selected protected backup storage is unavailable."
+        )
+    return Path(protected_backup_dir)
+
+
+def _verify_manifest_artifact(
+    artifact_dir: Path,
+    backup_id: str,
+    *,
+    full: bool,
+    require_revision: bool = True,
+):
+    """Verify one manifest and return its path without exposing the root."""
+    manifest = read_manifest(artifact_dir, backup_id)
+    if manifest is None or not manifest.valid:
+        raise RestoreError(f"Backup {backup_id} is not a valid restore point.")
+    artifact_path = db_path_for(artifact_dir, backup_id)
+    try:
+        size_matches = (
+            artifact_path.exists()
+            and manifest.filename == artifact_path.name
+            and manifest.file_size == artifact_path.stat().st_size
+        )
+        checksum_matches = size_matches and (
+            compute_sha256(artifact_path) == manifest.sha256
+        )
+    except OSError as exc:
+        raise RestoreError(f"Backup {backup_id} could not be read.") from exc
+    if not checksum_matches:
+        raise RestoreError(f"Backup {backup_id} failed checksum re-verification.")
+    if full and not run_integrity_check(artifact_path):
+        raise RestoreError(f"Backup {backup_id} failed integrity_check.")
+    if not run_foreign_key_check(artifact_path):
+        raise RestoreError(f"Backup {backup_id} failed foreign_key_check.")
+    if require_revision and (
+        manifest.schema_revision is None
+        or not _is_revision_compatible(manifest.schema_revision)
+    ):
+        raise RestoreError(f"Backup {backup_id} has an incompatible schema revision.")
+    return manifest, artifact_path
+
+
 def _record_failed_state_if_current(
-    backup_dir: Path, state: RestoreState, *, error: str
+    backup_dir: Path,
+    state: RestoreState,
+    *,
+    error: str,
+    status: str = STATUS_FAILED,
 ) -> None:
     """Persist a failure without overwriting a newer restore request.
 
@@ -317,9 +459,10 @@ def _record_failed_state_if_current(
                 STATUS_COMPLETED,
                 STATUS_FAILED,
                 STATUS_ROLLED_BACK,
+                STATUS_MANUAL_INTERVENTION,
             }:
                 return
-            state.status = STATUS_FAILED
+            state.status = status
             state.error = error
             state.completed_at = datetime.now(UTC).isoformat()
             write_restore_state(backup_dir, state)
@@ -341,7 +484,7 @@ def _timed_step(state: RestoreState, name: str):
         step.ok = True
     except Exception as exc:
         step.ok = False
-        step.detail = str(exc)
+        step.detail = _safe_restore_error(exc)
         raise
     finally:
         step.completed_at = datetime.now(UTC).isoformat()
@@ -350,7 +493,13 @@ def _timed_step(state: RestoreState, name: str):
 
 
 def perform_offline_restore(
-    *, backup_dir: Path, db_path: Path, backup_id: str
+    *,
+    backup_dir: Path,
+    db_path: Path,
+    backup_id: str,
+    storage_tier: str = STORAGE_TIER_DEGRADED,
+    protected_backup_dir: Path | None = None,
+    storage_provider: StorageTargetProvider | None = None,
 ) -> RestoreState:
     """D-011 Steps 3-7 — the pure file/DB manipulation that must run only
     while FastAPI and the AI engine are already stopped by the caller.
@@ -360,9 +509,11 @@ def perform_offline_restore(
     Always leaves a `RestoreState` recording success or failure; never
     leaves the primary database half-replaced."""
     validate_backup_id(backup_id)
+    validate_storage_tier(storage_tier)
     state: RestoreState | None = None
     tmp_restore_path: Path | None = None
     state_owned = False
+    emergency = None
 
     try:
         with maintenance_lock(backup_dir):
@@ -384,16 +535,35 @@ def perform_offline_restore(
                 raise RestoreError(
                     "A different restore request is already active; refusing to overwrite it."
                 )
+            if (
+                state is not None
+                and state.backup_id == backup_id
+                and state.storage_tier != storage_tier
+                and state.status
+                in {
+                    STATUS_REQUESTED,
+                    STATUS_IN_PROGRESS,
+                    STATUS_DB_RESTORED,
+                }
+            ):
+                raise RestoreError(
+                    "The selected restore tier does not match the active request."
+                )
             if state is None or state.backup_id != backup_id:
                 requested_at = datetime.now(UTC)
                 state = RestoreState(
                     status=STATUS_REQUESTED,
                     backup_id=backup_id,
                     requested_at=requested_at.isoformat(),
+                    storage_tier=storage_tier,
                     request_id=uuid.uuid4().hex,
                     execute_after=requested_at.isoformat(),
                 )
-            elif state.status in {STATUS_COMPLETED, STATUS_ROLLED_BACK}:
+            elif state.status in {
+                STATUS_COMPLETED,
+                STATUS_ROLLED_BACK,
+                STATUS_MANUAL_INTERVENTION,
+            }:
                 raise RestoreError(
                     f"Restore request is already terminal ({state.status}); refusing to repeat it."
                 )
@@ -403,6 +573,7 @@ def perform_offline_restore(
                 )
 
             state.status = STATUS_IN_PROGRESS
+            state.storage_tier = storage_tier
             state.error = None
             state.completed_at = None
             state_owned = True
@@ -410,52 +581,35 @@ def perform_offline_restore(
 
             # Step 3 — emergency backup of the CURRENT (pre-restore) database.
             with _timed_step(state, "emergency_backup"):
+                _check_disk_space(db_path, backup_dir)
                 emergency = _perform_backup_write(
-                    db_path, backup_dir, ORIGIN_PRE_RESTORE
+                    db_path,
+                    backup_dir,
+                    ORIGIN_PRE_RESTORE,
+                    storage_tier=STORAGE_TIER_DEGRADED,
+                    storage_reason="pre_restore_emergency",
                 )
+                _verify_manifest_artifact(backup_dir, emergency.backup_id, full=True)
             state.emergency_backup_id = emergency.backup_id
+            state.emergency_storage_tier = STORAGE_TIER_DEGRADED
             write_restore_state(backup_dir, state)
 
-            # Step 4 — re-verify the selected backup is still a valid restore
-            # point: checksum, full integrity_check, foreign_key_check, and
-            # (P9) that its recorded schema revision is one this codebase's
-            # migration chain actually recognizes — restoring a backup with
-            # an unrecognized/incompatible schema would silently run the
-            # current code against the wrong table shape.
+            selected_root = _selected_artifact_root(
+                backup_dir,
+                storage_tier=storage_tier,
+                protected_backup_dir=protected_backup_dir,
+                db_path=db_path,
+                storage_provider=storage_provider,
+            )
+
+            # Step 4 — re-verify the selected backup while the services are
+            # offline.  The selected tier is resolved independently from the
+            # local emergency state, so a duplicate id in both roots cannot
+            # silently select the wrong database.
             with _timed_step(state, "verify_selected_backup"):
-                manifest = read_manifest(backup_dir, backup_id)
-                if manifest is None or not manifest.valid:
-                    raise RestoreError(
-                        f"Backup {backup_id} is not a valid restore point."
-                    )
-                selected_path = db_path_for(backup_dir, backup_id)
-                if (
-                    not selected_path.exists()
-                    or compute_sha256(selected_path) != manifest.sha256
-                ):
-                    raise RestoreError(
-                        f"Backup {backup_id} failed checksum re-verification."
-                    )
-                if manifest.filename != selected_path.name:
-                    raise RestoreError(
-                        f"Backup {backup_id} failed artifact-name validation."
-                    )
-                if manifest.file_size != selected_path.stat().st_size:
-                    raise RestoreError(
-                        f"Backup {backup_id} failed file-size validation."
-                    )
-                if not run_integrity_check(selected_path):
-                    raise RestoreError(f"Backup {backup_id} failed integrity_check.")
-                if not run_foreign_key_check(selected_path):
-                    raise RestoreError(f"Backup {backup_id} failed foreign_key_check.")
-                if manifest.schema_revision is None or not _is_revision_compatible(
-                    manifest.schema_revision
-                ):
-                    raise RestoreError(
-                        f"Backup {backup_id} has schema revision "
-                        f"{manifest.schema_revision!r}, which this build's "
-                        "migration chain does not recognize as compatible."
-                    )
+                _manifest, selected_path = _verify_manifest_artifact(
+                    selected_root, backup_id, full=True
+                )
 
             # Step 5 — restore to a temporary path and validate again.
             tmp_restore_path = db_path.with_name(db_path.name + ".restoring.tmp")
@@ -465,6 +619,12 @@ def perform_offline_restore(
                     tmp_restore_path.unlink(missing_ok=True)
                     _remove_sidecars(tmp_restore_path)
                     raise RestoreError("Restored temp database failed integrity_check.")
+                if not run_foreign_key_check(tmp_restore_path):
+                    tmp_restore_path.unlink(missing_ok=True)
+                    _remove_sidecars(tmp_restore_path)
+                    raise RestoreError(
+                        "Restored temp database failed foreign_key_check."
+                    )
 
             # Step 6 — remove obsolete WAL/SHM sidecars, for both the
             # primary path and the temp copy itself (see _remove_sidecars).
@@ -482,9 +642,25 @@ def perform_offline_restore(
             write_restore_state(backup_dir, state)
             return state
     except Exception as exc:
+        if (
+            emergency is not None
+            and state is not None
+            and state.emergency_backup_id is None
+        ):
+            from app.maintenance.backup import _remove_backup_files
+
+            _remove_backup_files(backup_dir, emergency.backup_id)
         if state is not None and state_owned:
-            _record_failed_state_if_current(backup_dir, state, error=str(exc))
-        logger.error("Offline restore failed for backup_id=%s: %s", backup_id, exc)
+            _record_failed_state_if_current(
+                backup_dir,
+                state,
+                error="Restore failed; manual intervention may be required.",
+            )
+        logger.error(
+            "Offline restore failed for backup_id=%s (%s).",
+            backup_id,
+            type(exc).__name__,
+        )
         raise
     finally:
         if tmp_restore_path is not None:
@@ -504,31 +680,22 @@ def perform_rollback(*, backup_dir: Path, db_path: Path) -> RestoreState:
     try:
         with maintenance_lock(backup_dir):
             state = read_restore_state(backup_dir)
-            if state is None or state.emergency_backup_id is None:
+            if state is None:
+                raise RestoreError("No emergency backup recorded; cannot roll back.")
+            state_owned = True
+            if state.emergency_backup_id is None:
                 raise RestoreError("No emergency backup recorded; cannot roll back.")
 
             emergency_id = state.emergency_backup_id
-            state_owned = True
+            validate_storage_tier(state.emergency_storage_tier)
+            if state.emergency_storage_tier != STORAGE_TIER_DEGRADED:
+                raise RestoreError(
+                    "The emergency restore reserve is not on local degraded storage."
+                )
             with _timed_step(state, "rollback_verify_emergency"):
-                manifest = read_manifest(backup_dir, emergency_id)
-                if manifest is None:
-                    raise RestoreError(
-                        f"Emergency backup {emergency_id} manifest missing."
-                    )
-                emergency_path = db_path_for(backup_dir, emergency_id)
-                if (
-                    not emergency_path.exists()
-                    or compute_sha256(emergency_path) != manifest.sha256
-                ):
-                    raise RestoreError(
-                        "Emergency backup failed checksum re-verification."
-                    )
-                if manifest.filename != emergency_path.name:
-                    raise RestoreError(
-                        "Emergency backup failed artifact-name validation."
-                    )
-                if manifest.file_size != emergency_path.stat().st_size:
-                    raise RestoreError("Emergency backup failed file-size validation.")
+                _manifest, emergency_path = _verify_manifest_artifact(
+                    backup_dir, emergency_id, full=True
+                )
 
             tmp_restore_path = db_path.with_name(db_path.name + ".rollback.tmp")
             with _timed_step(state, "rollback_restore_to_temp"):
@@ -549,18 +716,28 @@ def perform_rollback(*, backup_dir: Path, db_path: Path) -> RestoreState:
             state.error = None
             state.completed_at = datetime.now(UTC).isoformat()
             write_restore_state(backup_dir, state)
+            try:
+                from app.core.config import settings
+
+                keep = settings.BACKUP_PRE_RESTORE_RETENTION
+            except (ImportError, AttributeError):
+                keep = 3
+            _prune_pre_restore_backups_unlocked(backup_dir, keep=keep)
             return state
     except Exception as exc:
         if state is not None and state_owned:
             _record_failed_state_if_current(
-                backup_dir, state, error=f"rollback failed: {exc}"
+                backup_dir,
+                state,
+                error="Rollback failed; manual intervention is required.",
+                status=STATUS_MANUAL_INTERVENTION,
             )
         logger.critical(
             "Rollback FAILED for backup_id=%s emergency_backup_id=%s: %s — system "
             "may be left in an inconsistent state, manual intervention required.",
             state.backup_id if state is not None else None,
             emergency_id,
-            exc,
+            type(exc).__name__,
         )
         raise
     finally:
@@ -585,6 +762,18 @@ def finalize_restore(backup_dir: Path, *, healthy: bool) -> RestoreState:
         state.status = STATUS_COMPLETED if healthy else STATUS_FAILED
         state.completed_at = datetime.now(UTC).isoformat()
         write_restore_state(backup_dir, state)
+        # A terminal outcome makes the emergency id eligible for the bounded
+        # pre-restore retention sweep.  The newest reserves are retained for
+        # the configured safety window; active requests remain protected by
+        # _active_restore_protected_ids().
+        if healthy:
+            try:
+                from app.core.config import settings
+
+                keep = settings.BACKUP_PRE_RESTORE_RETENTION
+            except (ImportError, AttributeError):
+                keep = 3
+            _prune_pre_restore_backups_unlocked(backup_dir, keep=keep)
         return state
 
 
@@ -601,6 +790,7 @@ def record_restore_outcome_audit(db_path: Path, *, state: RestoreState) -> None:
     failed independently of this bookkeeping step."""
     detail = {
         "outcome": state.status,
+        "storage_tier": state.storage_tier,
         "emergency_backup_id": state.emergency_backup_id,
         "request_id": state.request_id,
     }

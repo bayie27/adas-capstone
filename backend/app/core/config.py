@@ -60,8 +60,13 @@ class Settings(BaseSettings):
     SNAPSHOT_ROOT: Path = Path("ai_engine/snapshots")
     LEGACY_SNAPSHOT_DIR: Path = Path("ai_engine/snapshots")
     BACKUP_DIR: Path = Path("var/backups")
+    # P30 — optional explicit external artifact roots.  These are intentionally
+    # not repo-relative: the runtime will only use them after the physical
+    # device provider proves they are safe.
+    PROTECTED_BACKUP_DIR: Path | None = None
     EXPORT_DIR: Path = Path("var/exports")
     ARCHIVE_DIR: Path = Path("var/archive")
+    PROTECTED_ARCHIVE_DIR: Path | None = None
     # scripts/adas-maintenance.ps1's own -LogDir default — kept in sync so
     # GET /api/system/maintenance/status reads the same maintenance-runs.jsonl
     # the PowerShell orchestrator writes.
@@ -121,6 +126,7 @@ class Settings(BaseSettings):
     # Backups (D-011)
     BACKUP_DAILY_RETENTION: int = 30
     BACKUP_MANUAL_RETENTION: int = 10
+    BACKUP_PRE_RESTORE_RETENTION: int = 3
 
     # Maintenance
     MAINTENANCE_HOUR_LOCAL: int = 3
@@ -177,6 +183,13 @@ class Settings(BaseSettings):
     @classmethod
     def resolve_repo_relative_path(cls, v: Path) -> Path:
         return _resolve_repo_path(v)
+
+    @field_validator("PROTECTED_BACKUP_DIR", "PROTECTED_ARCHIVE_DIR", mode="before")
+    @classmethod
+    def parse_optional_external_path(cls, v):
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        return Path(v)
 
     @field_validator("CORS_ORIGINS", "ALARM_SOUND_KEYS", mode="before")
     @classmethod
