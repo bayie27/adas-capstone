@@ -7,6 +7,8 @@
  * human-readable UI text so `AuditLog.tsx` stays a layout-only file.
  */
 
+import type { AuditLogEntry } from "@/api/audit"
+
 // ---------------------------------------------------------------------------
 // 1. Human-readable key labels
 // ---------------------------------------------------------------------------
@@ -431,4 +433,34 @@ export function formatChangedFields(fields: unknown[]): string {
         : String(f),
     )
     .join(", ")
+}
+
+// ---------------------------------------------------------------------------
+// 7. Slice an already-grouped page of rows back into groups for rendering
+// ---------------------------------------------------------------------------
+
+export type AuditRowSegment =
+  { kind: "single"; entry: AuditLogEntry } | { kind: "group"; entries: AuditLogEntry[] }
+
+/**
+ * The backend (`_annotate_groups`, `routes/audit.py`) already chains
+ * consecutive same-actor/action/target/result rows into runs and marks them
+ * with `group_size`/`is_group_head` — this only slices that flat,
+ * already-contiguous list back into single rows and groups for rendering.
+ * It never recomputes the grouping decision itself.
+ */
+export function groupAuditRows(items: AuditLogEntry[]): AuditRowSegment[] {
+  const result: AuditRowSegment[] = []
+  let i = 0
+  while (i < items.length) {
+    const entry = items[i]
+    if (entry.is_group_head && entry.group_size > 1) {
+      result.push({ kind: "group", entries: items.slice(i, i + entry.group_size) })
+      i += entry.group_size
+    } else {
+      result.push({ kind: "single", entry })
+      i += 1
+    }
+  }
+  return result
 }

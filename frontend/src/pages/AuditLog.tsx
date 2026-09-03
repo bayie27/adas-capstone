@@ -10,6 +10,7 @@ import {
   formatScalarDetailValue,
   formatTargetDisplayName,
   formatTargetType,
+  groupAuditRows,
   hasResolvedName,
   humanizeDetailKey,
   isLongHexId,
@@ -53,6 +54,7 @@ import { useUserOptions } from "@/hooks/useUserOptions"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { formatFullDateTime } from "@/utils/datetime"
 import { getUserFullName } from "@/utils/format"
+import { cn } from "@/utils/cn"
 
 const AUDIT_PAGE_SIZE = 20
 
@@ -102,6 +104,7 @@ export default function AuditLog() {
   const [userId, setUserId] = useState("")
   const [targetType, setTargetType] = useState("")
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(new Set())
   // created_at desc is the default and the only sane resting state for an
   // append-only log — the newest entries are what an admin opens this for.
   const [sort, setSort] = useState<{ key: AuditSortField; order: SortOrder }>({
@@ -192,7 +195,12 @@ export default function AuditLog() {
     placeholderData: (previousData) => previousData,
   })
 
-  const rows = auditQuery.data?.items ?? []
+  const items = auditQuery.data?.items
+  const rows = items ?? []
+  // Keyed on `items` (not the `?? []` fallback `rows`) so this doesn't
+  // recompute every render just because the fallback is a fresh empty array.
+  const segments = useMemo(() => groupAuditRows(items ?? []), [items])
+
   const totalFiltered = auditQuery.data?.total_filtered ?? 0
   if (totalFiltered !== seenTotal) {
     setSeenTotal(totalFiltered)
@@ -400,18 +408,41 @@ export default function AuditLog() {
                 No audit entries found for the current filters.
               </TableStateRow>
             ) : (
-              rows.map((entry) => (
-                <AuditRow
-                  key={entry.audit_id}
-                  entry={entry}
-                  expanded={expandedId === entry.audit_id}
-                  onToggle={() =>
-                    setExpandedId((current) => (current === entry.audit_id ? null : entry.audit_id))
-                  }
-                  cameraMap={cameraMap}
-                  userMap={userMap}
-                />
-              ))
+              segments.map((segment) =>
+                segment.kind === "single" ? (
+                  <AuditRow
+                    key={segment.entry.audit_id}
+                    entry={segment.entry}
+                    expanded={expandedId === segment.entry.audit_id}
+                    onToggle={() =>
+                      setExpandedId((current) =>
+                        current === segment.entry.audit_id ? null : segment.entry.audit_id,
+                      )
+                    }
+                    cameraMap={cameraMap}
+                    userMap={userMap}
+                  />
+                ) : (
+                  <GroupedAuditRows
+                    key={segment.entries[0].audit_id}
+                    entries={segment.entries}
+                    expandedGroup={expandedGroupIds.has(segment.entries[0].audit_id)}
+                    onToggleGroup={() => {
+                      const groupId = segment.entries[0].audit_id
+                      setExpandedGroupIds((current) => {
+                        const next = new Set(current)
+                        if (next.has(groupId)) next.delete(groupId)
+                        else next.add(groupId)
+                        return next
+                      })
+                    }}
+                    expandedId={expandedId}
+                    onToggleRow={(id) => setExpandedId((current) => (current === id ? null : id))}
+                    cameraMap={cameraMap}
+                    userMap={userMap}
+                  />
+                ),
+              )
             )}
           </TableBody>
         </Table>
@@ -572,12 +603,15 @@ function AuditRow({
   onToggle,
   cameraMap,
   userMap,
+  nested = false,
 }: {
   entry: AuditLogEntry
   expanded: boolean
   onToggle: () => void
   cameraMap: Map<string, string>
   userMap: Map<string, string>
+  /** Rendered inside an expanded group's member list rather than at the top level. */
+  nested?: boolean
 }) {
   const hasRequestId = entry.request_id && entry.request_id !== "-"
   const hasSourceIp = entry.source_ip && entry.source_ip !== "-"
@@ -593,8 +627,10 @@ function AuditRow({
 
   return (
     <>
-      <TableRow className="cursor-pointer" onClick={onToggle}>
-        <TableCell className="text-fg-muted">{formatFullDateTime(entry.created_at)}</TableCell>
+      <TableRow className={cn("cursor-pointer", nested && "bg-surface-1")} onClick={onToggle}>
+        <TableCell className={cn("text-fg-muted", nested && "pl-8")}>
+          {formatFullDateTime(entry.created_at)}
+        </TableCell>
         <TableCell>
           {entry.username ?? (entry.actor_type === "system" ? "System" : "Unknown")}
           {entry.role ? (
@@ -758,6 +794,99 @@ function AuditRow({
           </TableCell>
         </TableRow>
       ) : null}
+    </>
+  )
+}
+
+/**
+ * One collapsed summary row for a burst the backend already chained
+ * together (`group_size`/`is_group_head`) — e.g. a run of autosaved
+ * alarm-settings tweaks. Expanding it reveals the individual rows, each
+ * still independently expandable to its own detail via `AuditRow`.
+ */
+function GroupedAuditRows({
+  entries,
+  expandedGroup,
+  onToggleGroup,
+  expandedId,
+  onToggleRow,
+  cameraMap,
+  userMap,
+}: {
+  entries: AuditLogEntry[]
+  expandedGroup: boolean
+  onToggleGroup: () => void
+  expandedId: number | null
+  onToggleRow: (id: number) => void
+  cameraMap: Map<string, string>
+  userMap: Map<string, string>
+}) {
+  const head = entries[0]
+  const byTime = [...entries].sort((a, b) => a.created_at.localeCompare(b.created_at))
+  const earliest = byTime[0]
+  const latest = byTime[byTime.length - 1]
+  const targetDisplay = formatTargetDisplayName({
+    targetType: head.target_type,
+    targetRef: head.target_ref,
+    detail: head.detail,
+    cameraMap,
+    userMap,
+  })
+
+  return (
+    <>
+      <TableRow className="cursor-pointer bg-surface-2/40" onClick={onToggleGroup}>
+        <TableCell className="text-fg-muted">
+          {formatFullDateTime(earliest.created_at)} – {formatFullDateTime(latest.created_at)}
+        </TableCell>
+        <TableCell>
+          {head.username ?? (head.actor_type === "system" ? "System" : "Unknown")}
+          {head.role ? (
+            <span className="ml-1 text-caption text-fg-muted">({head.role})</span>
+          ) : null}
+        </TableCell>
+        <TableCell>
+          <span className="inline-flex items-center gap-2">
+            {formatAuditAction(head.action)}
+            <Badge variant="outline" tone="neutral" uppercase={false}>
+              ×{entries.length}
+            </Badge>
+          </span>
+        </TableCell>
+        <TableCell className="text-fg-muted">
+          {head.target_type ? (
+            <span>
+              {formatTargetType(head.target_type)}
+              {targetDisplay ? ` · ${targetDisplay}` : ""}
+            </span>
+          ) : (
+            <span className="text-caption italic text-fg-muted">Not applicable</span>
+          )}
+        </TableCell>
+        <TableCell>
+          <ResultBadge result={head.result} />
+        </TableCell>
+        <TableCell className="text-right">
+          {expandedGroup ? (
+            <RiArrowDownSLine size={16} className="ml-auto text-fg-muted" />
+          ) : (
+            <RiArrowRightSLine size={16} className="ml-auto text-fg-muted" />
+          )}
+        </TableCell>
+      </TableRow>
+      {expandedGroup
+        ? entries.map((entry) => (
+            <AuditRow
+              key={entry.audit_id}
+              entry={entry}
+              expanded={expandedId === entry.audit_id}
+              onToggle={() => onToggleRow(entry.audit_id)}
+              cameraMap={cameraMap}
+              userMap={userMap}
+              nested
+            />
+          ))
+        : null}
     </>
   )
 }
