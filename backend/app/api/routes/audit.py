@@ -39,6 +39,54 @@ def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
+# How close together two rows from the same actor/action/target/result have
+# to be, chained one to the next, to read as one burst rather than two
+# separate decisions — e.g. someone nudging their alarm volume every second
+# or two while listening for the right level. Viewer-only: it never affects
+# what gets written (see AuditLogRead.group_size), only how the list route
+# presents rows that are already there.
+AUDIT_GROUP_GAP_SECONDS = 120
+
+
+def _annotate_groups(
+    logs: list[AuditLog], *, sort_by: str, gap_seconds: int = AUDIT_GROUP_GAP_SECONDS
+) -> list[AuditLogRead]:
+    """Collapses consecutive same-actor/action/target/result rows into
+    visual groups when the page is in `created_at` order — the only order
+    where "consecutive in the array" also means "consecutive in time".
+    Sorting by anything else (action, result, user_id...) leaves every row
+    as its own group of one, since adjacency there says nothing about how
+    close together the events actually happened.
+    """
+    reads = [AuditLogRead.model_validate(log) for log in logs]
+    if sort_by != "created_at":
+        return reads
+
+    start = 0
+    while start < len(reads):
+        end = start + 1
+        while (
+            end < len(reads)
+            and reads[end].action == reads[start].action
+            and reads[end].result == reads[start].result
+            and reads[end].user_id == reads[start].user_id
+            and reads[end].username == reads[start].username
+            and reads[end].target_type == reads[start].target_type
+            and reads[end].target_ref == reads[start].target_ref
+            and abs((reads[end].created_at - reads[end - 1].created_at).total_seconds())
+            <= gap_seconds
+        ):
+            end += 1
+
+        group_size = end - start
+        for index in range(start, end):
+            reads[index].group_size = group_size
+            reads[index].is_group_head = index == start
+        start = end
+
+    return reads
+
+
 def _apply_audit_filters(
     stmt,
     *,
@@ -152,7 +200,7 @@ def list_audit_logs(
 
     return AuditLogListResponse(
         total_filtered=total_filtered,
-        items=[AuditLogRead.model_validate(log) for log in logs],
+        items=_annotate_groups(logs, sort_by=sort_by),
     )
 
 
