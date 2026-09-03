@@ -954,3 +954,34 @@ matrix, where each case maps to exactly one of:
 - a documented manual procedure with recorded measured results,
 - an explicitly external owner (AI model accuracy, physical VLAN/NAS, frontend UI) **with** the
   interface, prerequisite, and acceptance evidence named.
+
+---
+
+## 13. P28-P30 locked follow-up contracts
+
+### 13.1 Incident terminal terminology (P28)
+
+The only true-positive terminal state is `Cleared`. The legal transition is
+`Ongoing -> Cleared`, performed by `POST /api/alerts/{log_id}/clear`, audited and broadcast as
+`ALERT_CLEAR`. The visible action button is also `Cleared` and remains immediate; no confirmation
+step is introduced. `Cleared` means the accident is no longer visible in that camera and detection
+may resume. `Resolved`, `/resolve`, `ALERT_RESOLVE`, and `total_resolved*` are not compatibility
+aliases. Existing detection and audit rows are rewritten by the reviewed migration. Closure actor/
+timestamp field names remain generic because an Ongoing-to-Dismissed correction uses them too.
+
+### 13.2 AI Performance authorization (P29)
+
+AI Performance is Administrator-only at the API, async-job, route, navigation, help, and UAT layers.
+Its sidebar location is the final Administration item after Maintenance. Operators retain Dashboard,
+Detections, System Health, incident/dashboard exports, Profile, and role-appropriate Help. Existing
+Operator-owned performance jobs are no longer listable, readable, or downloadable by that Operator.
+
+### 13.3 Protected and degraded backup storage (P30)
+
+`BACKUP_DIR` remains local fallback plus maintenance-control state. `PROTECTED_BACKUP_DIR` and
+`PROTECTED_ARCHIVE_DIR` are explicit optional absolute targets. `protected` requires a provably
+different physical device from the live database; a different drive letter alone is insufficient.
+Backup/archive creation prefers protected storage and falls back locally as `degraded`. Listing and
+restore use `(storage_tier, backup_id)` identity. Restore state and a verified pre-restore emergency
+reserve stay local so loss of external media cannot erase rollback state. Paths and physical ids are
+never returned or audited.

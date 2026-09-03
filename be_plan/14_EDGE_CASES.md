@@ -273,6 +273,27 @@ edges where a row is invisible but still referenced.
 
 ---
 
+## 11. P28-P30 follow-up edge cases
+
+| # | Case | Pkg | Expected |
+|---|---|---|---|
+| 11.1 | Upgrade a DB containing `Resolved` detections and `ALERT_RESOLVE` audit rows | P28 | Every target row becomes `Cleared`/`ALERT_CLEAR`; all other columns and row counts are identical |
+| 11.2 | Audit migration fails after triggers are dropped | P28 | Transaction rolls back; database is not left writable or half-migrated |
+| 11.3 | Call removed `/resolve` or filter by `Resolved` | P28 | 404 route / 422 filter; no silent alias |
+| 11.4 | Two operators click `Cleared` concurrently | P28 | One transition/audit succeeds, loser gets the normal 409 handler facts |
+| 11.5 | Operator opens `/user/ai` or calls performance APIs directly | P29 | Redirect in UI; 403 from backend before analytics work |
+| 11.6 | Operator owns a legacy async performance job | P29 | Cannot list, poll, or download it; Admin can |
+| 11.7 | Operator creates dashboard/incident export after P29 | P29 | Still succeeds; authorization did not broaden accidentally |
+| 11.8 | Protected path is another partition/junction/SUBST on the DB disk | P30 | Classified unavailable; fallback is visibly degraded |
+| 11.9 | Protected target fails after temp creation but before publication | P30 | Orphans cleaned, valid old backups preserved, local fallback attempted once |
+| 11.10 | Same backup id exists in both roots | P30 | Both rows remain distinct by tier; restore uses the selected tier only |
+| 11.11 | USB disappears before versus after local restore copy | P30 | Before: no DB mutation. After: restore/rollback can finish from local files |
+| 11.12 | Recent degraded backup exists when protected storage returns | P30 | Protected catch-up still runs; degraded freshness cannot mask protected overdue state |
+| 11.13 | Both protected and fallback backups fail during scheduled restart | P30 | Abort before stopping services and record the failure |
+| 11.14 | Test tracker cell is updated | P28-P30 | Only changed content cells receive `#D9EAD3`; validation/formulas/links and neighbors survive readback |
+
+---
+
 ## Coverage gaps that are acceptable
 
 Stated so nobody spends time on them:
