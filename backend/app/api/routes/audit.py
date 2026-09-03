@@ -11,7 +11,11 @@ from app.models import AuditAction, AuditLog, AuditResult, User
 from app.schemas import AuditLogListResponse, AuditLogRead
 from app.services.filters import apply_sort, validate_common_filters
 from app.services.formatting import format_user_name
-from app.services.reports.common import check_row_limit, record_export_attempt
+from app.services.reports.common import (
+    check_row_limit,
+    format_export_datetime,
+    record_export_attempt,
+)
 from app.services.reports.csv_writer import csv_response
 from app.services.reports.pdf_writer import build_audit_pdf
 
@@ -423,7 +427,7 @@ def export_audit_logs(
     rows_iter = (
         [
             log.audit_id,
-            log.created_at.isoformat(),
+            format_export_datetime(log.created_at),
             _actor(log),
             log.action,
             _target(log),
