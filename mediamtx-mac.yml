@@ -1,0 +1,144 @@
+# Dedicated MediaMTX configuration for supervised UAT.
+# Run from the repository root:
+#
+#   mediamtx mediamtx-mac.yml
+#
+# The laptop handler switches phases by commenting the entire active `paths:`
+# profile and uncommenting the next complete `paths:` profile. Save the file,
+# then press Ctrl+C in the MediaMTX terminal followed by Up Arrow and Enter.
+# Do not type or alter clip paths during a participant session.
+#
+# Safety rules:
+# - Keep exactly one complete `paths:` profile uncommented at a time.
+# - Select whole blocks when toggling comments; do not toggle individual lines.
+# - Restart only on the facilitator's cue. A restart briefly reconnects every
+#   simulated camera and restarts all five FFmpeg publishers.
+# - After each participant, activate the OP-J01 to OP-J03 Baseline profile and
+#   verify the expected camera and incident counts before the next session.
+# - Never edit the original clips; they are test-only evaluation assets.
+#
+# Profile order:
+# 1. OP-J01 to OP-J03 — Baseline / Silent
+# 2. OP-J04 to OP-J07 — Multi-Alert and Follow-through
+# 3. OP-J08 to OP-J09 — Recovery and Handover
+# 4. AD-J01 to AD-J04 — Administrator Baseline / Silent
+# 5. AD-J05 to AD-J06 — Post-Restore Positive Alert
+#
+# Positive UAT publishers use scripts/publish-uat-positive-then-silent.sh.
+# Each positive clip plays exactly once per profile activation, then a brief
+# publisher handover returns the RTSP path to the non-alerting airbase feed.
+# Verify that the camera reconnects before continuing. This prevents a resolved
+# camera from generating another fixture alert on the next positive clip loop.
+#
+# OP-J04 note: dekwatro.mp4 and car-motor-motor.mp4 start together. Their
+# recorded events occur roughly 10 seconds apart (about 12.0 s and 21.66 s).
+# Confirm that both real alerts remain queued before participant decisions.
+#
+# TCP publishing is required. UDP dropped RTP packets when five loopback feeds
+# were published concurrently during the project's live verification.
+
+# ---------------------------------------------------------------------------
+# ACTIVE BY DEFAULT: OP-J01 to OP-J03 — BASELINE / SILENT
+# To leave this phase, comment this entire block from `paths:` through channel5.
+# ---------------------------------------------------------------------------
+paths:
+  channel1:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel2:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel3:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel4:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel5:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+
+# ---------------------------------------------------------------------------
+# OP-J04 to OP-J07 — MULTI-ALERT AND FOLLOW-THROUGH
+# Comment the active profile above, then uncomment this entire block.
+# ---------------------------------------------------------------------------
+# paths:
+#   channel1:
+#     runOnInit: bash ./scripts/publish-uat-positive-then-silent.sh -PositiveClip ./ai_engine/eval/clips/dekwatro.mp4 -SilentClip ./ai_engine/eval/clips/airbase.mp4 -RtspUrl rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel2:
+#     runOnInit: bash ./scripts/publish-uat-positive-then-silent.sh -PositiveClip ./ai_engine/eval/clips/car-motor-motor.mp4 -SilentClip ./ai_engine/eval/clips/airbase.mp4 -RtspUrl rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel3:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel4:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel5:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+
+# ---------------------------------------------------------------------------
+# OP-J08 to OP-J09 — RECOVERY AND HANDOVER
+# Comment the OP-J04 to OP-J07 profile, then uncomment this entire block.
+# ---------------------------------------------------------------------------
+# paths:
+#   channel1:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel2:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel3:
+#     runOnInit: bash ./scripts/publish-uat-positive-then-silent.sh -PositiveClip ./ai_engine/eval/clips/red-car-motor.mp4 -SilentClip ./ai_engine/eval/clips/airbase.mp4 -RtspUrl rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel4:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel5:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+
+# ---------------------------------------------------------------------------
+# AD-J01 to AD-J04 — ADMINISTRATOR BASELINE / SILENT
+# Comment the active Operator profile, then uncomment this entire block.
+# ---------------------------------------------------------------------------
+# paths:
+#   channel1:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel2:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel3:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel4:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel5:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+
+# ---------------------------------------------------------------------------
+# AD-J05 to AD-J06 — POST-RESTORE POSITIVE ALERT
+# After AD-J04 restore succeeds, comment the AD-J01 to AD-J04 profile and
+# uncomment this entire block. Channel 1 must be verified clean first.
+# ---------------------------------------------------------------------------
+# paths:
+#   channel1:
+#     runOnInit: bash ./scripts/publish-uat-positive-then-silent.sh -PositiveClip ./ai_engine/eval/clips/dekwatro.mp4 -SilentClip ./ai_engine/eval/clips/airbase.mp4 -RtspUrl rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel2:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel3:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel4:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel5:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
