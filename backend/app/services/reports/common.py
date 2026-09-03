@@ -4,7 +4,9 @@ every export attempt writes, regardless of outcome (success, over-limit
 rejection, or failure).
 """
 
+from datetime import datetime
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from sqlmodel import Session
 
@@ -15,6 +17,26 @@ from app.services import audit as audit_service
 from app.services.cameras import resolve_camera_names
 
 ReportFormat = Literal["csv", "pdf"]
+
+
+def format_export_datetime(value: datetime | None) -> str | None:
+    """Human-readable local timestamp for a report cell, e.g.
+    "Sep 03, 2026 02:15 PM" — the CDRRMO-facing exports show this instead
+    of a raw UTC ISO string. Only applied at the export row-building
+    boundary, never inside a shared data-computation function that also
+    backs a live JSON API (which must keep returning raw values)."""
+    if value is None:
+        return None
+    tz = ZoneInfo(settings.REPORT_LOCAL_TIMEZONE)
+    return value.astimezone(tz).strftime("%b %d, %Y %I:%M %p")
+
+
+def format_confidence_pct(value: float | None) -> str | None:
+    """Human-readable confidence/precision percentage, e.g. "87.3%" instead
+    of the raw decimal `0.8734`."""
+    if value is None:
+        return None
+    return f"{value * 100:.1f}%"
 
 
 def row_limit_for(format: ReportFormat) -> int:
