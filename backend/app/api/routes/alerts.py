@@ -39,7 +39,12 @@ from app.services.incidents import (
     transition,
 )
 from app.services.realtime import RealtimeManager
-from app.services.reports.common import check_row_limit, record_export_attempt
+from app.services.reports.common import (
+    check_row_limit,
+    format_confidence_pct,
+    format_export_datetime,
+    record_export_attempt,
+)
 from app.services.reports.csv_writer import csv_response
 from app.services.reports.pdf_writer import build_incident_pdf
 from app.services.snapshots import resolve as resolve_snapshot
@@ -173,18 +178,18 @@ def _filters_summary(
 def _incident_csv_row(log: DetectionLog) -> list:
     return [
         log.log_id,
-        log.detected_at.isoformat(),
+        format_export_datetime(log.detected_at),
         log.camera_id,
         log.camera.camera_name if log.camera else None,
         log.detection_status,
-        log.confidence_score,
+        format_confidence_pct(log.confidence_score),
         f"/api/alerts/{log.log_id}/snapshot",
         log.verified_by_id,
         format_user_name(log.verified_by),
-        log.verified_at.isoformat() if log.verified_at else None,
+        format_export_datetime(log.verified_at),
         log.closed_by_id,
         format_user_name(log.closed_by),
-        log.closed_at.isoformat() if log.closed_at else None,
+        format_export_datetime(log.closed_at),
     ]
 
 
@@ -197,10 +202,10 @@ INCIDENT_CSV_COLUMNS = [
     "Confidence",
     "Snapshot URL",
     "Verified By ID",
-    "Verified By Name",
+    "Verified By",
     "Verified At",
     "Closed By ID",
-    "Closed By Name",
+    "Closed By",
     "Closed At",
 ]
 
@@ -208,14 +213,14 @@ INCIDENT_CSV_COLUMNS = [
 def _incident_pdf_row(log: DetectionLog) -> list:
     return [
         log.log_id,
-        log.detected_at.isoformat(),
+        format_export_datetime(log.detected_at),
         log.camera.camera_name if log.camera else None,
         log.detection_status,
-        log.confidence_score,
+        format_confidence_pct(log.confidence_score),
         format_user_name(log.verified_by),
-        log.verified_at.isoformat() if log.verified_at else None,
+        format_export_datetime(log.verified_at),
         format_user_name(log.closed_by),
-        log.closed_at.isoformat() if log.closed_at else None,
+        format_export_datetime(log.closed_at),
     ]
 
 

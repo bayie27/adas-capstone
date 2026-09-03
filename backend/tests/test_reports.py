@@ -240,7 +240,7 @@ class TestPdfContent:
         assert len(reader.pages) >= 1
         text = reader.pages[0].extract_text()
         assert "Incident Report" in text
-        assert "A.D.A.S." in text
+        assert "Lipa CDRRMO" in text
         assert "Search:" in text
         assert "Page 1 of" in text
         _assert_no_filesystem_paths(text)

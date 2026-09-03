@@ -539,17 +539,16 @@ class TestExportAlerts:
             "Confidence",
             "Snapshot URL",
             "Verified By ID",
-            "Verified By Name",
+            "Verified By",
             "Verified At",
             "Closed By ID",
-            "Closed By Name",
+            "Closed By",
             "Closed At",
         ]
         assert rows[1][0] == str(log.log_id)
         assert rows[1][3] == "CSV Cam"
         assert rows[1][4] == "Unverified"
-        # D-010 — raw machine-readable value, not a presentation percentage.
-        assert rows[1][5] == "0.8700"
+        assert rows[1][5] == "87.0%"
         assert rows[1][6] == f"/api/alerts/{log.log_id}/snapshot"
         assert rows[1][7] == str(operator.user_id)
         assert rows[1][8] == "Test Operator"
