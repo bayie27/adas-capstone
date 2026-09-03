@@ -37,7 +37,12 @@ from app.services.filters import (
     validate_common_filters,
 )
 from app.services.formatting import format_user_name
-from app.services.reports.common import check_row_limit, record_export_attempt
+from app.services.reports.common import (
+    check_row_limit,
+    format_confidence_pct,
+    format_export_datetime,
+    record_export_attempt,
+)
 from app.services.reports.csv_writer import csv_response
 from app.services.reports.pdf_writer import build_dashboard_pdf, build_performance_pdf
 
@@ -470,17 +475,17 @@ def export_dashboard(
     def _row(log: DetectionLog) -> list:
         return [
             log.log_id,
-            log.detected_at.isoformat(),
+            format_export_datetime(log.detected_at),
             log.camera_id,
             log.camera.camera_name if log.camera else None,
             log.detection_status,
-            log.confidence_score,
+            format_confidence_pct(log.confidence_score),
             log.verified_by_id,
             format_user_name(log.verified_by),
-            log.verified_at.isoformat() if log.verified_at else None,
+            format_export_datetime(log.verified_at),
             log.closed_by_id,
             format_user_name(log.closed_by),
-            log.closed_at.isoformat() if log.closed_at else None,
+            format_export_datetime(log.closed_at),
         ]
 
     rows_iter = (_row(log) for log in session.exec(logs_stmt).yield_per(500))
@@ -494,10 +499,10 @@ def export_dashboard(
             "Status",
             "Confidence",
             "Verified By ID",
-            "Verified By Name",
+            "Verified By",
             "Verified At",
             "Closed By ID",
-            "Closed By Name",
+            "Closed By",
             "Closed At",
         ],
         rows_iter,
@@ -829,10 +834,34 @@ def export_performance(
         camera_names=camera_names,
     )
 
+    def _friendly_kpis(kpis: dict[str, object]) -> dict[str, object]:
+        return {
+            **kpis,
+            "precision_score": format_confidence_pct(kpis["precision_score"]),
+            "avg_accident_confidence": format_confidence_pct(
+                kpis["avg_accident_confidence"]
+            ),
+            "avg_dismissed_confidence": format_confidence_pct(
+                kpis["avg_dismissed_confidence"]
+            ),
+        }
+
+    def _friendly_camera_row(row: dict[str, object]) -> dict[str, object]:
+        return {
+            **row,
+            "precision_score": format_confidence_pct(row["precision_score"]),
+            "avg_accident_confidence": format_confidence_pct(
+                row["avg_accident_confidence"]
+            ),
+            "avg_dismissed_confidence": format_confidence_pct(
+                row["avg_dismissed_confidence"]
+            ),
+        }
+
     if format == "pdf":
         pdf_bytes = build_performance_pdf(
-            global_kpis=data["global_kpis"],
-            per_camera=data["per_camera"],
+            global_kpis=_friendly_kpis(data["global_kpis"]),
+            per_camera=[_friendly_camera_row(row) for row in data["per_camera"]],
             filters_summary=filters_summary,
             requested_by=format_user_name(current_user) or current_user.username,
             generated_at=datetime.now(UTC),
@@ -855,7 +884,7 @@ def export_performance(
             row["avg_accident_confidence"],
             row["avg_dismissed_confidence"],
         ]
-        for row in data["per_camera"]
+        for row in (_friendly_camera_row(row) for row in data["per_camera"])
     )
     return csv_response(
         "adas_performance_export.csv",
