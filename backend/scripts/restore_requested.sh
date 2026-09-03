@@ -14,8 +14,8 @@ AI_SERVICE="${ADAS_AI_SERVICE:-adas-ai-engine.service}"
 READY_TIMEOUT_SECONDS="${ADAS_READY_TIMEOUT_SECONDS:-60}"
 UV_BIN="${ADAS_UV_BIN:-/usr/local/bin/uv}"
 
-if [[ "$#" -ne 1 || ! "$1" =~ ^[0-9a-f]{32}$ ]]; then
-    echo "restore_requested: exactly one valid restore-point identifier is required" >&2
+if [[ "$#" -ne 2 || ! "$1" =~ ^[0-9a-f]{32}$ || ! "$2" =~ ^(protected|degraded)$ ]]; then
+    echo "restore_requested: a valid restore-point identifier and storage tier are required" >&2
     exit 2
 fi
 if [[ ! "$BACKEND_SERVICE" =~ ^[A-Za-z0-9_.@-]+\.service$ || ! "$AI_SERVICE" =~ ^[A-Za-z0-9_.@-]+\.service$ ]]; then
@@ -28,6 +28,7 @@ if [[ ! "$SERVICE_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
 fi
 
 BACKUP_ID="$1"
+STORAGE_TIER="$2"
 
 run_maintenance() {
     runuser -u "$SERVICE_USER" -- env PYTHONPATH="$REPO_ROOT/backend" "$UV_BIN" run python -m app.maintenance "$@"
@@ -50,7 +51,7 @@ if systemctl is-active --quiet "$AI_SERVICE" || systemctl is-active --quiet "$BA
 fi
 
 echo "restore_requested: applying the selected restore point"
-if ! run_maintenance restore "$BACKUP_ID"; then
+if ! run_maintenance restore "$BACKUP_ID" --storage-tier "$STORAGE_TIER"; then
     echo "restore_requested: database work failed; starting the original services" >&2
     if start_services && wait_for_services; then
         exit 1

@@ -38,9 +38,13 @@ run_maintenance() {
 }
 
 log "Phase 1/2: online backup."
-if ! run_maintenance backup --origin scheduled; then
+if ! backup_output=$(run_maintenance backup --origin scheduled); then
     log "ERROR: scheduled backup failed; aborting restart without touching running services."
     exit 1
+fi
+printf '%s\n' "$backup_output"
+if grep -q '"storage_tier": "degraded"' <<<"$backup_output"; then
+    log "WARNING: protected backup storage was unavailable; the verified local degraded backup is being used."
 fi
 
 log "Phase 2/2: restart downtime."

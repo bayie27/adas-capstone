@@ -209,15 +209,15 @@ Accidents = `Ongoing` + `Resolved`; false positives = `Dismissed`; `Unverified` 
 
 ### Settings, audit, exports, help, system — summary
 
-| Area           | Routes                                                                                                                        | Auth                                    |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Alarm settings | `GET`/`PUT /api/settings/alarm`                                                                                               | S                                       |
-| Audit trail    | `GET /api/audit-logs`, `GET /api/audit-logs/export`                                                                           | A                                       |
-| Async exports  | `POST /api/exports/jobs`, `GET /api/exports/jobs/{id}`, `GET /api/exports/jobs/{id}/download`, `POST /api/exports/retraining` | S (job owner or Admin) / A (retraining) |
-| Help Center    | `GET /api/help/articles`, `GET /api/help/articles/{slug}`                                                                     | S, role-filtered                        |
-| System health  | `GET /api/system/health/live`, `GET /api/system/health/history`                                                               | S                                       |
-| Backup/restore | `GET`/`POST /api/system/backups`, `POST /api/system/restores`, `GET /api/system/restores/latest`                              | A                                       |
-| Probes         | `GET /healthz/live`, `GET /healthz/ready`                                                                                     | —                                       |
+| Area           | Routes                                                                                                                                 | Auth                                    |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Alarm settings | `GET`/`PUT /api/settings/alarm`                                                                                                        | S                                       |
+| Audit trail    | `GET /api/audit-logs`, `GET /api/audit-logs/export`                                                                                    | A                                       |
+| Async exports  | `POST /api/exports/jobs`, `GET /api/exports/jobs/{id}`, `GET /api/exports/jobs/{id}/download`, `POST /api/exports/retraining`          | S (job owner or Admin) / A (retraining) |
+| Help Center    | `GET /api/help/articles`, `GET /api/help/articles/{slug}`                                                                              | S, role-filtered                        |
+| System health  | `GET /api/system/health/live`, `GET /api/system/health/history`                                                                        | S                                       |
+| Backup/restore | `GET`/`POST /api/system/backups`, `POST /api/system/restores`, `GET /api/system/restores/latest`, `GET /api/system/maintenance/status` | A                                       |
+| Probes         | `GET /healthz/live`, `GET /healthz/ready`                                                                                              | —                                       |
 
 Full request/response schemas for all of the above are in `app/schemas/` and documented interactively at `/docs`; `be_plan/01_CONTRACTS.md` is the frozen source of truth this backend was built against.
 
@@ -309,25 +309,25 @@ The default suite uses an in-memory SQLite database via the `session` fixture in
 
 **Current coverage** (representative, not exhaustive — every route/service module has a corresponding test file):
 
-| File                                     | What it tests                                                                             |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `test_auth.py`                           | Login/logout, JWT verification, session authority, rate limiting, RBAC, origin validation |
-| `test_users.py`                          | Full user CRUD, self-service, last-admin guards, password rules, soft delete              |
-| `test_alerts.py`                         | Filtering, pagination, export, every HITL transition and its rejection/race cases         |
-| `test_cameras.py`                        | Camera CRUD, KPI/breakdown invariants, desired-state effects                              |
-| `test_camera_reconciliation.py`          | Desired-state derivation from incidents/cooldowns, restart durability                     |
-| `test_internal.py`                       | AI engine webhook (v1/v2), idempotent ingestion, heartbeat contract                       |
-| `test_snoozes.py`                        | Snooze scheduling, expiry, re-snooze, restart recovery                                    |
-| `test_audit.py`                          | Append-only enforcement, transaction coupling, redaction, RBAC, filtering, export         |
-| `test_analytics.py`                      | Dashboard KPIs, AI performance, precision calibration, export parity                      |
-| `test_reports.py`                        | PDF/CSV report contract — headers, pagination, filter summaries, empty states             |
-| `test_exports.py`                        | Async export jobs, retraining package, row limits, artifact lifecycle                     |
-| `test_help.py`                           | Role-filtered articles, FTS5 search + `LIKE` fallback, idempotent seeding                 |
-| `test_system_health.py`                  | Live/historical telemetry, rollup, retention pruning, warning thresholds                  |
-| `test_maintenance.py`                    | Backup/restore/rollback, disk-space guards, concurrency locking                           |
-| `test_realtime.py` / `test_websocket.py` | Handshake, connection limits, backpressure isolation, envelope/broadcast shape            |
-| `test_schema.py`                         | Every DB-level CHECK constraint, FK behavior, and uniqueness rule                         |
-| `perf/`                                  | NFR-04/06/08 and D-008, measured against a real 100,000-row database                      |
+| File                                                       | What it tests                                                                                             |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `test_auth.py`                                             | Login/logout, JWT verification, session authority, rate limiting, RBAC, origin validation                 |
+| `test_users.py`                                            | Full user CRUD, self-service, last-admin guards, password rules, soft delete                              |
+| `test_alerts.py`                                           | Filtering, pagination, export, every HITL transition and its rejection/race cases                         |
+| `test_cameras.py`                                          | Camera CRUD, KPI/breakdown invariants, desired-state effects                                              |
+| `test_camera_reconciliation.py`                            | Desired-state derivation from incidents/cooldowns, restart durability                                     |
+| `test_internal.py`                                         | AI engine webhook (v1/v2), idempotent ingestion, heartbeat contract                                       |
+| `test_snoozes.py`                                          | Snooze scheduling, expiry, re-snooze, restart recovery                                                    |
+| `test_audit.py`                                            | Append-only enforcement, transaction coupling, redaction, RBAC, filtering, export                         |
+| `test_analytics.py`                                        | Dashboard KPIs, AI performance, precision calibration, export parity                                      |
+| `test_reports.py`                                          | PDF/CSV report contract — headers, pagination, filter summaries, empty states                             |
+| `test_exports.py`                                          | Async export jobs, retraining package, row limits, artifact lifecycle                                     |
+| `test_help.py`                                             | Role-filtered articles, FTS5 search + `LIKE` fallback, idempotent seeding                                 |
+| `test_system_health.py`                                    | Live/historical telemetry, rollup, retention pruning, warning thresholds                                  |
+| `test_maintenance.py` / `test_protected_backup_storage.py` | Backup/restore/rollback, disk-space guards, tiered targets, physical-device fallback, concurrency locking |
+| `test_realtime.py` / `test_websocket.py`                   | Handshake, connection limits, backpressure isolation, envelope/broadcast shape                            |
+| `test_schema.py`                                           | Every DB-level CHECK constraint, FK behavior, and uniqueness rule                                         |
+| `perf/`                                                    | NFR-04/06/08 and D-008, measured against a real 100,000-row database                                      |
 
 ---
 
