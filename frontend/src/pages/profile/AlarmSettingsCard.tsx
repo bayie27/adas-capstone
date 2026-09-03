@@ -225,6 +225,30 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
     }, AUTOSAVE_DEBOUNCE_MS)
   }, [clearSaveTimer, flush])
 
+  // In-app navigation away from the Profile page unmounts this card before
+  // a pending debounce fires — flush immediately rather than dropping the
+  // edit. The underlying request isn't tied to the component's lifecycle,
+  // so it completes normally even though nothing is listening for the
+  // result anymore.
+  useEffect(() => {
+    return () => {
+      flush()
+    }
+  }, [flush])
+
+  // Closing the tab or reloading can drop an in-flight request outright, so
+  // this is a stronger guard than the unmount flush above: warn before the
+  // page actually goes away rather than risk losing the edit silently.
+  useEffect(() => {
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      if (!dirty && !mutationRef.current.isPending) return
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [dirty])
+
   function updateField<K extends keyof AlarmSettings>(field: K, value: AlarmSettings[K]) {
     // Fields are disabled while a save is in flight, so this can only run
     // between saves — safe to clear a previous attempt's error state here
