@@ -219,7 +219,7 @@ def build_dashboard_pdf(
         [
             ("Ongoing", kpis["ongoing"]),
             ("Total Accidents", kpis["total_accidents"]),
-            ("Total Resolved", kpis["total_resolved"]),
+            ("Total Cleared", kpis["total_cleared"]),
         ],
     )
 

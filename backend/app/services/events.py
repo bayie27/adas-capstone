@@ -60,7 +60,7 @@ def alert_status_update_event(
     log: DetectionLog, *, action: str, camera_name: str | None
 ) -> EventEnvelope:
     """`action` is one of the §8 catalog's four incident-transition actions
-    (ALERT_CONFIRM / ALERT_DISMISS / ALERT_RESOLVE / ALERT_CORRECTION); the
+    (ALERT_CONFIRM / ALERT_DISMISS / ALERT_CLEAR / ALERT_CORRECTION); the
     actor/timestamp semantics for `handled_by`/`handled_at` follow §10.1 —
     a confirm reports the verifier, every other transition reports the
     closer."""

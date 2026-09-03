@@ -297,7 +297,7 @@ def _pick_free_camera(session: Session) -> int:
     if not candidates:
         raise AppHTTPException(
             409,
-            "Every enabled camera already has an open incident. Resolve or "
+            "Every enabled camera already has an open incident. Clear or "
             "dismiss one first, or pass an explicit camera_id.",
             code="CONFLICT_STATE",
         )

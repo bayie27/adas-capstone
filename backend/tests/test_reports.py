@@ -38,15 +38,15 @@ def _seed_incident_matrix(session: Session):
     # ux_detection_open_camera (01_CONTRACTS.md §3.4) allows at most one
     # OPEN (Unverified/Ongoing) incident per camera at a time — so each
     # camera below carries exactly one open row, plus several terminal
-    # (Dismissed/Resolved) rows.
+    # (Dismissed/Cleared) rows.
     base = datetime(2026, 3, 1, 6, 0, tzinfo=UTC)
     specs = [
         (north, DetectionStatus.UNVERIFIED, 0.91, None, None, 0),
         (north, DetectionStatus.DISMISSED, 0.15, None, operator_a, 1),
-        (north, DetectionStatus.RESOLVED, 0.60, operator_a, operator_a, 2),
+        (north, DetectionStatus.CLEARED, 0.60, operator_a, operator_a, 2),
         (south, DetectionStatus.ONGOING, 0.66, operator_a, None, 3),
         (south, DetectionStatus.DISMISSED, 0.33, None, operator_b, 4),
-        (south, DetectionStatus.RESOLVED, 0.77, operator_b, operator_b, 5),
+        (south, DetectionStatus.CLEARED, 0.77, operator_b, operator_b, 5),
     ]
     logs = []
     for camera, status, confidence, verified_by, closed_by, day_offset in specs:
@@ -92,7 +92,7 @@ def _list_log_ids(client: TestClient, headers: dict, query: str) -> list[int]:
 PARITY_QUERIES = [
     "",
     "status=Unverified",
-    "status=Ongoing&status=Resolved",
+    "status=Ongoing&status=Cleared",
     "status=Dismissed",
     "search=Parity",
     "search=North",
@@ -271,7 +271,7 @@ class TestPdfContent:
                 detected_at=datetime(2026, 4, 1, tzinfo=UTC) + timedelta(minutes=i),
                 snapshot_key=f"multi_{i}.jpg",
                 confidence_score=0.5,
-                detection_status=DetectionStatus.RESOLVED.value,
+                detection_status=DetectionStatus.CLEARED.value,
                 source_event_id=str(uuid.uuid4()),
             )
             session.add(log)
@@ -292,7 +292,7 @@ class TestPdfContent:
         headers = auth_headers(client, "pdfempty", "Operator123")
 
         resp = client.get(
-            "/api/alerts/export?format=pdf&status=Resolved", headers=headers
+            "/api/alerts/export?format=pdf&status=Cleared", headers=headers
         )
         assert resp.status_code == 200
         reader = PdfReader(io.BytesIO(resp.content))
@@ -461,7 +461,7 @@ class TestHostileAndDegenerateInput:
             detected_at=datetime.now(UTC),
             snapshot_key="deactivated.jpg",
             confidence_score=0.5,
-            detection_status=DetectionStatus.RESOLVED.value,
+            detection_status=DetectionStatus.CLEARED.value,
             verified_by_id=operator.user_id,
             verified_at=datetime.now(UTC),
             closed_by_id=operator.user_id,
@@ -497,7 +497,7 @@ class TestHostileAndDegenerateInput:
                 detected_at=datetime.now(UTC),
                 snapshot_key="softdel.jpg",
                 confidence_score=0.5,
-                detection_status=DetectionStatus.RESOLVED.value,
+                detection_status=DetectionStatus.CLEARED.value,
                 source_event_id=str(uuid.uuid4()),
             )
         )
@@ -530,7 +530,7 @@ class TestRowLimitBoundary:
                     + timedelta(minutes=existing + i),
                     snapshot_key=f"boundary_{existing + i}.jpg",
                     confidence_score=0.5,
-                    detection_status=DetectionStatus.RESOLVED.value,
+                    detection_status=DetectionStatus.CLEARED.value,
                     source_event_id=str(uuid.uuid4()),
                 )
             )
@@ -613,7 +613,7 @@ class TestCsvStreamClientDisconnect:
                             detected_at=datetime.now(UTC) - timedelta(minutes=i),
                             snapshot_key=f"streamdc/{i}.jpg",
                             confidence_score=0.5,
-                            detection_status=DetectionStatus.RESOLVED.value,
+                            detection_status=DetectionStatus.CLEARED.value,
                             source_event_id=str(uuid.uuid4()),
                         )
                     )

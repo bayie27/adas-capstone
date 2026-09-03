@@ -101,9 +101,9 @@ Profiles:
   SQLAlchemy Core `insert()` calls rather than 100,000 ORM objects — measured
   at ~33s on the demo laptop (see `be_plan/EVIDENCE.md`). Spread over ~18
   months across the six seeded cameras, with a realistic
-  Resolved/Dismissed/Ongoing/Unverified mix that still respects
+  Cleared/Dismissed/Ongoing/Unverified mix that still respects
   `ux_detection_open_camera` (at most one open incident per camera survives;
-  every other open candidate is demoted to `Resolved`). Snapshot files are
+  every other open candidate is demoted to `Cleared`). Snapshot files are
   not generated — a handful of reused fake keys exercise the
   missing-snapshot-file path. `--count` overrides the row target for a
   faster smoke run. This is what `backend/tests/perf/` seeds itself with a

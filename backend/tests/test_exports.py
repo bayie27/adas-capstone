@@ -585,7 +585,7 @@ class TestArtifactExpiry:
         _make_log(
             session,
             camera,
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             snapshot_key="keep_me.jpg",
         )
 
@@ -948,7 +948,7 @@ class TestRetraining:
         camera = make_camera(session, name="Retrain Cam", channel_id=6)
 
         true_positive = _make_log(
-            session, camera, status=DetectionStatus.RESOLVED, snapshot_key="present.jpg"
+            session, camera, status=DetectionStatus.CLEARED, snapshot_key="present.jpg"
         )
         false_positive = _make_log(
             session,

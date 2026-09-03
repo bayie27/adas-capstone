@@ -37,7 +37,7 @@ _OPEN_STATUSES = (DetectionStatus.UNVERIFIED.value, DetectionStatus.ONGOING.valu
 ALLOWED: dict[tuple[DetectionStatus, DetectionStatus], AuditAction] = {
     (DetectionStatus.UNVERIFIED, DetectionStatus.ONGOING): AuditAction.ALERT_CONFIRM,
     (DetectionStatus.UNVERIFIED, DetectionStatus.DISMISSED): AuditAction.ALERT_DISMISS,
-    (DetectionStatus.ONGOING, DetectionStatus.RESOLVED): AuditAction.ALERT_RESOLVE,
+    (DetectionStatus.ONGOING, DetectionStatus.CLEARED): AuditAction.ALERT_CLEAR,
     (DetectionStatus.ONGOING, DetectionStatus.DISMISSED): AuditAction.ALERT_CORRECTION,
 }
 
@@ -51,8 +51,8 @@ def _describe_handler(
     status = log.detection_status
     if status == DetectionStatus.ONGOING.value:
         return AuditAction.ALERT_CONFIRM.value, log.verified_by, log.verified_at
-    if status == DetectionStatus.RESOLVED.value:
-        return AuditAction.ALERT_RESOLVE.value, log.closed_by, log.closed_at
+    if status == DetectionStatus.CLEARED.value:
+        return AuditAction.ALERT_CLEAR.value, log.closed_by, log.closed_at
     if status == DetectionStatus.DISMISSED.value:
         if log.closed_by_id is not None:
             # Correction (Ongoing -> Dismissed) sets closed_by; an immediate
@@ -239,7 +239,7 @@ def transition(
 
     Actor semantics (§10.1): a transition out of Unverified (confirm or
     immediate dismiss) stamps the *verification* fields; a transition out of
-    Ongoing (resolve or correction) retains verification and stamps the
+    Ongoing (clear or correction) retains verification and stamps the
     *closure* fields instead. Terminal transitions clear snooze state in the
     same UPDATE, which is what makes the in-memory snooze job an
     optimization rather than the correctness mechanism (D-004).
@@ -288,7 +288,7 @@ def dismiss_transition(
     below only *picks* which atomic attempt to make — correctness still
     comes entirely from `transition()`'s conditional UPDATE, which
     re-validates the row's real status at write time. Peeking a terminal
-    status is safe without a race window: Dismissed/Resolved never
+    status is safe without a race window: Dismissed/Cleared never
     transition again (D-002), so that read is already authoritative.
     """
     current = session.get(DetectionLog, log_id, populate_existing=True)

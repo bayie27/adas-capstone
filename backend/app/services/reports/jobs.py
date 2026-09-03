@@ -430,12 +430,12 @@ def _generate_audit(
 
 _RETRAINING_STATUSES = (
     DetectionStatus.ONGOING,
-    DetectionStatus.RESOLVED,
+    DetectionStatus.CLEARED,
     DetectionStatus.DISMISSED,
 )
 _RETRAINING_LABELS = {
     DetectionStatus.ONGOING.value: "true_positive",
-    DetectionStatus.RESOLVED.value: "true_positive",
+    DetectionStatus.CLEARED.value: "true_positive",
     DetectionStatus.DISMISSED.value: "false_positive",
 }
 _RETRAINING_MANIFEST_COLUMNS = [
@@ -619,7 +619,7 @@ def process_export_job(engine: Engine, job_id: str) -> None:
         audit_action = "AUDIT_EXPORT" if job.report_type == "audit" else "REPORT_EXPORT"
         filters_dict = _filters_dict_from_job(job)
         sort_dict = _sort_dict_from_job(job) or None
-        # Resolved once and threaded through both the generator (PDF
+        # Camera names are resolved once and threaded through both the generator (PDF
         # filter-summary header, Step 6) and every record_export_attempt
         # call below (audit row, Step 5) so a camera-filtered job issues
         # exactly one resolve_camera_names query, not two or three.

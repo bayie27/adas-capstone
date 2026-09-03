@@ -59,6 +59,6 @@ if Another Operator Already Acted?](faq-what-happens-if-another-operator-already
 ## If you don't respond right away
 
 The popup and its alarm don't time out. See [What Happens if I Don't Respond to an
-Alert?](faq-what-happens-if-i-dont-respond-to-an-alert). Nothing auto-resolves in your
+Alert?](faq-what-happens-if-i-dont-respond-to-an-alert). Nothing auto-clears in your
 absence, which is exactly why the alarm keeps looping rather than playing once and going
 quiet.

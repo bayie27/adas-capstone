@@ -13,16 +13,16 @@ per-camera charts](/help/dashboard-kpis.png)
 
 ## The three headline numbers
 
-- **Ongoing**: accidents currently confirmed and not yet resolved. This is the same
+- **Ongoing**: accidents currently confirmed and not yet cleared. This is the same
   count shown on the floating ONGOING tray, and it's the number to watch if you want to
-  know how much is currently unresolved right now. See [Reviewing Ongoing Incidents in
+  know how much is currently uncleared right now. See [Reviewing Ongoing Incidents in
   the Tray](reviewing-ongoing-incidents-in-the-tray).
 - **Total Accidents**: every incident that was confirmed, whether it's since been
-  resolved or is still ongoing. This is a running total for the filter you have applied,
+  cleared or is still ongoing. This is a running total for the filter you have applied,
   not a lifetime count of the whole system unless your filter covers all cameras and
   all time.
-- **Total Resolved**: confirmed accidents that have been closed out. Total Accidents
-  minus Total Resolved always equals Ongoing, for the same filter. If those numbers
+- **Total Cleared**: confirmed accidents that have been closed out. Total Accidents
+  minus Total Cleared always equals Ongoing, for the same filter. If those numbers
   don't line up, you're probably looking at two different filters without realizing it.
 
 Dismissed (false-positive) incidents are not counted in any of these three numbers.
