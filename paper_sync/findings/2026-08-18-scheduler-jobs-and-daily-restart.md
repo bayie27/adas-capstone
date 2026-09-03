@@ -1,8 +1,8 @@
 ---
 section: Frameworks and Libraries
 page/s: "p. 163; p. 220"
-required_revision: Document the in-process daily backup and host-level daily restart; correct the NAS storage claim
-notes: NFR-16 and NFR-18 remain correct requirement text. The live audit item 1.12 and tracker row 31 still contain the obsolete "both unimplemented" premise. The maintenance status endpoint exposes the next scheduled backup and the last restart, not a next restart.
+required_revision: Document the in-process daily backup, host-level daily restart, protected external storage with degraded fallback, tiered restore safety, and current archive behavior; correct the NAS storage claim
+notes: NFR-16 and NFR-18 remain correct requirement text. The live audit item 1.12 and tracker row 31 still contain the obsolete "both unimplemented" premise. P30 adds explicit protected and local-degraded storage tiers, tier-aware restore selection, a local emergency reserve, and protected-first archive publishing. The maintenance status endpoint exposes the next scheduled backup, protected availability/freshness, and the last restart, not a next restart. No separate physical USB device was available for the live drill on 2026-09-03, so tracker execution remains pending.
 status: Not started
 assigned_to: Daniboy
 synced: false
@@ -11,20 +11,21 @@ synced: false
 ## Where
 
 The live defense Doc still contains the exact scheduler sentence at native Docs tab
-t.y7ms6bhlk4qn, range 199235–199373, inside the Backend Layer paragraph
-198590–199546. A fresh native PDF export on 2026-08-25 maps it to printed p. 163
-(PDF page 164), not the p. 148 observed in the original snapshot.
+t.y7ms6bhlk4qn, range 197040–197178, inside the Backend Layer paragraph
+196395–197351. A fresh native PDF export maps it to printed p. 163 (PDF page 164),
+not the p. 148 observed in the original snapshot.
 
 The same live Doc has a separate backup-storage claim in the Maintenance and Support
-Plan on printed p. 220 (PDF page 221). The live ADAS_Paper_Audit Doc still has the
-obsolete §1.12 at tab t.0, heading range 31414–31490, and the canonical
+Plan on printed p. 220 (PDF page 221; live range 248561–250173). The live
+ADAS_Paper_Audit Doc still has the obsolete §1.12 at tab t.0, heading range
+31554–32865, and the canonical
 🚩 Action Stream tracker still has the corresponding stale row at A31:H31.
 
 ## Changes
 
 ### 1. Defense paper — Frameworks and Libraries, Backend Layer (FastAPI)
 
-Page/s: p. 163 (PDF page 164; live Docs range t.y7ms6bhlk4qn:199235–199373)
+Page/s: p. 163 (PDF page 164; live Docs range t.y7ms6bhlk4qn:197040–197178; paragraph 196395–197351)
 
 #### OLD
 
@@ -32,25 +33,25 @@ Page/s: p. 163 (PDF page 164; live Docs range t.y7ms6bhlk4qn:199235–199373)
 
 #### NEW
 
-Background tasks, including the automated hourly aggregation of raw hardware telemetry into historical trends and the automated daily database backup, are managed by apscheduler. The daily system restart is scheduled outside the application process by a host-level Windows Scheduled Task (or Linux systemd timer), and the administrative maintenance status endpoint exposes the latest and next scheduled backup plus the last recorded restart.
+Background tasks, including the automated hourly aggregation of raw hardware telemetry into historical trends and the automated daily database backup, are managed by apscheduler. The daily system restart is scheduled outside the application process by a host-level Windows Scheduled Task (or Linux systemd timer). The administrative maintenance status endpoint exposes the latest and next scheduled backup, protected-backup availability and freshness, and the last recorded restart; when the configured protected target is unavailable, the system continues with a visible local degraded backup.
 
 #### Evidence
 
-The live paragraph contains the exact OLD text at Docs indices 199235–199373. The current implementation registers daily_backup and daily_backup_catch_up and performs a startup due-check in backend/app/main.py:259-280; the backup service implements the scheduled and catch-up paths in backend/app/services/maintenance_schedule.py:93-158. The Windows host scheduler is registered by scripts/register-maintenance-task.ps1:3-24,153-187; the Linux production target uses deploy/systemd/adas-maintenance.timer:1-14 and backend/scripts/daily_restart.sh:1-20,40-63.
+The live paragraph contains the exact OLD text at Docs indices 197040–197178 inside paragraph 196395–197351. The current implementation registers daily_backup and daily_backup_catch_up and performs a startup due-check in backend/app/main.py:259-280; the backup service implements the scheduled and catch-up paths in backend/app/services/maintenance_schedule.py:93-158. Protected-target probing and path-free tier/reason handling are implemented in backend/app/maintenance/storage.py:1-384 and backend/app/maintenance/backup.py:475-610. The Windows host scheduler is registered by scripts/register-maintenance-task.ps1:3-24,153-187; the Linux production target uses deploy/systemd/adas-maintenance.timer:1-14 and backend/scripts/daily_restart.sh:1-20,40-63.
 
-GET /api/system/maintenance/status is implemented at backend/app/api/routes/maintenance.py:409-438. Its schema has next_scheduled_backup_at and last_restart, but no next-restart field (backend/app/schemas/maintenance.py:84-92). The scheduler and status behavior are covered by backend/tests/test_maintenance_schedule.py:298-342 and backend/tests/test_maintenance.py:1176-1244,1304-1334.
+GET /api/system/maintenance/status is implemented at backend/app/api/routes/maintenance.py:409-438 and now returns protected_backup_available, protected_backup_reason, protection_state, latest_protected_backup, and protected_backup_overdue alongside the existing backup/restart fields; the schema is in backend/app/schemas/maintenance.py:84-138. The scheduler and status behavior are covered by backend/tests/test_maintenance_schedule.py:298-342, backend/tests/test_maintenance.py:1176-1244,1304-1334, and backend/tests/test_protected_backup_storage.py:1-520.
 
 #### Proposed comment (Defense paper gate)
 
 Previous: Background tasks, including the automated hourly aggregation of raw hardware telemetry into historical trends, are managed by apscheduler.
 
-Codex ID: adas-paper-sync-2026-08-25-scheduler-jobs-and-daily-restart-01
+Codex ID: PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART
 
 Done by Codex.
 
 ### 2. Defense paper — Maintenance and Support Plan, Disaster Recovery Protocols
 
-Page/s: p. 220 (PDF page 221; live Docs range t.y7ms6bhlk4qn:251535–252342)
+Page/s: p. 220 (PDF page 221; live Docs range t.y7ms6bhlk4qn:248561–250173)
 
 #### OLD
 
@@ -58,17 +59,17 @@ Page/s: p. 220 (PDF page 221; live Docs range t.y7ms6bhlk4qn:251535–252342)
 
 #### NEW
 
-Disaster Recovery Protocols: To guarantee operational resilience against catastrophic hardware failures or severe logical corruption, the Administrators are required to execute a manual "Bi-Annual Restore Drill." This proactive maintenance protocol involves manually retrieving a validated database backup and its associated visual snapshots from the system's generated maintenance archive. Supervisors must then deploy this backup into a secure, localized staging environment entirely isolated from the production network. This drill strictly validates the integrity of the archived data, verifies the efficacy of the "Flag and Restart" restoration architecture, and ensures that agency personnel maintain the technical readiness required to execute a rapid system recovery during a critical emergency.
+Disaster Recovery Protocols: To guarantee operational resilience against catastrophic hardware failures or severe logical corruption, the Administrators are required to execute a manual "Bi-Annual Restore Drill." This proactive maintenance protocol involves manually retrieving a validated database backup and its associated visual snapshots from the system's generated maintenance archive, preferring the explicitly configured protected external storage when it is available and using the local degraded archive otherwise. Supervisors must then deploy this backup into a secure, localized staging environment entirely isolated from the production network. This drill strictly validates the integrity of the archived data, verifies the efficacy of the "Flag and Restart" restoration architecture, and ensures that agency personnel maintain the technical readiness required to execute a rapid system recovery during a critical emergency.
 
 #### Evidence
 
-This is an incidental storage-location correction found while tracing the daily backup. The implementation stores database backups under BACKUP_DIR and snapshots under SNAPSHOT_ROOT (backend/app/core/config.py:60-68). backend/app/maintenance/archive.py:1-7,104-179 builds a generated archive from a verified database backup, its manifest, and the snapshots referenced by that backup; backend/app/maintenance/cli.py:193-214 writes it under the configured archive directory. No code establishes an external NAS integration, so the paper should not present NAS as an implemented storage location.
+This is an incidental storage-location correction found while tracing the daily backup. The implementation stores database backups under BACKUP_DIR and snapshots under SNAPSHOT_ROOT (backend/app/core/config.py:60-72). backend/app/maintenance/archive.py:1-7,130-309 builds a generated archive from a verified database backup, its manifest, and the snapshots referenced by that backup, using protected-first publication with local degraded fallback; backend/app/maintenance/cli.py:332-382 selects the backup's source tier and reports the archive tier without exposing paths. No code establishes an external NAS integration, so the paper should not present NAS as an implemented storage location. The available P30 configuration is an explicitly mounted path checked by a physical-device probe, not removable-media autodiscovery.
 
 #### Proposed comment (Defense paper gate)
 
 Previous: Disaster Recovery Protocols: To guarantee operational resilience against catastrophic hardware failures or severe logical corruption, the Administrators are required to execute a manual "Bi-Annual Restore Drill." This proactive maintenance protocol involves manually download the scheduled database backup and its associated visual snapshots from the air-gapped Network Attached Storage (NAS). Supervisors must then deploy this backup into a secure, localized staging environment entirely isolated from the production network. This drill strictly validates the integrity of the archived data, verifies the efficacy of the "Flag and Restart" restoration architecture, and ensures that agency personnel maintain the technical readiness required to execute a rapid system recovery during a critical emergency.
 
-Codex ID: adas-paper-sync-2026-08-25-scheduler-jobs-and-daily-restart-02
+Codex ID: PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART
 
 Done by Codex.
 
@@ -94,15 +95,15 @@ Page/s: unconfirmed (live Docs tab t.0; heading range 31414–31490)
 
 1.12 NFR-16 and NFR-18 are implemented; the paper's maintenance description is incomplete
 
-NFR-16 and NFR-18 are now satisfied. The daily backup is scheduled by the application, while the daily restart is scheduled by the host because it must stop and start the application services. The paper's Frameworks and Libraries description names only hourly telemetry aggregation and should be expanded to name both mechanisms and the maintenance status information they expose. This is documentation drift, not an unimplemented-requirement finding.
+NFR-16 and NFR-18 are now satisfied. The daily backup is scheduled by the application, while the daily restart is scheduled by the host because it must stop and start the application services. Normal backups prefer the explicitly configured protected physical device and continue under a visible local degraded tier when that target is absent or unsafe; the backup list and restore request identify both the storage tier and backup id. Restore safety keeps control state and a verified pre-restore emergency reserve on the local device, and generated archives follow the same protected-first/degraded-fallback policy. The paper's Frameworks and Libraries description should name these mechanisms and the maintenance status information they expose. This is documentation drift, not an unimplemented-requirement finding.
 
 #### Evidence
 
 backend/app/main.py:259-280 registers the in-process daily backup cron job, its hourly catch-up job, and the lifespan-startup due-check. scripts/register-maintenance-task.ps1:13-24,153-187 registers the Windows task DailyRestart; deploy/systemd/adas-maintenance.timer:1-14 is the Linux production-target timer. The host-level split is intentional because the restart orchestrator must stop and start the backend and AI-engine processes.
 
-The status route returns last_scheduled_backup, next_scheduled_backup_at, backup_overdue, maintenance_hour_local, maintenance_timezone, last_restart, and latest_restore (backend/app/api/routes/maintenance.py:409-438; backend/app/schemas/maintenance.py:84-92). It does not expose a next restart time.
+The status route returns last_scheduled_backup, next_scheduled_backup_at, backup_overdue, maintenance_hour_local, maintenance_timezone, last_restart, latest_restore, protected-backup availability/reason, protection_state, latest_protected_backup, and protected_backup_overdue (backend/app/api/routes/maintenance.py:409-438,598-732; backend/app/schemas/maintenance.py:84-138). It does not expose a next restart time. Restore state includes the selected tier and the local emergency tier, and the coordinator can leave a durable manual_intervention state when rollback fails (backend/app/maintenance/restore.py:67-112,520-790; backend/app/maintenance/coordinator.py:62-80).
 
-The paper's NFR-16 and NFR-18 text is still correct on printed pp. 74–75 (PDF pages 75–76), and no separate scheduler mechanism is described in Deployment and Implementation. The restore narrative on printed pp. 152–153 (PDF pages 153–154) describes operator-initiated restore orchestration, not the unattended daily restart. The separate NAS wording is covered by change 2 in this finding.
+The paper's NFR-16 and NFR-18 text is still correct on printed pp. 74–75 (PDF pages 75–76), and no separate scheduler mechanism is described in Deployment and Implementation. The restore narrative on printed pp. 152–153 (PDF pages 153–154) describes operator-initiated restore orchestration, not the unattended daily restart; the tier-aware selection and local emergency reserve are the P30 additions that should be reflected in the maintenance description. The separate NAS wording is covered by change 2 in this finding.
 
 #### Proposed comment (Audit + tracker gate)
 
@@ -118,7 +119,7 @@ Compounding this, the Maintenance and Support Plan refers to downloading "the sc
 
 These are code gaps, not documentation errors. Two honest paths for each: implement the scheduled job (a trigger="cron", hour=MAINTENANCE_HOUR_LOCAL entry alongside the existing jobs, which is a small change given the setting already exists), or restate the requirements as orchestrator-driven with the operational procedure documented. Which is right is a team decision — flagged here so it isn't discovered live.
 
-Codex ID: adas-paper-sync-2026-08-25-scheduler-jobs-and-daily-restart-03
+Codex ID: PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART
 
 Done by Codex.
 
@@ -132,11 +133,11 @@ Page/s: 🚩 Action Stream!A31:H31
 
 #### NEW
 
-Major | Frameworks and Libraries, Maintenance and Support Plan, NFR-16, NFR-18 | 74-75, 163, 220 | 1.12 Replace the obsolete unimplemented note; document the in-process daily backup and host-level daily restart | NFR-16 and NFR-18 are implemented. Update Frameworks and Libraries p. 163 and correct the separate air-gapped NAS storage claim on p. 220. ADAS_Paper_Audit §1.12 also needs replacement. | Not started | Daniboy | blank
+Major | Frameworks and Libraries, Maintenance and Support Plan, NFR-16, NFR-18 | 74-75, 163, 220 | 1.12 Replace the obsolete unimplemented note; document scheduled restart/backup ownership, protected storage with degraded fallback, tier-aware restore safety, and current archive behavior | NFR-16 and NFR-18 are implemented. Update Frameworks and Libraries p. 163, correct the separate air-gapped NAS storage claim on p. 220, and describe protected-first/local-degraded backup, tiered restore, local emergency reserve, and protected-first archive behavior. ADAS_Paper_Audit §1.12 also needs replacement. | Not started | Daniboy | blank
 
 #### Evidence
 
-The live Sheet metadata identifies 🚩 Action Stream as the canonical tab (sheetId 1620600289). The full row was read from A31:H31 on 2026-08-25; the H-column Reviewed by cell is blank and is preserved. The duplicate Copy of 🚩 Action Stream row 31 was also read but is not targeted because existing paper-sync updates use the canonical 🚩 Action Stream tab.
+The live Sheet metadata identifies 🚩 Action Stream as the canonical tab (sheetId 1620600289). The full row was read from A31:H31 on 2026-09-03; the H-column Reviewed by cell is blank and is preserved. The duplicate Copy of 🚩 Action Stream row 31 was also read but is not targeted because existing paper-sync updates use the canonical 🚩 Action Stream tab.
 
 The proposed page values use the current live rendered pagination: NFR-16/NFR-18 are printed pp. 74–75, the primary scheduler sentence is p. 163, and the separate maintenance-plan sentence is p. 220.
 
@@ -144,7 +145,147 @@ The proposed page values use the current live rendered pagination: NFR-16/NFR-18
 
 Previous: Major | NFR-16, NFR-18 | 65 | 1.12 NFR-16 (daily restart) and NFR-18 (daily backup) are both unimplemented | Either implement the scheduled cron jobs, or restate the requirements as orchestrator-driven. | Completed | Daniboy | blank
 
-Codex ID: adas-paper-sync-2026-08-25-scheduler-jobs-and-daily-restart-04
+Codex ID: PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART
+
+Done by Codex.
+
+### 5. ADAS Test Execution Tracker — `Backup & Recovery`!A2:J6
+
+Page/s: `Backup & Recovery`!A2:J6 (sheetId 3000007)
+
+#### OLD
+
+The first five data rows are blank. The header row is `Test ID | Requirement / Objective | Scenario | Preconditions / Steps | Expected Result / Acceptance | Date Executed | Result | Actual Result / Notes | Evidence Link | Defect / Retest Note`. The blank `Result` cells retain the existing validation options `Not Executed`, `Pass`, `Fail`, `Blocked`, and `Retest Required`.
+
+#### NEW
+
+| Test ID   | Requirement / Objective | Scenario                                               | Preconditions / Steps                                                                                                                                                                                       | Expected Result / Acceptance                                                                                                                                                                                                             | Date Executed | Result       | Actual Result / Notes                                                | Evidence Link | Defect / Retest Note |
+| --------- | ----------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------ | -------------------------------------------------------------------- | ------------- | -------------------- |
+| TC-BR-001 | NFR-18                  | Protected backup, combined listing, and validation     | Mount the configured protected target after the separate-physical-device probe passes. Create a backup under normal write load. Inspect its manifest and the combined backup listing.                       | The protected artifact has a Valid manifest; the listing retains protected and local rows with tier labels; no path or device identifier is exposed.                                                                                     | blank         | Not Executed | Automated coverage exists; live physical-device evidence is pending. | blank         | blank                |
+| TC-BR-002 | NFR-18                  | External restore and local rollback                    | Select a protected backup by exact storage tier plus backup id. Run separate restore drills with media loss before verification/copy and after the local restore copy. Exercise readiness-failure rollback. | Pre-copy media loss fails without a live-database swap; post-copy loss can finish; readiness failure rolls back from a verified local emergency reserve; rollback failure is durable manual_intervention and never success.              | blank         | Not Executed | Automated coverage exists; live physical-device evidence is pending. | blank         | blank                |
+| TC-BR-003 | NFR-18                  | Degraded fallback warning                              | Use a missing, read-only, full, or same-device protected target and run a manual or scheduled backup.                                                                                                       | The local fallback is created and listed as degraded with a path-free reason and visible warning; existing local artifacts remain intact; both-target failure returns failure without lifecycle shutdown.                                | blank         | Not Executed | Automated coverage exists; live physical-device evidence is pending. | blank         | blank                |
+| TC-BR-004 | NFR-18                  | Reinsertion, protected catch-up, and scheduled restart | Create a recent degraded scheduled backup while protected storage is unavailable. Reconnect the protected target and run startup/hourly catch-up and the scheduled-restart backup phase.                    | Recent degraded continuity is accepted; protected overdue remains visible and one protected catch-up occurs after reinsertion; restart continues after a valid degraded backup and aborts before service stop only if both targets fail. | blank         | Not Executed | Automated coverage exists; live physical-device evidence is pending. | blank         | blank                |
+| TC-BR-005 | NFR-18                  | Protected archive placement and contents               | With a valid backup and referenced snapshots, generate an archive while the protected archive target is available, then repeat with it unavailable.                                                         | Archive publication follows protected-first/degraded-fallback, includes the database, manifest, snapshots, and portable model, excludes credentials, and reports tier/reason without paths.                                              | blank         | Not Executed | Automated coverage exists; live physical-device evidence is pending. | blank         | blank                |
+
+#### Evidence
+
+The read-only pre-write Sheet readback on 2026-09-03 returned only the header in `Backup & Recovery`!A1:J6; rows 2–6 were blank while the `Result` column validation existed. The automated P30 coverage is in backend/tests/test_protected_backup_storage.py:1-520. The Windows read-only inventory found one fixed NVMe disk and no removable/separate physical device, so no live rows are marked Pass and no evidence link is fabricated. The proposed rows preserve the existing validation and leave execution/result/evidence fields pending.
+
+#### Proposed comment (Test tracker gate)
+
+Previous: `Backup & Recovery`!A2:J6 was blank; the `Result` cells retained the existing validation list.
+
+Codex ID: PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART
+
+Done by Codex.
+
+### 6. ADAS Test Execution Tracker — `UAT Journeys`!D14, G14 (AD-J04)
+
+Page/s: `UAT Journeys`!D14, G14
+
+#### OLD
+
+`D14`
+
+```text
+System Handler
+1. Use the isolated UAT environment after all Operator sessions and AD-J01–AD-J03.
+2. Check readiness: Invoke-RestMethod http://localhost:8000/healthz/ready
+3. Ensure there is no Unverified alert before opening Maintenance.
+4. Prepare one known historical incident and the expected camera configuration.
+5. Mark the new manual backup created in this stage as the restore target.
+
+Logger
+1. Record the known historical incident and expected camera configuration.
+
+Facilitator
+1. Keep the Administrator password available only to the assigned participant.
+```
+
+`G14`
+
+```text
+1. Administrator-specific Help Center guidance is retrievable.
+2. Only the Administrator can initiate backup/restore.
+3. The newly created backup reaches Valid before selection.
+4. The exact same backup is restored, preventing loss of the completed UAT participant accounts, actions, audit evidence, and prepared state.
+5. Password and exact-text safeguards work.
+6. Service returns Ready; participant understanding is evaluated here, while the strict 60-second NFR-18 measurement remains in the technical Backup & Recovery activity.
+7. Any failure/deviation is recorded.
+```
+
+#### NEW
+
+`D14`
+
+```text
+System Handler
+1. Use the isolated UAT environment after all Operator sessions and AD-J01–AD-J03.
+2. Check readiness: Invoke-RestMethod http://localhost:8000/healthz/ready
+3. Ensure there is no Unverified alert before opening Maintenance.
+4. Prepare one known historical incident and the expected camera configuration.
+5. Record the new manual backup's exact storage tier and backup id; mark that tier/id as the restore target.
+
+Logger
+1. Record the known historical incident and expected camera configuration.
+
+Facilitator
+1. Keep the Administrator password available only to the assigned participant.
+```
+
+`G14`
+
+```text
+1. Administrator-specific Help Center guidance is retrievable.
+2. Only the Administrator can initiate backup/restore.
+3. The newly created backup reaches Valid before selection and its storage tier is recorded.
+4. The exact same storage tier and backup id are restored, preventing loss of the completed UAT participant accounts, actions, audit evidence, and prepared state.
+5. Password and exact-text safeguards work.
+6. Service returns Ready; participant understanding is evaluated here, while the strict 60-second NFR-18 measurement remains in the technical Backup & Recovery activity.
+7. Any failure/deviation is recorded, including a visible degraded-storage warning when the protected target is unavailable.
+```
+
+#### Evidence
+
+The exact AD-J04 row was read from `UAT Journeys`!A14:I14 on 2026-09-03. The current journey names the new backup but does not record the required P30 storage tier, so only D14 and G14 are proposed for change. The live run remains pending because no separate physical device was available; the `Result`, `Assistance`, `Notes`, and `Evidence` fields are not changed by this local finding.
+
+#### Proposed comment (Test tracker gate)
+
+Previous: D14 — “Mark the new manual backup created in this stage as the restore target.” G14 — “The newly created backup reaches Valid before selection.” and “The exact same backup is restored, preventing loss of the completed UAT participant accounts, actions, audit evidence, and prepared state.”
+
+Codex ID: PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART
+
+Done by Codex.
+
+### 7. ADAS Test Execution Tracker — `UAT Traceability`!D38, E38, G38 (NFR-18)
+
+Page/s: `UAT Traceability`!D38, E38, G38
+
+#### OLD
+
+`D38`: `AD-J04; AD-J05; Backup & Recovery`
+
+`E38`: `Execution Log / Session Control; linked evidence`
+
+`G38`: `UAT evaluates understandable backup selection, restoration safeguards, restored state, and fresh post-recovery alerting. The strict 60-second recovery measurement remains in the technical Backup & Recovery activity.`
+
+#### NEW
+
+`D38`: `AD-J04; AD-J05; Backup & Recovery (TC-BR-001–TC-BR-005)`
+
+`E38`: `Backup & Recovery; Execution Log / Session Control; linked evidence`
+
+`G38`: `UAT evaluates understandable tier-labeled backup selection, restoration safeguards, restored state, and fresh post-recovery alerting. Protected-versus-degraded fallback warnings and the local rollback reserve are covered by the technical Backup & Recovery activity; the strict 60-second recovery measurement remains there.`
+
+#### Evidence
+
+The exact NFR-18 row was read from `UAT Traceability`!A38:G38 on 2026-09-03. Its current mapping already includes AD-J04, AD-J05, and Backup & Recovery; the proposed change names the five P30 technical rows and clarifies that tier-aware fallback and rollback evidence belongs to the technical activity. No live Sheet write was made.
+
+#### Proposed comment (Test tracker gate)
+
+Previous: D38 — `AD-J04; AD-J05; Backup & Recovery`. E38 — `Execution Log / Session Control; linked evidence`. G38 — `UAT evaluates understandable backup selection, restoration safeguards, restored state, and fresh post-recovery alerting. The strict 60-second recovery measurement remains in the technical Backup & Recovery activity.`
+
+Codex ID: PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART
 
 Done by Codex.
 
@@ -154,9 +295,17 @@ Done by Codex.
 - Use Case 12 already distinguishes scheduled and manual backups, and Use Case 13 plus the restore architecture already describe operator-initiated restore orchestration. These are not the unattended daily scheduler and do not need wording changes for this finding.
 - TC-R-303 describes the restart scenario and expected result but does not claim that APScheduler owns the restart; it remains unchanged.
 - Deployment and Implementation contains no separate scheduler-ownership sentence. The Frameworks and Libraries replacement is the single primary implementation-narrative site.
+- The `Backup & Recovery` tab remains execution-pending: automated tests do not substitute for the requested live protected-device drill, and the read-only Windows inventory found no separate physical disk.
 
-## Approval gates
+## Approval / sync ledger
 
-1. **Defense paper** — blocks 1–2 and their attached Previous comments.
-2. **ADAS_Paper_Audit plus tracker Sheet** — blocks 3–4 and their attached Previous comments.
-3. **Standalone comments** — none proposed.
+Package ID: `PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART`
+
+| Target                                   | Approved scope                                                                                                   | Applied/read back                                                                                             | Skipped/pending                                                                                                                      | Blocked                                                                           |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Defense paper                            | Blocks 1–2 and their attached comments                                                                           | Local exact replacements amended; no live Docs write or readback in this pass                                 | Blocks 1–2 require the defense-paper approval gate                                                                                   | —                                                                                 |
+| ADAS_Paper_Audit plus `🚩 Action Stream` | Blocks 3–4 and their attached comments                                                                           | Local exact replacements amended; no live Doc/Sheet write or readback in this pass                            | Blocks 3–4 require the combined audit/tracker approval gate                                                                          | —                                                                                 |
+| ADAS Test Execution Tracker              | Blocks 5–7 and their attached comments; preserve existing `#D9EAD3`, validation, formatting, formulas, and links | Live ranges were read-only verified on 2026-09-03; exact local proposals recorded; no live Sheet write        | Blocks 5–7 require the separate test-tracker approval gate; all five new rows remain `Not Executed` pending physical-device evidence | —                                                                                 |
+| Local companion records                  | Amended finding, regenerated `paper_sync/TRACKER.md`, and P30 edge-coverage row                                  | Applied in this Git worktree; tracker regenerated after the finding edit                                      | —                                                                                                                                    | —                                                                                 |
+| Live protected-device drill              | TC-BR-001 through TC-BR-005 execution/evidence                                                                   | Read-only inventory found one fixed internal NVMe disk and no separate USB/removable disk; no drill attempted | A confirmed separate physical device and demo-database window are required                                                           | Live execution is blocked by device availability, not treated as a passing result |
+| Standalone comments                      | None proposed                                                                                                    | —                                                                                                             | None                                                                                                                                 | —                                                                                 |
