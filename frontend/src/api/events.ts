@@ -107,7 +107,7 @@ const EVENT_TYPES: RealtimeEventType[] = [
   "RE_ALARM",
   "MAINTENANCE_NOTICE",
 ]
-const ALERT_STATUS_VALUES: AlertStatus[] = ["Unverified", "Ongoing", "Dismissed", "Resolved"]
+const ALERT_STATUS_VALUES: AlertStatus[] = ["Unverified", "Ongoing", "Dismissed", "Cleared"]
 const CAMERA_CONNECTION_STATUS_VALUES: CameraConnectionStatus[] = [
   "Connected",
   "Disconnected",

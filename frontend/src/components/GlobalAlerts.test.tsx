@@ -16,7 +16,7 @@ vi.mock("@/api/alerts", async () => {
     snoozeAlert: vi.fn(),
     dismissAlert: vi.fn(),
     confirmAlert: vi.fn(),
-    resolveAlert: vi.fn(),
+    clearAlert: vi.fn(),
   }
 })
 

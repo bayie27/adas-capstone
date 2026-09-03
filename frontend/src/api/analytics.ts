@@ -5,7 +5,7 @@ import type { ExportFormat } from "@/components/ui/ExportButton"
 export interface DashboardAnalyticsKpis {
   ongoing: number
   total_accidents: number
-  total_resolved: number
+  total_cleared: number
   /**
    * Percentage change against the previous window of the same duration,
    * with the same camera filter applied (`schemas/analytics.py:15-17`).
@@ -17,7 +17,7 @@ export interface DashboardAnalyticsKpis {
    */
   ongoing_delta_pct: number | null
   total_accidents_delta_pct: number | null
-  total_resolved_delta_pct: number | null
+  total_cleared_delta_pct: number | null
 }
 
 export interface DashboardLocationFrequency {

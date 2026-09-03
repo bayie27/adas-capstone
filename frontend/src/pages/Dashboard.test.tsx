@@ -13,7 +13,6 @@ vi.mock("@/api/cameras", async () => {
   const actual = await vi.importActual<typeof import("@/api/cameras")>("@/api/cameras")
   return { ...actual, getCameras: vi.fn().mockResolvedValue({ cameras: [] }) }
 })
-
 import { getDashboardAnalytics } from "@/api/analytics"
 
 function response(kpis: DashboardAnalyticsResponse["kpis"]): DashboardAnalyticsResponse {
@@ -35,10 +34,10 @@ describe("Dashboard KPI delta badges", () => {
       response({
         ongoing: 3,
         total_accidents: 10,
-        total_resolved: 7,
+        total_cleared: 7,
         ongoing_delta_pct: null,
         total_accidents_delta_pct: null,
-        total_resolved_delta_pct: null,
+        total_cleared_delta_pct: null,
       }),
     )
     renderDashboard()
@@ -51,10 +50,10 @@ describe("Dashboard KPI delta badges", () => {
       response({
         ongoing: 3,
         total_accidents: 10,
-        total_resolved: 7,
+        total_cleared: 7,
         ongoing_delta_pct: null,
         total_accidents_delta_pct: 12.5,
-        total_resolved_delta_pct: null,
+        total_cleared_delta_pct: null,
       }),
     )
     renderDashboard()
@@ -62,15 +61,15 @@ describe("Dashboard KPI delta badges", () => {
     expect(delta).toHaveClass("text-danger")
   })
 
-  it("more resolved (positive delta) reads as good news -- success tone", async () => {
+  it("more cleared (positive delta) reads as good news -- success tone", async () => {
     vi.mocked(getDashboardAnalytics).mockResolvedValue(
       response({
         ongoing: 3,
         total_accidents: 10,
-        total_resolved: 7,
+        total_cleared: 7,
         ongoing_delta_pct: null,
         total_accidents_delta_pct: null,
-        total_resolved_delta_pct: 8,
+        total_cleared_delta_pct: 8,
       }),
     )
     renderDashboard()
@@ -83,10 +82,10 @@ describe("Dashboard KPI delta badges", () => {
       response({
         ongoing: 5,
         total_accidents: 10,
-        total_resolved: 7,
+        total_cleared: 7,
         ongoing_delta_pct: 20,
         total_accidents_delta_pct: null,
-        total_resolved_delta_pct: null,
+        total_cleared_delta_pct: null,
       }),
     )
     renderDashboard()
@@ -99,10 +98,10 @@ describe("Dashboard KPI delta badges", () => {
       response({
         ongoing: 3,
         total_accidents: 10,
-        total_resolved: 7,
+        total_cleared: 7,
         ongoing_delta_pct: null,
         total_accidents_delta_pct: -5,
-        total_resolved_delta_pct: null,
+        total_cleared_delta_pct: null,
       }),
     )
     renderDashboard()
@@ -115,10 +114,10 @@ describe("Dashboard KPI delta badges", () => {
       response({
         ongoing: 3,
         total_accidents: 10,
-        total_resolved: 7,
+        total_cleared: 7,
         ongoing_delta_pct: null,
         total_accidents_delta_pct: 0,
-        total_resolved_delta_pct: null,
+        total_cleared_delta_pct: null,
       }),
     )
     renderDashboard()

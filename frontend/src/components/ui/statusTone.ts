@@ -8,7 +8,7 @@ import type { CameraAiStatus, CameraConnectionStatus } from "@/api/cameras"
  * living in a utils module, returning Tailwind class strings, which is where
  * hardcoded colour hides best. §2.2 assigns the meanings:
  *
- *   success  Connected, Active, Resolved
+ *   success  Connected, Active, Cleared
  *   warning  Reconnecting, Paused, Ongoing
  *   danger   Disconnected, Unresponsive, Inactive
  *   neutral  Dismissed, and anything terminal without a signal
@@ -32,7 +32,7 @@ export const TONE_CLASS: Record<StatusTone, string> = {
 
 export function getAlertStatusTone(status: AlertStatus): StatusTone {
   if (status === "Ongoing") return "warning"
-  if (status === "Resolved") return "success"
+  if (status === "Cleared") return "success"
   // Unverified reads as plain foreground rather than a semantic colour — the
   // alert dialog is already carrying the alarm — and Dismissed recedes to
   // muted. This matches what the pages render today, so the screen phases

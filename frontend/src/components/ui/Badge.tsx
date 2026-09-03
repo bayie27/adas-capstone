@@ -6,7 +6,7 @@ import { cn } from "@/utils/cn"
  * The `Badge Primary` component from the Figma frames, in the three shapes
  * the screens actually draw:
  *
- * - `solid`   the status badge on the accident modals (ONGOING / RESOLVED),
+ * - `solid`   the status badge on the accident modals (ONGOING / CLEARED),
  *             a filled pill with --color-fg-on-primary text.
  * - `subtle`  the tinted pill: the Online/Offline status dot on System Health
  *             and the delta indicators on the KPI cards, using the
