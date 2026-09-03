@@ -14,6 +14,8 @@ const backup: BackupRead = {
   file_size: 2048,
   valid: true,
   checks: { checksum: true, quick_check: true, foreign_key_check: true },
+  storage_tier: "protected",
+  storage_reason: null,
 }
 
 function renderModal() {

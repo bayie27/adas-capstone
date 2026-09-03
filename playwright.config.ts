@@ -87,6 +87,10 @@ export default defineConfig({
         {
           command: "uv run fastapi run backend/app/main.py --port 8000",
           url: "http://127.0.0.1:8000/docs",
+          // FastAPI's Rich startup banner contains an emoji.  The Playwright
+          // web server is a detached Windows process, so pin UTF-8 here just
+          // as the controlled maintenance/startup launchers do.
+          env: { ...process.env, PYTHONUTF8: "1" },
           reuseExistingServer: !process.env.CI,
           timeout: 60_000,
         },

@@ -31,6 +31,10 @@ function formatBackupOrigin(origin: string) {
   return origin
 }
 
+function formatStorageTier(tier: BackupRead["storage_tier"]) {
+  return tier === "protected" ? "Protected storage" : "Local degraded"
+}
+
 /**
  * The selected BackupRead object is kept intact from the table through this
  * modal. The summary is repeated immediately before the two confirmation
@@ -63,6 +67,7 @@ export function RestoreConfirmModal({ backup, onClose, onSuccess }: RestoreConfi
     if (!canSubmit) return
     mutation.mutate({
       backup_id: backup.backup_id,
+      storage_tier: backup.storage_tier,
       current_password: password,
       confirmation,
     })
@@ -90,6 +95,16 @@ export function RestoreConfirmModal({ backup, onClose, onSuccess }: RestoreConfi
             <dd className="text-right text-fg">{formatFullDateTime(backup.created_at)}</dd>
             <dt className="text-fg-muted">Origin</dt>
             <dd className="text-right text-fg">{formatBackupOrigin(backup.origin)}</dd>
+            <dt className="text-fg-muted">Storage tier</dt>
+            <dd className="text-right text-fg">{formatStorageTier(backup.storage_tier)}</dd>
+            {backup.storage_reason ? (
+              <>
+                <dt className="text-fg-muted">Fallback reason</dt>
+                <dd className="text-right text-warning">
+                  {backup.storage_reason.replaceAll("_", " ")}
+                </dd>
+              </>
+            ) : null}
             <dt className="text-fg-muted">Size</dt>
             <dd className="text-right text-fg">{formatFileSize(backup.file_size)}</dd>
             <dt className="text-fg-muted">Validation</dt>
