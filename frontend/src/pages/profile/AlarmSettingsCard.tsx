@@ -271,14 +271,18 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
   return (
     <Card className={cn("p-8", className)}>
       <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-[18px] font-semibold text-fg">Alarm Settings</h2>
           <p className="text-secondary text-fg-muted">
             Control the sound and volume of the accident alarm, and how long an unverified incident
             stays muted when you snooze it.
           </p>
         </div>
-        {form ? <SaveStatusBadge status={status} onRetry={flush} /> : null}
+        {form ? (
+          <div className="shrink-0">
+            <SaveStatusBadge status={status} onRetry={flush} />
+          </div>
+        ) : null}
       </div>
 
       {settingsQuery.isLoading ? (
