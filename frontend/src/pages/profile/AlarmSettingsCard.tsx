@@ -57,8 +57,11 @@ function SaveStatusBadge({ status, onRetry }: { status: SaveStatus; onRetry: () 
         </Badge>
       )
     case "pending":
+      // Neutral, not warning — this fires on every edit, well before the
+      // debounce even attempts to send anything, so it isn't a problem to
+      // flag, just a normal in-between state.
       return (
-        <Badge tone="warning" variant="subtle" icon={<BadgeDot tone="warning" />}>
+        <Badge tone="neutral" variant="subtle" icon={<BadgeDot tone="neutral" />}>
           Unsaved changes
         </Badge>
       )
