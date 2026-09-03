@@ -271,10 +271,8 @@ class TestDashboardAnalytics:
         assert [row["Status"] for row in rows] == ["Cleared", "Ongoing"]
         assert rows[0]["Camera Name"] == "Export Camera"
         assert rows[0]["Confidence"] == "65.0%"
-        assert rows[0]["Closed By ID"] == str(operator.user_id)
         assert rows[0]["Closed By"] == "Test Operator"
         assert rows[1]["Confidence"] == "87.0%"
-        assert rows[1]["Verified By ID"] == str(operator.user_id)
         assert rows[1]["Verified By"] == "Test Operator"
 
     def test_export_dashboard_pdf(self, client: TestClient, session: Session):
@@ -693,7 +691,6 @@ class TestPerformanceAnalytics:
         rows = list(csv.DictReader(StringIO(resp.text[1:])))
         assert rows == [
             {
-                "Camera ID": str(zulu.camera_id),
                 "Camera Name": "zulu Tunnel",
                 "Total Accidents": "1",
                 "Total Dismissed": "0",
@@ -1063,14 +1060,11 @@ def test_export_dashboard_csv_returns_header_only_when_no_confirmed_logs(
         [
             "Log ID",
             "Detected At",
-            "Camera ID",
             "Camera Name",
             "Status",
             "Confidence",
-            "Verified By ID",
             "Verified By",
             "Verified At",
-            "Closed By ID",
             "Closed By",
             "Closed At",
         ]
@@ -1202,7 +1196,6 @@ def test_export_performance_csv_lists_camera_row_when_no_analytics_rows(
     rows = list(csv.reader(StringIO(resp.text[1:])))
     assert rows == [
         [
-            "Camera ID",
             "Camera Name",
             "Total Accidents",
             "Total Dismissed",
@@ -1211,7 +1204,6 @@ def test_export_performance_csv_lists_camera_row_when_no_analytics_rows(
             "Avg Dismissed Confidence",
         ],
         [
-            str(camera.camera_id),
             "Header Perf Camera",
             "0",
             "0",

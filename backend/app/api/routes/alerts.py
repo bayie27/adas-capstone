@@ -179,49 +179,37 @@ def _incident_csv_row(log: DetectionLog) -> list:
     return [
         log.log_id,
         format_export_datetime(log.detected_at),
-        log.camera_id,
         log.camera.camera_name if log.camera else None,
         log.detection_status,
         format_confidence_pct(log.confidence_score),
-        f"/api/alerts/{log.log_id}/snapshot",
-        log.verified_by_id,
         format_user_name(log.verified_by),
         format_export_datetime(log.verified_at),
-        log.closed_by_id,
         format_user_name(log.closed_by),
         format_export_datetime(log.closed_at),
     ]
 
 
+# Camera ID / Verified By ID / Closed By ID / Snapshot URL are deliberately
+# left out here: internal foreign keys and an API-relative path add nothing
+# for a CDRRMO reader once the Camera/Verified By/Closed By name columns
+# are right there, and Log ID already works as the record's reference
+# number. Same column set as the PDF, so CSV and PDF never disagree.
 INCIDENT_CSV_COLUMNS = [
     "Log ID",
     "Detected At",
-    "Camera ID",
     "Camera Name",
     "Status",
     "Confidence",
-    "Snapshot URL",
-    "Verified By ID",
     "Verified By",
     "Verified At",
-    "Closed By ID",
     "Closed By",
     "Closed At",
 ]
 
 
-def _incident_pdf_row(log: DetectionLog) -> list:
-    return [
-        log.log_id,
-        format_export_datetime(log.detected_at),
-        log.camera.camera_name if log.camera else None,
-        log.detection_status,
-        format_confidence_pct(log.confidence_score),
-        format_user_name(log.verified_by),
-        format_export_datetime(log.verified_at),
-        format_user_name(log.closed_by),
-        format_export_datetime(log.closed_at),
-    ]
+# Same column set as the CSV (see INCIDENT_CSV_COLUMNS) — a single row
+# shape shared by both formats, so they can never drift apart.
+_incident_pdf_row = _incident_csv_row
 
 
 def _incident_query_stmt(filters: IncidentFilters):

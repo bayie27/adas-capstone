@@ -476,14 +476,11 @@ def export_dashboard(
         return [
             log.log_id,
             format_export_datetime(log.detected_at),
-            log.camera_id,
             log.camera.camera_name if log.camera else None,
             log.detection_status,
             format_confidence_pct(log.confidence_score),
-            log.verified_by_id,
             format_user_name(log.verified_by),
             format_export_datetime(log.verified_at),
-            log.closed_by_id,
             format_user_name(log.closed_by),
             format_export_datetime(log.closed_at),
         ]
@@ -494,14 +491,11 @@ def export_dashboard(
         [
             "Log ID",
             "Detected At",
-            "Camera ID",
             "Camera Name",
             "Status",
             "Confidence",
-            "Verified By ID",
             "Verified By",
             "Verified At",
-            "Closed By ID",
             "Closed By",
             "Closed At",
         ],
@@ -876,7 +870,6 @@ def export_performance(
 
     rows = (
         [
-            row["camera_id"],
             row["camera_name"],
             row["total_accidents"],
             row["total_dismissed"],
@@ -889,7 +882,6 @@ def export_performance(
     return csv_response(
         "adas_performance_export.csv",
         [
-            "Camera ID",
             "Camera Name",
             "Total Accidents",
             "Total Dismissed",

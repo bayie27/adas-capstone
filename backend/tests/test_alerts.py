@@ -533,27 +533,20 @@ class TestExportAlerts:
         assert rows[0] == [
             "Log ID",
             "Detected At",
-            "Camera ID",
             "Camera Name",
             "Status",
             "Confidence",
-            "Snapshot URL",
-            "Verified By ID",
             "Verified By",
             "Verified At",
-            "Closed By ID",
             "Closed By",
             "Closed At",
         ]
         assert rows[1][0] == str(log.log_id)
-        assert rows[1][3] == "CSV Cam"
-        assert rows[1][4] == "Unverified"
-        assert rows[1][5] == "87.0%"
-        assert rows[1][6] == f"/api/alerts/{log.log_id}/snapshot"
-        assert rows[1][7] == str(operator.user_id)
-        assert rows[1][8] == "Test Operator"
-        assert rows[1][10] == str(operator.user_id)
-        assert rows[1][11] == "Test Operator"
+        assert rows[1][2] == "CSV Cam"
+        assert rows[1][3] == "Unverified"
+        assert rows[1][4] == "87.0%"
+        assert rows[1][5] == "Test Operator"
+        assert rows[1][7] == "Test Operator"
 
     def test_export_alerts_neutralizes_formula_injection(
         self, client: TestClient, session: Session
@@ -568,7 +561,7 @@ class TestExportAlerts:
 
         assert resp.status_code == 200
         rows = list(csv.reader(StringIO(resp.text[1:])))
-        assert rows[1][3] == "'=cmd|'/c calc'!A1"
+        assert rows[1][2] == "'=cmd|'/c calc'!A1"
 
     def test_export_alerts_pdf(self, client: TestClient, session: Session):
         operator, headers = operator_with_headers(client, session, username="pdfexp")
