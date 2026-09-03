@@ -24,7 +24,7 @@ from app.services.reports.csv_writer import stringify_cell
 _ASSETS_DIR = REPO_ROOT / "backend" / "app" / "assets"
 _REGULAR_FONT_PATH = _ASSETS_DIR / "fonts" / "DejaVuSans.ttf"
 _BOLD_FONT_PATH = _ASSETS_DIR / "fonts" / "DejaVuSans-Bold.ttf"
-_LOGO_PATH = REPO_ROOT / "frontend" / "public" / "adas-logo.png"
+_LOGO_PATH = REPO_ROOT / "backend" / "app" / "assets" / "lipa-cdrrmo-logo.png"
 
 _FONT_FAMILY = "DejaVu"
 
@@ -71,7 +71,13 @@ class ReportPDF(FPDF):
 
         self.set_xy(text_x, 8)
         self.set_font(_FONT_FAMILY, "B", 13)
-        self.cell(0, 6, "A.D.A.S.", new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 6, "Lipa CDRRMO", new_x="LMARGIN", new_y="NEXT")
+
+        self.set_x(text_x)
+        self.set_font(_FONT_FAMILY, "", 9)
+        self.cell(
+            0, 5, "Accident Detection & Alert System", new_x="LMARGIN", new_y="NEXT"
+        )
 
         self.set_x(text_x)
         self.set_font(_FONT_FAMILY, "B", 10)
@@ -194,7 +200,7 @@ def build_incident_pdf(
             "Closed At",
         ],
         rows,
-        col_widths=(15, 30, 35, 22, 20, 30, 30, 30, 30),
+        col_widths=(13, 34, 33, 20, 20, 30, 34, 30, 34),
     )
     return pdf.output_bytes()
 
@@ -318,6 +324,6 @@ def build_audit_pdf(
             "Detail",
         ],
         rows,
-        col_widths=(18, 30, 35, 35, 40, 20, 60),
+        col_widths=(15, 33, 32, 32, 38, 20, 57),
     )
     return pdf.output_bytes()
