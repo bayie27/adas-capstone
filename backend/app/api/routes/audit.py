@@ -399,7 +399,7 @@ def export_audit_logs(
         rows = [
             [
                 log.audit_id,
-                log.created_at.isoformat(),
+                format_export_datetime(log.created_at),
                 _actor(log),
                 log.action,
                 _target(log),
