@@ -29,15 +29,17 @@ _LOGO_PATH = REPO_ROOT / "backend" / "app" / "assets" / "lipa-cdrrmo-logo.png"
 
 _FONT_FAMILY = "DejaVu"
 
-# Lipa CDRRMO report palette — one accent (the seal's red) rather than all
-# four seal colors, so the report reads as a formal document, not a poster.
-_RED = (200, 16, 46)
+# Lipa CDRRMO report palette — one accent (a deep, muted crimson inspired
+# by the seal, deliberately less saturated than a pure alarm-red) rather
+# than all four seal colors, so the report reads as a formal document, not
+# a poster or a warning banner.
+_RED = (139, 27, 45)
 _INK = (30, 42, 50)
 _SLATE = (100, 116, 139)
 _MIST = (241, 243, 245)
 _LINE = (220, 225, 230)
 _WHITE = (255, 255, 255)
-_BAND_META_TEXT = (255, 214, 214)
+_BAND_META_TEXT = (232, 200, 204)
 
 _STATUS_COLORS = {
     "Unverified": (29, 78, 216),
@@ -255,6 +257,14 @@ class ReportPDF(FPDF):
         """
         self.set_font(_FONT_FAMILY, "", 8)
         heading_style = FontFace(emphasis="B", color=_WHITE, fill_color=_RED)
+        # fpdf2's Table captures the FPDF's *current* fill color as every
+        # cell's base style the moment the first row is added, then only
+        # overrides it for cells the fill mode actually selects. Without
+        # resetting here, a body row that ISN'T selected for the zebra
+        # stripe inherits whatever fill color a previous section (the red
+        # header band, a KPI tile) last set — solid red data rows instead
+        # of plain white ones.
+        self.set_fill_color(*_WHITE)
 
         if not rows:
             with self.table(
