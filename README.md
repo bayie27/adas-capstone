@@ -51,7 +51,7 @@ adas-capstone/
 │   │           ├── internal.py          # AI engine webhook + heartbeat (v1 legacy and v2)
 │   │           ├── auth.py              # Login/logout (HttpOnly session cookie)
 │   │           ├── cameras.py           # Camera CRUD and management
-│   │           ├── alerts.py            # HITL workflow (confirm/dismiss/resolve/snooze) + exports
+│   │           ├── alerts.py            # HITL workflow (confirm/dismiss/clear/snooze) + exports
 │   │           ├── users.py             # User CRUD and self-service
 │   │           ├── analytics.py         # Dashboard KPIs, AI performance, charts + exports
 │   │           ├── audit.py             # Append-only activity audit viewer + export (Admin only)
@@ -400,10 +400,10 @@ This runs an inference-only batch sweep and prints rough 15/10 FPS estimates. It
 
 **Only 5 RTSP channels exist** in both simulation configs (`mediamtx.yml` and `start-sim.ps1`), but the `demo`/`analytics` camera roster has 8 entries. `channel1`–`channel5` map to the 5 cameras in the [clip table](#3-simulate-camera-streams-development) above; the other 3 — Dagatan Entry Cam, Silang Junction Cam, and the disabled/soft-deleted Retired Depot Cam — have no channel at all and will sit `Unresponsive`/`Disconnected` forever no matter how correctly everything else is configured. This isn't a bug to fix; it's a 5-clip simulation intentionally covering a larger camera roster so the UI has something realistic to show for a camera that's actually down.
 
-**Self-blindfold: any camera with an open (`Unverified` or `Ongoing`) incident pauses itself.** This is deliberate — an unresolved incident means the camera shouldn't be re-alerting on the same scene, and it puts the operator in control of when a camera goes back online rather than the engine flooding them the moment it starts. `demo` and `analytics` seed a realistic mix of open and closed incidents (not every camera), so expect some — not necessarily all — of the 5 real-feed cameras to start paused. Resolve or dismiss the open incident in the dashboard (or via the dev panel) and that camera resumes within seconds. To force every seeded camera active at once for a demo:
+**Self-blindfold: any camera with an open (`Unverified` or `Ongoing`) incident pauses itself.** This is deliberate — an uncleared incident means the camera shouldn't be re-alerting on the same scene, and it puts the operator in control of when a camera goes back online rather than the engine flooding them the moment it starts. `demo` and `analytics` seed a realistic mix of open and closed incidents (not every camera), so expect some — not necessarily all — of the 5 real-feed cameras to start paused. Clear or dismiss the open incident in the dashboard (or via the dev panel) and that camera resumes within seconds. To force every seeded camera active at once for a demo:
 
 ```bash
-uv run python -c "import sqlite3; d=sqlite3.connect('adas.db'); d.execute(\"UPDATE detection_log SET detection_status='Resolved' WHERE detection_status IN ('Unverified','Ongoing')\"); d.execute(\"UPDATE camera SET desired_ai_state='Active', desired_state_reason=NULL WHERE is_active=1\"); d.commit()"
+uv run python -c "import sqlite3; d=sqlite3.connect('adas.db'); d.execute(\"UPDATE detection_log SET detection_status='Cleared' WHERE detection_status IN ('Unverified','Ongoing')\"); d.execute(\"UPDATE camera SET desired_ai_state='Active', desired_state_reason=NULL WHERE is_active=1\"); d.commit()"
 ```
 
 The engine reports `Connected` on a paused camera and then deliberately runs no inference on it, so it can look broken if you don't know to expect `Stream dropped ... while paused` in its log instead of anything about detection.
@@ -528,7 +528,7 @@ Registers a Windows Scheduled Task (`\ADAS\DailyRestart`) that fires `adas-maint
 
 **Self-blindfold pattern.** When the AI engine detects a collision, it immediately pauses its own ingestion for that camera. The backend mirrors this by marking the camera `Paused` in the DB and broadcasting the state change over WebSocket the moment the webhook arrives — before any operator action.
 
-**HITL state machine.** Detection logs move through `Unverified → Ongoing → Resolved` (true positive) or `Unverified → Dismissed` (false positive, triggers 60-second cooldown) or `Ongoing → Dismissed` (human error correction, resumes immediately). The backend guards against the AI engine overwriting operator-driven pause states.
+**HITL state machine.** Detection logs move through `Unverified → Ongoing → Cleared` (true positive) or `Unverified → Dismissed` (false positive, triggers 60-second cooldown) or `Ongoing → Dismissed` (human error correction, resumes immediately). The backend guards against the AI engine overwriting operator-driven pause states.
 
 **WAL mode on SQLite.** Allows the AI engine's high-frequency writes and the dashboard's concurrent reads to coexist without locking errors.
 
