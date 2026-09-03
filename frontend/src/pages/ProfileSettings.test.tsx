@@ -208,4 +208,24 @@ describe("ProfileSettings Page", () => {
 
     vi.useRealTimers()
   })
+
+  it("blocks an out-of-range snooze duration without a Retry action, since retrying can't fix an invalid value", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(getMyProfile).mockResolvedValue(mockProfile)
+
+    renderProfileSettings()
+
+    const snoozeInput = await screen.findByLabelText("Snooze Duration (seconds)")
+    await user.clear(snoozeInput)
+    await user.type(snoozeInput, "5")
+
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(await screen.findByText("Fix errors to save")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument()
+    expect(updateAlarmSettings).not.toHaveBeenCalled()
+
+    vi.useRealTimers()
+  })
 })

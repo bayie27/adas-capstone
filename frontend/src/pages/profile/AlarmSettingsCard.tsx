@@ -38,7 +38,11 @@ function formatSoundLabel(key: string): string {
     .join(" ")
 }
 
-type SaveStatus = "saving" | "error" | "pending" | "saved"
+// "invalid" and "error" both render as a red badge, but only "error" means
+// a save was actually attempted and failed — Retry re-sends the same
+// values, which can only help there. A blocked value can't be "retried"
+// into passing validation, so that state gets no retry action at all.
+type SaveStatus = "saving" | "invalid" | "error" | "pending" | "saved"
 
 function SaveStatusBadge({ status, onRetry }: { status: SaveStatus; onRetry: () => void }) {
   switch (status) {
@@ -56,6 +60,12 @@ function SaveStatusBadge({ status, onRetry }: { status: SaveStatus; onRetry: () 
       return (
         <Badge tone="warning" variant="subtle" icon={<BadgeDot tone="warning" />}>
           Unsaved changes
+        </Badge>
+      )
+    case "invalid":
+      return (
+        <Badge tone="danger" variant="subtle" icon={<BadgeDot tone="danger" />}>
+          Fix errors to save
         </Badge>
       )
     case "error":
@@ -262,11 +272,13 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
 
   const status: SaveStatus = mutation.isPending
     ? "saving"
-    : validationError || mutation.isError
-      ? "error"
-      : dirty
-        ? "pending"
-        : "saved"
+    : validationError
+      ? "invalid"
+      : mutation.isError
+        ? "error"
+        : dirty
+          ? "pending"
+          : "saved"
 
   return (
     <Card className={cn("p-8", className)}>
