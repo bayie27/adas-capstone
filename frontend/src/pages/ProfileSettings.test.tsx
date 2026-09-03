@@ -125,8 +125,9 @@ describe("ProfileSettings Page", () => {
     expect(screen.getByRole("heading", { name: "Change Password" })).toBeInTheDocument()
   })
 
-  it("allows clearing and typing a new snooze duration without leading zero bug", async () => {
-    const user = userEvent.setup()
+  it("allows clearing and typing a new snooze duration without leading zero bug, autosaved after it settles", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
     vi.mocked(getMyProfile).mockResolvedValue(mockProfile)
     vi.mocked(updateAlarmSettings).mockResolvedValue({
       alarm_sound: "default",
@@ -145,20 +146,66 @@ describe("ProfileSettings Page", () => {
 
     const snoozeInput = await screen.findByLabelText("Snooze Duration (seconds)")
     expect(snoozeInput).toHaveValue(30)
+    expect(await screen.findByText("All changes saved")).toBeInTheDocument()
 
     await user.clear(snoozeInput)
     expect(snoozeInput).toHaveValue(null)
 
     await user.type(snoozeInput, "15")
     expect(snoozeInput).toHaveValue(15)
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument()
+    expect(updateAlarmSettings).not.toHaveBeenCalled()
 
-    const saveAlarmButton = screen.getByRole("button", { name: "Save Alarm Settings" })
-    await user.click(saveAlarmButton)
+    // No Save button anymore — the edit autosaves once the field has sat
+    // still for the debounce window.
+    await vi.advanceTimersByTimeAsync(1000)
 
+    expect(updateAlarmSettings).toHaveBeenCalledTimes(1)
     expect(updateAlarmSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         snooze_duration: 15,
       }),
     )
+    expect(await screen.findByText("All changes saved")).toBeInTheDocument()
+
+    vi.useRealTimers()
+  })
+
+  it("coalesces rapid alarm-settings edits into a single autosave call", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
+    vi.mocked(getMyProfile).mockResolvedValue(mockProfile)
+    vi.mocked(updateAlarmSettings).mockResolvedValue({
+      alarm_sound: "default",
+      volume: 80,
+      snooze_duration: 45,
+      options: {
+        alarm_sound_keys: ["default", "chime"],
+        snooze_min_seconds: 15,
+        snooze_max_seconds: 60,
+        volume_min: 0,
+        volume_max: 100,
+      },
+    })
+
+    renderProfileSettings()
+
+    const snoozeInput = await screen.findByLabelText("Snooze Duration (seconds)")
+    await user.clear(snoozeInput)
+
+    // Simulates a user still deciding — a few quick keystrokes well inside
+    // the debounce window — rather than one settled edit.
+    await user.type(snoozeInput, "4")
+    await vi.advanceTimersByTimeAsync(300)
+    await user.type(snoozeInput, "5")
+
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(updateAlarmSettings).toHaveBeenCalledTimes(1)
+    expect(updateAlarmSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ snooze_duration: 45 }),
+    )
+
+    vi.useRealTimers()
   })
 })
