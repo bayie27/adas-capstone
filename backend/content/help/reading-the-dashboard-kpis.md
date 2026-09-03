@@ -27,8 +27,8 @@ per-camera charts](/help/dashboard-kpis.png)
 
 Dismissed (false-positive) incidents are not counted in any of these three numbers.
 They never represent a real accident, so including them here would overstate how many
-accidents actually happened. Dismissed alerts do still show up elsewhere, though, in
-the full incident list, in AI performance metrics, and in the audit trail.
+accidents actually happened. Dismissed alerts do still show up in the full incident
+list. Administrators can also review them in AI Performance metrics and the audit trail.
 
 ## Accident frequency by location
 

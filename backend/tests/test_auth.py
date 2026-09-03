@@ -923,6 +923,8 @@ class TestRBAC:
         ("POST", "/api/system/backups", None),
         ("POST", "/api/system/restores", {}),
         ("GET", "/api/system/restores/latest", None),
+        ("GET", "/api/analytics/performance", None),
+        ("GET", "/api/analytics/export/performance", None),
         ("GET", "/api/users/", None),
         ("POST", "/api/users/", {}),
         ("PATCH", "/api/users/1", {}),

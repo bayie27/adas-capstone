@@ -37,7 +37,8 @@ Cleared and Dismissed alerts both stay visible in your incident history. Clearin
 doesn't delete anything; it just marks the incident as finished. You can still find it
 later with a search or filter (see [Viewing and Filtering
 Incidents](viewing-and-filtering-incidents)), and it still counts toward the dashboard's
-**Total Cleared** figure and the AI performance metrics for that camera.
+**Total Cleared** figure and the Administrator-visible AI performance metrics for that
+camera.
 
 ## If you clear the wrong incident
 

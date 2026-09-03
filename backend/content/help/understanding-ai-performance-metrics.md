@@ -2,7 +2,7 @@
 slug: understanding-ai-performance-metrics
 title: Understanding AI Performance Metrics
 category: Monitoring
-roles: [Admin, Operator]
+roles: [Admin]
 summary: What precision score and confidence mean on the AI Performance page.
 sort_order: 30
 is_faq: false

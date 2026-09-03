@@ -9,7 +9,7 @@ from app.models import DetectionLog, DetectionStatus
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from .conftest import auth_headers, make_camera, make_operator
+from .conftest import auth_headers, make_admin, make_camera, make_operator
 
 
 def operator_with_headers(
@@ -22,6 +22,18 @@ def operator_with_headers(
     operator = make_operator(session, username=username, password=password)
     headers = auth_headers(client, username, password)
     return operator, headers
+
+
+def admin_with_headers(
+    client: TestClient,
+    session: Session,
+    *,
+    username: str = "analytics_admin",
+    password: str = "Admin123",
+):
+    admin = make_admin(session, username=username, password=password)
+    headers = auth_headers(client, username, password)
+    return admin, headers
 
 
 def make_analytics_log(
@@ -477,7 +489,7 @@ class TestPerformanceAnalytics:
     def test_performance_returns_global_and_per_camera_metrics(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfmetrics")
+        _, headers = admin_with_headers(client, session, username="perfmetrics")
         north = make_camera(session, name="North Corridor", channel_id=31)
         south = make_camera(session, name="South Corridor", channel_id=32)
         east = make_camera(session, name="East Corridor", channel_id=33)
@@ -602,7 +614,7 @@ class TestPerformanceAnalytics:
     def test_performance_search_is_case_insensitive_and_tie_sorted(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfsearch")
+        _, headers = admin_with_headers(client, session, username="perfsearch")
         alpha = make_camera(session, name="Alpha Bridge", channel_id=41)
         zulu = make_camera(session, name="zulu Tunnel", channel_id=42)
 
@@ -650,7 +662,7 @@ class TestPerformanceAnalytics:
     def test_export_performance_csv_matches_filtered_table(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfcsv")
+        _, headers = admin_with_headers(client, session, username="perfcsv")
         alpha = make_camera(session, name="Alpha Bridge", channel_id=51)
         zulu = make_camera(session, name="zulu Tunnel", channel_id=52)
 
@@ -692,7 +704,7 @@ class TestPerformanceAnalytics:
         ]
 
     def test_export_performance_pdf(self, client: TestClient, session: Session):
-        operator, headers = operator_with_headers(client, session, username="perfpdf")
+        _, headers = admin_with_headers(client, session, username="perfpdf")
         camera = make_camera(session, name="PDF Perf Camera", channel_id=53)
         make_analytics_log(
             session,
@@ -733,7 +745,7 @@ class TestPerformancePagination:
     def test_total_filtered_reflects_full_set_per_camera_holds_one_page(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfpage1")
+        _, headers = admin_with_headers(client, session, username="perfpage1")
         self._make_n_quiet_cameras(session, 15, start_channel=100)
 
         resp = client.get("/api/analytics/performance", headers=headers)
@@ -748,7 +760,7 @@ class TestPerformancePagination:
         self, client: TestClient, session: Session, query: str
     ):
         """Edge case 2.1/2.2, same bounds every other list endpoint uses."""
-        _, headers = operator_with_headers(client, session, username="perfpage2")
+        _, headers = admin_with_headers(client, session, username="perfpage2")
         resp = client.get(f"/api/analytics/performance?{query}", headers=headers)
         assert resp.status_code == 422
 
@@ -756,14 +768,14 @@ class TestPerformancePagination:
     def test_pagination_boundary_accepted(
         self, client: TestClient, session: Session, query: str
     ):
-        _, headers = operator_with_headers(client, session, username="perfpage3")
+        _, headers = admin_with_headers(client, session, username="perfpage3")
         resp = client.get(f"/api/analytics/performance?{query}", headers=headers)
         assert resp.status_code == 200
 
     def test_offset_beyond_total_returns_empty_page_with_correct_total(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfpage4")
+        _, headers = admin_with_headers(client, session, username="perfpage4")
         self._make_n_quiet_cameras(session, 3, start_channel=120)
 
         resp = client.get("/api/analytics/performance?offset=100", headers=headers)
@@ -776,7 +788,7 @@ class TestPerformancePagination:
     def test_paging_through_whole_set_yields_every_camera_exactly_once(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfpage5")
+        _, headers = admin_with_headers(client, session, username="perfpage5")
         cameras = self._make_n_quiet_cameras(session, 23, start_channel=140)
         expected_ids = {c.camera_id for c in cameras}
 
@@ -804,7 +816,7 @@ class TestPerformancePagination:
         """F24 still holds under pagination: a camera with zero confirmed
         and zero dismissed incidents is still counted and still paged, not
         silently dropped by the slice."""
-        _, headers = operator_with_headers(client, session, username="perfpage6")
+        _, headers = admin_with_headers(client, session, username="perfpage6")
         make_camera(session, name="Only Quiet Camera", channel_id=160)
 
         resp = client.get("/api/analytics/performance", headers=headers)
@@ -818,7 +830,7 @@ class TestPerformancePagination:
     def test_export_ignores_limit_and_offset_and_exports_every_row(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfpage7")
+        _, headers = admin_with_headers(client, session, username="perfpage7")
         cameras = self._make_n_quiet_cameras(session, 15, start_channel=180)
 
         resp = client.get(
@@ -836,7 +848,7 @@ class TestPerformancePagination:
         """The exact trap the package doc warns about: if pagination ever
         leaked into _compute_performance_data, this pre-flight would see
         only one page and under-report a large export as small."""
-        _, headers = operator_with_headers(client, session, username="perfpage8")
+        _, headers = admin_with_headers(client, session, username="perfpage8")
         self._make_n_quiet_cameras(session, 12, start_channel=200)
 
         seen_row_counts: list[int] = []
@@ -869,7 +881,10 @@ def test_analytics_endpoints_reject_invalid_camera_ids(
     session: Session,
     path: str,
 ):
-    _, headers = operator_with_headers(client, session, username="invalidcam")
+    header_factory = (
+        admin_with_headers if "performance" in path else operator_with_headers
+    )
+    _, headers = header_factory(client, session, username="invalidcam")
 
     resp = client.get(f"{path}?camera_id=0", headers=headers)
 
@@ -894,7 +909,10 @@ def test_analytics_endpoints_reject_inverted_date_ranges(
     session: Session,
     path: str,
 ):
-    _, headers = operator_with_headers(client, session, username="invaliddate")
+    header_factory = (
+        admin_with_headers if "performance" in path else operator_with_headers
+    )
+    _, headers = header_factory(client, session, username="invaliddate")
 
     resp = client.get(
         f"{path}?start_date=2026-05-03T00:00:00Z&end_date=2026-05-02T00:00:00Z",
@@ -943,6 +961,31 @@ def test_analytics_endpoints_reject_invalid_tokens(path: str, client: TestClient
     )
 
     assert resp.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/api/analytics/performance", "/api/analytics/export/performance"],
+)
+def test_operator_cannot_access_admin_only_performance_endpoints(
+    path: str, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
+):
+    """P29 — the role check runs before the performance query or export
+    generation, so an Operator cannot use either synchronous endpoint as an
+    analytics side door."""
+    _, headers = operator_with_headers(client, session, username="perfdenied")
+
+    def fail_if_performance_work_runs(*args, **kwargs):
+        raise AssertionError("performance work must not run for an Operator")
+
+    monkeypatch.setattr(
+        analytics_routes, "_compute_performance_data", fail_if_performance_work_runs
+    )
+
+    resp = client.get(path, headers=headers)
+
+    assert resp.status_code == 403
+    assert resp.json()["code"] == "FORBIDDEN"
 
 
 def test_dashboard_ignores_unverified_logs_and_returns_empty_state(
@@ -1041,7 +1084,7 @@ def test_performance_ignores_unverified_logs_but_still_lists_the_camera(
     number (global KPIs all zero/null), but the camera itself is not
     omitted from the per-camera breakdown just because it has no
     confirmed/dismissed rows."""
-    _, headers = operator_with_headers(client, session, username="perfempty")
+    _, headers = admin_with_headers(client, session, username="perfempty")
     camera = make_camera(session, name="Silent Camera", channel_id=63)
     make_analytics_log(
         session,
@@ -1086,7 +1129,7 @@ def test_performance_soft_deleted_camera_with_history_still_appears(
     in range still appears in the per-camera breakdown; one with no history
     does not (it just isn't a *quiet active* camera, edge case 3.5's
     concern doesn't extend to deleted-and-silent cameras)."""
-    _, headers = operator_with_headers(client, session, username="perfsoftdel")
+    _, headers = admin_with_headers(client, session, username="perfsoftdel")
     camera = make_camera(session, name="Soon Deleted Cam", channel_id=65)
     make_analytics_log(
         session,
@@ -1121,7 +1164,7 @@ def test_performance_with_zero_cameras_registered_returns_empty_state(
     client: TestClient, session: Session
 ):
     """The genuinely-empty case (edge case 3.1/3.6): no cameras at all."""
-    _, headers = operator_with_headers(client, session, username="perfnocams")
+    _, headers = admin_with_headers(client, session, username="perfnocams")
 
     resp = client.get("/api/analytics/performance", headers=headers)
 
@@ -1143,7 +1186,7 @@ def test_export_performance_csv_lists_camera_row_when_no_analytics_rows(
     client: TestClient, session: Session
 ):
     """Edge case 3.5 / F24 at the export layer — same fix, CSV surface."""
-    _, headers = operator_with_headers(client, session, username="perfheader")
+    _, headers = admin_with_headers(client, session, username="perfheader")
     camera = make_camera(session, name="Header Perf Camera", channel_id=64)
     make_analytics_log(
         session,

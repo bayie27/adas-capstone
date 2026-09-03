@@ -252,6 +252,60 @@ class TestRoleFilter:
         resp = client.get("/api/help/articles/admin-thing", headers=headers)
         assert resp.status_code == 200
 
+    def test_real_ai_performance_guidance_is_admin_only_and_shared_articles_have_no_dead_links(
+        self, client: TestClient, session: Session
+    ):
+        """P29 — role-filtered list/search/detail must agree with the
+        navigation boundary, and shared Operator guidance must not link to a
+        restricted article."""
+        seed_help_articles(session, content_dir=REAL_CONTENT_DIR)
+        make_operator(session)
+        operator_headers = auth_headers(client, "operator", "Operator123")
+
+        listed = client.get(
+            "/api/help/articles",
+            params={"search": "precision"},
+            headers=operator_headers,
+        )
+        assert listed.status_code == 200
+        assert {article["slug"] for article in listed.json()["items"]}.isdisjoint(
+            {
+                "understanding-ai-performance-metrics",
+                "faq-what-does-precision-score-mean",
+            }
+        )
+
+        for slug in (
+            "understanding-ai-performance-metrics",
+            "faq-what-does-precision-score-mean",
+        ):
+            detail = client.get(f"/api/help/articles/{slug}", headers=operator_headers)
+            assert detail.status_code == 404
+
+        for slug in (
+            "getting-started-with-adas",
+            "dismissing-a-false-positive",
+            "reading-the-dashboard-kpis",
+            "resolving-an-ongoing-incident",
+        ):
+            detail = client.get(f"/api/help/articles/{slug}", headers=operator_headers)
+            assert detail.status_code == 200
+            assert (
+                "(understanding-ai-performance-metrics)"
+                not in detail.json()["body_markdown"]
+            )
+
+        make_admin(session)
+        admin_headers = auth_headers(client, "admin", "Admin123")
+        admin_list = client.get(
+            "/api/help/articles", params={"search": "precision"}, headers=admin_headers
+        )
+        assert admin_list.status_code == 200
+        assert {article["slug"] for article in admin_list.json()["items"]} >= {
+            "understanding-ai-performance-metrics",
+            "faq-what-does-precision-score-mean",
+        }
+
 
 # ---------------------------------------------------------------------------
 # Search

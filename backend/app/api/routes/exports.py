@@ -1,7 +1,8 @@
 """07_PKG_reports.md Step 5/6 — async export jobs and the retraining
-package. `/api/exports/jobs*` is available to any authenticated user (a
-job's owner or an Admin may read/download it); `/api/exports/retraining`
-is Admin only.
+package. Incident and dashboard jobs are available to their authenticated
+owner (or an Admin); AI Performance jobs are Admin-only at every async-job
+operation, including jobs created before that boundary was introduced.
+`/api/exports/retraining` is Admin only.
 """
 
 from pathlib import Path
@@ -67,10 +68,13 @@ async def create_export_job(
     itself is Admin only (01_CONTRACTS.md §5.7), and this async path must
     not become a side door around that for an Operator, who would otherwise
     both create *and*, as the job's owner, download it."""
-    if payload.report_type == "audit" and current_user.role != UserRole.ADMIN:
+    if (
+        payload.report_type in {"audit", "performance"}
+        and current_user.role != UserRole.ADMIN
+    ):
         raise AppHTTPException(
             403,
-            "Only an Admin may create an audit-log export job.",
+            "Only an Admin may create this export job.",
             code="FORBIDDEN",
         )
 
@@ -115,10 +119,11 @@ def list_export_jobs(
 ):
     """01_CONTRACTS.md §5.10 (P21 Step 4) — own jobs by default for every
     role, including Admin: an admin's own tray answers "where is my
-    export?", not the whole system's. `?all_users=true` widens it, Admin
-    only — an Operator passing it gets 403. `expired` jobs are included:
-    that status is exactly what an operator is investigating when a
-    download stops working. Not audited — routine viewing."""
+    export?", not the whole system's. Operators never receive performance
+    jobs, including legacy jobs created before the Admin-only boundary.
+    `?all_users=true` widens it, Admin only — an Operator passing it gets
+    403. `expired` jobs are included for the report types visible to the
+    caller. Not audited — routine viewing."""
     if all_users and current_user.role != UserRole.ADMIN:
         raise AppHTTPException(
             403,
@@ -129,6 +134,11 @@ def list_export_jobs(
     query = select(ExportJob)
     if not all_users:
         query = query.where(col(ExportJob.requested_by_id) == current_user.user_id)
+    if current_user.role != UserRole.ADMIN:
+        # The owner-only predicate above is not sufficient: an Operator may
+        # own a performance job created before P29. Exclude that report type
+        # from the list itself so the total and page cannot reveal it either.
+        query = query.where(col(ExportJob.report_type) != "performance")
     if status:
         query = query.where(col(ExportJob.status).in_(status))
     query = query.order_by(col(ExportJob.created_at).desc())
@@ -152,6 +162,12 @@ def _get_job_or_404(session: Session, job_id: str) -> ExportJob:
 
 
 def _require_owner_or_admin(job: ExportJob, current_user: User) -> None:
+    if job.report_type == "performance" and current_user.role != UserRole.ADMIN:
+        raise AppHTTPException(
+            403,
+            "Only an Admin may access AI performance export jobs.",
+            code="FORBIDDEN",
+        )
     if (
         job.requested_by_id != current_user.user_id
         and current_user.role != UserRole.ADMIN

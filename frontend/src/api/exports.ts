@@ -20,6 +20,7 @@ export type ExportJobStatus = "queued" | "processing" | "completed" | "failed" |
 export type ExportJobFailureCategory = "generation_failed" | "artifact_write_failed" | (string & {})
 
 export interface ExportJobCreateParams {
+  /** `performance` jobs are Administrator-only server-side. */
   report_type: ExportJobReportType
   format: ExportJobFormat
   start_date?: string
@@ -76,9 +77,10 @@ export interface RetrainingExportParams {
 /**
  * `GET /api/exports/jobs` (P21 Step 4, `routes/exports.py:107-141`) — scoped
  * to the caller's own jobs by default, for every role including Admin.
- * `all_users` widens it and is Admin-only server-side (a 403 for an
- * Operator); this client never sets it, since the tray only ever needs
- * "my exports," not the whole system's.
+ * Operator responses exclude performance jobs, including legacy jobs. `all_users`
+ * widens it and is Admin-only server-side (a 403 for an Operator); this client
+ * never sets it, since the tray only ever needs "my exports," not the whole
+ * system's.
  */
 export interface GetExportJobsParams {
   status?: ExportJobStatus[]

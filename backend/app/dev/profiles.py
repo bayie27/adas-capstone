@@ -751,8 +751,9 @@ def build_uat_alert_specs(now: datetime) -> list[SeedAlertSpec]:
     )
     specs: list[SeedAlertSpec] = []
 
-    # Two weeks of deterministic, filterable data gives Dashboard,
-    # Detections and AI Performance meaningful CSV/PDF exports in OP-J09.
+    # Two weeks of deterministic, filterable data gives Dashboard and
+    # Detections meaningful Operator exports, while the Administrator-only
+    # AI Performance CSV/PDF checks have the same stable history to inspect.
     for day in range(14):
         verifier = operator_keys[day % len(operator_keys)]
         closer = operator_keys[(day + 1) % len(operator_keys)]
