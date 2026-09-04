@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom"
 import { RiAddLine, RiCloseLine, RiSubtractLine } from "@remixicon/react"
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch"
 
@@ -23,13 +24,23 @@ const controlButton = cn(
  * existing overlay layer (GlobalAlerts' z-9999 is the next highest), and
  * useOverlayBehavior's open-overlay stack makes sure Escape closes only this
  * lightbox, not the modal underneath it.
+ *
+ * Portals to document.body rather than rendering in place: IncidentDetailModal's
+ * dialog card carries `animate-modal-enter`, whose `animation-fill-mode: both`
+ * leaves a permanent (if identity) `transform` on the card even after the
+ * animation ends. Per the CSS spec that makes the card a new containing block
+ * for any `position: fixed` descendant, so this lightbox — nested deep inside
+ * it — would resolve `fixed inset-0` against the card's own box instead of the
+ * viewport, rendering small and boxed-in instead of fullscreen. GlobalAlerts
+ * doesn't hit this (it passes `noEntrance`, skipping that class), which is why
+ * the same lightbox looked correctly fullscreen from there.
  */
 export function SnapshotZoomModal({ isOpen, onClose, src, alt }: SnapshotZoomModalProps) {
   const dialogRef = useOverlayBehavior(isOpen, onClose)
 
   if (!isOpen) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-8">
       <div className="absolute inset-0 bg-black/90 cursor-pointer" onClick={onClose} />
 
@@ -119,6 +130,7 @@ export function SnapshotZoomModal({ isOpen, onClose, src, alt }: SnapshotZoomMod
           )}
         </TransformWrapper>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
