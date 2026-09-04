@@ -41,33 +41,12 @@
 # ACTIVE BY DEFAULT: OP-J01 to OP-J03 — BASELINE / SILENT
 # To leave this phase, comment this entire block from `paths:` through channel5.
 # ---------------------------------------------------------------------------
-paths:
-  channel1:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
-    runOnInitRestart: yes
-  channel2:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
-    runOnInitRestart: yes
-  channel3:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
-    runOnInitRestart: yes
-  channel4:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
-    runOnInitRestart: yes
-  channel5:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
-    runOnInitRestart: yes
-
-# ---------------------------------------------------------------------------
-# OP-J04 to OP-J07 — MULTI-ALERT AND FOLLOW-THROUGH
-# Comment the active profile above, then uncomment this entire block.
-# ---------------------------------------------------------------------------
 # paths:
 #   channel1:
-#     runOnInit: bash ./scripts/publish-uat-positive-then-silent.sh -PositiveClip ./ai_engine/eval/clips/dekwatro.mp4 -SilentClip ./ai_engine/eval/clips/airbase.mp4 -RtspUrl rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
 #     runOnInitRestart: yes
 #   channel2:
-#     runOnInit: bash ./scripts/publish-uat-positive-then-silent.sh -PositiveClip ./ai_engine/eval/clips/car-motor-motor.mp4 -SilentClip ./ai_engine/eval/clips/airbase.mp4 -RtspUrl rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
 #     runOnInitRestart: yes
 #   channel3:
 #     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
@@ -78,6 +57,27 @@ paths:
 #   channel5:
 #     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
 #     runOnInitRestart: yes
+
+# ---------------------------------------------------------------------------
+# OP-J04 to OP-J07 — MULTI-ALERT AND FOLLOW-THROUGH
+# Comment the active profile above, then uncomment this entire block.
+# ---------------------------------------------------------------------------
+paths:
+  channel1:
+    runOnInit: bash ./scripts/publish-uat-positive-then-silent.sh -PositiveClip ./ai_engine/eval/clips/dekwatro.mp4 -SilentClip ./ai_engine/eval/clips/airbase.mp4 -RtspUrl rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel2:
+    runOnInit: bash ./scripts/publish-uat-positive-then-silent.sh -PositiveClip ./ai_engine/eval/clips/car-motor-motor.mp4 -SilentClip ./ai_engine/eval/clips/airbase.mp4 -RtspUrl rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel3:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel4:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel5:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
 
 # ---------------------------------------------------------------------------
 # OP-J08 to OP-J09 — RECOVERY AND HANDOVER
