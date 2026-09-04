@@ -67,4 +67,62 @@ describe("Modal", () => {
     unmount()
     expect(document.body.style.overflow).not.toBe("hidden")
   })
+
+  /**
+   * A snapshot lightbox opened from within an already-open modal nests one
+   * overlay inside another. Without stacking, both overlays' Escape handlers
+   * would fire on a single keypress and close the modal underneath the
+   * lightbox along with the lightbox itself.
+   */
+  it("closes only the topmost overlay on Escape when two are open", async () => {
+    const user = userEvent.setup()
+    const onCloseOuter = vi.fn()
+    const onCloseInner = vi.fn()
+    render(
+      <>
+        <Modal isOpen onClose={onCloseOuter} title="Outer">
+          <p>outer</p>
+        </Modal>
+        <Modal isOpen onClose={onCloseInner} title="Inner">
+          <p>inner</p>
+        </Modal>
+      </>,
+    )
+
+    await user.keyboard("{Escape}")
+
+    expect(onCloseInner).toHaveBeenCalledTimes(1)
+    expect(onCloseOuter).not.toHaveBeenCalled()
+  })
+
+  it("lets Escape reach the outer overlay once the inner one closes", async () => {
+    const user = userEvent.setup()
+    const onCloseOuter = vi.fn()
+    const onCloseInner = vi.fn()
+    const { rerender } = render(
+      <>
+        <Modal isOpen onClose={onCloseOuter} title="Outer">
+          <p>outer</p>
+        </Modal>
+        <Modal isOpen onClose={onCloseInner} title="Inner">
+          <p>inner</p>
+        </Modal>
+      </>,
+    )
+
+    rerender(
+      <>
+        <Modal isOpen onClose={onCloseOuter} title="Outer">
+          <p>outer</p>
+        </Modal>
+        <Modal isOpen={false} onClose={onCloseInner} title="Inner">
+          <p>inner</p>
+        </Modal>
+      </>,
+    )
+
+    await user.keyboard("{Escape}")
+
+    expect(onCloseOuter).toHaveBeenCalledTimes(1)
+  })
 })
