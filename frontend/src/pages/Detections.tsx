@@ -61,7 +61,6 @@ import { getApiErrorMessage } from "@/api/client"
 import { formatFullDateTime } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
 import { isReversedDateRange, toPhilippineDayEnd, toPhilippineDayStart } from "@/utils/dateRange"
-import { RiEyeLine } from "@remixicon/react"
 
 // Starting page size. PAGE_SIZE_OPTIONS in PaginationFooter is
 // [10, 25, 50, 100], so the default must be one of them or the selector
@@ -569,13 +568,12 @@ export default function Detections() {
             <TableHeaderCell sort={sortFor("Status")}>Status</TableHeaderCell>
             <TableHeaderCell>Last Handled By</TableHeaderCell>
             <TableHeaderCell sort={sortFor("Last Updated")}>Last Updated</TableHeaderCell>
-            <TableHeaderCell className="text-right">Actions</TableHeaderCell>
           </TableHead>
           <TableBody>
             {alertsQuery.isLoading ? (
-              <TableStateRow colSpan={8}>Loading detections…</TableStateRow>
+              <TableStateRow colSpan={7}>Loading detections…</TableStateRow>
             ) : currentRows.length === 0 ? (
-              <TableStateRow colSpan={8}>
+              <TableStateRow colSpan={7}>
                 No detections found for the current filters.
               </TableStateRow>
             ) : (
@@ -616,19 +614,6 @@ export default function Detections() {
                   </TableCell>
                   <TableCell className="text-fg-muted">{getAlertLastHandledBy(item)}</TableCell>
                   <TableCell className="text-fg-muted">{getAlertLastUpdated(item)}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 w-7 px-0"
-                        aria-label={`View ${formatAlertCode(item.log_id)}`}
-                        onClick={() => openAlertModal(item)}
-                      >
-                        <RiEyeLine size={14} />
-                      </Button>
-                    </div>
-                  </TableCell>
                 </TableRow>
               ))
             )}
