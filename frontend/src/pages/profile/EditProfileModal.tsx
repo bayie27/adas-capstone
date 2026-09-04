@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/Input"
 import { Button } from "@/components/ui/Button"
 import { updateMyProfile, type UpdateMyProfileInput, type UserRecord } from "@/api/users"
 import { useAuthStore } from "@/store/useAuthStore"
-import { getApiErrorMessage } from "@/api/client"
+import { getApiError, getApiErrorMessage } from "@/api/client"
 import { toast } from "@/store/useToastStore"
 
 interface EditProfileModalProps {
@@ -31,6 +31,7 @@ export function EditProfileModal({ profile, onClose }: EditProfileModalProps) {
   const [lastName, setLastName] = useState(profile.last_name)
   const [username, setUsername] = useState(profile.username)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [usernameError, setUsernameError] = useState<string | null>(null)
 
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateMyProfileInput) => updateMyProfile(payload),
@@ -61,6 +62,17 @@ export function EditProfileModal({ profile, onClose }: EditProfileModalProps) {
       onClose()
     },
     onError: (error) => {
+      // PATCH /me (routes/users.py) answers a duplicate with a plain 400 —
+      // the only field this route lets a conflict happen on is username, so
+      // that's where the message belongs rather than a banner disconnected
+      // from the field.
+      if (getApiError(error)?.status === 400) {
+        const message = getApiErrorMessage(error, "Username already taken.")
+        setUsernameError(message)
+        toast.error(message)
+        return
+      }
+
       const message = getApiErrorMessage(error, "Unable to update your profile.")
       setErrorMessage(message)
       toast.error(message)
@@ -75,6 +87,7 @@ export function EditProfileModal({ profile, onClose }: EditProfileModalProps) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setErrorMessage(null)
+    setUsernameError(null)
 
     const nextFirstName = firstName.trim()
     const nextLastName = lastName.trim()
@@ -138,8 +151,10 @@ export function EditProfileModal({ profile, onClose }: EditProfileModalProps) {
             label="Username"
             type="text"
             value={username}
+            error={usernameError ?? undefined}
             onChange={(event) => {
               setErrorMessage(null)
+              setUsernameError(null)
               setUsername(event.target.value)
             }}
           />

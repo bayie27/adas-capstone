@@ -9,6 +9,8 @@ import { PasswordInput } from "@/components/ui/PasswordInput"
 import { resetUserPassword } from "@/api/users"
 import type { UserRecord } from "@/api/users"
 import { getApiErrorMessage } from "@/api/client"
+import { getFieldValidationMessage } from "@/utils/apiFieldErrors"
+import { validateNewPassword, validatePasswordConfirmation } from "@/utils/passwordValidation"
 import { formatShortDateTime } from "@/utils/datetime"
 import { getUserFullName } from "@/utils/format"
 
@@ -16,6 +18,8 @@ type ChangePasswordFormState = {
   new_password: string
   confirm_password: string
 }
+
+type ChangePasswordFieldErrors = Partial<Record<keyof ChangePasswordFormState, string>>
 
 const EMPTY_FORM: ChangePasswordFormState = {
   new_password: "",
@@ -30,7 +34,7 @@ interface ChangePasswordModalProps {
 
 export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePasswordModalProps) {
   const [form, setForm] = useState<ChangePasswordFormState>(EMPTY_FORM)
-  const [validationError, setValidationError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<ChangePasswordFieldErrors>({})
 
   const mutation = useMutation({
     mutationFn: ({ userId, newPassword }: { userId: number; newPassword: string }) =>
@@ -42,24 +46,20 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
     field: K,
     value: ChangePasswordFormState[K],
   ) {
-    setValidationError(null)
+    setFieldErrors((current) => ({ ...current, [field]: undefined }))
     mutation.reset()
     setForm((current) => ({ ...current, [field]: value }))
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setValidationError(null)
 
-    if (!form.new_password || !form.confirm_password) {
-      setValidationError("Both password fields are required.")
-      return
+    const errors: ChangePasswordFieldErrors = {
+      new_password: validateNewPassword(form.new_password),
+      confirm_password: validatePasswordConfirmation(form.new_password, form.confirm_password),
     }
-
-    if (form.new_password !== form.confirm_password) {
-      setValidationError("Password confirmation does not match.")
-      return
-    }
+    setFieldErrors(errors)
+    if (Object.values(errors).some(Boolean)) return
 
     mutation.mutate({
       userId: user.user_id,
@@ -67,9 +67,18 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
     })
   }
 
-  const errorMessage =
-    validationError ??
-    (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to reset password.") : null)
+  // The server-side strength check should never fire once the client-side
+  // one above agrees with it, but it's the final word — attribute a 422 that
+  // still names new_password to that field rather than a generic banner.
+  const apiNewPasswordError = mutation.isError
+    ? getFieldValidationMessage(mutation.error, "new_password")
+    : undefined
+  const newPasswordError = fieldErrors.new_password ?? apiNewPasswordError
+
+  const genericError =
+    mutation.isError && !apiNewPasswordError
+      ? getApiErrorMessage(mutation.error, "Unable to reset password.")
+      : null
 
   return (
     <Modal
@@ -97,6 +106,7 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
               label="New Password"
               value={form.new_password}
               disabled={mutation.isPending}
+              error={newPasswordError}
               onChange={(value) => updateField("new_password", value)}
               inputClassName="text-sm text-fg"
               labelClassName="text-sm font-medium text-fg"
@@ -105,6 +115,7 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
               label="Confirm New Password"
               value={form.confirm_password}
               disabled={mutation.isPending}
+              error={fieldErrors.confirm_password}
               onChange={(value) => updateField("confirm_password", value)}
               inputClassName="text-sm text-fg"
               labelClassName="text-sm font-medium text-fg"
@@ -123,7 +134,7 @@ export function ChangePasswordModal({ user, onClose, onSuccess }: ChangePassword
           </div>
         </div>
 
-        {errorMessage ? <p className="mt-4 text-sm text-danger">{errorMessage}</p> : null}
+        {genericError ? <p className="mt-4 text-sm text-danger">{genericError}</p> : null}
 
         <hr className="border-t border-stroke my-6 -mx-6" />
 

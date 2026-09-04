@@ -10,7 +10,9 @@ import { createUser } from "@/api/users"
 import { cn } from "@/utils/cn"
 import type { ApiUserRole } from "@/api/auth"
 import type { CreateUserInput, UserRecord } from "@/api/users"
-import { getApiErrorMessage } from "@/api/client"
+import { getApiError, getApiErrorMessage } from "@/api/client"
+import { getFieldValidationMessage } from "@/utils/apiFieldErrors"
+import { validateNewPassword, validatePasswordConfirmation } from "@/utils/passwordValidation"
 
 type CreateUserFormState = {
   first_name: string
@@ -20,6 +22,8 @@ type CreateUserFormState = {
   password: string
   confirm_password: string
 }
+
+type PasswordFieldErrors = Partial<Record<"password" | "confirm_password", string>>
 
 const EMPTY_FORM: CreateUserFormState = {
   first_name: "",
@@ -38,6 +42,7 @@ interface AddUserModalProps {
 export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
   const [form, setForm] = useState<CreateUserFormState>(EMPTY_FORM)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<PasswordFieldErrors>({})
 
   const mutation = useMutation({
     mutationFn: createUser,
@@ -49,6 +54,9 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
     value: CreateUserFormState[K],
   ) {
     setValidationError(null)
+    if (field === "password" || field === "confirm_password") {
+      setFieldErrors((current) => ({ ...current, [field]: undefined }))
+    }
     mutation.reset()
     setForm((current) => ({ ...current, [field]: value }))
   }
@@ -57,30 +65,54 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
     event.preventDefault()
     setValidationError(null)
 
-    const payload: CreateUserInput = {
-      first_name: form.first_name.trim(),
-      last_name: form.last_name.trim(),
-      username: form.username.trim(),
-      role: form.role,
-      password: form.password,
-    }
+    const trimmedFirstName = form.first_name.trim()
+    const trimmedLastName = form.last_name.trim()
+    const trimmedUsername = form.username.trim()
 
-    if (!payload.first_name || !payload.last_name || !payload.username || !payload.password) {
+    if (!trimmedFirstName || !trimmedLastName || !trimmedUsername) {
       setValidationError("All user fields are required.")
       return
     }
 
-    if (form.password !== form.confirm_password) {
-      setValidationError("Password confirmation does not match.")
-      return
+    const errors: PasswordFieldErrors = {
+      password: validateNewPassword(form.password),
+      confirm_password: validatePasswordConfirmation(form.password, form.confirm_password),
+    }
+    setFieldErrors(errors)
+    if (Object.values(errors).some(Boolean)) return
+
+    const payload: CreateUserInput = {
+      first_name: trimmedFirstName,
+      last_name: trimmedLastName,
+      username: trimmedUsername,
+      role: form.role,
+      password: form.password,
     }
 
     mutation.mutate(payload)
   }
 
+  // The server-side strength check should never fire once the client-side
+  // one above agrees with it, but it's the final word — attribute a 422 that
+  // still names password to that field rather than a generic banner.
+  const apiPasswordError = mutation.isError
+    ? getFieldValidationMessage(mutation.error, "password")
+    : undefined
+  const passwordError = fieldErrors.password ?? apiPasswordError
+
+  // create_user (routes/users.py) answers a duplicate with a plain 400 —
+  // the one collision this form can have is on username, so that's where it
+  // belongs rather than a banner disconnected from the field.
+  const usernameError =
+    mutation.isError && getApiError(mutation.error)?.status === 400
+      ? getApiErrorMessage(mutation.error, "Username already taken.")
+      : undefined
+
   const errorMessage =
     validationError ??
-    (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to create user.") : null)
+    (mutation.isError && !apiPasswordError && !usernameError
+      ? getApiErrorMessage(mutation.error, "Unable to create user.")
+      : null)
 
   return (
     <Modal
@@ -162,6 +194,7 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
               placeholder="jdoe"
               value={form.username}
               disabled={mutation.isPending}
+              error={usernameError}
               onChange={(event) => updateField("username", event.target.value)}
               className="text-sm text-fg"
               labelClassName="text-sm font-medium text-fg"
@@ -179,6 +212,7 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
                 label="Password"
                 value={form.password}
                 disabled={mutation.isPending}
+                error={passwordError}
                 onChange={(value) => updateField("password", value)}
                 inputClassName="text-sm text-fg"
                 labelClassName="text-sm font-medium text-fg"
@@ -187,6 +221,7 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
                 label="Confirm Password"
                 value={form.confirm_password}
                 disabled={mutation.isPending}
+                error={fieldErrors.confirm_password}
                 onChange={(value) => updateField("confirm_password", value)}
                 inputClassName="text-sm text-fg"
                 labelClassName="text-sm font-medium text-fg"

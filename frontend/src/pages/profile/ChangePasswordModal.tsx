@@ -5,15 +5,23 @@ import { RiLockLine } from "@remixicon/react"
 import { Modal } from "@/components/ui/Modal"
 import { Button } from "@/components/ui/Button"
 import { PasswordInput } from "@/components/ui/PasswordInput"
+import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
 import { changeMyPassword } from "@/api/users"
-import type { NoticeState } from "@/components/ui/NoticeBanner"
-import { getApiErrorMessage } from "@/api/client"
+import { getApiError, getApiErrorMessage } from "@/api/client"
+import { getFieldValidationMessage } from "@/utils/apiFieldErrors"
+import {
+  validateNewPassword,
+  validatePasswordConfirmation,
+  validateRequiredPassword,
+} from "@/utils/passwordValidation"
 
 type PasswordFormState = {
   old_password: string
   new_password: string
   confirm_password: string
 }
+
+type PasswordFieldErrors = Partial<Record<keyof PasswordFormState, string>>
 
 const EMPTY_FORM: PasswordFormState = {
   old_password: "",
@@ -26,8 +34,45 @@ interface ChangePasswordModalProps {
   onSuccess: () => void
 }
 
+/**
+ * Turns a failed password change into field-level messages.
+ *
+ * The self-service route (`PATCH /me/password`) answers a wrong current
+ * password with a plain 400, not a validation error — that's the one case
+ * worth naming explicitly. Anything else that names `old_password` or
+ * `new_password` in a 422 (the client-side check above should have already
+ * caught it, but the server is the final word) is attributed to that field
+ * too; everything else falls back to one generic message.
+ */
+function describePasswordChangeError(error: unknown): {
+  fieldErrors: PasswordFieldErrors
+  generic?: string
+} {
+  if (getApiError(error)?.status === 400) {
+    return {
+      fieldErrors: {
+        old_password: getApiErrorMessage(error, "Current password is incorrect."),
+      },
+    }
+  }
+
+  const fieldErrors: PasswordFieldErrors = {
+    old_password: getFieldValidationMessage(error, "old_password"),
+    new_password: getFieldValidationMessage(error, "new_password"),
+  }
+  if (fieldErrors.old_password || fieldErrors.new_password) {
+    return { fieldErrors }
+  }
+
+  return {
+    fieldErrors: {},
+    generic: getApiErrorMessage(error, "Unable to update your password."),
+  }
+}
+
 export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalProps) {
   const [form, setForm] = useState<PasswordFormState>(EMPTY_FORM)
+  const [fieldErrors, setFieldErrors] = useState<PasswordFieldErrors>({})
   const [notice, setNotice] = useState<NoticeState | null>(null)
 
   const mutation = useMutation({
@@ -37,6 +82,8 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
 
   function updateField<K extends keyof PasswordFormState>(field: K, value: PasswordFormState[K]) {
     setNotice(null)
+    setFieldErrors((current) => ({ ...current, [field]: undefined }))
+    mutation.reset()
     setForm((current) => ({ ...current, [field]: value }))
   }
 
@@ -44,15 +91,13 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
     event.preventDefault()
     setNotice(null)
 
-    if (!form.old_password || !form.new_password || !form.confirm_password) {
-      setNotice({ tone: "error", message: "Complete all password fields." })
-      return
+    const errors: PasswordFieldErrors = {
+      old_password: validateRequiredPassword(form.old_password, "Current password"),
+      new_password: validateNewPassword(form.new_password),
+      confirm_password: validatePasswordConfirmation(form.new_password, form.confirm_password),
     }
-
-    if (form.new_password !== form.confirm_password) {
-      setNotice({ tone: "error", message: "New password and confirmation do not match." })
-      return
-    }
+    setFieldErrors(errors)
+    if (Object.values(errors).some(Boolean)) return
 
     mutation.mutate({
       old_password: form.old_password,
@@ -60,14 +105,12 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
     })
   }
 
+  const apiOutcome = mutation.isError ? describePasswordChangeError(mutation.error) : null
+  const oldPasswordError = fieldErrors.old_password ?? apiOutcome?.fieldErrors.old_password
+  const newPasswordError = fieldErrors.new_password ?? apiOutcome?.fieldErrors.new_password
+  const confirmPasswordError = fieldErrors.confirm_password
   const currentNotice =
-    notice ??
-    (mutation.isError
-      ? {
-          tone: "error" as const,
-          message: getApiErrorMessage(mutation.error, "Unable to update your password."),
-        }
-      : null)
+    notice ?? (apiOutcome?.generic ? { tone: "error" as const, message: apiOutcome.generic } : null)
 
   return (
     <Modal
@@ -89,18 +132,21 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
             label="Current Password"
             value={form.old_password}
             autoComplete="current-password"
+            error={oldPasswordError}
             onChange={(value) => updateField("old_password", value)}
           />
 
           <PasswordInput
             label="New Password"
             value={form.new_password}
+            error={newPasswordError}
             onChange={(value) => updateField("new_password", value)}
           />
 
           <PasswordInput
             label="Confirm New Password"
             value={form.confirm_password}
+            error={confirmPasswordError}
             onChange={(value) => updateField("confirm_password", value)}
           />
 
@@ -109,13 +155,7 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
           </p>
         </div>
 
-        {currentNotice ? (
-          <p
-            className={`mt-4 text-xs ${currentNotice.tone === "success" ? "text-success" : "text-danger"}`}
-          >
-            {currentNotice.message}
-          </p>
-        ) : null}
+        {currentNotice ? <NoticeBanner notice={currentNotice} /> : null}
 
         <hr className="my-6 -mx-6 border-t border-stroke" />
 

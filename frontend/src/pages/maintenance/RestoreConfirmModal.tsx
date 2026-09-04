@@ -8,7 +8,7 @@ import {
   type BackupRead,
   type RestoreTriggerResponse,
 } from "@/api/maintenance"
-import { getApiErrorMessage } from "@/api/client"
+import { getApiError, getApiErrorMessage } from "@/api/client"
 import { Badge } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -33,6 +33,32 @@ function formatBackupOrigin(origin: string) {
 
 function formatStorageTier(tier: BackupRead["storage_tier"]) {
   return tier === "protected" ? "Protected storage" : "Local degraded"
+}
+
+/**
+ * Both real failure modes here are hand-raised HTTPExceptions, not Pydantic
+ * validation errors — `trigger_restore` (routes/maintenance.py) answers a
+ * wrong password with 401 AUTH_INVALID_CREDENTIALS and a confirmation
+ * mismatch with 422 VALIDATION_ERROR, each with an already-precise `detail`.
+ * Route each to the field it's actually about instead of one banner under
+ * both.
+ */
+function describeRestoreError(error: unknown): {
+  password?: string
+  confirmation?: string
+  generic?: string
+} {
+  const parsed = getApiError(error)
+
+  if (parsed?.code === "AUTH_INVALID_CREDENTIALS") {
+    return { password: getApiErrorMessage(error, "Current password is incorrect.") }
+  }
+
+  if (parsed?.code === "VALIDATION_ERROR" && parsed.detail.toLowerCase().includes("confirmation")) {
+    return { confirmation: parsed.detail }
+  }
+
+  return { generic: getApiErrorMessage(error, "Unable to start the database restore.") }
 }
 
 /**
@@ -72,6 +98,8 @@ export function RestoreConfirmModal({ backup, onClose, onSuccess }: RestoreConfi
       confirmation,
     })
   }
+
+  const apiError = mutation.isError ? describeRestoreError(mutation.error) : null
 
   return (
     <Modal
@@ -146,23 +174,27 @@ export function RestoreConfirmModal({ backup, onClose, onSuccess }: RestoreConfi
             label="Current Password"
             value={password}
             autoComplete="current-password"
-            onChange={setPassword}
+            error={apiError?.password}
+            onChange={(value) => {
+              mutation.reset()
+              setPassword(value)
+            }}
           />
 
           <Input
             label={`Type "${expected}" to confirm`}
             value={confirmation}
-            onChange={(event) => setConfirmation(event.target.value)}
+            error={apiError?.confirmation}
+            onChange={(event) => {
+              mutation.reset()
+              setConfirmation(event.target.value)
+            }}
             autoComplete="off"
             placeholder={expected}
           />
         </div>
 
-        {mutation.isError ? (
-          <p className="text-xs text-danger">
-            {getApiErrorMessage(mutation.error, "Unable to start the database restore.")}
-          </p>
-        ) : null}
+        {apiError?.generic ? <p className="text-xs text-danger">{apiError.generic}</p> : null}
 
         <div className="flex items-center justify-end gap-3">
           <Button type="button" variant="outline" size="sm" onClick={onClose}>
