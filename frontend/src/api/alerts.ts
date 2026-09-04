@@ -1,9 +1,9 @@
 import api, { getApiError } from "@/api/client"
 import { downloadBlobResponse } from "@/utils/download"
 
-export type AlertStatus = "Unverified" | "Ongoing" | "Dismissed" | "Resolved"
+export type AlertStatus = "Unverified" | "Ongoing" | "Dismissed" | "Cleared"
 
-const ALERT_STATUSES: AlertStatus[] = ["Unverified", "Ongoing", "Dismissed", "Resolved"]
+const ALERT_STATUSES: AlertStatus[] = ["Unverified", "Ongoing", "Dismissed", "Cleared"]
 
 function asAlertStatus(value: unknown): AlertStatus | null {
   return typeof value === "string" && (ALERT_STATUSES as string[]).includes(value)
@@ -16,7 +16,7 @@ function asNullableString(value: unknown): string | null {
 }
 
 /**
- * Who resolved a race for this incident, and how.
+ * Who won a race for this incident, and how.
  *
  * The same four facts reach the client by **two different paths**, which is
  * why this is one shape rather than two:
@@ -183,8 +183,8 @@ export async function dismissAlert(logId: number) {
   return data
 }
 
-export async function resolveAlert(logId: number) {
-  const { data } = await api.post<AlertLog>(`/alerts/${logId}/resolve`)
+export async function clearAlert(logId: number) {
+  const { data } = await api.post<AlertLog>(`/alerts/${logId}/clear`)
   return data
 }
 
@@ -197,7 +197,7 @@ export async function resolveAlert(logId: number) {
  * 400 `PRECONDITION_FAILED` when the incident is no longer Unverified —
  * decidable from a plain read, since a terminal or Ongoing incident can't
  * become Unverified again. 409 `CONFLICT_STATE` on a genuine race, reusing
- * the same already-handled dialog as confirm/dismiss/resolve — callers
+ * the same already-handled dialog as confirm/dismiss/clear — callers
  * should check `getIncidentConflict` first and fall back to the plain
  * message only when it returns null, so the two failures render distinctly.
  */

@@ -26,7 +26,7 @@ class DetectionLog(DetectionLogBase, table=True):
             name="ck_detection_confidence_score_range",
         ),
         CheckConstraint(
-            "detection_status IN ('Unverified', 'Ongoing', 'Dismissed', 'Resolved')",
+            "detection_status IN ('Unverified', 'Ongoing', 'Dismissed', 'Cleared')",
             name="ck_detection_status_valid",
         ),
         Index("ux_detection_source_event", "source_event_id", unique=True),

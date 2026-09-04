@@ -42,7 +42,7 @@ class DetectionStatus(StrEnum):
     UNVERIFIED = "Unverified"
     ONGOING = "Ongoing"
     DISMISSED = "Dismissed"
-    RESOLVED = "Resolved"
+    CLEARED = "Cleared"
 
 
 class AuditResult(StrEnum):

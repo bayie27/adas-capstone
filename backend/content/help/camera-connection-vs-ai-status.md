@@ -35,7 +35,7 @@ itself, and these are worth reading rather than skipping past:
 - **"Held for an open incident"**, meaning it resumes when an operator closes it: the
   camera is Paused because it's the source of a currently Ongoing or Unverified alert.
   Nothing is wrong; detection will resume the moment that alert is
-  confirmed-and-resolved, corrected, or dismissed. See [What Happens After I Confirm an
+  confirmed-and-cleared, corrected, or dismissed. See [What Happens After I Confirm an
   Alert?](faq-what-happens-after-i-confirm-an-alert).
 - **"Dismissal cooldown"**, shown with a live countdown of seconds remaining: the
   camera just had a false positive dismissed and is in its short automatic cooldown.

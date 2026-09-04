@@ -8,7 +8,7 @@ sort_order: 30
 is_faq: false
 ---
 
-![The incident detail view for an Ongoing incident, with Dismiss and Resolve
+![The incident detail view for an Ongoing incident, with Dismiss and Cleared
 actions](/help/incident-detail-modal.png)
 
 ## When to use this
@@ -29,7 +29,7 @@ the other path.
 
 - The alert moves to **Dismissed**, a final state. It cannot be reopened, edited, or
   restored, regardless of who dismisses it or why. See [Can I Undo a Confirmed or
-  Resolved Incident?](faq-can-i-undo-a-confirmed-or-resolved-incident).
+  Cleared Incident?](faq-can-i-undo-a-confirmed-or-cleared-incident).
 - The original operator who confirmed it stays on the record as the verifier; you are
   recorded as the operator who closed it. Both names remain visible on the incident
   afterward. Correcting a confirmation doesn't erase who made the original call, since
@@ -47,6 +47,6 @@ looking back later sees exactly what happened (confirmed, then corrected) rather
 a record that looks like nothing occurred. See [Reading the Audit
 Trail](reading-the-audit-trail) if you need to explain a correction after the fact.
 
-If the incident had already been resolved (scene cleared) rather than corrected while
-still Ongoing, it's too late for this path: Resolved is also final. See [Resolving an
-Ongoing Incident](resolving-an-ongoing-incident) for that state instead.
+If the incident had already been cleared (scene cleared) rather than corrected while
+still Ongoing, it's too late for this path: Cleared is also final. See [Clearing an
+Ongoing Incident](clearing-an-ongoing-incident) for that state instead.

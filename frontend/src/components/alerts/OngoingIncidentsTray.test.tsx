@@ -12,7 +12,7 @@ vi.mock("@/api/alerts", async () => {
   const actual = await vi.importActual<typeof import("@/api/alerts")>("@/api/alerts")
   return {
     ...actual,
-    resolveAlert: vi.fn(),
+    clearAlert: vi.fn(),
     dismissAlert: vi.fn(),
   }
 })
@@ -76,11 +76,11 @@ describe("OngoingIncidentsTray", () => {
     expect(screen.getByText(/verified by lead operator/i)).toBeInTheDocument()
   })
 
-  it("opens IncidentDetailModal and allows resolving the ongoing incident", async () => {
+  it("opens IncidentDetailModal and immediately clears the ongoing incident", async () => {
     const user = userEvent.setup()
-    vi.mocked(alertsApi.resolveAlert).mockResolvedValueOnce({
+    vi.mocked(alertsApi.clearAlert).mockResolvedValueOnce({
       ...mockOngoingAlert,
-      detection_status: "Resolved",
+      detection_status: "Cleared",
       closed_by_name: "Current User",
       closed_at: "2026-08-27T10:05:00Z",
     })
@@ -91,18 +91,18 @@ describe("OngoingIncidentsTray", () => {
     // Open tray
     await user.click(screen.getByRole("button", { name: /ongoing incidents tray/i }))
 
-    // Click Review & Resolve
-    const reviewBtn = screen.getByRole("button", { name: /review & resolve/i })
+    // Click Review Incident
+    const reviewBtn = screen.getByRole("button", { name: /review incident/i })
     await user.click(reviewBtn)
 
     // Modal opens
-    expect(screen.getByRole("button", { name: /resolve accident/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Cleared" })).toBeInTheDocument()
 
-    // Click Resolve Accident
-    await user.click(screen.getByRole("button", { name: /resolve accident/i }))
+    // Click Cleared
+    await user.click(screen.getByRole("button", { name: "Cleared" }))
 
     await waitFor(() => {
-      expect(alertsApi.resolveAlert).toHaveBeenCalledWith(201)
+      expect(alertsApi.clearAlert).toHaveBeenCalledWith(201)
     })
 
     // Incident is removed from ongoing queue and tray disappears
@@ -122,40 +122,40 @@ describe("OngoingIncidentsTray", () => {
     await user.click(screen.getByRole("button", { name: /ongoing incidents tray/i }))
     expect(screen.getByText("Ongoing Incidents")).toBeInTheDocument()
 
-    // Click Review & Resolve
-    const reviewBtn = screen.getByRole("button", { name: /review & resolve/i })
+    // Click Review Incident
+    const reviewBtn = screen.getByRole("button", { name: /review incident/i })
     await user.click(reviewBtn)
 
     // Modal opens
-    expect(screen.getByRole("button", { name: /resolve accident/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Cleared" })).toBeInTheDocument()
 
     // Side panel tray remains open in the document behind modal (both tray card and modal have camera name)
     expect(screen.getByText("Ongoing Incidents")).toBeInTheDocument()
     expect(screen.getAllByText("Highway Intersection")).toHaveLength(2)
 
-    // Close modal without resolving
+    // Close modal without clearing
     const closeBtn = screen.getByRole("button", { name: /close incident details/i })
     await user.click(closeBtn)
 
     // Modal is closed
-    expect(screen.queryByRole("button", { name: /resolve accident/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Cleared" })).not.toBeInTheDocument()
 
     // Tray is still open
     expect(screen.getByText("Ongoing Incidents")).toBeInTheDocument()
     expect(screen.getByText("Highway Intersection")).toBeInTheDocument()
   })
 
-  it("removes incident from tray in real-time when another operator resolves it", () => {
+  it("removes incident from tray in real-time when another operator clears it", () => {
     useAlertStore.setState({ alerts: [mockOngoingAlert] })
     const { rerender } = render(renderWithProviders(<OngoingIncidentsTray />))
 
     expect(screen.getByRole("button", { name: /ongoing incidents tray/i })).toBeInTheDocument()
 
-    // Simulate WebSocket update removing or changing to Resolved
+    // Simulate WebSocket update removing or changing to Cleared
     act(() => {
       useAlertStore.getState().addAlert({
         ...mockOngoingAlert,
-        detection_status: "Resolved",
+        detection_status: "Cleared",
         closed_by_name: "Other Operator",
         updated_at: "2026-08-27T10:06:00Z",
       })

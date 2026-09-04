@@ -26,6 +26,7 @@ describe("auditFormat", () => {
       expect(formatAuditAction("CAMERA_CREATE")).toBe("Created Camera")
       expect(formatAuditAction("USER_UPDATE")).toBe("Updated User")
       expect(formatAuditAction("AUDIT_EXPORT")).toBe("Exported Audit Log")
+      expect(formatAuditAction("ALERT_CLEAR")).toBe("Cleared Alert")
     })
 
     it("falls back to title-casing unmapped action codes", () => {

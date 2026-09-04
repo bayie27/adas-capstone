@@ -526,6 +526,93 @@ explicitly rather than marking it passed.
 
 ---
 
+## P28 — Cleared incident contract
+
+```text
+Execute be_plan/28_PKG_cleared_incident.md completely on branch
+feat/be-p28-cleared-incident from the shared P28-P30 planning commit.
+
+Use gpt-5.6-luna at max reasoning. Read CLAUDE.md, be_plan/01_CONTRACTS.md,
+the complete P28 document, be_plan/14_EDGE_CASES.md, and the authoritative
+paper_sync procedure before editing. Work through every numbered step in order.
+
+This is a clean breaking rename: Resolved -> Cleared, /resolve -> /clear,
+ALERT_RESOLVE -> ALERT_CLEAR, total_resolved* -> total_cleared*. The visible
+button is exactly "Cleared" and invokes immediately; do not add a confirmation
+modal or explanatory UI. The tray CTA becomes "Review Incident". Keep closed_*
+field names. Rewrite both detection and audit history through one new migration;
+preserve and re-prove audit immutability, indexes, timestamps, and every unrelated
+column. Do not add compatibility aliases and do not modify ai_engine/.
+
+Run narrow tests as you work, then the full backend suite, frontend suite, and
+pnpm full:check. Do not run pnpm check manually and do not push. Finish with a
+categorized rg sweep and a numbered spec-vs-diff checklist.
+
+Run read-only live paper sync and create the local P28 finding/TRACKER update,
+but do not mutate Drive without the standard gates. Prepare the separately gated
+test-tracker manifest and #D9EAD3 cell formatting exactly as the package states;
+do not write the live Sheet before approval. Report every deviation or unrun test.
+```
+
+---
+
+## P29 — Administrator-only AI Performance
+
+```text
+Execute be_plan/29_PKG_admin_ai_performance.md on branch
+feat/be-p29-admin-ai-performance using gpt-5.6-luna at max reasoning.
+
+Read CLAUDE.md, be_plan/01_CONTRACTS.md, the complete P29 document,
+be_plan/14_EDGE_CASES.md, and paper_sync instructions before editing. You may
+implement isolated authorization files while P28 runs, but before claiming done
+you MUST rebase onto the completed P28 result, resolve all analytics/help/test
+overlap using Cleared terminology, and rerun verification.
+
+Enforce Admin authorization on performance APIs and synchronous/async exports,
+including legacy Operator-owned performance jobs. Preserve Operator Dashboard,
+Detections, System Health, and incident/dashboard exports. Move AI Performance
+to the final Administration position after Maintenance; remove it from Monitoring;
+redirect /user/ai to /user. Make dedicated help Admin-only without dead Operator
+links. Do not add a migration or audit action.
+
+Run the package tests plus pnpm full:check. Do not run pnpm check manually and do
+not push. Run read-only paper sync, create the local finding, and prepare the exact
+separately gated test-tracker edits with #D9EAD3 only on changed cells. No live
+Drive writes without approval. Finish with a spec-vs-diff checklist.
+```
+
+---
+
+## P30 — Protected backup storage
+
+```text
+Execute be_plan/30_PKG_protected_backup_storage.md on branch
+feat/be-p30-protected-backup-storage in the main checkout, using gpt-5.6-luna
+at max reasoning.
+
+Read CLAUDE.md, the P7/P18 maintenance contracts and implementations, the full
+P30 document, be_plan/14_EDGE_CASES.md, and paper_sync instructions first. Build
+the injected physical-device probe, dual artifact roots with one local control
+root, protected-first/degraded-fallback backup and archive publishing, tiered
+listing/restore contract, protected freshness, and local emergency restore copy.
+Never choose arbitrary removable media, expose paths/device ids, edit the real
+.env, delete/copy existing local backups, or modify ai_engine/.
+
+Run all targeted maintenance/coordinator/frontend tests and pnpm full:check. Then
+perform the real drill only on a confirmed demo database with a confirmed separate
+USB physical disk: protected backup, list/verify/audit, dashboard restore, rollback,
+degraded fallback while absent, catch-up after reinsertion, and protected archive.
+If hardware is unavailable, stop with that exact acceptance item pending rather
+than simulating it. Do not run pnpm check manually and do not push.
+
+Amend the existing scheduler/NAS paper finding without duplicating it; no Drive
+writes before approval. Prepare the separately gated Backup & Recovery Sheet rows,
+AD-J04/NFR-18 edits, and #D9EAD3 changed-cell formatting with full readback. Finish
+with a numbered spec-vs-diff checklist and all measured evidence.
+```
+
+---
+
 ## Extra — Frontend migration (for a frontend session, or for Seb)
 
 ```

@@ -87,7 +87,7 @@ backend/
 │           ├── internal.py          # AI engine bridge — v2 heartbeat + idempotent alert ingestion
 │           ├── auth.py              # POST /api/auth/login, POST /api/auth/logout
 │           ├── cameras.py           # Camera CRUD, KPI/breakdown response shape
-│           ├── alerts.py            # HITL workflow (confirm/dismiss/resolve/snooze) + CSV/PDF export
+│           ├── alerts.py            # HITL workflow (confirm/dismiss/clear/snooze) + CSV/PDF export
 │           ├── users.py             # User CRUD (Admin) and self-service (Operator)
 │           ├── analytics.py         # Dashboard KPIs, AI performance, charts + exports
 │           ├── audit.py             # Append-only activity audit viewer + export (Admin only)
@@ -169,13 +169,13 @@ Protected by `x-api-key` (the `INTERNAL_API_KEY` from `.env`, compared with `sec
 | `GET`  | `/api/alerts/{log_id}/snapshot` | S    | The incident snapshot JPEG — authenticated, not a public static mount.                                                        |
 | `POST` | `/api/alerts/{log_id}/confirm`  | S    | `Unverified → Ongoing`.                                                                                                       |
 | `POST` | `/api/alerts/{log_id}/dismiss`  | S    | `Unverified → Dismissed` (60s cooldown) or `Ongoing → Dismissed` (immediate resume).                                          |
-| `POST` | `/api/alerts/{log_id}/resolve`  | S    | `Ongoing → Resolved`. Immediate resume.                                                                                       |
+| `POST` | `/api/alerts/{log_id}/clear`    | S    | `Ongoing → Cleared`. Immediate resume.                                                                                        |
 | `POST` | `/api/alerts/{log_id}/snooze`   | S    | `Unverified` only. Duration comes from the actor's saved settings, never the request body.                                    |
 
 **Detection status flow** (D-002 — the only canonical version; `Closed` is never a stored value):
 
 ```
-Unverified ──confirm──► Ongoing ──resolve──► Resolved
+Unverified ──confirm──► Ongoing ──clear──► Cleared
      │                     │
      └──dismiss──► Dismissed ◄──dismiss── (correction)
      (60s cooldown)              (immediate resume)
@@ -205,7 +205,7 @@ Every transition is a conditional `UPDATE ... WHERE detection_status = :expected
 | `GET`  | `/api/analytics/performance`        | S    |
 | `GET`  | `/api/analytics/export/performance` | S    |
 
-Accidents = `Ongoing` + `Resolved`; false positives = `Dismissed`; `Unverified` is excluded from every analytics number. `precision = confirmed / (confirmed + dismissed)`, returning `null` (never `0`) on zero division.
+Accidents = `Ongoing` + `Cleared`; false positives = `Dismissed`; `Unverified` is excluded from every analytics number. `precision = confirmed / (confirmed + dismissed)`, returning `null` (never `0`) on zero division.
 
 ### Settings, audit, exports, help, system — summary
 
@@ -252,7 +252,7 @@ Event types: `CONNECTION_READY`, `NEW_DETECTION`, `ALERT_STATUS_UPDATE`, `CAMERA
 | `Unverified` | AI detected, operator has not acted yet              |
 | `Ongoing`    | Operator confirmed — active emergency, camera paused |
 | `Dismissed`  | False positive or corrected human error              |
-| `Resolved`   | Emergency cleared, camera resumed                    |
+| `Cleared`    | Emergency cleared, camera resumed                    |
 
 ### Camera state — desired vs. observed (D-003)
 

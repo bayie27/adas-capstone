@@ -20,7 +20,7 @@ Trail?](faq-who-can-see-the-audit-trail).
 ## What's recorded
 
 Actions that change something: logins and logouts (including failed login attempts),
-incident confirm/dismiss/resolve, camera create/update/enable/disable/delete, and user
+incident confirm/dismiss/clear, camera create/update/enable/disable/delete, and user
 create/update/role-change/password-reset/enable/disable. Backup and restore actions are
 recorded too, attributed to the system itself rather than a person when they run on a
 schedule rather than by someone clicking a button.

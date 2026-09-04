@@ -25,8 +25,8 @@ measured.
 ## What happens after you dismiss
 
 - The alert moves to **Dismissed**, a final state. It cannot be reopened, edited, or
-  restored. See [Can I Undo a Confirmed or Resolved
-  Incident?](faq-can-i-undo-a-confirmed-or-resolved-incident).
+  restored. See [Can I Undo a Confirmed or Cleared
+  Incident?](faq-can-i-undo-a-confirmed-or-cleared-incident).
 - You are recorded as the operator who closed it.
 - The camera stays paused for a short cooldown period (about 60 seconds) before AI
   detection resumes automatically on that camera. You don't need to do anything to

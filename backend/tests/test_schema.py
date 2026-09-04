@@ -270,15 +270,15 @@ class TestOneOpenIncidentPerCamera:
 
     def test_a_terminal_status_does_not_block_a_new_open_incident(self, db_session):
         camera = _make_camera(db_session)
-        resolved = DetectionLog(
+        cleared = DetectionLog(
             camera_id=camera.camera_id,
             detected_at=datetime.now(UTC),
             snapshot_key="a.jpg",
             confidence_score=0.5,
             source_event_id="evt-closed",
-            detection_status=DetectionStatus.RESOLVED.value,
+            detection_status=DetectionStatus.CLEARED.value,
         )
-        db_session.add(resolved)
+        db_session.add(cleared)
         db_session.commit()
 
         new_open = DetectionLog(
@@ -299,7 +299,7 @@ class TestOneOpenIncidentPerCamera:
             snapshot_key="a.jpg",
             confidence_score=0.5,
             source_event_id="evt-dup",
-            detection_status=DetectionStatus.RESOLVED.value,
+            detection_status=DetectionStatus.CLEARED.value,
         )
         db_session.add(first)
         db_session.commit()

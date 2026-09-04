@@ -31,7 +31,7 @@ function formatDeltaText(value: number): string {
 /**
  * Sign does not map to colour uniformly across these three KPIs -- more
  * accidents and more still-ongoing incidents are both a *positive* delta
- * that reads as bad news; only "more resolved" is a positive delta that's
+ * that reads as bad news; only "more cleared" is a positive delta that's
  * actually good. `worseWhenPositive` lets one function express both
  * mappings instead of inlining the flip at each call site.
  */
@@ -254,17 +254,17 @@ export default function Dashboard() {
           <div className="h-[195px]">
             <StatCard
               icon={RiCheckboxLine}
-              title="Total Resolved"
-              value={kpis?.total_resolved ?? 0}
+              title="Total Cleared"
+              value={kpis?.total_cleared ?? 0}
               isLoading={dashboardQuery.isLoading}
               delta={
-                kpis?.total_resolved_delta_pct != null
-                  ? formatDeltaText(kpis.total_resolved_delta_pct)
+                kpis?.total_cleared_delta_pct != null
+                  ? formatDeltaText(kpis.total_cleared_delta_pct)
                   : undefined
               }
               deltaPositive={
-                kpis?.total_resolved_delta_pct != null
-                  ? deltaTone(kpis.total_resolved_delta_pct, false)
+                kpis?.total_cleared_delta_pct != null
+                  ? deltaTone(kpis.total_cleared_delta_pct, false)
                   : undefined
               }
             />

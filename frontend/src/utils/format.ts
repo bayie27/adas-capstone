@@ -47,7 +47,7 @@ export function getAlertStatusTextClass(status: AlertStatus) {
     return "text-warning"
   }
 
-  if (status === "Resolved") {
+  if (status === "Cleared") {
     return "text-success"
   }
 
@@ -63,7 +63,7 @@ export function getAlertBadgeClass(status: AlertStatus) {
     return "bg-warning text-canvas"
   }
 
-  if (status === "Resolved") {
+  if (status === "Cleared") {
     return "bg-success text-canvas"
   }
 
@@ -83,7 +83,7 @@ export function getAlertBorderClass(status: AlertStatus) {
     return "border-t-amber-500"
   }
 
-  if (status === "Resolved") {
+  if (status === "Cleared") {
     return "border-t-emerald-500"
   }
 

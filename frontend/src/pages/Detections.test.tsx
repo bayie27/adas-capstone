@@ -22,11 +22,10 @@ vi.mock("@/api/alerts", async () => {
     exportAlerts: vi.fn(),
     confirmAlert: vi.fn(),
     dismissAlert: vi.fn(),
-    resolveAlert: vi.fn(),
+    clearAlert: vi.fn(),
     snoozeAlert: vi.fn(),
   }
 })
-
 vi.mock("@/api/cameras", async () => {
   const actual = await vi.importActual<typeof import("@/api/cameras")>("@/api/cameras")
   return { ...actual, getCameras: vi.fn() }
@@ -50,7 +49,7 @@ const EMPTY_CAMERAS: CameraListResponse = {
 const EMPTY_ALERTS: AlertListResponse = { total_filtered: 1, logs: [] }
 
 const PHILIPPINE_FILTERS = {
-  status: ["Resolved"],
+  status: ["Cleared"],
   search: undefined,
   sort_by: "detected_at" as const,
   sort_order: "desc" as const,
@@ -79,7 +78,7 @@ async function setDateRangeAndStatus(user: ReturnType<typeof userEvent.setup>) {
     target: { value: "2026-08-30" },
   })
   await user.click(screen.getByRole("button", { name: "All statuses" }))
-  await user.click(screen.getByText("Resolved"))
+  await user.click(screen.getByText("Cleared"))
 }
 
 describe("Detections date-filter export parity", () => {

@@ -9,7 +9,7 @@ is_faq: false
 ---
 
 ![The Ongoing Incidents side panel, listing each open incident's camera,
-detection time, and confidence, with a Review & Resolve
+detection time, and confidence, with a Review Incident
 button](/help/ongoing-incidents-tray.png)
 
 ## The ONGOING button
@@ -26,15 +26,15 @@ over a thumbnail shows a larger preview next to the panel.
 
 ## Reviewing one
 
-Selecting **Review & Resolve** on a card opens the full incident detail view, where you
+Selecting **Review Incident** on a card opens the full incident detail view, where you
 can:
 
-- **Resolve** it once the scene has been cleared. See [Resolving an Ongoing
-  Incident](resolving-an-ongoing-incident).
+- **Clear** it once the scene has been cleared. See [Clearing an Ongoing
+  Incident](clearing-an-ongoing-incident).
 - **Dismiss** it if confirming it turns out to have been a mistake. See [Correcting a
   Mistaken Confirmation](correcting-a-mistaken-confirmation).
 
-If another operator resolves or dismisses the same incident while you have it open, a
+If another operator clears or dismisses the same incident while you have it open, a
 notice tells you what happened and the incident disappears from the tray. See [What
 Happens if Another Operator Already
 Acted?](faq-what-happens-if-another-operator-already-acted).

@@ -119,7 +119,7 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   LOGOUT: "Logged Out",
   ALERT_CONFIRM: "Confirmed Alert",
   ALERT_DISMISS: "Dismissed Alert",
-  ALERT_RESOLVE: "Resolved Alert",
+  ALERT_CLEAR: "Cleared Alert",
   ALERT_CORRECTION: "Corrected Alert",
   ALERT_SNOOZE: "Snoozed Alert",
   CAMERA_CREATE: "Created Camera",

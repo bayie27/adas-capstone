@@ -846,7 +846,7 @@ class TestDeleteCamera:
     ):
         headers = _headers(client, session)
         cam = make_camera(session, name="Closed Incident Cam", channel_id=82)
-        make_detection(session, cam, status=DetectionStatus.RESOLVED)
+        make_detection(session, cam, status=DetectionStatus.CLEARED)
 
         resp = client.delete(f"/api/cameras/{cam.camera_id}", headers=headers)
         assert resp.status_code == 204
@@ -1113,7 +1113,7 @@ class TestCameraRestore:
         history was never orphaned."""
         headers = _headers(client, session)
         cam = make_camera(session, name="Detections Cam", channel_id=420)
-        detection = make_detection(session, cam, status=DetectionStatus.RESOLVED)
+        detection = make_detection(session, cam, status=DetectionStatus.CLEARED)
         client.delete(f"/api/cameras/{cam.camera_id}", headers=headers)
 
         resp = client.patch(

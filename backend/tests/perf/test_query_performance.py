@@ -33,7 +33,7 @@ class TestListAndDashboardLatency:
             headers=headers,
             params={
                 "status": [
-                    DetectionStatus.RESOLVED.value,
+                    DetectionStatus.CLEARED.value,
                     DetectionStatus.DISMISSED.value,
                 ],
                 "sort_by": "detected_at",
@@ -92,7 +92,7 @@ class TestQueryPlans:
 
     def test_incident_list_query_plan_uses_an_index(self, perf_engine):
         filters = IncidentFilters(
-            statuses=(DetectionStatus.RESOLVED, DetectionStatus.DISMISSED),
+            statuses=(DetectionStatus.CLEARED, DetectionStatus.DISMISSED),
         )
         stmt = _incident_query_stmt(filters).order_by(None)
         # detected_at is the list route's default sort — re-add explicitly
@@ -118,7 +118,7 @@ class TestQueryPlans:
             .select_from(DetectionLog)
             .where(
                 DetectionLog.detection_status.in_(
-                    [DetectionStatus.ONGOING.value, DetectionStatus.RESOLVED.value]
+                    [DetectionStatus.ONGOING.value, DetectionStatus.CLEARED.value]
                 ),
                 DetectionLog.detected_at >= datetime(2026, 1, 1, tzinfo=UTC),
             )

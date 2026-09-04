@@ -59,7 +59,7 @@ and verify their current state before relying on or changing them.
 ## Domain rules
 
 - **The self-blindfold pattern**: when the AI engine detects a collision it immediately pauses its own ingestion for that camera; the backend mirrors this by marking the camera `Paused` and broadcasting over WebSocket before any operator acts. Alert-handling code must preserve that ordering.
-- **The HITL state machine**: `Unverified → Ongoing → Resolved` (true positive), `Unverified → Dismissed` (false positive, 60s cooldown), `Ongoing → Dismissed` (human correction, resumes immediately). The backend guards against the AI engine overwriting operator-driven pause states — don't loosen those guards without understanding why they're there.
+- **The HITL state machine**: `Unverified → Ongoing → Cleared` (true positive), `Unverified → Dismissed` (false positive, 60s cooldown), `Ongoing → Dismissed` (human correction, resumes immediately). The backend guards against the AI engine overwriting operator-driven pause states — don't loosen those guards without understanding why they're there.
 
 ## Conventions
 
