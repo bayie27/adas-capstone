@@ -202,22 +202,22 @@ Every transition is a conditional `UPDATE ... WHERE detection_status = :expected
 | ------ | ----------------------------------- | ---- |
 | `GET`  | `/api/analytics/dashboard`          | S    |
 | `GET`  | `/api/analytics/export/dashboard`   | S    |
-| `GET`  | `/api/analytics/performance`        | S    |
-| `GET`  | `/api/analytics/export/performance` | S    |
+| `GET`  | `/api/analytics/performance`        | A    |
+| `GET`  | `/api/analytics/export/performance` | A    |
 
 Accidents = `Ongoing` + `Cleared`; false positives = `Dismissed`; `Unverified` is excluded from every analytics number. `precision = confirmed / (confirmed + dismissed)`, returning `null` (never `0`) on zero division.
 
 ### Settings, audit, exports, help, system — summary
 
-| Area           | Routes                                                                                                                        | Auth                                    |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Alarm settings | `GET`/`PUT /api/settings/alarm`                                                                                               | S                                       |
-| Audit trail    | `GET /api/audit-logs`, `GET /api/audit-logs/export`                                                                           | A                                       |
-| Async exports  | `POST /api/exports/jobs`, `GET /api/exports/jobs/{id}`, `GET /api/exports/jobs/{id}/download`, `POST /api/exports/retraining` | S (job owner or Admin) / A (retraining) |
-| Help Center    | `GET /api/help/articles`, `GET /api/help/articles/{slug}`                                                                     | S, role-filtered                        |
-| System health  | `GET /api/system/health/live`, `GET /api/system/health/history`                                                               | S                                       |
-| Backup/restore | `GET`/`POST /api/system/backups`, `POST /api/system/restores`, `GET /api/system/restores/latest`                              | A                                       |
-| Probes         | `GET /healthz/live`, `GET /healthz/ready`                                                                                     | —                                       |
+| Area           | Routes                                                                                                                        | Auth                                                               |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Alarm settings | `GET`/`PUT /api/settings/alarm`                                                                                               | S                                                                  |
+| Audit trail    | `GET /api/audit-logs`, `GET /api/audit-logs/export`                                                                           | A                                                                  |
+| Async exports  | `POST /api/exports/jobs`, `GET /api/exports/jobs/{id}`, `GET /api/exports/jobs/{id}/download`, `POST /api/exports/retraining` | S (job owner or Admin; performance is Admin-only) / A (retraining) |
+| Help Center    | `GET /api/help/articles`, `GET /api/help/articles/{slug}`                                                                     | S, role-filtered                                                   |
+| System health  | `GET /api/system/health/live`, `GET /api/system/health/history`                                                               | S                                                                  |
+| Backup/restore | `GET`/`POST /api/system/backups`, `POST /api/system/restores`, `GET /api/system/restores/latest`                              | A                                                                  |
+| Probes         | `GET /healthz/live`, `GET /healthz/ready`                                                                                     | —                                                                  |
 
 Full request/response schemas for all of the above are in `app/schemas/` and documented interactively at `/docs`; `be_plan/01_CONTRACTS.md` is the frozen source of truth this backend was built against.
 

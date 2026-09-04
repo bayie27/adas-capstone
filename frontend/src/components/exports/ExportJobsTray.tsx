@@ -13,6 +13,7 @@ import { Button, focusRing } from "@/components/ui/Button"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { SidePanel } from "@/components/ui/SidePanel"
 import { useExportJobsStore, type TrackedExportJob } from "@/store/useExportJobsStore"
+import { useAuthStore } from "@/store/useAuthStore"
 import { useNow } from "@/hooks/useNow"
 import { formatRelativeDateTime } from "@/utils/datetime"
 import { failureMessage } from "@/utils/exportJobs"
@@ -263,6 +264,12 @@ function HistoryJobRow({ job }: { job: ExportJobRead }) {
 export function ExportJobsTray() {
   const jobs = useExportJobsStore((state) => state.jobs)
   const untrack = useExportJobsStore((state) => state.untrack)
+  const role = useAuthStore((state) => state.role)
+  // The backend remains the authorization boundary. This client-side filter
+  // also keeps a stale pre-P29 localStorage entry from making an Operator's
+  // tray poll or offer a legacy performance job.
+  const visibleJobs =
+    role === "Admin" ? jobs : jobs.filter((job) => job.reportType !== "performance")
   const [isOpen, setIsOpen] = useState(false)
   // Only ticks while the panel is open — the timeout check only needs to be
   // fresh when a row is actually visible, not while the tray sits collapsed.
@@ -291,12 +298,12 @@ export function ExportJobsTray() {
 
   // A job started this session already appears in the tracked list above --
   // don't show it a second time once the account-wide history also returns it.
-  const trackedIds = new Set(jobs.map((tracked) => tracked.jobId))
+  const trackedIds = new Set(visibleJobs.map((tracked) => tracked.jobId))
   const dedupedHistory = historyItems.filter((item) => !trackedIds.has(item.job_id))
   const totalFiltered = historyQuery.data?.total_filtered ?? historyItems.length
   const hasMore = historyRequested && historyItems.length < totalFiltered
 
-  if (jobs.length === 0 && !isOpen) {
+  if (visibleJobs.length === 0 && !isOpen) {
     return null
   }
 
@@ -305,7 +312,7 @@ export function ExportJobsTray() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        aria-label={`Export jobs (${jobs.length})`}
+        aria-label={`Export jobs (${visibleJobs.length})`}
         title="Export jobs"
         className={cn(
           "relative pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg",
@@ -319,7 +326,7 @@ export function ExportJobsTray() {
           className="absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-stroke bg-primary px-0.5 text-[9px] font-bold leading-none text-fg-on-primary shadow-sm ring-2 ring-surface-1"
           aria-hidden="true"
         >
-          {jobs.length}
+          {visibleJobs.length}
         </span>
       </button>
 
@@ -329,14 +336,14 @@ export function ExportJobsTray() {
         title="Export jobs"
         subtitle="Background exports, this browser and earlier sessions"
       >
-        {jobs.length > 0 ? (
+        {visibleJobs.length > 0 ? (
           <>
             {historyRequested ? (
               <h4 className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-fg-muted">
                 This session
               </h4>
             ) : null}
-            {jobs.map((tracked) => (
+            {visibleJobs.map((tracked) => (
               <JobRow
                 key={tracked.jobId}
                 tracked={tracked}
@@ -353,7 +360,7 @@ export function ExportJobsTray() {
 
         <div
           className={cn(
-            jobs.length > 0 || historyRequested ? "mt-4 border-t border-stroke pt-3" : "",
+            visibleJobs.length > 0 || historyRequested ? "mt-4 border-t border-stroke pt-3" : "",
           )}
         >
           {!historyRequested ? (

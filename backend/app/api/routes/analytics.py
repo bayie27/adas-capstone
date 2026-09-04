@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, func, select
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_admin, get_current_user
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
 from app.models import AuditResult, Camera, DetectionLog, DetectionStatus, User
@@ -699,6 +699,7 @@ def get_ai_performance(
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
+    _current_admin: User = Depends(get_current_admin),
 ):
     """
     AI Performance module (FR-14).
@@ -713,7 +714,8 @@ def get_ai_performance(
     pages don't shuffle between requests. `total_filtered` is the full
     filtered count, not `len(per_camera)`. Optionally filtered by camera
     name via `?search=`. Only cameras that have at least one detection in
-    the filtered window appear in the table.
+    the filtered window appear in the table. This administrator-only view is
+    deliberately separate from the operator-facing Dashboard analytics.
 
     **CHANGED (P19 §4, breaking):** previously returned every matching
     camera in one array with no `limit`/`offset`. `GET
@@ -753,12 +755,12 @@ def export_performance(
     search: str | None = Query(default=None, min_length=1, max_length=100),
     format: str = Query(default="csv", pattern="^(csv|pdf)$"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin),
 ):
     """
     Export the per-camera AI performance breakdown as CSV or PDF.
     Applies the same filters as GET /api/analytics/performance so the
-    export always matches exactly what the operator sees on screen.
+    export always matches exactly what the administrator sees on screen.
     """
     validate_common_filters(
         start_date=start_date,
