@@ -94,12 +94,12 @@ class TestReceiveAiAlertV2:
         ).all()
         assert len(rows) == 1
 
-    def test_v2_retry_after_resolved_returns_resolved_unchanged(
+    def test_v2_retry_after_cleared_returns_cleared_unchanged(
         self, client: TestClient, session: Session
     ):
         """Edge case 10.2 — a retry after the incident closed must not
         create a new one or reopen it."""
-        camera = make_camera(session, name="Retry After Resolve Cam", channel_id=32)
+        camera = make_camera(session, name="Retry After Clear Cam", channel_id=32)
         payload = self._payload(camera.camera_id)
 
         first = client.post(
@@ -107,7 +107,7 @@ class TestReceiveAiAlertV2:
         )
         log_id = first.json()["log_id"]
         log = session.get(DetectionLog, log_id)
-        log.detection_status = DetectionStatus.RESOLVED.value
+        log.detection_status = DetectionStatus.CLEARED.value
         session.add(log)
         session.commit()
 
@@ -116,7 +116,7 @@ class TestReceiveAiAlertV2:
         )
         assert retry.status_code == 200
         assert retry.json()["log_id"] == log_id
-        assert retry.json()["detection_status"] == DetectionStatus.RESOLVED.value
+        assert retry.json()["detection_status"] == DetectionStatus.CLEARED.value
 
     def test_v2_open_camera_conflict_is_409(self, client: TestClient, session: Session):
         camera = make_camera(session, name="Conflict Cam", channel_id=33)

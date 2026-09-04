@@ -20,7 +20,7 @@ export type ButtonVariant = "primary" | "secondary" | "outline" | "destructive" 
 export type ButtonSize = "sm" | "md" | "icon"
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  // §2.2 — the near-white action: Add Camera, Add User, Login, Confirm/Resolve.
+  // §2.2 — the near-white action: Add Camera, Add User, Login, Confirm/Cleared.
   primary: "bg-primary text-fg-on-primary hover:bg-primary-hover",
   // §2.2 — Dark/Secondary fill; §2.8 hover raises it to the elevated surface.
   secondary: "bg-surface-3 text-fg hover:bg-surface-2",

@@ -160,9 +160,9 @@ export const useAlertStore = create<AlertState>((set, get) => ({
         return state
       }
 
-      // If the alert is now Dismissed or Resolved, it should definitely be removed
+      // If the alert is now Dismissed or Cleared, it should definitely be removed
       // from the active queue and marked as handled.
-      if (alert.detection_status === "Dismissed" || alert.detection_status === "Resolved") {
+      if (alert.detection_status === "Dismissed" || alert.detection_status === "Cleared") {
         cancelSnoozeTimer(alert.log_id)
         const nextHandled = new Set([...state.handledIds, alert.log_id])
         writeHandledIds(nextHandled)

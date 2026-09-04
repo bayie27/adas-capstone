@@ -166,7 +166,7 @@ def test_heartbeat_status_change_broadcasts_to_all_connected_websocket_clients(
     assert second_data == expected
 
 
-def test_resolve_alert_broadcasts_camera_status_update_over_websocket(
+def test_clear_alert_broadcasts_camera_status_update_over_websocket(
     client: TestClient,
     session: Session,
 ):
@@ -174,7 +174,7 @@ def test_resolve_alert_broadcasts_camera_status_update_over_websocket(
     headers = auth_headers(client, "wsoperator", "Operator123")
     camera = make_camera(
         session,
-        name="WS Resolve Cam",
+        name="WS Clear Cam",
         channel_id=303,
         ai_status=AIStatus.PAUSED.value,
         connection_status=ConnectionStatus.CONNECTED.value,
@@ -184,7 +184,7 @@ def test_resolve_alert_broadcasts_camera_status_update_over_websocket(
     with client.websocket_connect("/ws/alerts", headers=headers) as websocket:
         _assert_envelope(websocket.receive_json(), "CONNECTION_READY")
 
-        resp = client.post(f"/api/alerts/{detection.log_id}/resolve", headers=headers)
+        resp = client.post(f"/api/alerts/{detection.log_id}/clear", headers=headers)
 
         assert resp.status_code == 200
 
@@ -194,7 +194,7 @@ def test_resolve_alert_broadcasts_camera_status_update_over_websocket(
     assert operator.user_id is not None
     assert camera_data == {
         "camera_id": camera.camera_id,
-        "camera_name": "WS Resolve Cam",
+        "camera_name": "WS Clear Cam",
         "is_enabled": True,
         "desired_ai_state": "Active",
         "desired_state_reason": None,
@@ -204,8 +204,8 @@ def test_resolve_alert_broadcasts_camera_status_update_over_websocket(
         "config_version": 2,
     }
     assert alert_data["log_id"] == detection.log_id
-    assert alert_data["detection_status"] == DetectionStatus.RESOLVED.value
-    assert alert_data["action"] == "ALERT_RESOLVE"
+    assert alert_data["detection_status"] == DetectionStatus.CLEARED.value
+    assert alert_data["action"] == "ALERT_CLEAR"
 
 
 def test_dismiss_ongoing_broadcasts_camera_status_update_over_websocket(

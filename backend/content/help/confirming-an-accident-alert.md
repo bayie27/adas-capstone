@@ -45,7 +45,7 @@ realize it wasn't real.
 
 - The alert moves to **Ongoing**.
 - You are recorded as the operator who verified it, and that record doesn't change even
-  if someone else later resolves or corrects the incident.
+  if someone else later clears or corrects the incident.
 - The camera that reported it stays paused. It does not resume AI detection while the
   incident is open. This is intentional: the system doesn't want a second, overlapping
   alert from the same camera for the same event while it's already being handled. See
@@ -55,7 +55,7 @@ realize it wasn't real.
   the full incident history. See [Reviewing Ongoing Incidents in the
   Tray](reviewing-ongoing-incidents-in-the-tray).
 
-From **Ongoing**, the alert can later be resolved (scene cleared: see [Resolving an
-Ongoing Incident](resolving-an-ongoing-incident)) or, if confirming it turns out to have
+From **Ongoing**, the alert can later be cleared (scene cleared: see [Clearing an
+Ongoing Incident](clearing-an-ongoing-incident)) or, if confirming it turns out to have
 been a mistake, dismissed as a correction (see [Correcting a Mistaken
 Confirmation](correcting-a-mistaken-confirmation)).

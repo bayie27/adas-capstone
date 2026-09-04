@@ -19,8 +19,8 @@ const STALE_DETECTION_SECONDS = 90
  * | Status                | Frame      | Accent  | Extra blocks           | Actions            |
  * | --------------------- | ---------- | ------- | ---------------------- | ------------------ |
  * | Unverified            | `118:8948` | danger  | —                      | Dismiss / Confirm  |
- * | Ongoing               | `129:9234` | warning | verified-by            | Dismiss / Resolve  |
- * | Dismissed \| Resolved | `124:9186` | neutral | verified-by, closed-by | **none**           |
+ * | Ongoing               | `129:9234` | warning | verified-by            | Dismiss / Cleared  |
+ * | Dismissed \| Cleared | `124:9186` | neutral | verified-by, closed-by | **none**           |
  *
  * The terminal variant having no actions at all is the load-bearing part: a
  * closed incident is a record, and the modal must not offer a transition the
@@ -28,7 +28,7 @@ const STALE_DETECTION_SECONDS = 90
  *
  * D-8(b) settled this as a modal rather than a drawer. An incident detail is
  * an *interrupting decision surface* — the operator opens it to commit to
- * confirm / dismiss / resolve, and blocking the rest of the screen while they
+ * confirm / dismiss / clear, and blocking the rest of the screen while they
  * decide is the point. Camera telemetry (Phase 19) is a reference surface and
  * gets `SidePanel` instead.
  */
@@ -42,10 +42,10 @@ export interface IncidentDetailModalProps {
   isTransitionPending: boolean
   isDismissing: boolean
   isConfirming: boolean
-  isResolving: boolean
+  isClearing: boolean
   onDismiss: (logId: number) => void
   onConfirm: (logId: number) => void
-  onResolve: (logId: number) => void
+  onClear: (logId: number) => void
   /**
    * D-2 — the third action slot on the Unverified variant.
    *
@@ -66,10 +66,10 @@ export function IncidentDetailModal({
   isTransitionPending,
   isDismissing,
   isConfirming,
-  isResolving,
+  isClearing,
   onDismiss,
   onConfirm,
-  onResolve,
+  onClear,
   snoozeAction,
   overlayClassName,
 }: IncidentDetailModalProps) {
@@ -80,16 +80,16 @@ export function IncidentDetailModal({
   const isDelayed = ageSeconds !== null && ageSeconds >= STALE_DETECTION_SECONDS
 
   const isTerminal =
-    alert?.detection_status === "Dismissed" || alert?.detection_status === "Resolved"
+    alert?.detection_status === "Dismissed" || alert?.detection_status === "Cleared"
 
   // M7 — the frame labels the closed-by timestamp "TIME VERIFIED", duplicating
   // the row above it. `closed_at` is a distinct field from `verified_at`.
-  const closedTimeLabel = alert?.detection_status === "Resolved" ? "TIME RESOLVED" : "TIME CLOSED"
+  const closedTimeLabel = alert?.detection_status === "Cleared" ? "TIME CLEARED" : "TIME CLOSED"
 
   const statusBorderClass =
     alert?.detection_status === "Ongoing"
       ? "border-t-warning"
-      : alert?.detection_status === "Resolved"
+      : alert?.detection_status === "Cleared"
         ? "border-t-success"
         : "border-t-stroke-strong"
 
@@ -328,11 +328,11 @@ export function IncidentDetailModal({
                         <Button
                           className="flex-1 whitespace-nowrap h-[44px] rounded-[4px] bg-fg-body px-3 py-2 text-xs sm:text-[14px] font-medium uppercase leading-[28px] tracking-wide text-surface-2 hover:bg-fg"
                           disabled={isTransitionPending}
-                          isLoading={isResolving}
+                          isLoading={isClearing}
                           loadingLabel="…"
-                          onClick={() => onResolve(alert.log_id)}
+                          onClick={() => onClear(alert.log_id)}
                         >
-                          Resolve Accident
+                          Cleared
                         </Button>
                       </>
                     ) : null}

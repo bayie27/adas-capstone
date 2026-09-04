@@ -108,7 +108,7 @@ class DetectionStatus(StrEnum):
     UNVERIFIED = "Unverified"
     ONGOING    = "Ongoing"
     DISMISSED  = "Dismissed"
-    RESOLVED   = "Resolved"
+    CLEARED    = "Cleared"
 
 class ConnectionStatus(StrEnum):        # observed, AI-reported
     CONNECTED    = "Connected"
@@ -138,7 +138,7 @@ class AuditResult(StrEnum):
     FAILURE = "failure"
 ```
 
-`Closed` is **not** a status. Where the paper says "Closed", it means a terminal `Resolved` or
+`Closed` is **not** a status. Where the paper says "Closed", it means a terminal `Cleared` or
 `Dismissed` incident (D-002). The `closed_by_id` / `closed_at` column names stay.
 
 ---
@@ -475,7 +475,7 @@ Existing guards stay: cannot demote, deactivate, or delete the last active admin
 | GET | `/api/alerts/{log_id}/snapshot` | S | P4 | **NEW.** Replaces the public `/snapshots` static mount |
 | POST | `/api/alerts/{log_id}/confirm` | S | P4 | `Unverified → Ongoing` |
 | POST | `/api/alerts/{log_id}/dismiss` | S | P4 | `Unverified → Dismissed` or `Ongoing → Dismissed` |
-| POST | `/api/alerts/{log_id}/resolve` | S | P4 | `Ongoing → Resolved` |
+| POST | `/api/alerts/{log_id}/clear` | S | P4 | `Ongoing → Cleared` |
 | POST | `/api/alerts/{log_id}/snooze` | S | P4 | **NEW.** Only on `Unverified`. Duration comes from the actor's saved settings — never from the request body |
 
 **The `409 CONFLICT_STATE` body** — this exact shape drives the frontend's "already handled" modal
@@ -513,7 +513,7 @@ decision, recorded in P2, not an oversight.
 | GET | `/api/analytics/export/dashboard` | S | P6 — `?format=csv\|pdf` |
 | GET | `/api/analytics/export/performance` | S | P6 — `?format=csv\|pdf` |
 
-Domain rules (unchanged, keep them): accidents = `Ongoing` + `Resolved`; false positives =
+Domain rules (unchanged, keep them): accidents = `Ongoing` + `Cleared`; false positives =
 `Dismissed`; `Unverified` excluded entirely; `precision = confirmed / (confirmed + dismissed)`,
 returning **`null`** (never `0`) on zero division; global confidence averages are count-weighted.
 
@@ -752,7 +752,7 @@ in one request produces both `CAMERA_UPDATE` and `CAMERA_DISABLE`.
 ```
 LOGIN_SUCCESS   LOGIN_FAILURE   LOGOUT
 
-ALERT_CONFIRM   ALERT_DISMISS   ALERT_RESOLVE   ALERT_CORRECTION   ALERT_SNOOZE
+ALERT_CONFIRM   ALERT_DISMISS   ALERT_CLEAR    ALERT_CORRECTION   ALERT_SNOOZE
 
 CAMERA_CREATE   CAMERA_UPDATE   CAMERA_ENABLE   CAMERA_DISABLE   CAMERA_DELETE
 
@@ -770,7 +770,7 @@ Incident-transition mapping:
 |---|---|
 | `Unverified → Ongoing` | `ALERT_CONFIRM` |
 | `Unverified → Dismissed` | `ALERT_DISMISS` |
-| `Ongoing → Resolved` | `ALERT_RESOLVE` |
+| `Ongoing → Cleared` | `ALERT_CLEAR` |
 | `Ongoing → Dismissed` | `ALERT_CORRECTION` |
 
 **Excluded from the audit trail:** AI detections, heartbeats, FPS/latency samples, routine camera
@@ -874,11 +874,11 @@ After every accepted connection or reconnection:
 AI detection  ->  Unverified
 Unverified    ->  Ongoing     (Confirm)
 Unverified    ->  Dismissed   (Immediate false positive)
-Ongoing       ->  Resolved    (Emergency cleared)
+Ongoing       ->  Cleared     (Emergency cleared)
 Ongoing       ->  Dismissed   (Correction of a mistaken confirmation)
 ```
 
-Every other transition is rejected. `Dismissed` and `Resolved` are terminal — there is no reopen path
+Every other transition is rejected. `Dismissed` and `Cleared` are terminal — there is no reopen path
 and no general-purpose incident edit or delete API.
 
 ### 10.1 Actor and timestamp semantics
@@ -887,7 +887,7 @@ and no general-purpose incident edit or delete API.
 |---|---|---|
 | Confirm (`Unverified→Ongoing`) | set to the actor | unchanged (null) |
 | Immediate dismiss (`Unverified→Dismissed`) | **set to the actor** | remains empty |
-| Resolve (`Ongoing→Resolved`) | retained | set to the actor |
+| Clear (`Ongoing→Cleared`) | retained | set to the actor |
 | Correction (`Ongoing→Dismissed`) | retained (original verifier) | set to the correcting actor |
 
 > The current code sets *closure* fields on an immediate dismiss. That is wrong under D-002 and P4
@@ -901,7 +901,7 @@ and no general-purpose incident edit or delete API.
 | Confirm | `Paused` (unchanged) | `incident` | — |
 | Immediate dismiss | `Paused` | `cooldown` | `cooldown_until = now + 60s` |
 | Cooldown expiry | `Active` | cleared | cleared |
-| Resolve | `Active` immediately | cleared | — |
+| Clear | `Active` immediately | cleared | — |
 | Correction | `Active` immediately | cleared | — |
 | Camera disabled | `Inactive` | `disabled` | — |
 
@@ -954,3 +954,35 @@ matrix, where each case maps to exactly one of:
 - a documented manual procedure with recorded measured results,
 - an explicitly external owner (AI model accuracy, physical VLAN/NAS, frontend UI) **with** the
   interface, prerequisite, and acceptance evidence named.
+
+---
+
+## 13. P28-P30 locked follow-up contracts
+
+### 13.1 Incident terminal terminology (P28)
+
+The only true-positive terminal state is `Cleared`. The legal transition is
+`Ongoing -> Cleared`, performed by `POST /api/alerts/{log_id}/clear`, audited and broadcast as
+`ALERT_CLEAR`. The visible action button is also `Cleared` and remains immediate; no confirmation
+step is introduced. `Cleared` means the accident is no longer visible in that camera and detection
+may resume. `Resolved`, `/resolve`, `ALERT_RESOLVE`, and `total_resolved*` are not compatibility
+aliases for the active `Cleared` contract. Existing detection and audit rows are rewritten by the
+reviewed migration. Closure actor/
+timestamp field names remain generic because an Ongoing-to-Dismissed correction uses them too.
+
+### 13.2 AI Performance authorization (P29)
+
+AI Performance is Administrator-only at the API, async-job, route, navigation, help, and UAT layers.
+Its sidebar location is the final Administration item after Maintenance. Operators retain Dashboard,
+Detections, System Health, incident/dashboard exports, Profile, and role-appropriate Help. Existing
+Operator-owned performance jobs are no longer listable, readable, or downloadable by that Operator.
+
+### 13.3 Protected and degraded backup storage (P30)
+
+`BACKUP_DIR` remains local fallback plus maintenance-control state. `PROTECTED_BACKUP_DIR` and
+`PROTECTED_ARCHIVE_DIR` are explicit optional absolute targets. `protected` requires a provably
+different physical device from the live database; a different drive letter alone is insufficient.
+Backup/archive creation prefers protected storage and falls back locally as `degraded`. Listing and
+restore use `(storage_tier, backup_id)` identity. Restore state and a verified pre-restore emergency
+reserve stay local so loss of external media cannot erase rollback state. Paths and physical ids are
+never returned or audited.

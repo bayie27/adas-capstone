@@ -23,7 +23,7 @@ describe("status tone mapping", () => {
 
   it("maps every alert status", () => {
     expect(getAlertStatusTone("Ongoing")).toBe("warning")
-    expect(getAlertStatusTone("Resolved")).toBe("success")
+    expect(getAlertStatusTone("Cleared")).toBe("success")
     expect(getAlertStatusTone("Dismissed")).toBe("neutral")
     expect(getAlertStatusTone("Unverified")).toBe("default")
   })
@@ -39,7 +39,7 @@ describe("status tone mapping", () => {
     const { rerender } = render(<CameraAiText status="Paused" />)
     expect(screen.getByText("Paused")).toHaveClass("text-warning")
 
-    rerender(<AlertStatusText status="Resolved" />)
-    expect(screen.getByText("Resolved")).toHaveClass("text-success")
+    rerender(<AlertStatusText status="Cleared" />)
+    expect(screen.getByText("Cleared")).toHaveClass("text-success")
   })
 })

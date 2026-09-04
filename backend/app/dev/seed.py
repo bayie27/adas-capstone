@@ -280,7 +280,7 @@ def _enforce_one_open_incident_per_camera(
     """Spec-path adapter over _keep_latest_open_per_camera.
 
     A demoted spec always ends up with a verifier and closer even if the
-    original (often Unverified, with neither) didn't have one — a Resolved
+    original (often Unverified, with neither) didn't have one — a Cleared
     row with no verified_by/closed_by would be a nonsensical seed record.
     """
     demote = _keep_latest_open_per_camera(
@@ -299,7 +299,7 @@ def _enforce_one_open_incident_per_camera(
             )
             spec = replace(
                 spec,
-                detection_status=DetectionStatus.RESOLVED,
+                detection_status=DetectionStatus.CLEARED,
                 verified_by_key=verified_by_key,
                 verified_after_minutes=verified_after_minutes,
                 closed_by_key=spec.closed_by_key or verified_by_key,
@@ -736,16 +736,16 @@ _PERF_SNAPSHOT_POOL = [
 
 
 def _perf_pick_status(rng: random.Random) -> DetectionStatus:
-    """Roughly 60% Resolved / 25% Dismissed / 14% (candidate) Ongoing / 1%
+    """Roughly 60% Cleared / 25% Dismissed / 14% (candidate) Ongoing / 1%
     (candidate) Unverified, per the package doc. The Ongoing/Unverified
     shares are only *candidates* — ux_detection_open_camera allows at most
     one open incident per camera, so _enforce_open_camera_limit below
-    demotes every extra candidate to Resolved, same as the hand-written
+    demotes every extra candidate to Cleared, same as the hand-written
     demo/analytics/edge profiles already do via
     _enforce_one_open_incident_per_camera."""
     roll = rng.random()
     if roll < 0.61:
-        return DetectionStatus.RESOLVED
+        return DetectionStatus.CLEARED
     if roll < 0.86:
         return DetectionStatus.DISMISSED
     if roll < 0.99:
@@ -784,13 +784,13 @@ def _build_perf_rows(
         closed_by_id: int | None = None
         closed_at: datetime | None = None
 
-        if status in (DetectionStatus.RESOLVED, DetectionStatus.ONGOING):
+        if status in (DetectionStatus.CLEARED, DetectionStatus.ONGOING):
             # Confirm: verified_by/verified_at set, closed fields empty
             # (10.1 in 01_CONTRACTS.md).
             verified_by_id = operator_ids[i % len(operator_ids)]
             verified_at = detected_at + timedelta(minutes=rng.randint(1, 8))
-        if status == DetectionStatus.RESOLVED:
-            # Resolve: closed_by/closed_at added, verifier retained.
+        if status == DetectionStatus.CLEARED:
+            # Clear: closed_by/closed_at added, verifier retained.
             closed_by_id = operator_ids[(i + 1) % len(operator_ids)]
             closed_at = verified_at + timedelta(minutes=rng.randint(5, 60))
         elif status == DetectionStatus.DISMISSED:
@@ -850,7 +850,7 @@ def _enforce_open_camera_limit(
         )
         closed_at = verified_at + timedelta(minutes=_DEMOTED_CLOSE_MINUTES)
         row.update(
-            detection_status=DetectionStatus.RESOLVED.value,
+            detection_status=DetectionStatus.CLEARED.value,
             verified_by_id=verified_by_id,
             verified_at=verified_at,
             closed_by_id=row["closed_by_id"] or verified_by_id,

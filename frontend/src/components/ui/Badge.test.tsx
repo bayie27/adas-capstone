@@ -5,8 +5,8 @@ import { Badge, BadgeDot } from "./Badge"
 
 describe("Badge", () => {
   it("renders a solid neutral pill by default, uppercase and tracked", () => {
-    render(<Badge>Resolved</Badge>)
-    const badge = screen.getByText("Resolved")
+    render(<Badge>Cleared</Badge>)
+    const badge = screen.getByText("Cleared")
     expect(badge).toHaveClass("bg-surface-3", "uppercase", "rounded-full")
   })
 

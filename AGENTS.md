@@ -12,6 +12,7 @@ Two that catch everyone, repeated here because they cost the most time:
 
 - **Run everything from the repo root**, and always `uv run python`, never bare `python` — PATH `python` is 3.14 and the project is pinned to 3.12.13.
 - **`pnpm check` runs on pre-push already.** Don't run it manually first; just push.
+- **Branch names use the work type and scope**, such as `feat/`, `fix/`, `docs/`, `test/`, `refactor/`, or `chore/`. Do not add agent or runtime prefixes such as `codex/` or `claude/`.
 
 ## Keeping the defense document honest
 

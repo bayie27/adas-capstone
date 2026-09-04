@@ -20,12 +20,12 @@ person-in-the-loop step is on purpose: the AI flags candidates, but only a logge
 user ever confirms that something is a real accident.
 
 The moment a camera reports a possible accident, that camera pauses its own detection
-until the alert is resolved. This keeps the system from raising a flood of duplicate
+until the alert is cleared. This keeps the system from raising a flood of duplicate
 alerts for the same event while someone is already looking at it.
 
 ## The two account types
 
-- **Operator**: the day-to-day monitoring role. Confirms or dismisses alerts, resolves
+- **Operator**: the day-to-day monitoring role. Confirms or dismisses alerts, clears
   ongoing incidents, manages cameras, and checks system health and AI performance.
 - **Administrator**: everything an Operator can do, plus managing user accounts,
   reading the audit trail, and backing up or restoring the system's database.

@@ -17,10 +17,11 @@ import { formatFullDateTime } from "@/utils/datetime"
  */
 
 const ACTION_VERB: Record<string, string> = {
-  confirm: "confirmed",
-  dismiss: "dismissed",
-  resolve: "resolved",
-  snooze: "snoozed",
+  ALERT_CONFIRM: "confirmed",
+  ALERT_DISMISS: "dismissed",
+  ALERT_CLEAR: "cleared",
+  ALERT_CORRECTION: "corrected",
+  ALERT_SNOOZE: "snoozed",
 }
 
 function sentence(info: IncidentHandledInfo): string {

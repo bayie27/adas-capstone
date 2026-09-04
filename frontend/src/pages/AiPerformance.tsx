@@ -143,7 +143,7 @@ export default function AiPerformance() {
     queryKey: ["retraining-labelled-count", startDate, endDate, cameraId],
     queryFn: () =>
       getAlerts({
-        status: ["Resolved", "Dismissed"],
+        status: ["Cleared", "Dismissed"],
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         camera_id: cameraId ? [Number(cameraId)] : undefined,
