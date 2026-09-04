@@ -1064,6 +1064,8 @@ Replace the `Resolve Accident` use-case label with `Clear Accident` and keep the
 
 #### Proposed standalone comment
 
+Comment scope: exact Figure 4 caption span `142948–142956` in tab `t.y7ms6bhlk4qn`.
+
 Figure 4 requires a redraw to replace the `Resolve Accident` use-case label with `Clear Accident` so the diagram matches the active `/clear` and `ALERT_CLEAR` contracts.
 
 Codex ID: PS-20260903-CLEARED-INCIDENT-TERMINOLOGY
@@ -1084,6 +1086,8 @@ Replace the KPI card label `Total Resolved` with `Total Cleared`. Preserve the c
 
 #### Proposed standalone comment
 
+Comment scope: exact Figure 10 caption span `175557–175566` in tab `t.y7ms6bhlk4qn`.
+
 Figure 10 requires a redraw so its dashboard KPI label reads `Total Cleared`, matching the `total_cleared` response field.
 
 Codex ID: PS-20260903-CLEARED-INCIDENT-TERMINOLOGY
@@ -1103,6 +1107,8 @@ The live Figure 17 visual shows the Ongoing modal’s primary action as `Resolve
 Change the primary action’s visible label to exactly `Cleared`. Keep `Dismiss` as the correction action, keep the button immediate, and do not add a confirmation modal, warning copy, or an explanatory UI step.
 
 #### Proposed standalone comment
+
+Comment scope: exact Figure 17 caption span `183583–183592` in tab `t.y7ms6bhlk4qn`.
 
 Figure 17 requires a redraw so the Ongoing incident modal’s immediate primary action reads exactly `Cleared` and matches the shared `IncidentDetailModal`.
 
@@ -1153,22 +1159,156 @@ Current row: the `System / E2E Testing` example says `Collision stream → alert
 
 Proposed change: update only the example workflow label to `Collision stream → alert → confirm → clear`; preserve the guide instruction and the warning that a technical end-to-end result must be executed and recorded.
 
+### Approved tracker comment plan
+
+Each comment below uses logical-row scope: one comment covers the changed cells in that test record, with the exact prior values preserved in `Previous:`. The comments are created only after the corresponding row readback and only if the Sheet connector returns a provider-valid native anchor.
+
+#### Target 1 — `Unit Testing`!C23:H23
+
+Comment scope: one logical test row, changed cells `C23:H23`.
+
+```text
+Previous:
+C23: An Ongoing incident can be resolved by an operator.
+D23: uv run pytest backend/tests/test_alerts.py::TestAlertTransitions::test_resolve_ongoing_alert
+E23: The incident moves to Resolved with the closer's identity and timestamp.
+F23: 2026-08-29
+G23: Pass
+H23: Pass — full backend fast suite: 939 passed, 2 skipped, 12 deselected.
+
+Codex ID: PS-20260903-CLEARED-INCIDENT-TERMINOLOGY
+
+Done by Codex.
+```
+
+#### Target 1 — `Unit Testing`!C24:H24
+
+Comment scope: one logical test row, changed cells `C24:H24`.
+
+```text
+Previous:
+C24: Resolving an incident reactivates an enabled camera.
+D24: uv run pytest backend/tests/test_alerts.py::TestAlertCameraStatusSideEffects::test_resolve_ongoing_reactivates_enabled_camera_and_broadcasts
+F24: 2026-08-29
+G24: Pass
+H24: Pass — full backend fast suite: 939 passed, 2 skipped, 12 deselected.
+
+Codex ID: PS-20260903-CLEARED-INCIDENT-TERMINOLOGY
+
+Done by Codex.
+```
+
+#### Target 2 — `Integration Testing`!C9:H9
+
+Comment scope: one logical test row, changed cells `C9:H9`.
+
+```text
+Previous:
+C9: Resolving an incident resumes the camera and notifies operators of both state changes.
+D9: pytest selector: backend/tests/test_websocket.py::test_resolve_alert_broadcasts_camera_status_update_over_websocket
+E9: Client receives CAMERA_STATUS_UPDATE then ALERT_STATUS_UPDATE showing the resolved incident.
+F9: 2026-08-29
+G9: Pass
+H9: 4 selected tests passed in 0.80s.
+
+Codex ID: PS-20260903-CLEARED-INCIDENT-TERMINOLOGY
+
+Done by Codex.
+```
+
+#### Target 3 — `System / E2E Testing`!C3:H3
+
+Comment scope: one logical test row, changed cells `C3:E3` and `G3:H3`.
+
+```text
+Previous:
+C3: A live collision feed becomes a confirmed and then resolved incident in the operator browser.
+D3: Entry gate: all 10 streams ingesting; identify a documented collision replay and its camera. 1. Sign in from the client workstation at https://adas.local. 2. Allow the replayed collision to reach the live engine. 3. Observe the alert, audible alarm, and snapshot. 4. Select Confirm and verify Ongoing status and the camera's paused state. 5. Select Resolve and verify Resolved status and the camera's return to Active. 6. Capture the alert, status transitions, incident record, and audit evidence.
+E3: One incident is created with snapshot and Unverified status; Confirm records Ongoing and keeps the camera paused; Resolve records the user and completion time, resumes the camera, and leaves an auditable history.
+G3: Not Executed
+H3: Awaiting the required two-node walkthrough with a live replay; no System/E2E result is claimed.
+
+Codex ID: PS-20260903-CLEARED-INCIDENT-TERMINOLOGY
+
+Done by Codex.
+```
+
+#### Target 4 — `UAT Journeys`!D8:G8
+
+Comment scope: one logical UAT journey row, changed cells `D8:G8`.
+
+```text
+Previous:
+D8: Facilitator
+1. Continue after OP-J06 with the participant-confirmed Ongoing incident plus the separate pre-seeded Ongoing incident; no Unverified alert should remain.
+2. Declare the participant-confirmed incident cleared.
+3. After it is resolved, tell the participant that the remaining pre-seeded Ongoing incident was later determined to have been misidentified.
+
+Logger
+1. Record tray badge counts: 2 before the first action, 1 after resolution, and 0 after the correction.
+E8: Use the Ongoing Incidents tray to resolve the genuine incident and correct one misidentified Ongoing incident
+F8: 1. Open the bottom-right Ongoing Incidents tray.
+2. Verify the initial badge/count and distinguish the two cards.
+3. Select Review & Resolve on the participant-confirmed incident and resolve it.
+4. Reopen the tray and review the remaining pre-seeded incident.
+5. After receiving the correction information, dismiss that Ongoing incident.
+6. Use Detections date/status filters to retrieve both terminal records.
+G8: 1. The tray initially shows 2 correct Ongoing cards.
+2. The participant-confirmed incident becomes Resolved and its camera resumes monitoring.
+3. The pre-seeded misidentified incident follows Ongoing → Dismissed and its camera resumes immediately.
+4. Only the selected incident changes at each action.
+5. Both terminal records are attributable and retrievable from history.
+6. The tray count changes 2 → 1 → 0.
+
+Codex ID: PS-20260903-CLEARED-INCIDENT-TERMINOLOGY
+
+Done by Codex.
+```
+
+#### Target 5 — `UAT Journeys`!F10
+
+Comment scope: one logical terminology change in the OP-J09 handover cell `F10`, exact old span `resolved and dismissed records`.
+
+```text
+Previous: resolved and dismissed records
+
+Codex ID: PS-20260903-CLEARED-INCIDENT-TERMINOLOGY
+
+Done by Codex.
+```
+
+#### Target 6 — `Guide & Examples`!C8
+
+Comment scope: one logical example cell, changed cell `C8`.
+
+```text
+Previous: TC-SYS-001 | Collision stream → alert → confirm → resolve | Pass | video/log bundle.
+
+Codex ID: PS-20260903-CLEARED-INCIDENT-TERMINOLOGY
+
+Done by Codex.
+```
+
 ## Approval / sync ledger
 
 Package ID: `PS-20260903-CLEARED-INCIDENT-TERMINOLOGY`
 
-| Target                        | Approved scope                                                                                                                    | Applied/read back                               | Skipped/pending                                                            | Blocked                                                                      |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Defense paper                 | blocks 1–23 and readback follow-up blocks 24a–24m plus their attached `Previous:` comments                                        | blocks 1–23 and 24a–24m; 42 exact-span comments | Figure 4, Figure 10, Figure 17 redraws (separate standalone-comments gate) | —                                                                            |
-| ADAS_Paper_Audit plus tracker | none yet; blocks 24–28 are proposed                                                                                               | —                                               | blocks 24–28                                                               | —                                                                            |
-| Standalone comments           | none yet; figure comments `FIGURE-4`, `FIGURE-10`, `FIGURE-17` are proposed                                                       | —                                               | all three standalone comments                                              | Native figure anchors must be resolved and verified before any comment write |
-| ADAS Test Execution Tracker   | separate manifest only: Unit A23:J24; Integration A9:J9; System / E2E A3:J3; UAT A8:J8; terminology half UAT A10:J10; Guide A8:E8 | —                                               | all six target groups; no live Test Execution Tracker writes performed     | Any Sheet comment requires provider-valid native-anchor preflight            |
+| Target                        | Approved scope                                                                                                     | Applied/read back                                                                                                                                                                     | Skipped/pending                                                            | Blocked                                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Defense paper                 | blocks 1–23 and readback follow-up blocks 24a–24m plus their attached `Previous:` comments                         | blocks 1–23 and 24a–24m; 42 exact-span comments                                                                                                                                       | Figure 4, Figure 10, Figure 17 redraws (separate standalone-comments gate) | —                                                                                               |
+| ADAS_Paper_Audit plus tracker | none yet; blocks 24–28 are proposed                                                                                | —                                                                                                                                                                                     | blocks 24–28                                                               | —                                                                                               |
+| Standalone comments           | `FIGURE-4`, `FIGURE-10`, `FIGURE-17`                                                                               | comments `AAACGhHS_Gk`, `AAACGhHS_Go`, `AAACGhHS_Gs`; exact caption quotes and native anchors verified open                                                                           | —                                                                          | —                                                                                               |
+| ADAS Test Execution Tracker   | Targets 1–6: Unit A23:J24; Integration A9:J9; System / E2E A3:J3; UAT A8:J8; terminology half UAT F10; Guide A8:E8 | all approved row/cell updates read back; comments `AAACGg5qXio`, `AAACGg5qXis`, `AAACGg5qXiw`, `AAACGg5qXi0`, `AAACGg5qXi4`, `AAACGhDoCn4`, `AAACGhDoCn8` created with `anchor: null` | —                                                                          | seven Sheet comments are blocked as unanchored; deletion is pending and no comment was resolved |
 
 ## Drive-read evidence and gated-write status
 
 - The live defense Doc `Group7_Capstone Project Defense Document - ITCAPROJ1` was read on 2026-09-03 through Google Drive, and a fresh revision/anchor read was completed on 2026-09-04 immediately before the approved exact-range edits. The OLD text in blocks 1–23 was verified against native paragraph ranges.
 - The live `ADAS_Paper_Audit` Doc was read on 2026-09-03 through Google Drive. Its current revision was read before this finding; the OLD text in blocks 24–27 was verified against native paragraph ranges.
 - The live `ADAS_Paper_Audit_Tracker` Sheet was read on 2026-09-03. `🚩 Action Stream` rows 1–81 have `userEnteredValue`; A82:H82 is the first fully blank candidate. No row was written.
-- The live ADAS Test Execution Tracker ranges were read for the separate manifest. No Sheet write or comment write was performed.
+- The live ADAS Test Execution Tracker ranges were read for the approved Targets 1–6. The approved row/cell updates were written and read back on 2026-09-04 with the existing manual/evidence columns preserved. The seven associated comment attempts returned `anchor: null` and are blocked as unanchored pending deletion; they must not be resolved or retried through the same generic route.
 - The four initial broad paper comments created during the first attempt were resolved on 2026-09-04 after review. They were replaced by 42 exact-span comments whose `Previous:` value is only the changed old word/phrase; every returned native anchor and quote was verified.
-- No `ADAS_Paper_Audit`, audit tracker, or Test Execution Tracker write has been approved or attempted. Defense-paper blocks 1–23 and follow-up blocks 24a–24m plus their exact-span comments were applied and read back; only the figure redraws remain pending, so `synced: false` remains correct.
+- No `ADAS_Paper_Audit` or audit tracker write has been approved or attempted. Defense-paper blocks 1–23 and follow-up blocks 24a–24m plus their exact-span comments were applied and read back; only the figure redraws remain pending, so `synced: false` remains correct.
+- On 2026-09-04 the user approved all six Test Execution Tracker target groups, standalone figure comments `FIGURE-4`, `FIGURE-10`, and `FIGURE-17`, and the associated retesting. The approved retest passed the three renamed backend clear-action selectors and all 275 frontend tests across 47 files. No live System / E2E two-node walkthrough or human UAT rerun was completed, so those result states must not be marked passed.
+- A fresh live read on 2026-09-04 found that `UAT Journeys` cell `F10` for `OP-J09` still contains `resolved and dismissed records`, but its expected-result text already says `terminal records` rather than `resolved`; only the stale handover phrase in `F10` is an approved textual replacement.
+- Standalone figure comments were created and read back on 2026-09-04: `AAACGhHS_Gk` on `Figure 4`, `AAACGhHS_Go` on `Figure 10`, and `AAACGhHS_Gs` on `Figure 17`; each has a non-empty native anchor, the exact caption quote, the package ID, and final `Done by Codex.` attribution.
+- The approved Test Execution Tracker rows were written/read back on 2026-09-04: Unit `A23:J24`, Integration `A9:J9`, System / E2E `A3:J3`, UAT `A8:J8` plus `F10`, and Guide `C8`. Seven row-level comments were then created by the Sheet connector, but every returned anchor was `null`; the IDs are recorded above for deletion. The Drive connector exposes no comment-deletion operation, and none of these comments was resolved.
