@@ -2,7 +2,7 @@
 slug: faq-what-does-precision-score-mean
 title: What does precision score mean?
 category: FAQ
-roles: [Admin, Operator]
+roles: [Admin]
 summary: The share of confirmed alerts that were real accidents rather than false positives.
 sort_order: 60
 is_faq: true

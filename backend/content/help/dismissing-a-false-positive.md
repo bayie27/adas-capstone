@@ -18,9 +18,8 @@ accident: a false trigger, an empty road, a shadow the model misread, glare, or 
 vehicle that merely slowed down rather than collided. This is the everyday, expected
 outcome for a share of alerts: the AI is deliberately tuned to flag anything that might
 be an accident rather than only the ones it's certain about, so seeing false positives
-in your queue is normal, not a sign something is broken. See [Understanding AI
-Performance Metrics](understanding-ai-performance-metrics) for how that trade-off is
-measured.
+in your queue is normal, not a sign something is broken. Administrators can review how
+that trade-off appears in the AI Performance metrics.
 
 ## What happens after you dismiss
 

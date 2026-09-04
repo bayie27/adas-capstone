@@ -95,16 +95,34 @@ Before writing anything, sweep: Definition of Terms · the FR/NFR tables · the 
 
 For every textual site that needs a change, produce a separate change block with its own artifact, location, page/s or Sheet range, OLD, NEW, and evidence. Do not defer actionable text to a propagation list or a "see above" reference. For figures and diagrams, produce a `REDRAW REQUIRED` block instead of inventing replacement prose.
 
+### Current finding ownership
+
+The current dated finding is the sole owner of every newly implicated site discovered in the current analysis, even when an older finding discussed the same surface. Repeat the relevant OLD, NEW, and Evidence in the current finding instead of handing the work back to an older Markdown file or making the current finding depend on it. Older findings remain untouched historical records by default; cite them only as provenance, not as the place where the current work lives.
+
+### Change metadata
+
+Every change block must also record a compact execution manifest, which may be generated automatically:
+
+- `Operation`: `replace`, `insert`, `delete`, or `redraw`.
+- `Scope`: `span`, `logical paragraph`, `cell`, `row`, or `figure`.
+- `Changed target`: the exact text span, cell(s), row, or figure being changed.
+- `Preserve`: nearby text, cells, validation, formatting, or manual fields that must not change.
+- `Comment target`: the exact native range, or the exact changed Sheet text colored orange (`#E67E22`).
+
+This metadata is an execution contract, not extra replacement prose. It lets the workflow validate that a comment does not cover preserved content and that a proposed operation matches the actual write.
+
 ### Comment scope
 
 Choose the comment scope per textual site before writing and record it in the finding:
 
 - **Span scope** — use this when the change is genuinely one small, contiguous word or phrase. The comment's `Previous:` line contains only the exact old span, and the native comment range highlights only the exact new span.
-- **Logical-paragraph scope** — use this when most of the paragraph changes, or when the required changes are scattered across multiple non-contiguous spans. Create one comment for the whole logical paragraph, with the full old paragraph in `Previous:` and the full new logical paragraph as the native highlight. Do not flood one logical paragraph with a separate comment for every scattered phrase.
+- **Logical-paragraph scope** — use this when most of the paragraph changes, when the required changes are scattered across multiple non-contiguous spans, or when one paragraph contains three or more distinct changes. Create one comment for the whole logical paragraph rather than flooding it with phrase comments. For this scope, the comment may use `Previous (marked, intentionally non-verbatim):` and wrap each changed old fragment in `[[...]]` so the changes are easy to see. The finding's OLD section must still contain the exact verbatim paragraph.
 
 Do not use a paragraph-sized comment for a small, contiguous replacement. Do not use many span comments when a paragraph-level rewrite is the clearer audit trail. The required `Codex ID:` and final `Done by Codex.` lines remain in both comment shapes.
 
 Each finding block must record `Comment scope:` immediately before its proposed comment. For span scope, include the exact changed OLD and NEW spans; for logical-paragraph scope, identify the single logical paragraph being highlighted.
+
+For an insertion-only block, use `Previous: N/A` and highlight only the inserted NEW text. For a deletion-only block, make NEW explicitly say `DELETE ONLY — insert nothing.`, put the exact deleted text in `Previous:`, and anchor the native comment to the nearest surviving left character. Do not comment on preserved text merely because it is adjacent to the deletion.
 
 For a new tracker row, resolve the target deterministically rather than assuming a convenient row. Read a bounded range with `userEnteredValue` immediately before proposing and again immediately before writing. Treat a row as occupied when any cell has a `userEnteredValue`; formatting, validation, banding, or a blank-looking rendered value does not make it occupied or available. Use the response's `startRow`/`startColumn` metadata when mapping returned arrays to A1 rows—blank trailing rows may be omitted. If the candidate is occupied, scan downward to the first fully blank row, preserve every occupied row, and update the finding's Sheet range, OLD, Evidence, proposed comment, tracker summary, and approval report to the actual range before writing. Write only the intended cells, normally A:G, and preserve manual cells such as `Reviewed by`, formatting, validation, and notes.
 
@@ -124,21 +142,21 @@ For every finding/package, assign one stable searchable package ID derived from 
 For every textual NEW that Codex will apply, also draft the comment that will be attached to that new information after the replacement is verified. Use the recorded comment scope: a span comment preserves only the replaced old span; a logical-paragraph comment preserves the full previous paragraph. Both comment bodies include the package ID and end with the attribution line:
 
 ```text
-Previous: <the exact OLD text or old cell value>
+Previous: <the exact OLD text or old cell value; use N/A for insertion-only>
 
 Codex ID: PS-YYYYMMDD-FINDING-SLUG
 
 Done by Codex.
 ```
 
+For a logical-paragraph comment with three or more distinct changes, replace the `Previous:` label with `Previous (marked, intentionally non-verbatim):` and wrap each changed old fragment in `[[...]]`. The block's OLD section remains the exact audit quote.
+
 For a standalone review comment, put the review text first, then the `Codex ID:` line, and keep `Done by Codex.` as the exact final line. This comment is an audit trail, not part of NEW. Do not add it to unchanged sites, preserved tracker cells, or redraw-only items unless a separate comment is useful.
 
-The comment uses the same approval gate as its replacement: a defense-paper replacement and its `Previous` comment are approved together under **Defense paper**; an audit-Doc or tracker replacement and its comment are approved together under **Audit + tracker**. Only a standalone review comment uses the separate Comments gate.
+The comment uses the same approval gate as its replacement: a defense-paper replacement and its `Previous` comment are approved together under **Defense paper**; an audit-Doc replacement and its comment are approved under **Audit + tracker**; a tracker Sheet replacement uses the exact orange text fallback in that same gate. Only a standalone review comment uses the separate Comments gate.
 
-Sheet comments need an additional capability check. A `sheet_cell_range` parameter or a returned `quotedFileContent` such as `Cell/range ...` is location context, not proof of a provider-valid anchor. Before creating a Sheet comment, confirm that the connector can return and read back a non-empty native anchor tied to the intended range. If it cannot, leave the proposed comment in the finding, mark it **Blocked** in the sync ledger, and do not retry the same generic comment route. If an incorrect, duplicate, or provisional comment was created, delete it with the provider's comment-deletion operation and verify deletion. Do not resolve it as a substitute. If the connector cannot delete comments, stop and report that limitation rather than silently resolving or adding a replacement.
-
----
-
+For Sheets, do not create comments. Color only the exact new or changed word/phrase text orange (`#E67E22`) using rich-text `textFormatRuns`; preserve unchanged characters and all other cell formatting. Never color the whole cell unless the entire cell value is new or changed.
+Comment target: exact NEW span, or exact changed Sheet text colored orange (`#E67E22`)
 Before creating comments, search the file's existing comments for the package ID. Multiple comments with the same package ID are expected; for each planned comment, match its recorded scope, exact content, quote, and anchor and do not duplicate an exact match. If the package ID is attached to an unrelated finding or the expected scope/anchor/quote conflicts, stop and report it. Existing comments created before this convention are historical and are not rewritten solely to add IDs without explicit approval.
 
 ## Step 6 — write the finding
@@ -148,7 +166,7 @@ Every finding stays in `paper_sync/findings/<YYYY-MM-DD>-<slug>.md` and contains
 ```markdown
 ---
 section: Frameworks and Libraries
-page/s: "unconfirmed"
+page/s: "<exact rendered page(s)>"
 required_revision: One-line summary of the change
 notes: Any qualifier a reader needs
 status: Not started
@@ -161,6 +179,14 @@ synced: false
 ### 1. Defense paper — Table 7, NFR-21
 
 Page/s: 66
+
+#### Change metadata
+
+Operation: replace
+Scope: span
+Changed target: exact OLD span
+Preserve: surrounding text and formatting
+Comment target: exact NEW span, or exact changed Sheet text colored orange (`#E67E22`)
 
 #### OLD
 
@@ -200,7 +226,7 @@ file:line or measured evidence
 
 ### 3. ADAS_Paper_Audit — §2.6
 
-Page/s: unconfirmed
+Page/s: p. NN (exact rendered page required)
 
 #### OLD
 
@@ -253,8 +279,8 @@ Comment text to attach only if a valid native highlight anchor is available.
 - Add only the minimum wording needed to make the paper accurate.
 - Put implementation detail, key lists, counts, file paths, and reasoning in Evidence, never in NEW.
 - Repeat OLD/NEW for every site; never replace those blocks with a site list or cross-reference.
-- For every textual NEW, include a proposed comment body using the site's recorded scope: exact changed OLD/NEW spans for span scope, or the full OLD/NEW logical paragraph for paragraph scope. Every body starts with `Previous:`, includes the finding's package-level `Codex ID:` line, and ends with `Done by Codex.` on its own final line. Standalone comments also include the same package ID.
-- The proposed comment is not part of NEW and is created only after the associated replacement has been read back successfully and its same approval gate has been granted.
+- For every textual NEW, include either a proposed comment body using the site's recorded scope or, for Sheet content, a documented orange text-format fallback covering the exact changed text. Comment bodies use exact changed OLD/NEW spans for span scope or the full OLD/NEW logical paragraph for paragraph scope; every body starts with `Previous:`, includes the finding's package-level `Codex ID:` line, and ends with `Done by Codex.` on its own final line. Standalone comments also include the same package ID.
+- The proposed comment or formatting fallback is not part of NEW and is applied only after the associated replacement has been read back successfully and its same approval gate has been granted.
 - Use `REDRAW REQUIRED` for non-text artifacts.
 
 ### Standing evidence rules
@@ -328,7 +354,7 @@ Use this section for figures and diagrams. Give each item its own page/s, curren
 
 **Front-matter values are cells, not prose.** Each one is pasted into a spreadsheet cell, so keep it short — a summary, not an explanation. Anything that needs reasoning goes in the body. This is the same rule as NEW, one field over.
 
-**Page/s are rendered-document evidence.** Native Docs indexes are not page numbers. When page numbers are required, export the live native Doc internally as PDF, match the exact OLD text against the rendered PDF, and record every matching page or page range. Use `unconfirmed` only when PDF mapping genuinely fails. For the tracker Sheet, record the tab name and A1 cell/range instead of a page.
+**Page/s are rendered-document evidence.** Native Docs indexes are not page numbers. Export the live native Doc internally as PDF, match the exact OLD text against the rendered PDF, and record every matching page or page range before approval. Exact page mapping is a hard requirement because those pages must flow into the paper-audit tracker; an unresolved mapping blocks approval and the tracker write. For the tracker Sheet, record the tab name and A1 cell/range instead of a page.
 
 The front matter is the tracker row. Its keys are the Sheet's columns, in order:
 
@@ -356,7 +382,7 @@ Package ID: `PS-YYYYMMDD-FINDING-SLUG`
 | Standalone comments           | comments …     | comments …        | comments …      | …       |
 ```
 
-**One file per finding, never one shared file.** Four people work on separate branches; everyone appending to a single file conflicts on every merge, separate files never do.
+**One current finding per analysis, never one shared file for one analysis.** The current dated file owns all newly implicated sites, including sites previously discussed elsewhere. Older finding files remain untouched historical records by default; do not split current work across the current file and an older file.
 
 Then regenerate the summary — it is generated, never hand-edited:
 
@@ -380,7 +406,7 @@ End with three separate approval gates:
 2. **ADAS_Paper_Audit plus tracker Sheet** — one combined permission for the listed audit-Doc and Sheet updates.
 3. **Standalone comments** — a separate permission only for comments that are not attached to a replacement, such as a figure/redraw review comment.
 
-The Defense paper gate includes each paper replacement's `Previous` comment. The combined Audit + tracker gate includes each audit-Doc or tracker replacement's `Previous` comment. For native Google Docs, use the Docs `insertComment` request through `google_drive_batch_update_document`, with the exact NEW range, only after its associated replacement has been read back. Do not synthesize Drive `kix.*` anchors or use the Drive comments bulk endpoint for Doc highlighting. If a native highlight cannot be created and verified, leave the proposed comment in the report and do not create an unanchored comment.
+The Defense paper gate includes each paper replacement's `Previous` comment. The combined Audit + tracker gate includes each audit-Doc replacement's `Previous` comment or tracker replacement's exact text-format fallback. For native Google Docs, use the Docs `insertComment` request through `google_drive_batch_update_document`, with the exact NEW range, only after its associated replacement has been read back. Do not synthesize Drive `kix.*` anchors or use the Drive comments bulk endpoint for Doc highlighting. If a native highlight cannot be created and verified, leave the proposed comment in the report and do not create an unanchored comment.
 
 ## Step 8 — apply approved writes and verify
 
@@ -392,7 +418,7 @@ For each approved gate:
 - Update only the intended tracker row/cells with `google_drive_batch_update_spreadsheet`; read the full resolved target row immediately before writing and preserve unrelated values, formatting, validation, blank owner/status cells, and other manual columns. For an append, verify the target is fully blank by `userEnteredValue`; if not, resolve the next fully blank row, update the finding/ledger/report, and only then write.
 - After each approved Doc replacement succeeds, find the exact NEW text again, obtain a fresh revision, and create its approved comment with a raw Docs `insertComment` request containing `content` and `range` (`startIndex`, `endIndex`, `tabId`). Apply the recorded scope: highlight only the new changed span for span scope, or one full new logical paragraph for paragraph scope. Do not combine the replacement and comment into one batch because the replacement changes the range being anchored. Before inserting, check comments with the package ID and match the expected scope, content, and quote/anchor to avoid duplicates.
 - If an incorrect, duplicate, or provisional comment was created, delete it with the provider's comment-deletion operation and verify deletion. Do not resolve it as a substitute; if deletion is unavailable, stop and report the limitation.
-- Read back the changed Doc paragraphs, Sheet cells, and comment state. For a native Doc comment, verify the returned `commentThread`, non-empty anchor, exact `plainTextQuote`/quoted text (HTML-decode entities before comparison), the expected `Codex ID:`, and that the content ends with `Done by Codex.`.
+- Read back the changed Doc paragraphs, Sheet cells, comment state, and any Sheet text-format fallback. For a native Doc comment, verify the returned `commentThread`, non-empty anchor, exact `plainTextQuote`/quoted text (HTML-decode entities before comparison), the expected `Codex ID:`, and that the content ends with `Done by Codex.`.
 - Update the local finding's approval/sync ledger after each verified artifact. Update `synced` only when no block remains skipped, pending, or blocked and every approved write has passed read-back.
 
 After all approved writes and read-backs, run a fresh read-only sweep of the live artifacts for claim-bearing drift. If the sweep finds a new textual site that was not in the approved manifest, stop completion, record the site with its OLD/NEW text and evidence in the finding, leave it pending, and request approval before writing it. Do not silently expand the manifest or mark the finding synced. Generic technical or ordinary-language matches may be classified as out of scope only with an explicit justification.
