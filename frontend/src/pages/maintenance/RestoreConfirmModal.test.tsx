@@ -6,6 +6,20 @@ import { describe, expect, it, vi } from "vitest"
 import type { BackupRead } from "@/api/maintenance"
 import { RestoreConfirmModal } from "./RestoreConfirmModal"
 
+vi.mock("@/api/maintenance", async () => {
+  const actual = await vi.importActual<typeof import("@/api/maintenance")>("@/api/maintenance")
+  return { ...actual, requestRestore: vi.fn() }
+})
+
+import { requestRestore } from "@/api/maintenance"
+
+function apiError(status: number, code: string, detail: string) {
+  return {
+    isAxiosError: true,
+    response: { status, data: { code, detail } },
+  }
+}
+
 const BACKUP_ID = "0123456789abcdef0123456789abcdef"
 const backup: BackupRead = {
   backup_id: BACKUP_ID,
@@ -77,5 +91,37 @@ describe("RestoreConfirmModal", () => {
     )
 
     expect(screen.getByRole("button", { name: /restore database/i })).toBeDisabled()
+  })
+
+  it("shows a wrong-password rejection under the password field, not as a generic banner", async () => {
+    vi.mocked(requestRestore).mockRejectedValueOnce(
+      apiError(401, "AUTH_INVALID_CREDENTIALS", "Current password is incorrect."),
+    )
+    const user = userEvent.setup()
+    renderModal()
+
+    await user.type(screen.getByLabelText(/current password/i), "wrong-password")
+    await user.type(screen.getByLabelText('Type "RESTORE DATABASE" to confirm'), "RESTORE DATABASE")
+    await user.click(screen.getByRole("button", { name: /restore database/i }))
+
+    expect(await screen.findByText("Current password is incorrect.")).toBeInTheDocument()
+    expect(screen.getByLabelText(/current password/i)).toHaveAttribute("aria-invalid", "true")
+  })
+
+  it("shows a confirmation mismatch under the confirmation field", async () => {
+    vi.mocked(requestRestore).mockRejectedValueOnce(
+      apiError(422, "VALIDATION_ERROR", "Confirmation must be exactly 'RESTORE DATABASE'."),
+    )
+    const user = userEvent.setup()
+    renderModal()
+
+    await user.type(screen.getByLabelText(/current password/i), "hunter2")
+    await user.type(screen.getByLabelText('Type "RESTORE DATABASE" to confirm'), "RESTORE DATABASE")
+    await user.click(screen.getByRole("button", { name: /restore database/i }))
+
+    expect(
+      await screen.findByText("Confirmation must be exactly 'RESTORE DATABASE'."),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText(/current password/i)).not.toHaveAttribute("aria-invalid")
   })
 })
