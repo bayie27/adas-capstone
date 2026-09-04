@@ -5,7 +5,7 @@ table for audit coupling, redaction, multi-action, and the viewer.
 """
 
 import csv
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from io import StringIO
 
 import pytest
@@ -536,6 +536,148 @@ class TestAuditViewer:
         delete_resp = client.delete(f"/api/audit-logs/{row.audit_id}", headers=headers)
         assert patch_resp.status_code in (404, 405)
         assert delete_resp.status_code in (404, 405)
+
+
+class TestAuditViewerGrouping:
+    """Viewer-only collapsing of same-actor/action/target/result bursts
+    (e.g. autosaved alarm-settings tweaks) — the rows themselves are always
+    written and exported individually; only this endpoint's `items` gain
+    `group_size`/`is_group_head` annotations."""
+
+    def test_bursts_within_the_gap_collapse_into_one_group(
+        self, client: TestClient, session: Session
+    ):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+
+        base = datetime.now(UTC)
+        for offset_seconds in (0, 30, 60):
+            session.add(
+                AuditLog(
+                    actor_type="user",
+                    user_id=admin.user_id,
+                    username=admin.username,
+                    action="ALARM_SETTINGS_UPDATE",
+                    target_type="user",
+                    target_ref=str(admin.user_id),
+                    result="success",
+                    created_at=base + timedelta(seconds=offset_seconds),
+                )
+            )
+        session.commit()
+
+        items = client.get("/api/audit-logs/", headers=headers).json()["items"]
+        assert len(items) == 3
+        assert {item["group_size"] for item in items} == {3}
+        assert sum(item["is_group_head"] for item in items) == 1
+
+    def test_a_gap_past_the_threshold_starts_a_new_group(
+        self, client: TestClient, session: Session
+    ):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+
+        base = datetime.now(UTC)
+        for offset_seconds in (0, 200):
+            session.add(
+                AuditLog(
+                    actor_type="user",
+                    user_id=admin.user_id,
+                    username=admin.username,
+                    action="ALARM_SETTINGS_UPDATE",
+                    target_type="user",
+                    target_ref=str(admin.user_id),
+                    result="success",
+                    created_at=base + timedelta(seconds=offset_seconds),
+                )
+            )
+        session.commit()
+
+        items = client.get("/api/audit-logs/", headers=headers).json()["items"]
+        assert len(items) == 2
+        assert all(item["group_size"] == 1 and item["is_group_head"] for item in items)
+
+    def test_a_different_target_never_joins_the_group(
+        self, client: TestClient, session: Session
+    ):
+        admin = make_admin(session)
+        operator = make_operator(session)
+        headers = _cookie_header_for(session, admin)
+
+        base = datetime.now(UTC)
+        for user, offset_seconds in ((admin, 0), (operator, 5)):
+            session.add(
+                AuditLog(
+                    actor_type="user",
+                    user_id=user.user_id,
+                    username=user.username,
+                    action="ALARM_SETTINGS_UPDATE",
+                    target_type="user",
+                    target_ref=str(user.user_id),
+                    result="success",
+                    created_at=base + timedelta(seconds=offset_seconds),
+                )
+            )
+        session.commit()
+
+        items = client.get("/api/audit-logs/", headers=headers).json()["items"]
+        assert len(items) == 2
+        assert all(item["group_size"] == 1 for item in items)
+
+    def test_sorting_by_anything_other_than_time_disables_grouping(
+        self, client: TestClient, session: Session
+    ):
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+
+        base = datetime.now(UTC)
+        for offset_seconds in (0, 10, 20):
+            session.add(
+                AuditLog(
+                    actor_type="user",
+                    user_id=admin.user_id,
+                    username=admin.username,
+                    action="ALARM_SETTINGS_UPDATE",
+                    target_type="user",
+                    target_ref=str(admin.user_id),
+                    result="success",
+                    created_at=base + timedelta(seconds=offset_seconds),
+                )
+            )
+        session.commit()
+
+        items = client.get(
+            "/api/audit-logs/?sort_by=action&sort_order=asc", headers=headers
+        ).json()["items"]
+        assert all(item["group_size"] == 1 and item["is_group_head"] for item in items)
+
+    def test_export_never_groups_rows(self, client: TestClient, session: Session):
+        """01_CONTRACTS.md's append-only export is a complete, ungrouped
+        record — every row is exported individually regardless of how the
+        list viewer would collapse them."""
+        admin = make_admin(session)
+        headers = _cookie_header_for(session, admin)
+
+        base = datetime.now(UTC)
+        for offset_seconds in (0, 30, 60):
+            session.add(
+                AuditLog(
+                    actor_type="user",
+                    user_id=admin.user_id,
+                    username=admin.username,
+                    action="ALARM_SETTINGS_UPDATE",
+                    target_type="user",
+                    target_ref=str(admin.user_id),
+                    result="success",
+                    created_at=base + timedelta(seconds=offset_seconds),
+                )
+            )
+        session.commit()
+
+        resp = client.get("/api/audit-logs/export", headers=headers)
+        rows = list(csv.reader(StringIO(resp.text)))
+        # Header + 3 individual rows, none collapsed.
+        assert len(rows) == 4
 
 
 class TestAuditExport:
