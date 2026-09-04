@@ -29,3 +29,14 @@ Object.defineProperty(window, "localStorage", {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = function () {}
 }
+
+// JSDOM has no layout engine, so ResizeObserver doesn't exist either — the
+// snapshot zoom lightbox (react-zoom-pan-pinch) measures its wrapper on
+// mount and throws without it.
+if (typeof window.ResizeObserver === "undefined") {
+  window.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+}

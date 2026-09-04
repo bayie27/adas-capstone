@@ -164,6 +164,7 @@ export function IncidentDetailModal({
                 alt={`Accident snapshot for log ${alert.log_id}`}
                 className="h-full w-full min-h-full object-cover block"
                 fallbackClassName="h-full w-full rounded-none"
+                zoomable
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-xs text-fg-muted">
