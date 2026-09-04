@@ -2,21 +2,21 @@
 section: Frameworks and Libraries
 page/s: "p. 163; p. 220"
 required_revision: Document the in-process daily backup, host-level daily restart, protected external storage with degraded fallback, tiered restore safety, and current archive behavior; correct the NAS storage claim
-notes: NFR-16 and NFR-18 remain correct requirement text. The live audit item 1.12 and tracker row 31 still contain the obsolete "both unimplemented" premise. P30 adds explicit protected and local-degraded storage tiers, tier-aware restore selection, a local emergency reserve, and protected-first archive publishing. The 2026-09-04 isolated-clone drill passed protected backup/list/restore/rollback/fallback/catch-up checks; archive publication was blocked by the credential scan, and live tracker/Drive updates remain pending.
-status: Not started
+notes: NFR-16 and NFR-18 remain correct requirement text. P30 adds explicit protected and local-degraded storage tiers, tier-aware restore selection, a local emergency reserve, and protected-first archive publishing. The 2026-09-04 isolated-clone drill initially blocked archive publication because the strict scanner matched a masked Help Center RTSP example; the source was reworded, the dev database was re-seeded, and follow-up protected archives passed. The approved defense-paper blocks, corrected maintenance comment, audit tracker row, and test-tracker fields were applied and read back on 2026-09-04. ADAS_Paper_Audit §1.12 remains pending; P28's A84 append and the 418/Figure 18 work remain blocked or separately gated.
+status: In progress
 assigned_to: Daniboy
 synced: false
 ---
 
 ## Where
 
-The live defense Doc still contains the exact scheduler sentence at native Docs tab
-t.y7ms6bhlk4qn, range 197040–197178, inside the Backend Layer paragraph
-196395–197351. A fresh native PDF export maps it to printed p. 163 (PDF page 164),
+The live defense Doc's corrected scheduler span is at native Docs tab
+t.y7ms6bhlk4qn, range 197252–197846, inside the post-write Backend Layer paragraph
+196607–198019. A fresh native PDF export maps it to printed p. 163 (PDF page 164),
 not the p. 148 observed in the original snapshot.
 
-The same live Doc has a separate backup-storage claim in the Maintenance and Support
-Plan on printed p. 220 (PDF page 221; live range 248561–250173). The live
+The same live Doc has the corrected backup-storage paragraph in the Maintenance and Support
+Plan on printed p. 220 (PDF page 221; live range 250113–251049). The live
 ADAS_Paper_Audit Doc still has the obsolete §1.12 at tab t.0, heading range
 31554–32865, and the canonical
 🚩 Action Stream tracker still has the corresponding stale row at A31:H31.
@@ -25,7 +25,13 @@ ADAS_Paper_Audit Doc still has the obsolete §1.12 at tab t.0, heading range
 
 ### 1. Defense paper — Frameworks and Libraries, Backend Layer (FastAPI)
 
-Page/s: p. 163 (PDF page 164; live Docs range t.y7ms6bhlk4qn:197040–197178; paragraph 196395–197351)
+Page/s: p. 163 (PDF page 164; live Docs range t.y7ms6bhlk4qn:197252–197846; paragraph 196607–198019)
+
+Operation: replace the exact scheduler span in place.
+Scope: span; highlight only the revised NEW span in the attached native comment.
+Changed target: the sentence beginning `Background tasks, including the automated hourly aggregation`.
+Preserve: the surrounding Backend Layer paragraph, list structure, and adjacent text.
+Comment target: exact NEW span `197252–197846` in tab `t.y7ms6bhlk4qn`.
 
 #### OLD
 
@@ -37,11 +43,15 @@ Background tasks, including the automated hourly aggregation of raw hardware tel
 
 #### Evidence
 
-The live paragraph contains the exact OLD text at Docs indices 197040–197178 inside paragraph 196395–197351. The current implementation registers daily_backup and daily_backup_catch_up and performs a startup due-check in backend/app/main.py:259-280; the backup service implements the scheduled and catch-up paths in backend/app/services/maintenance_schedule.py:93-158. Protected-target probing and path-free tier/reason handling are implemented in backend/app/maintenance/storage.py:1-384 and backend/app/maintenance/backup.py:475-610. The Windows host scheduler is registered by scripts/register-maintenance-task.ps1:3-24,153-187; the Linux production target uses deploy/systemd/adas-maintenance.timer:1-14 and backend/scripts/daily_restart.sh:1-20,40-63.
+The pre-write paragraph contained the exact OLD text at Docs indices 197040–197178 inside paragraph 196395–197351. The current implementation registers daily_backup and daily_backup_catch_up and performs a startup due-check in backend/app/main.py:259-280; the backup service implements the scheduled and catch-up paths in backend/app/services/maintenance_schedule.py:93-158. Protected-target probing and path-free tier/reason handling are implemented in backend/app/maintenance/storage.py:1-384 and backend/app/maintenance/backup.py:475-610. The Windows host scheduler is registered by scripts/register-maintenance-task.ps1:3-24,153-187; the Linux production target uses deploy/systemd/adas-maintenance.timer:1-14 and backend/scripts/daily_restart.sh:1-20,40-63.
 
 GET /api/system/maintenance/status is implemented at backend/app/api/routes/maintenance.py:409-438 and now returns protected_backup_available, protected_backup_reason, protection_state, latest_protected_backup, and protected_backup_overdue alongside the existing backup/restart fields; the schema is in backend/app/schemas/maintenance.py:84-138. The scheduler and status behavior are covered by backend/tests/test_maintenance_schedule.py:298-342, backend/tests/test_maintenance.py:1176-1244,1304-1334, and backend/tests/test_protected_backup_storage.py:1-520.
 
+The revised span and its attached comment were written and read back on 2026-09-04; the returned comment has a provider-valid anchor and quotes the exact NEW span.
+
 #### Proposed comment (Defense paper gate)
+
+Comment scope: span scope — highlight only the exact NEW scheduler span.
 
 Previous: Background tasks, including the automated hourly aggregation of raw hardware telemetry into historical trends, are managed by apscheduler.
 
@@ -51,7 +61,13 @@ Done by Codex.
 
 ### 2. Defense paper — Maintenance and Support Plan, Disaster Recovery Protocols
 
-Page/s: p. 220 (PDF page 221; live Docs range t.y7ms6bhlk4qn:248561–250173)
+Page/s: p. 220 (PDF page 221; live Docs range t.y7ms6bhlk4qn:250113–251049; paragraph 250113–251050)
+
+Operation: replace the full Disaster Recovery Protocols logical paragraph.
+Scope: logical paragraph; highlight the full revised NEW paragraph in the attached native comment.
+Changed target: the paragraph beginning `Disaster Recovery Protocols:`.
+Preserve: the surrounding Maintenance and Support Plan list structure and neighboring paragraphs.
+Comment target: exact NEW paragraph `250113–251049` in tab `t.y7ms6bhlk4qn`.
 
 #### OLD
 
@@ -63,9 +79,11 @@ Disaster Recovery Protocols: To guarantee operational resilience against catastr
 
 #### Evidence
 
-This is an incidental storage-location correction found while tracing the daily backup. The implementation stores database backups under BACKUP_DIR and snapshots under SNAPSHOT_ROOT (backend/app/core/config.py:60-72). backend/app/maintenance/archive.py:1-7,130-309 builds a generated archive from a verified database backup, its manifest, and the snapshots referenced by that backup, using protected-first publication with local degraded fallback; backend/app/maintenance/cli.py:332-382 selects the backup's source tier and reports the archive tier without exposing paths. No code establishes an external NAS integration, so the paper should not present NAS as an implemented storage location. The available P30 configuration is an explicitly mounted path checked by a physical-device probe, not removable-media autodiscovery.
+This is an incidental storage-location correction found while tracing the daily backup. The implementation stores database backups under BACKUP_DIR and snapshots under SNAPSHOT_ROOT (backend/app/core/config.py:60-72). backend/app/maintenance/archive.py:1-7,130-309 builds a generated archive from a verified database backup, its manifest, and the snapshots referenced by that backup, using protected-first publication with local degraded fallback; backend/app/maintenance/cli.py:332-382 selects the backup's source tier and reports the archive tier without exposing paths. No code establishes an external NAS integration, so the paper should not present NAS as an implemented storage location. The available P30 configuration is an explicitly mounted path checked by a physical-device probe, not removable-media autodiscovery. The revised paragraph and its attached comment were written and read back on 2026-09-04; the returned comment has a provider-valid anchor and quotes the full NEW paragraph.
 
 #### Proposed comment (Defense paper gate)
+
+Comment scope: logical-paragraph scope — highlight the full exact NEW Disaster Recovery Protocols paragraph.
 
 Previous: Disaster Recovery Protocols: To guarantee operational resilience against catastrophic hardware failures or severe logical corruption, the Administrators are required to execute a manual "Bi-Annual Restore Drill." This proactive maintenance protocol involves manually download the scheduled database backup and its associated visual snapshots from the air-gapped Network Attached Storage (NAS). Supervisors must then deploy this backup into a secure, localized staging environment entirely isolated from the production network. This drill strictly validates the integrity of the archived data, verifies the efficacy of the "Flag and Restart" restoration architecture, and ensures that agency personnel maintain the technical readiness required to execute a rapid system recovery during a critical emergency.
 
@@ -76,6 +94,12 @@ Done by Codex.
 ### 3. ADAS_Paper_Audit — §1.12
 
 Page/s: unconfirmed (live Docs tab t.0; heading range 31414–31490)
+
+Operation: replace the obsolete §1.12 audit paragraph.
+Scope: logical paragraph; native comment remains pending with the Audit + tracker gate.
+Changed target: the §1.12 heading and its replacement paragraph.
+Preserve: correct NFR-16/NFR-18 requirement text on pp. 74–75 and the surrounding audit record.
+Comment target: the exact NEW §1.12 logical paragraph after fresh page/range mapping.
 
 #### OLD
 
@@ -107,6 +131,8 @@ The paper's NFR-16 and NFR-18 text is still correct on printed pp. 74–75 (PDF 
 
 #### Proposed comment (Audit + tracker gate)
 
+Comment scope: logical-paragraph scope — highlight the full exact NEW §1.12 paragraph after fresh page/range mapping.
+
 Previous: 1.12 NFR-16 (daily restart) and NFR-18 (daily backup) are both unimplemented
 
 NFR-16 — "the system shall automatically restart every 24 hours … at 3:00 AM, completing memory flush and recovery in under 10 seconds." No such job exists. backend/app/main.py:145-242 registers every scheduled job — cooldown sweep, snooze sweep, expired-session cleanup, five health jobs, export-artifact cleanup, WS session revalidation — and none is a daily restart.
@@ -127,6 +153,12 @@ Done by Codex.
 
 Page/s: 🚩 Action Stream!A31:H31
 
+Operation: update B31:F31's stale values; preserve A31, G31, H31, validation, and unrelated formatting.
+Scope: tracker cells; changed B31:F31 are orange `#E67E22` via rich-text `textFormatRuns`.
+Changed target: B31:F31 in canonical `🚩 Action Stream` (sheetId 1620600289).
+Preserve: H31's blank Reviewed by cell and all manual/validation state outside the changed cells.
+Comment target: no Sheet comment; the exact changed-cell text-format fallback is the audit trail.
+
 #### OLD
 
 > Major | NFR-16, NFR-18 | 65 | 1.12 NFR-16 (daily restart) and NFR-18 (daily backup) are both unimplemented | Either implement the scheduled cron jobs, or restate the requirements as orchestrator-driven. | Completed | Daniboy | blank
@@ -137,21 +169,23 @@ Major | Frameworks and Libraries, Maintenance and Support Plan, NFR-16, NFR-18 |
 
 #### Evidence
 
-The live Sheet metadata identifies 🚩 Action Stream as the canonical tab (sheetId 1620600289). The full row was read from A31:H31 on 2026-09-03; the H-column Reviewed by cell is blank and is preserved. The duplicate Copy of 🚩 Action Stream row 31 was also read but is not targeted because existing paper-sync updates use the canonical 🚩 Action Stream tab.
+The live Sheet metadata identifies 🚩 Action Stream as the canonical tab (sheetId 1620600289). The full row was read from A31:H31 on 2026-09-04; the H-column Reviewed by cell is blank and is preserved. The duplicate Copy of 🚩 Action Stream row 31 was also read but is not targeted because existing paper-sync updates use the canonical 🚩 Action Stream tab. The approved B31:F31 replacement and orange text-format fallback were read back successfully.
 
 The proposed page values use the current live rendered pagination: NFR-16/NFR-18 are printed pp. 74–75, the primary scheduler sentence is p. 163, and the separate maintenance-plan sentence is p. 220.
 
-#### Proposed comment (Audit + tracker gate)
+#### Sheet text-format fallback (Audit + tracker gate)
 
-Previous: Major | NFR-16, NFR-18 | 65 | 1.12 NFR-16 (daily restart) and NFR-18 (daily backup) are both unimplemented | Either implement the scheduled cron jobs, or restate the requirements as orchestrator-driven. | Completed | Daniboy | blank
-
-Codex ID: PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART
-
-Done by Codex.
+Changed cells: B31:F31. Color the complete replacement values orange `#E67E22`; do not create a Sheet comment. A31, G31, and H31 remain preserved.
 
 ### 5. ADAS Test Execution Tracker — `Backup & Recovery`!A2:J6
 
 Page/s: `Backup & Recovery`!A2:J6 (sheetId 3000007)
+
+Operation: populate only A2:E6 with the five technical test definitions.
+Scope: new tracker cells A2:E6; all newly written values are orange `#E67E22`.
+Changed target: `Backup & Recovery`!A2:E6.
+Preserve: F2:J6, including blank execution/result/evidence fields and existing Result validation in G2:G6.
+Comment target: no Sheet comment; the exact changed-cell text-format fallback is the audit trail.
 
 #### OLD
 
@@ -159,29 +193,31 @@ The first five data rows are blank. The header row is `Test ID | Requirement / O
 
 #### NEW
 
-| Test ID   | Requirement / Objective | Scenario                                               | Preconditions / Steps                                                                                                                                                                                       | Expected Result / Acceptance                                                                                                                                                                                                             | Date Executed | Result       | Actual Result / Notes                                                | Evidence Link | Defect / Retest Note |
-| --------- | ----------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------ | -------------------------------------------------------------------- | ------------- | -------------------- |
-| TC-BR-001 | NFR-18                  | Protected backup, combined listing, and validation     | Mount the configured protected target after the separate-physical-device probe passes. Create a backup under normal write load. Inspect its manifest and the combined backup listing.                       | The protected artifact has a Valid manifest; the listing retains protected and local rows with tier labels; no path or device identifier is exposed.                                                                                     | blank         | Not Executed | Automated coverage exists; live physical-device evidence is pending. | blank         | blank                |
-| TC-BR-002 | NFR-18                  | External restore and local rollback                    | Select a protected backup by exact storage tier plus backup id. Run separate restore drills with media loss before verification/copy and after the local restore copy. Exercise readiness-failure rollback. | Pre-copy media loss fails without a live-database swap; post-copy loss can finish; readiness failure rolls back from a verified local emergency reserve; rollback failure is durable manual_intervention and never success.              | blank         | Not Executed | Automated coverage exists; live physical-device evidence is pending. | blank         | blank                |
-| TC-BR-003 | NFR-18                  | Degraded fallback warning                              | Use a missing, read-only, full, or same-device protected target and run a manual or scheduled backup.                                                                                                       | The local fallback is created and listed as degraded with a path-free reason and visible warning; existing local artifacts remain intact; both-target failure returns failure without lifecycle shutdown.                                | blank         | Not Executed | Automated coverage exists; live physical-device evidence is pending. | blank         | blank                |
-| TC-BR-004 | NFR-18                  | Reinsertion, protected catch-up, and scheduled restart | Create a recent degraded scheduled backup while protected storage is unavailable. Reconnect the protected target and run startup/hourly catch-up and the scheduled-restart backup phase.                    | Recent degraded continuity is accepted; protected overdue remains visible and one protected catch-up occurs after reinsertion; restart continues after a valid degraded backup and aborts before service stop only if both targets fail. | blank         | Not Executed | Automated coverage exists; live physical-device evidence is pending. | blank         | blank                |
-| TC-BR-005 | NFR-18                  | Protected archive placement and contents               | With a valid backup and referenced snapshots, generate an archive while the protected archive target is available, then repeat with it unavailable.                                                         | Archive publication follows protected-first/degraded-fallback, includes the database, manifest, snapshots, and portable model, excludes credentials, and reports tier/reason without paths.                                              | blank         | Not Executed | Automated coverage exists; live physical-device evidence is pending. | blank         | blank                |
+| Test ID   | Requirement / Objective | Scenario                                               | Preconditions / Steps                                                                                                                                                                                       | Expected Result / Acceptance                                                                                                                                                                                                             | Date Executed | Result | Actual Result / Notes | Evidence Link | Defect / Retest Note |
+| --------- | ----------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------ | --------------------- | ------------- | -------------------- |
+| TC-BR-001 | NFR-18                  | Protected backup, combined listing, and validation     | Mount the configured protected target after the separate-physical-device probe passes. Create a backup under normal write load. Inspect its manifest and the combined backup listing.                       | The protected artifact has a Valid manifest; the listing retains protected and local rows with tier labels; no path or device identifier is exposed.                                                                                     | blank         | blank  | blank                 | blank         | blank                |
+| TC-BR-002 | NFR-18                  | External restore and local rollback                    | Select a protected backup by exact storage tier plus backup id. Run separate restore drills with media loss before verification/copy and after the local restore copy. Exercise readiness-failure rollback. | Pre-copy media loss fails without a live-database swap; post-copy loss can finish; readiness failure rolls back from a verified local emergency reserve; rollback failure is durable manual_intervention and never success.              | blank         | blank  | blank                 | blank         | blank                |
+| TC-BR-003 | NFR-18                  | Degraded fallback warning                              | Use a missing, read-only, full, or same-device protected target and run a manual or scheduled backup.                                                                                                       | The local fallback is created and listed as degraded with a path-free reason and visible warning; existing local artifacts remain intact; both-target failure returns failure without lifecycle shutdown.                                | blank         | blank  | blank                 | blank         | blank                |
+| TC-BR-004 | NFR-18                  | Reinsertion, protected catch-up, and scheduled restart | Create a recent degraded scheduled backup while protected storage is unavailable. Reconnect the protected target and run startup/hourly catch-up and the scheduled-restart backup phase.                    | Recent degraded continuity is accepted; protected overdue remains visible and one protected catch-up occurs after reinsertion; restart continues after a valid degraded backup and aborts before service stop only if both targets fail. | blank         | blank  | blank                 | blank         | blank                |
+| TC-BR-005 | NFR-18                  | Protected archive placement and contents               | With a valid backup and referenced snapshots, generate an archive while the protected archive target is available, then repeat with it unavailable.                                                         | Archive publication follows protected-first/degraded-fallback, includes the database, manifest, snapshots, and portable model, excludes credentials, and reports tier/reason without paths.                                              | blank         | blank  | blank                 | blank         | blank                |
 
 #### Evidence
 
-The read-only pre-write Sheet readback on 2026-09-03 returned only the header in `Backup & Recovery`!A1:J6; rows 2–6 were blank while the `Result` column validation existed. The automated P30 coverage is in backend/tests/test_protected_backup_storage.py:1-643. The 2026-09-04 drill used a separate healthy SanDisk USB disk as D: and an isolated clone of the demo database; the real `adas.db`, existing local backups, and the user's pending tracker changes were not used as drill state. The proposed rows preserve the existing validation and leave Sheet execution/result/evidence fields pending until the separately approved write.
+The pre-write Sheet readback on 2026-09-04 returned only the header in `Backup & Recovery`!A1:J6; rows 2–6 were blank while the `Result` column validation existed. The automated P30 coverage is in backend/tests/test_protected_backup_storage.py:1-643. The 2026-09-04 drill used a separate healthy SanDisk USB disk as D: and an isolated clone of the demo database; the real `adas.db`, existing local backups, and the user's pending tracker changes were not used as drill state. The approved write populated A2:E6, preserved F2:J6 and the Result validation, and the exact cells were read back successfully.
 
-#### Proposed comment (Test tracker gate)
+#### Sheet text-format fallback (Test tracker gate)
 
-Previous: `Backup & Recovery`!A2:J6 was blank; the `Result` cells retained the existing validation list.
-
-Codex ID: PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART
-
-Done by Codex.
+Changed cells: `Backup & Recovery`!A2:E6. Color the complete newly written values orange `#E67E22`; do not create a Sheet comment. F2:J6 remain preserved.
 
 ### 6. ADAS Test Execution Tracker — `UAT Journeys`!D14, G14 (AD-J04)
 
 Page/s: `UAT Journeys`!D14, G14
+
+Operation: update only the backup-identification and acceptance wording in D14 and G14.
+Scope: changed tracker text in D14/G14; preserve all other AD-J04 fields and color only the exact changed text orange `#E67E22`.
+Changed target: `UAT Journeys`!D14, G14.
+Preserve: the existing readiness, facilitator, assistance, notes, and evidence fields.
+Comment target: no Sheet comment; the exact changed-cell text-format fallback is the audit trail.
 
 #### OLD
 
@@ -247,19 +283,21 @@ Facilitator
 
 #### Evidence
 
-The exact AD-J04 row was read from `UAT Journeys`!A14:I14 on 2026-09-03. The current journey names the new backup but does not record the required P30 storage tier, so only D14 and G14 are proposed for change. The isolated-clone restore/rollback evidence below supports the intended journey but does not substitute for a dashboard participant run; the `Result`, `Assistance`, `Notes`, and `Evidence` fields are not changed by this local finding.
+The exact AD-J04 row was read from `UAT Journeys`!A14:I14 on 2026-09-04. The current journey names the new backup but does not record the required P30 storage tier, so only D14 and G14 were changed. The isolated-clone restore/rollback evidence below supports the intended journey but does not substitute for a dashboard participant run; the `Result`, `Assistance`, `Notes`, and `Evidence` fields were not changed.
 
-#### Proposed comment (Test tracker gate)
+#### Sheet text-format fallback (Test tracker gate)
 
-Previous: D14 — “Mark the new manual backup created in this stage as the restore target.” G14 — “The newly created backup reaches Valid before selection.” and “The exact same backup is restored, preventing loss of the completed UAT participant accounts, actions, audit evidence, and prepared state.”
-
-Codex ID: PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART
-
-Done by Codex.
+Changed cells: `UAT Journeys`!D14, G14. Color only the exact changed text orange `#E67E22`; do not create a Sheet comment. All other AD-J04 fields remain preserved.
 
 ### 7. ADAS Test Execution Tracker — `UAT Traceability`!D38, E38, G38 (NFR-18)
 
 Page/s: `UAT Traceability`!D38, E38, G38
+
+Operation: update the NFR-18 mapping and evidence-ownership wording in D38, E38, and G38.
+Scope: changed tracker text in D38/E38/G38; preserve the row's requirement/status cells and color only the exact changed text orange `#E67E22`.
+Changed target: `UAT Traceability`!D38, E38, G38.
+Preserve: A38:C38 and F38 plus all unrelated traceability rows.
+Comment target: no Sheet comment; the exact changed-cell text-format fallback is the audit trail.
 
 #### OLD
 
@@ -279,31 +317,29 @@ Page/s: `UAT Traceability`!D38, E38, G38
 
 #### Evidence
 
-The exact NFR-18 row was read from `UAT Traceability`!A38:G38 on 2026-09-03. Its current mapping already includes AD-J04, AD-J05, and Backup & Recovery; the proposed change names the five P30 technical rows and clarifies that tier-aware fallback and rollback evidence belongs to the technical activity. No live Sheet write was made.
+The exact NFR-18 row was read from `UAT Traceability`!A38:G38 on 2026-09-04. Its current mapping already includes AD-J04, AD-J05, and Backup & Recovery; the applied change names the five P30 technical rows and clarifies that tier-aware fallback and rollback evidence belongs to the technical activity. D38, E38, and G38 were read back successfully.
 
-#### Proposed comment (Test tracker gate)
+#### Sheet text-format fallback (Test tracker gate)
 
-Previous: D38 — `AD-J04; AD-J05; Backup & Recovery`. E38 — `Execution Log / Session Control; linked evidence`. G38 — `UAT evaluates understandable backup selection, restoration safeguards, restored state, and fresh post-recovery alerting. The strict 60-second recovery measurement remains in the technical Backup & Recovery activity.`
-
-Codex ID: PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART
-
-Done by Codex.
+Changed cells: `UAT Traceability`!D38, E38, G38. Color only the exact changed text orange `#E67E22`; do not create a Sheet comment. A38:C38 and F38 remain preserved.
 
 ## Live drill evidence — 2026-09-04
 
 The drill ran against a dedicated local clone of the demo database, with process-scoped `DATABASE_URL`, `BACKUP_DIR`, `ARCHIVE_DIR`, `LOG_DIR`, `PROTECTED_BACKUP_DIR`, and `PROTECTED_ARCHIVE_DIR`. The real repository `adas.db`, its existing `var/backups` artifacts, the real `.env`, and the user's modified/untracked paper files were not changed. Windows read-only inventory confirmed disk 0 as the internal Intel NVMe and disk 1 as a healthy SanDisk Cruzer Blade USB device mounted as D:; serial values were verified for separation but were not copied into the finding or archive.
 
-| Drill activity                      | Evidence                                                                                                                                                                                                                                                                                                                       | Result                                      |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| Protected backup, list, and verify  | Direct protected backup `2e9db8e7924f411cbfdef176c9e4355e`; full verify passed checksum, integrity, and foreign-key checks. Combined listing retained protected and degraded rows.                                                                                                                                             | Pass                                        |
-| Scheduler-owned audit               | `73bb56aae18d4f9f9fa6d3a9e09e4ba4` was audited with `trigger=live_drill`, `storage_tier=protected`, `result=success`.                                                                                                                                                                                                          | Pass                                        |
-| Protected restore and local reserve | Restore of `73bb56aae18d4f9f9fa6d3a9e09e4ba4` reached `db_restored`; local emergency reserve `df04a2d0d99146779688b567f7811747` was `degraded`. A clone-only marker disappeared after the swap.                                                                                                                                | Pass                                        |
-| Readiness-failure rollback          | Rollback reached `rolled_back`, restored the clone-only marker from the local reserve, and wrote a successful `RESTORE_TRIGGER` outcome with `outcome=rolled_back`.                                                                                                                                                            | Pass                                        |
-| Protected media-absent fallback     | With only the protected target changed to a non-existent subpath, scheduled backup `b66ff913357e4a95a9d39aa6722dae99` completed as `degraded/missing` and its audit row was successful. This simulated media loss without unmounting or deleting the USB contents.                                                             | Pass with simulation qualification          |
-| Protected reinsertion catch-up      | Reconnected D: path reported `protected_due_before=True` at a simulated +25-hour time and created audited protected catch-up backup `83ba83168b7449a4beb14cff0c407296`.                                                                                                                                                        | Pass with simulated-time qualification      |
-| Protected archive                   | No completed or temporary archive remained. The archive security scan correctly rejected the database member because its Help Center `body_markdown` contains one RTSP userinfo credential. Both protected and local publication attempts therefore failed safely; no credential value was printed or copied into the finding. | Blocked pending credential-safe source data |
+| Drill activity                        | Evidence                                                                                                                                                                                                                                                                                                                                                                                                          | Result                                 |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Protected backup, list, and verify    | Direct protected backup `2e9db8e7924f411cbfdef176c9e4355e`; full verify passed checksum, integrity, and foreign-key checks. Combined listing retained protected and degraded rows.                                                                                                                                                                                                                                | Pass                                   |
+| Scheduler-owned audit                 | `73bb56aae18d4f9f9fa6d3a9e09e4ba4` was audited with `trigger=live_drill`, `storage_tier=protected`, `result=success`.                                                                                                                                                                                                                                                                                             | Pass                                   |
+| Protected restore and local reserve   | Restore of `73bb56aae18d4f9f9fa6d3a9e09e4ba4` reached `db_restored`; local emergency reserve `df04a2d0d99146779688b567f7811747` was `degraded`. A clone-only marker disappeared after the swap.                                                                                                                                                                                                                   | Pass                                   |
+| Readiness-failure rollback            | Rollback reached `rolled_back`, restored the clone-only marker from the local reserve, and wrote a successful `RESTORE_TRIGGER` outcome with `outcome=rolled_back`.                                                                                                                                                                                                                                               | Pass                                   |
+| Protected media-absent fallback       | With only the protected target changed to a non-existent subpath, scheduled backup `b66ff913357e4a95a9d39aa6722dae99` completed as `degraded/missing` and its audit row was successful. This simulated media loss without unmounting or deleting the USB contents.                                                                                                                                                | Pass with simulation qualification     |
+| Protected reinsertion catch-up        | Reconnected D: path reported `protected_due_before=True` at a simulated +25-hour time and created audited protected catch-up backup `83ba83168b7449a4beb14cff0c407296`.                                                                                                                                                                                                                                           | Pass with simulated-time qualification |
+| Protected archive (initial run)       | No completed or temporary archive remained. The archive security scan rejected the database member because its Help Center `body_markdown` contained one masked RTSP URL example. The content did not contain a live credential; the strict P7 scan rejects the `rtsp://` scheme itself. Both protected and local publication attempts failed safely; no credential value was printed or copied into the finding. | Blocked before source fix              |
+| Protected archive after source fix    | The Help Center example was reworded without the literal `rtsp://` scheme, the isolated clone was re-seeded, and fresh backup `010003ded6b145bd83f58b8921530f2d` passed full verification. Direct archive construction and the protected-first maintenance CLI both published a protected archive with 29 members, zero missing files, and no `rtsp://` occurrences.                                              | Pass                                   |
+| Live dev protected backup and archive | The live dev database was re-seeded through the normal idempotent Help Center seed. Fresh protected backup `cf4f63c6f3244f7f8ddf6a54cbb29b88` passed checksum, quick-check, and foreign-key verification; the protected-first CLI published `adas_archive_20260904T042314Z_cf4f63c6.zip` with 29 members, a manifest, zero missing files, no `rtsp://` occurrences, and no temporary file left behind.            | Pass                                   |
 
-The live run did not perform a sustained concurrent-write measurement, a physical USB unplug/replug, or a dashboard participant restore. The technical restore core was exercised on the clone; the dashboard and physical removal portions remain pending for a controlled demo window. The protected archive result is a genuine safety block, not a fabricated pass: the current demo data cannot satisfy the existing P7 rule that no `rtsp://` credential string appear anywhere in an archive.
+The live run did not perform a sustained concurrent-write measurement, a physical USB unplug/replug, or a dashboard participant restore. The technical restore core was exercised on the clone; the dashboard and physical removal portions remain pending for a controlled demo window. The initial protected archive result was a genuine fail-closed policy block, but it was caused by a masked documentation example rather than a live credential. After the source rewording and clone re-seed, both direct archive construction and the protected-first CLI path passed the existing P7 rule that no `rtsp://` string appear anywhere in an archive. The live dev database was then re-seeded, and its fresh protected backup and protected-first archive also passed the same checks.
 
 ## Verified unchanged sites
 
@@ -311,17 +347,17 @@ The live run did not perform a sustained concurrent-write measurement, a physica
 - Use Case 12 already distinguishes scheduled and manual backups, and Use Case 13 plus the restore architecture already describe operator-initiated restore orchestration. These are not the unattended daily scheduler and do not need wording changes for this finding.
 - TC-R-303 describes the restart scenario and expected result but does not claim that APScheduler owns the restart; it remains unchanged.
 - Deployment and Implementation contains no separate scheduler-ownership sentence. The Frameworks and Libraries replacement is the single primary implementation-narrative site.
-- The `Backup & Recovery` tab remains Sheet-write-pending: the protected-device drill now has local evidence, but no live tracker result/evidence cells were changed without the separate test-tracker approval gate.
+- The `Backup & Recovery` tab now contains the approved technical definitions in A2:E6; its execution, result, notes, evidence, and defect fields remain blank pending the controlled physical-device/dashboard runs.
 
 ## Approval / sync ledger
 
 Package ID: `PS-20260818-SCHEDULER-JOBS-AND-DAILY-RESTART`
 
-| Target                                   | Approved scope                                                                                                   | Applied/read back                                                                                                                                                 | Skipped/pending                                                                                                                          | Blocked                                                                                                                |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Defense paper                            | Blocks 1–2 and their attached comments                                                                           | Local exact replacements amended; no live Docs write or readback in this pass                                                                                     | Blocks 1–2 require the defense-paper approval gate                                                                                       | —                                                                                                                      |
-| ADAS_Paper_Audit plus `🚩 Action Stream` | Blocks 3–4 and their attached comments                                                                           | Local exact replacements amended; no live Doc/Sheet write or readback in this pass                                                                                | Blocks 3–4 require the combined audit/tracker approval gate                                                                              | —                                                                                                                      |
-| ADAS Test Execution Tracker              | Blocks 5–7 and their attached comments; preserve existing `#D9EAD3`, validation, formatting, formulas, and links | Live ranges were read-only verified on 2026-09-03; exact local proposals recorded; no live Sheet write                                                            | Blocks 5–7 require the separate test-tracker approval gate; all five new rows remain `Not Executed` pending physical-device evidence     | —                                                                                                                      |
-| Local companion records                  | Amended finding, regenerated `paper_sync/TRACKER.md`, and P30 edge-coverage row                                  | Applied in this Git worktree; tracker regenerated after the finding edit                                                                                          | —                                                                                                                                        | —                                                                                                                      |
-| Live protected-device drill              | TC-BR-001 through TC-BR-005 execution/evidence                                                                   | Isolated-clone drill recorded protected backup/list/audit, restore/local reserve, rollback, degraded fallback, and protected catch-up results; D: remained intact | Physical unplug/replug, sustained write-load measurement, dashboard participant restore, and Sheet result/evidence writes remain pending | Protected archive is blocked by the existing credential scan because current demo data contains an RTSP userinfo value |
-| Standalone comments                      | None proposed                                                                                                    | —                                                                                                                                                                 | None                                                                                                                                     | —                                                                                                                      |
+| Target                                   | Approved scope                                                            | Applied/read back                                                                                                                                                                                                                                                          | Skipped/pending                                                                                                                          | Blocked |
+| ---------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Defense paper                            | Blocks 1–2 and their attached comments                                    | Both exact replacements and their native comments were applied/read back; each comment has a provider-valid anchor and exact NEW quote                                                                                                                                     | —                                                                                                                                        | —       |
+| ADAS_Paper_Audit plus `🚩 Action Stream` | Block 4 only: canonical tracker row 31                                    | B31:F31 applied/read back with orange `#E67E22` text-format fallback; A31, G31, H31, validation, and unrelated formatting preserved                                                                                                                                        | Block 3 (§1.12 audit Doc) remains pending because Audit Doc approval was not included                                                    | —       |
+| ADAS Test Execution Tracker              | Blocks 5–7; preserve existing validation, formatting, formulas, and links | A2:E6, D14/G14, and D38/E38/G38 applied/read back; changed text is orange `#E67E22`, no Sheet comments were created, and F:J/other cells were preserved                                                                                                                    | Execution/result/evidence fields remain blank pending physical-device/dashboard evidence                                                 | —       |
+| Local companion records                  | Amended finding and regenerated `paper_sync/TRACKER.md`                   | Applied in this Git worktree after the live write/read-back verification                                                                                                                                                                                                   | —                                                                                                                                        | —       |
+| Live protected-device drill              | TC-BR-001 through TC-BR-005 execution/evidence                            | Isolated-clone drill recorded protected backup/list/audit, restore/local reserve, rollback, degraded fallback, protected catch-up, and post-fix protected archive results; the live dev database was re-seeded and its protected backup/archive passed; D: remained intact | Physical unplug/replug, sustained write-load measurement, dashboard participant restore, and Sheet result/evidence writes remain pending | —       |
+| Standalone comments                      | None proposed                                                             | —                                                                                                                                                                                                                                                                          | None                                                                                                                                     | —       |

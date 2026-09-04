@@ -119,6 +119,16 @@ class TestFrontmatterParsing:
         slugs = [a["slug"] for a in articles]
         assert len(slugs) == len(set(slugs)), "duplicate slug in starter content"
 
+    def test_real_starter_content_contains_no_rtsp_urls(self):
+        """Archive security must not be defeated by a URL-shaped help example."""
+        articles = load_articles(REAL_CONTENT_DIR)
+        offenders = [
+            article["slug"]
+            for article in articles
+            if "rtsp://" in article["body_markdown"].casefold()
+        ]
+        assert not offenders, f"starter content contains RTSP URL(s): {offenders}"
+
 
 # ---------------------------------------------------------------------------
 # Idempotent seeding — edge case 10.6
