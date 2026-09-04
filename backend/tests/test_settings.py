@@ -1,5 +1,7 @@
 """Tests for /api/settings/alarm — 01_CONTRACTS.md §5.6, D-004."""
 
+import json
+
 from app.core.config import settings
 from app.models import AuditLog
 from fastapi.testclient import TestClient
@@ -239,3 +241,88 @@ class TestAlarmSettingsOptions:
         assert resp.json()["options"]["alarm_sound_keys"] == list(
             settings.ALARM_SOUND_KEYS
         )
+
+
+class TestAlarmSettingsAuditDetail:
+    """The `ALARM_SETTINGS_UPDATE` row's `detail` now records exactly what
+    changed — which field(s), and their old/new values — not just that
+    something did."""
+
+    def test_first_save_records_every_field_against_the_documented_defaults(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        client.put(
+            "/api/settings/alarm",
+            headers=headers,
+            json={"alarm_sound": "buzzer", "volume": 50, "snooze_duration": 45},
+        )
+
+        row = session.exec(
+            select(AuditLog).where(AuditLog.action == "ALARM_SETTINGS_UPDATE")
+        ).one()
+        detail = json.loads(row.detail)
+
+        assert detail["changed_fields"] == ["alarm_sound", "volume", "snooze_duration"]
+        assert detail["alarm_sound_from"] == "default"
+        assert detail["alarm_sound_to"] == "buzzer"
+        assert detail["volume_from"] == 80
+        assert detail["volume_to"] == 50
+        assert detail["snooze_duration_from"] == 30
+        assert detail["snooze_duration_to"] == 45
+
+    def test_partial_update_records_only_the_field_that_actually_changed(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        client.put(
+            "/api/settings/alarm",
+            headers=headers,
+            json={"alarm_sound": "default", "volume": 80, "snooze_duration": 30},
+        )
+        client.put(
+            "/api/settings/alarm",
+            headers=headers,
+            json={"alarm_sound": "default", "volume": 55, "snooze_duration": 30},
+        )
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "ALARM_SETTINGS_UPDATE")
+        ).all()
+        detail = json.loads(rows[-1].detail)
+
+        assert detail["changed_fields"] == ["volume"]
+        assert detail["volume_from"] == 80
+        assert detail["volume_to"] == 55
+        assert "alarm_sound_from" not in detail
+        assert "alarm_sound_to" not in detail
+        assert "snooze_duration_from" not in detail
+        assert "snooze_duration_to" not in detail
+
+    def test_updating_two_of_three_fields_records_only_those_two(
+        self, client: TestClient, session: Session
+    ):
+        headers = _headers(client, session)
+        client.put(
+            "/api/settings/alarm",
+            headers=headers,
+            json={"alarm_sound": "default", "volume": 80, "snooze_duration": 30},
+        )
+        client.put(
+            "/api/settings/alarm",
+            headers=headers,
+            json={"alarm_sound": "eas_siren", "volume": 80, "snooze_duration": 20},
+        )
+
+        rows = session.exec(
+            select(AuditLog).where(AuditLog.action == "ALARM_SETTINGS_UPDATE")
+        ).all()
+        detail = json.loads(rows[-1].detail)
+
+        assert detail["changed_fields"] == ["alarm_sound", "snooze_duration"]
+        assert detail["alarm_sound_from"] == "default"
+        assert detail["alarm_sound_to"] == "eas_siren"
+        assert detail["snooze_duration_from"] == 30
+        assert detail["snooze_duration_to"] == 20
+        assert "volume_from" not in detail
+        assert "volume_to" not in detail
