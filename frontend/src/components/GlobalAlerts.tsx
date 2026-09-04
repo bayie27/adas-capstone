@@ -309,6 +309,7 @@ export function GlobalAlerts() {
               alt={`Accident snapshot for log ${alert.log_id}`}
               className="w-full h-full min-h-full object-cover block"
               fallbackClassName="h-full w-full rounded-none"
+              zoomable
             />
           </div>
 
