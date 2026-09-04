@@ -542,7 +542,7 @@ The fresh live-paper sweep found three other role-adjacent AI-performance matche
 
 ## Test Execution Tracker manifest and readback
 
-The live `ADAS Test Execution Tracker` was re-read on 2026-09-04 immediately before the approved writes. The manifest below records the exact targets and values; only listed content cells were changed. Native row structure and validation were preserved, manual/evidence columns not listed were retained. After the final whole-cell comment probe failed, the changed text in `G2` received the orange fallback `#E67E22`.
+The live `ADAS Test Execution Tracker` was re-read on 2026-09-04 immediately before the approved writes. The manifest below records the exact targets and values; only listed content cells were changed. Native row structure and validation were preserved, manual/evidence columns not listed were retained. After the final whole-cell comment probe failed, only the exact new phrases `AI Performance is Administrator-only` in item 2 and `AI Performance` in item 3 of `G2` received the orange fallback `#E67E22`; all other G2 text reverted to its original dark color.
 
 ### 14. `Unit Testing`!A35:J35 — refresh with Administrator evidence
 
@@ -652,11 +652,11 @@ Changed cells: `G2 = 1. Secure access opens /user. 2. Cameras, Detections, Syste
 
 #### Evidence
 
-The Operator journey currently promises AI Performance availability. Preserve A2:F2, H2:I2, row formatting, and any validation; change only G2. The final whole-cell native-comment probe also returned `anchor: null`, so no comment is attached; the changed G2 text is orange `#E67E22` as the requested fallback.
+The Operator journey currently promises AI Performance availability. Preserve A2:F2, H2:I2, row formatting, and any validation; change only G2. The final whole-cell native-comment probe also returned `anchor: null`, so no comment is attached. Rich-text readback confirms that only `AI Performance is Administrator-only` in item 2 and `AI Performance` in item 3 are orange `#E67E22`.
 
 #### Comment status
 
-No comment — provider-native Sheet anchor unavailable. The final whole-cell probe returned `anchor: null`; the probe thread was removed from the active comment view, and the changed G2 text was colored orange `#E67E22`.
+No comment — provider-native Sheet anchor unavailable. The final whole-cell probe returned `anchor: null`; the probe thread was removed from the active comment view. Only the two exact new G2 phrases were colored orange `#E67E22`.
 
 ### 19. `UAT Journeys`!A4:I4 — update OP-J03
 
@@ -774,7 +774,7 @@ Package ID: `PS-20260903-ADMIN-AI-PERFORMANCE`
 | ----------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Defense paper                 | blocks 1a–1c, 2a–2b, 3–6, 7a–7c, 8a–8c, 9–11 | paper text and 18 native comments applied/read back                                 | DFD coordination note pending with `2026-08-23-logical-dfd-overhaul.md` | —                                                                                                                                                    |
 | ADAS_Paper_Audit plus tracker | blocks 12–13                                 | audit paragraph/comment and A82:G82 row applied/read back; H82 validation preserved | —                                                                       | preflight found no provider-valid native anchor for the approved A82:H82 Sheet comment; not attempted and retained locally as blocked                |
-| ADAS Test Execution Tracker   | blocks 14–22                                 | row/cell writes and G2 orange-text fallback applied/read back                       | —                                                                       | approved Sheet comments returned no provider-valid native anchors; final G2 whole-cell probe also returned `anchor: null`; no active comment remains |
+| ADAS Test Execution Tracker   | blocks 14–22                                 | row/cell writes and exact G2 phrase-color fallback applied/read back                | —                                                                       | approved Sheet comments returned no provider-valid native anchors; final G2 whole-cell probe also returned `anchor: null`; no active comment remains |
 | Standalone comments           | none; no P29 figure-comment block exists     | —                                                                                   | —                                                                       | —                                                                                                                                                    |
 
-Approved Drive writes were applied and read back for the paper, audit Doc, audit tracker row, and Test Execution Tracker rows. The 18 paper comments and one audit-Doc comment have provider-valid native anchors. The audit-tracker Sheet comment was not attempted because preflight found no native anchor. The final whole-cell Test Tracker probe on `UAT Journeys!G2` also returned `anchor: null`; no active Sheet comment remains, and the changed G2 text is orange `#E67E22`. Rendered-paper page mapping remains `unconfirmed` because the connected export returned a user-scoped file reference that was not available to the local PDF renderer in this session.
+Approved Drive writes were applied and read back for the paper, audit Doc, audit tracker row, and Test Execution Tracker rows. The 18 paper comments and one audit-Doc comment have provider-valid native anchors. The audit-tracker Sheet comment was not attempted because preflight found no native anchor. The final whole-cell Test Tracker probe on `UAT Journeys!G2` also returned `anchor: null`; no active Sheet comment remains, and only the two exact new G2 phrases are orange `#E67E22`. Rendered-paper page mapping remains `unconfirmed` because the connected export returned a user-scoped file reference that was not available to the local PDF renderer in this session.
