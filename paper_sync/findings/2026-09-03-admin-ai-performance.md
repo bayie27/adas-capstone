@@ -10,53 +10,131 @@ synced: false
 
 ## Changes
 
-### 1. Defense paper — Scope and Delimitations, study scope paragraph
+### 1a. Defense paper — Scope and Delimitations, Operator analytics/telemetry span
 
-Page/s: unconfirmed; native paragraph index 16341–17755
+Page/s: unconfirmed; native span `17222–17284` within paragraph `16341–17755`
 
 #### OLD
 
-> This study covers the development and evaluation of a proof-of-concept, edge-based real-time road-collision detection and alert system intended to support internal CDRRMO operations in Lipa City, Batangas. Conducted over three semesters spanning the 2025–2026 and 2026–2027 academic years, the project implements a custom-trained YOLO-based model using publicly available annotated datasets and evaluates its event-level performance separately using held-out Lipa CDRRMO CCTV footage. The system processes configured RTSP CCTV feeds, with MediaMTX used only to simulate VMS streams during development and testing. It integrates a Python AI engine, FastAPI backend, local SQLite database, and React dashboard on researcher-controlled edge/test hardware. Operators and Administrators can review AI-generated alerts through a Human-in-the-Loop workflow, manage camera configurations, monitor analytics, system health, and AI-performance telemetry, and review historical detections. Role-Based Access Control is enforced: Administrators inherit operational privileges and additionally manage user accounts, review audit logs, and administer backup and restoration functions. The evaluation focuses on model detection performance, system timing behaviour, and operator workflow efficiency within the documented demonstration environment; it does not claim production-scale deployment or unmeasured operational outcomes.
+> monitor analytics, system health, and AI-performance telemetry
 
 #### NEW
 
-This study covers the development and evaluation of a proof-of-concept, edge-based real-time road-collision detection and alert system intended to support internal CDRRMO operations in Lipa City, Batangas. Conducted over three semesters spanning the 2025–2026 and 2026–2027 academic years, the project implements a custom-trained YOLO-based model using publicly available annotated datasets and evaluates its event-level performance separately using held-out Lipa CDRRMO CCTV footage. The system processes configured RTSP CCTV feeds, with MediaMTX used only to simulate VMS streams during development and testing. It integrates a Python AI engine, FastAPI backend, local SQLite database, and React dashboard on researcher-controlled edge/test hardware. Operators and Administrators can review AI-generated alerts through a Human-in-the-Loop workflow, manage camera configurations, monitor dashboard analytics and system health, and review historical detections. Administrators can additionally review AI-performance metrics and reports. Role-Based Access Control is enforced: Administrators inherit operational privileges and additionally manage user accounts, review audit logs, administer backup and restoration functions, and review and export AI-performance reports. The evaluation focuses on model detection performance, system timing behaviour, and operator workflow efficiency within the documented demonstration environment; it does not claim production-scale deployment or unmeasured operational outcomes.
+monitor dashboard analytics and system health
 
 #### Evidence
 
-Live paper paragraph index 143 says Operators and Administrators monitor AI-performance telemetry without distinguishing the Administrator-only module. The implemented boundary is enforced by `backend/app/api/routes/analytics.py:680-759`, where both performance routes depend on `get_current_admin`, and by `backend/app/api/routes/exports.py:72-168`, which gates performance job creation, listing, polling, and download.
+This contiguous span is the Operator/Administrator scope sentence in the live Scope and Delimitations paragraph. The implementation keeps Dashboard analytics and System Health available to Operators while the performance endpoints require `get_current_admin` (`backend/app/api/routes/analytics.py:680-759`).
 
 #### Proposed comment (same gate as associated replacement)
 
-Comment scope: Logical-paragraph scope — highlight the full revised Scope and Delimitations paragraph.
+Comment scope: Span scope — replace the exact contiguous span `monitor analytics, system health, and AI-performance telemetry` with `monitor dashboard analytics and system health`.
 
-Previous: This study covers the development and evaluation of a proof-of-concept, edge-based real-time road-collision detection and alert system intended to support internal CDRRMO operations in Lipa City, Batangas. Conducted over three semesters spanning the 2025–2026 and 2026–2027 academic years, the project implements a custom-trained YOLO-based model using publicly available annotated datasets and evaluates its event-level performance separately using held-out Lipa CDRRMO CCTV footage. The system processes configured RTSP CCTV feeds, with MediaMTX used only to simulate VMS streams during development and testing. It integrates a Python AI engine, FastAPI backend, local SQLite database, and React dashboard on researcher-controlled edge/test hardware. Operators and Administrators can review AI-generated alerts through a Human-in-the-Loop workflow, manage camera configurations, monitor analytics, system health, and AI-performance telemetry, and review historical detections. Role-Based Access Control is enforced: Administrators inherit operational privileges and additionally manage user accounts, review audit logs, and administer backup and restoration functions. The evaluation focuses on model detection performance, system timing behaviour, and operator workflow efficiency within the documented demonstration environment; it does not claim production-scale deployment or unmeasured operational outcomes.
+Previous: monitor analytics, system health, and AI-performance telemetry
 
 Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
 
 Done by Codex.
 
-### 2. Defense paper — Table 2, FR-02 Role-Based Access Control
+### 1b. Defense paper — Scope and Delimitations, Administrator metrics sentence insertion
 
-Page/s: unconfirmed; native paragraph index 92713–93049
+Page/s: unconfirmed; native span `17320–17345` within paragraph `16341–17755`
 
 #### OLD
 
-> The system shall enforce two distinct access levels. Operators shall have operational access to the analytics dashboard, active camera status lists and configurations, detection logs, and system health and AI performance metrics. Administrators shall inherit all Operator privileges and have exclusive access to User Account Management.
+> Role-Based Access Control
 
 #### NEW
 
-The system shall enforce two distinct access levels. Operators shall have operational access to the analytics dashboard, active camera status lists and configurations, detection logs, and system health metrics. Administrators shall inherit all Operator privileges and have exclusive access to AI performance monitoring, AI performance exports, and User Account Management.
+Administrators can additionally review AI-performance metrics and reports. Role-Based Access Control
 
 #### Evidence
 
-Live paper paragraph index 412 assigns AI performance metrics to Operators. `GET /api/analytics/performance` and `GET /api/analytics/export/performance` require `get_current_admin`; the frontend renders the page only under `/admin/ai` and removes it from the Operator route/sidebar (`frontend/src/App.tsx:80-113`, `frontend/src/components/layouts/Sidebar.tsx:88-107`).
+Insert the Administrator-only AI Performance sentence immediately before the existing `Role-Based Access Control` sentence in the live scope paragraph. The page is rendered only at `/admin/ai` and the performance APIs use the Admin dependency (`frontend/src/App.tsx:80-113`; `backend/app/api/routes/analytics.py:680-759`).
 
 #### Proposed comment (same gate as associated replacement)
 
-Comment scope: Logical-paragraph scope — highlight the full revised FR-02 role-based-access paragraph.
+Comment scope: Span scope — insert the exact sentence `Administrators can additionally review AI-performance metrics and reports.` immediately before `Role-Based Access Control`; highlight only the inserted sentence.
 
-Previous: The system shall enforce two distinct access levels. Operators shall have operational access to the analytics dashboard, active camera status lists and configurations, detection logs, and system health and AI performance metrics. Administrators shall inherit all Operator privileges and have exclusive access to User Account Management.
+Previous: Role-Based Access Control
+
+Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
+
+Done by Codex.
+
+### 1c. Defense paper — Scope and Delimitations, Administrator export span
+
+Page/s: unconfirmed; native span `17489–17511` within paragraph `16341–17755`
+
+#### OLD
+
+> restoration functions.
+
+#### NEW
+
+restoration functions, and review and export AI-performance reports.
+
+#### Evidence
+
+This contiguous ending of the Administrator privilege list adds the implemented performance-report export capability. The asynchronous performance job boundary is enforced in `backend/app/api/routes/exports.py:72-168`.
+
+#### Proposed comment (same gate as associated replacement)
+
+Comment scope: Span scope — replace the exact contiguous span `restoration functions.` with `restoration functions, and review and export AI-performance reports.`.
+
+Previous: restoration functions.
+
+Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
+
+Done by Codex.
+
+### 2a. Defense paper — Table 2, FR-02 Operator AI-performance deletion
+
+Page/s: unconfirmed; native span `92914–92933` within paragraph `92713–93049`
+
+#### OLD
+
+> and AI performance
+
+#### NEW
+
+`DELETE ONLY — insert nothing.`
+
+#### Evidence
+
+Deleting this exact span from `system health and AI performance metrics` leaves the live FR-02 Operator capability as `system health metrics`. The immediately preceding left character is `h`, the final character of `health`.
+
+#### Proposed comment (same gate as associated replacement)
+
+Comment scope: Deletion-only span — delete the exact span ` and AI performance`; after deletion, highlight/comment the nearest left character `h` in `health`.
+
+Previous: and AI performance
+
+Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
+
+Done by Codex.
+
+### 2b. Defense paper — Table 2, FR-02 Administrator AI-performance access insertion
+
+Page/s: unconfirmed; native span `93025–93048` within paragraph `92713–93049`
+
+#### OLD
+
+> User Account Management
+
+#### NEW
+
+AI performance monitoring, AI performance exports, and User Account Management
+
+#### Evidence
+
+The Administrator sentence gains the two restricted AI Performance capabilities immediately before its existing `User Account Management` capability. The frontend Admin navigation and backend route dependencies enforce the same boundary (`frontend/src/App.tsx:80-113`; `frontend/src/components/layouts/Sidebar.tsx:88-107`; `backend/app/api/routes/analytics.py:680-759`).
+
+#### Proposed comment (same gate as associated replacement)
+
+Comment scope: Span scope — replace the exact span `User Account Management` with `AI performance monitoring, AI performance exports, and User Account Management`; highlight the full new span.
+
+Previous: User Account Management
 
 Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
 
@@ -64,25 +142,25 @@ Done by Codex.
 
 ### 3. Defense paper — Table 2, FR-18 Report Generation and Data Export
 
-Page/s: unconfirmed; native paragraph index 98049–98288
+Page/s: unconfirmed; native span `98123–98146` within paragraph `98049–98288`
 
 #### OLD
 
-> The system shall allow users to export incident records, summary figures, and AI performance data as files in common formats such as CSV and PDF, for sharing with other agencies, for official record-keeping, and for improving the AI model.
+> and AI performance data
 
 #### NEW
 
-The system shall allow users to export incident records and summary figures, and shall allow Administrators to export AI performance data as files in common formats such as CSV and PDF, for sharing with other agencies, for official record-keeping, and for improving the AI model.
+and shall allow Administrators to export AI performance data
 
 #### Evidence
 
-The live paper’s FR-18 row uses “users” for all three export families. Operator dashboard and incident exports remain available through `backend/app/api/routes/analytics.py:341-497` and the existing incident export route; only performance exports are Admin-only. The async route applies the same boundary to `report_type="performance"`.
+This exact span is in the live FR-18 sentence. Replace only `and AI performance data` with `and shall allow Administrators to export AI performance data`; incident and summary exports remain available to users, while performance exports are Admin-only. The async route applies the same boundary to `report_type="performance"`.
 
 #### Proposed comment (same gate as associated replacement)
 
-Comment scope: Logical-paragraph scope — highlight the full revised FR-18 export paragraph.
+Comment scope: Span scope — replace the exact contiguous span `and AI performance data` with `and shall allow Administrators to export AI performance data`; highlight only the new span.
 
-Previous: The system shall allow users to export incident records, summary figures, and AI performance data as files in common formats such as CSV and PDF, for sharing with other agencies, for official record-keeping, and for improving the AI model.
+Previous: and AI performance data
 
 Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
 
@@ -166,53 +244,157 @@ Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
 
 Done by Codex.
 
-### 7. Defense paper — Use Case Diagram, actor narrative
+### 7a. Defense paper — Use Case Diagram, Operator AI-performance deletion
 
-Page/s: unconfirmed; native paragraph index 142983–143755
+Page/s: unconfirmed; native span `143303–143328` within paragraph `142983–143755`
 
 #### OLD
 
-> The system has three primary actors. The Operator, also referred to as the Dispatcher, is responsible for day-to-day command center operations, including monitoring and verifying collision alerts, managing cameras, configuring alarm settings, monitoring system health, analyzing accident trends, reviewing detection logs, tracking AI performance, exporting reports, and accessing the Help Center. The Administrator inherits the capabilities of the Operator and additionally performs administrative functions such as managing user accounts, triggering database backups, restoring the system from backups, and reviewing and exporting audit records. The CCTV/VMS acts as the external system responsible for continuously providing camera feeds to ADAS for collision detection.
+> , tracking AI performance
 
 #### NEW
 
-The system has three primary actors. The Operator, also referred to as the Dispatcher, is responsible for day-to-day command center operations, including monitoring and verifying collision alerts, managing cameras, configuring alarm settings, monitoring system health, analyzing accident trends, reviewing detection logs, exporting incident and dashboard reports, and accessing the Help Center. The Administrator inherits the capabilities of the Operator and additionally performs administrative functions such as reviewing AI performance, exporting AI performance reports, managing user accounts, triggering database backups, restoring the system from backups, and reviewing and exporting audit records. The CCTV/VMS acts as the external system responsible for continuously providing camera feeds to ADAS for collision detection.
+`DELETE ONLY — insert nothing.`
 
 #### Evidence
 
-The current actor paragraph explicitly gives the Operator “tracking AI performance” and unrestricted “exporting reports.” The Admin route/sidebar boundary is implemented in `frontend/src/App.tsx:80-113` and `frontend/src/components/layouts/Sidebar.tsx:88-107`; backend authorization is enforced by the Admin dependency and export-job filters.
+Deleting this exact span removes the Operator’s AI Performance action while preserving the surrounding `detection logs, exporting reports` list. The immediately preceding left character is `s`, the final character of `logs`.
 
 #### Proposed comment (same gate as associated replacement)
 
-Comment scope: Logical-paragraph scope — highlight the full revised Use Case Diagram actor narrative.
+Comment scope: Deletion-only span — delete the exact span `, tracking AI performance`; after deletion, highlight/comment the nearest left character `s` in `logs`.
 
-Previous: The system has three primary actors. The Operator, also referred to as the Dispatcher, is responsible for day-to-day command center operations, including monitoring and verifying collision alerts, managing cameras, configuring alarm settings, monitoring system health, analyzing accident trends, reviewing detection logs, tracking AI performance, exporting reports, and accessing the Help Center. The Administrator inherits the capabilities of the Operator and additionally performs administrative functions such as managing user accounts, triggering database backups, restoring the system from backups, and reviewing and exporting audit records. The CCTV/VMS acts as the external system responsible for continuously providing camera feeds to ADAS for collision detection.
+Previous: , tracking AI performance
 
 Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
 
 Done by Codex.
 
-### 8. Defense paper — Use Case Diagram, System Monitoring and Analytics narrative
+### 7b. Defense paper — Use Case Diagram, Operator report-export span
 
-Page/s: unconfirmed; native paragraph index 146213–146898
+Page/s: unconfirmed; native span `143330–143347` within paragraph `142983–143755`
 
 #### OLD
 
-> System Monitoring and Analytics. The Operator can Monitor System Health to observe the operational condition of the system and its connected resources. The Analyze Accident Trends, Track AI Performance, and Review Detection Logs functions provide analytical and historical information that supports operational assessment and system improvement. Relevant information can be consolidated through Export Reports, while large report requests may be handled through Queue Async Export to prevent lengthy export operations from disrupting normal system activities. These functions allow the command center to evaluate incident patterns, detection performance, and system behavior over time.
+> exporting reports
 
 #### NEW
 
-System Monitoring and Analytics. The Operator can Monitor System Health to observe the operational condition of the system and its connected resources. The Analyze Accident Trends and Review Detection Logs functions provide analytical and historical information that supports operational assessment and system improvement. Incident and dashboard information can be consolidated through Export Reports, while Administrators can use Track AI Performance and export its reports. Large report requests may be handled through Queue Async Export to prevent lengthy export operations from disrupting normal system activities. These functions allow the command center to evaluate incident patterns, detection performance, and system behavior over time.
+exporting incident and dashboard reports
 
 #### Evidence
 
-The live narrative assigns `Track AI Performance` and `Export Reports` to the Operator. Dashboard and incident exports remain Operator-accessible; performance analytics and performance export routes are Admin-only, and Operators cannot list, poll, or download performance jobs.
+This contiguous Operator capability is narrowed to the incident and dashboard export surfaces that remain available to Operators.
 
 #### Proposed comment (same gate as associated replacement)
 
-Comment scope: Logical-paragraph scope — highlight the full revised System Monitoring and Analytics narrative.
+Comment scope: Span scope — replace the exact contiguous span `exporting reports` with `exporting incident and dashboard reports`.
 
-Previous: System Monitoring and Analytics. The Operator can Monitor System Health to observe the operational condition of the system and its connected resources. The Analyze Accident Trends, Track AI Performance, and Review Detection Logs functions provide analytical and historical information that supports operational assessment and system improvement. Relevant information can be consolidated through Export Reports, while large report requests may be handled through Queue Async Export to prevent lengthy export operations from disrupting normal system activities. These functions allow the command center to evaluate incident patterns, detection performance, and system behavior over time.
+Previous: exporting reports
+
+Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
+
+Done by Codex.
+
+### 7c. Defense paper — Use Case Diagram, Administrator AI-performance insertion
+
+Page/s: unconfirmed; native span `143491–143521` within paragraph `142983–143755`
+
+#### OLD
+
+> such as managing user accounts
+
+#### NEW
+
+such as reviewing AI performance, exporting AI performance reports, managing user accounts
+
+#### Evidence
+
+This contiguous Administrator capability list gains AI Performance review and report export before the existing user-account-management capability. The Admin route/sidebar boundary is implemented in `frontend/src/App.tsx:80-113` and `frontend/src/components/layouts/Sidebar.tsx:88-107`; backend authorization is enforced by the Admin dependency and export-job filters.
+
+#### Proposed comment (same gate as associated replacement)
+
+Comment scope: Span scope — replace the exact contiguous span `such as managing user accounts` with `such as reviewing AI performance, exporting AI performance reports, managing user accounts`; highlight the full new span.
+
+Previous: such as managing user accounts
+
+Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
+
+Done by Codex.
+
+### 8a. Defense paper — Use Case Diagram, Operator AI-performance deletion
+
+Page/s: unconfirmed; native span `146392–146414` within paragraph `146213–146898`
+
+#### OLD
+
+> , Track AI Performance
+
+#### NEW
+
+`DELETE ONLY — insert nothing.`
+
+#### Evidence
+
+Deleting this exact span removes `Track AI Performance` from the Operator’s function list while preserving the surrounding `Analyze Accident Trends and Review Detection Logs` wording. The immediately preceding left character is `s`, the final character of `Trends`.
+
+#### Proposed comment (same gate as associated replacement)
+
+Comment scope: Deletion-only span — delete the exact span `, Track AI Performance`; after deletion, highlight/comment the nearest left character `s` in `Trends`.
+
+Previous: , Track AI Performance
+
+Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
+
+Done by Codex.
+
+### 8b. Defense paper — Use Case Diagram, incident/dashboard information span
+
+Page/s: unconfirmed; native span `146559–146579` within paragraph `146213–146898`
+
+#### OLD
+
+> Relevant information
+
+#### NEW
+
+Incident and dashboard information
+
+#### Evidence
+
+This contiguous span makes the existing Operator-facing `Export Reports` narrative specific to incident and dashboard information, not Administrator-only AI Performance reports.
+
+#### Proposed comment (same gate as associated replacement)
+
+Comment scope: Span scope — replace the exact contiguous span `Relevant information` with `Incident and dashboard information`.
+
+Previous: Relevant information
+
+Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
+
+Done by Codex.
+
+### 8c. Defense paper — Use Case Diagram, Administrator AI-performance insertion
+
+Page/s: unconfirmed; native span `146622–146651` within paragraph `146213–146898`
+
+#### OLD
+
+> , while large report requests
+
+#### NEW
+
+, while Administrators can use Track AI Performance and export its reports. Large report requests
+
+#### Evidence
+
+This contiguous insertion assigns Track AI Performance and its reports to Administrators while preserving the existing Queue Async Export explanation.
+
+#### Proposed comment (same gate as associated replacement)
+
+Comment scope: Span scope — replace the exact contiguous span `, while large report requests` with `, while Administrators can use Track AI Performance and export its reports. Large report requests`; highlight the full new span.
+
+Previous: , while large report requests
 
 Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
 
@@ -356,7 +538,7 @@ The live paper’s Context DFD paragraph currently says the Operator receives AI
 
 ## 2026-09-04 sweep notes
 
-The fresh live-paper sweep found three other role-adjacent AI-performance matches that are not additional P29 replacement sites. The Definition of Terms precision paragraph (`31238–31514`) describes operator-confirmed and dismissed labels as metric inputs, not module access. The system-boundary paragraph (`79972–80490`) says the application is available only to authenticated, authorized users; it does not assign AI Performance to Operators and remains accurate. The Context DFD paragraph (`148750–149552`) does assign AI-performance metrics to the Operator, but it is explicitly owned by the pending logical-DFD finding above. Headings, metric definitions, the generic Use Case 7 login/postcondition wording, and the FR-16 content are either role-neutral or covered by blocks 4–11; no new P29 replacement block is needed.
+The fresh live-paper sweep found three other role-adjacent AI-performance matches that are not additional P29 replacement sites. The Definition of Terms precision paragraph (`31238–31514`) describes operator-confirmed and dismissed labels as metric inputs, not module access. The system-boundary paragraph (`79972–80490`) says the application is available only to authenticated, authorized users; it does not assign AI Performance to Operators and remains accurate. The Context DFD paragraph (`148750–149552`) does assign AI-performance metrics to the Operator, but it is explicitly owned by the pending logical-DFD finding above. Headings, metric definitions, the generic Use Case 7 login/postcondition wording, and the FR-16 content are either role-neutral or covered by blocks 4–6, 7a–8c, and 9–11; no new P29 replacement block is needed.
 
 ## Test Execution Tracker manifest (prepared; no live write)
 
@@ -582,11 +764,11 @@ Done by Codex.
 
 Package ID: `PS-20260903-ADMIN-AI-PERFORMANCE`
 
-| Target                        | Approved scope | Applied/read back | Skipped/pending                                                                      | Blocked |
-| ----------------------------- | -------------- | ----------------- | ------------------------------------------------------------------------------------ | ------- |
-| Defense paper                 | —              | —                 | blocks 1–11; DFD coordination note pending with `2026-08-23-logical-dfd-overhaul.md` | —       |
-| ADAS_Paper_Audit plus tracker | —              | —                 | blocks 12–13                                                                         | —       |
-| ADAS Test Execution Tracker   | —              | —                 | blocks 14–22                                                                         | —       |
-| Standalone comments           | —              | —                 | none proposed outside replacement comments                                           | —       |
+| Target                        | Approved scope | Applied/read back | Skipped/pending                                                                                                       | Blocked |
+| ----------------------------- | -------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------- | ------- |
+| Defense paper                 | —              | —                 | blocks 1a–1c, 2a–2b, 3–6, 7a–7c, 8a–8c, 9–11; DFD coordination note pending with `2026-08-23-logical-dfd-overhaul.md` | —       |
+| ADAS_Paper_Audit plus tracker | —              | —                 | blocks 12–13                                                                                                          | —       |
+| ADAS Test Execution Tracker   | —              | —                 | blocks 14–22                                                                                                          | —       |
+| Standalone comments           | —              | —                 | none proposed outside replacement comments                                                                            | —       |
 
 No Drive writes were made in this implementation. The rendered-paper page mapping remains `unconfirmed` because the connected export returned a user-scoped file reference that was not available to the local PDF renderer in this session.
