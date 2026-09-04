@@ -107,12 +107,22 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
   const [form, setForm] = useState<AlarmSettings | null>(null)
   const [snoozeInput, setSnoozeInput] = useState<string>("")
   const [validationError, setValidationError] = useState<string | null>(null)
+  const validationErrorRef = useRef<HTMLParagraphElement | null>(null)
 
   useEffect(() => {
     return () => {
       stopPreviewDetectionSound()
     }
   }, [])
+
+  // The message renders below the Snooze Duration field, which can be
+  // below the fold — scroll it into view so a validation failure isn't
+  // silently invisible, just the status badge flipping with no visible cause.
+  useEffect(() => {
+    if (validationError) {
+      validationErrorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    }
+  }, [validationError])
 
   const settingsQuery = useQuery({
     queryKey: ALARM_SETTINGS_QUERY_KEY,
@@ -395,7 +405,11 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
             hint={`Must be between ${form.options.snooze_min_seconds} and ${form.options.snooze_max_seconds} seconds.`}
           />
 
-          {validationError ? <p className="text-caption text-danger">{validationError}</p> : null}
+          {validationError ? (
+            <p ref={validationErrorRef} className="text-caption text-danger">
+              {validationError}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </Card>
