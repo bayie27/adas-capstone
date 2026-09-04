@@ -56,7 +56,7 @@ Insert the Administrator-only AI Performance sentence immediately before the exi
 
 Comment scope: Span scope — insert the exact sentence `Administrators can additionally review AI-performance metrics and reports.` immediately before `Role-Based Access Control`; highlight only the inserted sentence.
 
-Previous: Role-Based Access Control
+Previous: N/A
 
 Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
 
@@ -324,11 +324,11 @@ Done by Codex.
 
 ### 8a. Defense paper — Use Case Diagram, Operator AI-performance deletion
 
-Page/s: unconfirmed; native span `146392–146414` within paragraph `146213–146898`
+Page/s: unconfirmed; native span `146392–146415` within paragraph `146213–146898`
 
 #### OLD
 
-> , Track AI Performance
+> , Track AI Performance,
 
 #### NEW
 
@@ -336,13 +336,13 @@ Page/s: unconfirmed; native span `146392–146414` within paragraph `146213–14
 
 #### Evidence
 
-Deleting this exact span removes `Track AI Performance` from the Operator’s function list while preserving the surrounding `Analyze Accident Trends and Review Detection Logs` wording. The immediately preceding left character is `s`, the final character of `Trends`.
+Deleting this exact span removes `Track AI Performance` and its surrounding list punctuation while preserving the `Analyze Accident Trends and Review Detection Logs` wording. The immediately preceding left character is `s`, the final character of `Trends`.
 
 #### Proposed comment (same gate as associated replacement)
 
-Comment scope: Deletion-only span — delete the exact span `, Track AI Performance`; after deletion, highlight/comment the nearest left character `s` in `Trends`.
+Comment scope: Deletion-only span — delete the exact span `, Track AI Performance,`; after deletion, highlight/comment the nearest left character `s` in `Trends`.
 
-Previous: , Track AI Performance
+Previous: , Track AI Performance,
 
 Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
 
@@ -466,7 +466,7 @@ Operator Scenarios (System Health): Dispatchers evaluated infrastructure dashboa
 
 #### Evidence
 
-The live UAT paragraph makes Dispatchers interact with AI Performance. The Test Execution Tracker’s UAT rows currently do the same in `OP-J01`, `OP-J03`, and `OP-J09`; the write-free manifest below moves the performance checks to the Administrator journey and keeps Operator dashboard/incident exports.
+The live UAT paragraph makes Dispatchers interact with AI Performance. The Test Execution Tracker’s UAT rows currently do the same in `OP-J01`, `OP-J03`, and `OP-J09`; the approved manifest below moves the performance checks to the Administrator journey and keeps Operator dashboard/incident exports.
 
 #### Proposed comment (same gate as associated replacement)
 
@@ -480,7 +480,7 @@ Done by Codex.
 
 ### 12. ADAS_Paper_Audit — new P29 finding entry
 
-Page/s: unconfirmed; live audit Doc `08.13 pass 1` tab, re-read 2026-09-04
+Page/s: unconfirmed; audit Doc tab `t.0`; inserted after native paragraph `52332–52741` (before the new paragraph at `52742–53367`), re-read 2026-09-04
 
 #### OLD
 
@@ -520,7 +520,7 @@ No existing row. Live `userEnteredValue` re-read on 2026-09-04 found rows 1–81
 
 #### Evidence
 
-The live audit tracker’s first fully blank row is A82:H82. Preserve the row’s native Poppins/wrap structure, the H-column assignee validation, the blank Reviewed by cell, and all neighboring rows. No live Sheet write was made.
+The live audit tracker’s first fully blank row is A82:H82. The approved A82:G82 write was applied and read back; the row’s native Poppins/wrap structure, H-column assignee validation, blank Reviewed by cell, and neighboring rows were preserved. Preflight found no provider-valid native anchor for the approved Sheet comment, so it was not attempted and remains blocked.
 
 #### Proposed comment (same gate as associated replacement)
 
@@ -542,7 +542,7 @@ The fresh live-paper sweep found three other role-adjacent AI-performance matche
 
 ## Test Execution Tracker manifest (prepared; no live write)
 
-The live `ADAS Test Execution Tracker` was re-read on 2026-09-04. The manifest below is exact and intentionally write-free. Each target must be re-read by `userEnteredValue` immediately before any future write; only listed content cells should be changed. Copy native row structure and validation, preserve manual/evidence columns not listed, and apply `#D9EAD3` only to changed cells.
+The live `ADAS Test Execution Tracker` was re-read on 2026-09-04 immediately before the approved writes. The manifest below records the exact targets and values; only listed content cells were changed. Native row structure and validation were preserved, manual/evidence columns not listed were retained, and `#D9EAD3` was applied only to changed cells.
 
 ### 14. `Unit Testing`!A35:J35 — refresh with Administrator evidence
 
@@ -692,21 +692,33 @@ Done by Codex.
 
 #### OLD
 
-Changed cells from live row 10: `D10 = Facilitator\n1. Provide a seeded date range, status, camera/location question, and Help Center topic.\n2. Assign export coverage: OP-01 Detections CSV; OP-02 Detections PDF; OP-03 Dashboard CSV; OP-04 Dashboard PDF; OP-05 AI Performance CSV; OP-06 AI Performance PDF.\n3. Direct the participant to use the visible active filters for the export.\n\nSystem Handler\n1. Ensure matching detection and analytics records exist.\n2. Keep the OP-J08 incident Ongoing for handover.\n3. Verify the downloaded artifact: uv run python backend/scripts/verify_uat_export.py \"<downloaded-file>\"\n4. Stop/reset publishers only after evidence is retained.\n\nLogger\n1. Verify the export against the visible filtered view.`; `F10 = 1. Filter the assigned Detections or analytics view using the given criteria. 2. Identify the requested operational pattern. 3. Export from the assigned surface and format. 4. Verify that the export matches the active filters. 5. Find the relevant SOP/FAQ in Help Center. 6. Give a concise verbal handover covering the active OP-J08 incident, cleared and dismissed records, and follow-up responsibilities.`; `G10 = 1. The correct records and operational pattern are found. 2. The assigned CSV/PDF export opens and matches the active filtered view. 3. Across the six Operators, Detections, Dashboard, and AI Performance are each covered in both CSV and PDF. 4. The role-appropriate Help Center guidance is found. 5. The handover accurately identifies the active Ongoing incident, terminal records, and manual responsibilities. 6. Evidence references are ready for the Execution Log.`; `H10 = FR-13; FR-17; FR-18; FR-19`.
+Changed cells from live row 10: `D10 = Facilitator\n1. Provide a seeded date range, status, camera/location question, and Help Center topic.\n2. Assign export coverage: OP-01 Detections CSV; OP-02 Detections PDF; OP-03 Dashboard CSV; OP-04 Dashboard PDF; OP-05 AI Performance CSV; OP-06 AI Performance PDF.\n3. Direct the participant to use the visible active filters for the export.\n\nSystem Handler\n1. Ensure matching detection and analytics records exist.\n2. Keep the OP-J08 incident Ongoing for handover.\n3. Verify the downloaded artifact: uv run python backend/scripts/verify_uat_export.py \"<downloaded-file>\"\n4. Stop/reset publishers only after evidence is retained.\n\nLogger\n1. Verify the export against the visible filtered view.`; `G10 = 1. The correct records and operational pattern are found. 2. The assigned CSV/PDF export opens and matches the active filtered view. 3. Across the six Operators, Detections, Dashboard, and AI Performance are each covered in both CSV and PDF. 4. The role-appropriate Help Center guidance is found. 5. The handover accurately identifies the active Ongoing incident, terminal records, and manual responsibilities. 6. Evidence references are ready for the Execution Log.`. F10 and H10 are preserved from the existing tracker row.
 
 #### NEW
 
-Changed cells: `D10 = Facilitator\n1. Provide a seeded date range, status, camera/location question, and Help Center topic.\n2. Assign Operator export coverage: OP-01 Detections CSV; OP-02 Detections PDF; OP-03 Dashboard CSV; OP-04 Dashboard PDF. Assign Administrator export coverage separately: AD-J02 AI Performance CSV and AI Performance PDF.\n3. Direct the participant to use the visible active filters for the assigned export.\n\nSystem Handler\n1. Ensure matching detection and analytics records exist.\n2. Keep the OP-J08 incident Ongoing for handover.\n3. Verify each downloaded artifact: uv run python backend/scripts/verify_uat_export.py \"<downloaded-file>\"\n4. Stop/reset publishers only after evidence is retained.\n\nLogger\n1. Verify each export against the visible filtered view and record the role used.`; `F10 = 1. Filter the assigned Detections or Dashboard view using the given criteria. 2. Identify the requested operational pattern. 3. Export from the assigned surface and format. 4. Verify that the export matches the active filters. 5. Find the relevant SOP/FAQ in Help Center. 6. Give a concise verbal handover covering the active OP-J08 incident, cleared and dismissed records, and follow-up responsibilities.`; `G10 = 1. The correct records and operational pattern are found. 2. The assigned Operator CSV/PDF export opens and matches the active filtered view. 3. Across the Operator participants, Detections and Dashboard are each covered in both CSV and PDF; Administrator participants cover AI Performance in both CSV and PDF in AD-J02. 4. The role-appropriate Help Center guidance is found. 5. The handover accurately identifies the active Ongoing incident, terminal records, and manual responsibilities. 6. Evidence references are ready for the Execution Log.`; `H10 = FR-13; FR-17; FR-18; FR-19`.
+Changed cells: `D10 = Facilitator\n1. Provide a seeded date range, status, camera/location question, and Help Center topic.\n2. Assign Operator export coverage: OP-01 Detections CSV; OP-02 Detections PDF; OP-03 Dashboard CSV; OP-04 Dashboard PDF. Assign Administrator export coverage separately: AD-J02 AI Performance CSV and AI Performance PDF.\n3. Direct the participant to use the visible active filters for the assigned export.\n\nSystem Handler\n1. Ensure matching detection and analytics records exist.\n2. Keep the OP-J08 incident Ongoing for handover.\n3. Verify each downloaded artifact: uv run python backend/scripts/verify_uat_export.py \"<downloaded-file>\"\n4. Stop/reset publishers only after evidence is retained.\n\nLogger\n1. Verify each export against the visible filtered view and record the role used.`; `G10 = 1. The correct records and operational pattern are found. 2. The assigned Operator CSV/PDF export opens and matches the active filtered view. 3. Across the Operator participants, Detections and Dashboard are each covered in both CSV and PDF; Administrator participants cover AI Performance in both CSV and PDF in AD-J02. 4. The role-appropriate Help Center guidance is found. 5. The handover accurately identifies the active Ongoing incident, terminal records, and manual responsibilities. 6. Evidence references are ready for the Execution Log.`. F10 and H10 are preserved from the existing tracker row.
 
 #### Evidence
 
-This is the shared P28/P29 row. P28’s merged `Cleared` terminology is already present in live F10; preserve it while applying the P29 role-boundary changes. Preserve A10:C10 and I10, row formatting, and any validation; write only D10, F10, and G10.
+This is the shared P28/P29 row. P28’s merged `Cleared` terminology is already present in live F10; preserve it while applying the P29 role-boundary changes. Preserve A10:C10, F10, H10, and I10, row formatting, and any validation; write only D10 and G10.
 
 #### Proposed comment (same gate as associated replacement)
 
-Comment scope: Logical-paragraph scope — highlight the full changed UAT Journeys D10, F10, and G10 field content.
+Comment scope: Cell scope — comment only on the changed UAT Journeys D10 field; F10 and H10 are preserved and must not be commented.
 
-Previous: D10 = Facilitator\n1. Provide a seeded date range, status, camera/location question, and Help Center topic.\n2. Assign export coverage: OP-01 Detections CSV; OP-02 Detections PDF; OP-03 Dashboard CSV; OP-04 Dashboard PDF; OP-05 AI Performance CSV; OP-06 AI Performance PDF.\n3. Direct the participant to use the visible active filters for the export.\n\nSystem Handler\n1. Ensure matching detection and analytics records exist.\n2. Keep the OP-J08 incident Ongoing for handover.\n3. Verify the downloaded artifact: uv run python backend/scripts/verify_uat_export.py \"<downloaded-file>\"\n4. Stop/reset publishers only after evidence is retained.\n\nLogger\n1. Verify the export against the visible filtered view.; F10 = 1. Filter the assigned Detections or analytics view using the given criteria. 2. Identify the requested operational pattern. 3. Export from the assigned surface and format. 4. Verify that the export matches the active filters. 5. Find the relevant SOP/FAQ in Help Center. 6. Give a concise verbal handover covering the active OP-J08 incident, cleared and dismissed records, and follow-up responsibilities.; G10 = 1. The correct records and operational pattern are found. 2. The assigned CSV/PDF export opens and matches the active filtered view. 3. Across the six Operators, Detections, Dashboard, and AI Performance are each covered in both CSV and PDF. 4. The role-appropriate Help Center guidance is found. 5. The handover accurately identifies the active Ongoing incident, terminal records, and manual responsibilities. 6. Evidence references are ready for the Execution Log.
+The P29 write changes D10 and G10 only. The second comment below targets G10 separately so the preserved F10 and H10 cells are not included.
+
+Previous (D10 only): D10 = Facilitator\n1. Provide a seeded date range, status, camera/location question, and Help Center topic.\n2. Assign export coverage: OP-01 Detections CSV; OP-02 Detections PDF; OP-03 Dashboard CSV; OP-04 Dashboard PDF; OP-05 AI Performance CSV; OP-06 AI Performance PDF.\n3. Direct the participant to use the visible active filters for the export.\n\nSystem Handler\n1. Ensure matching detection and analytics records exist.\n2. Keep the OP-J08 incident Ongoing for handover.\n3. Verify the downloaded artifact: uv run python backend/scripts/verify_uat_export.py \"<downloaded-file>\"\n4. Stop/reset publishers only after evidence is retained.\n\nLogger\n1. Verify the export against the visible filtered view.
+
+Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
+
+Done by Codex.
+
+#### Proposed comment (same gate as associated replacement)
+
+Comment scope: Cell scope — comment only on the changed UAT Journeys G10 field; F10 and H10 are preserved and must not be commented.
+
+Previous: G10 = 1. The correct records and operational pattern are found. 2. The assigned CSV/PDF export opens and matches the active filtered view. 3. Across the six Operators, Detections, Dashboard, and AI Performance are each covered in both CSV and PDF. 4. The role-appropriate Help Center guidance is found. 5. The handover accurately identifies the active Ongoing incident, terminal records, and manual responsibilities. 6. Evidence references are ready for the Execution Log.
 
 Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
 
@@ -764,11 +776,11 @@ Done by Codex.
 
 Package ID: `PS-20260903-ADMIN-AI-PERFORMANCE`
 
-| Target                        | Approved scope | Applied/read back | Skipped/pending                                                                                                       | Blocked |
-| ----------------------------- | -------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------- | ------- |
-| Defense paper                 | —              | —                 | blocks 1a–1c, 2a–2b, 3–6, 7a–7c, 8a–8c, 9–11; DFD coordination note pending with `2026-08-23-logical-dfd-overhaul.md` | —       |
-| ADAS_Paper_Audit plus tracker | —              | —                 | blocks 12–13                                                                                                          | —       |
-| ADAS Test Execution Tracker   | —              | —                 | blocks 14–22                                                                                                          | —       |
-| Standalone comments           | —              | —                 | none proposed outside replacement comments                                                                            | —       |
+| Target                        | Approved scope                               | Applied/read back                                                                   | Skipped/pending                                                         | Blocked                                                                                                                               |
+| ----------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Defense paper                 | blocks 1a–1c, 2a–2b, 3–6, 7a–7c, 8a–8c, 9–11 | paper text and 18 native comments applied/read back                                 | DFD coordination note pending with `2026-08-23-logical-dfd-overhaul.md` | —                                                                                                                                     |
+| ADAS_Paper_Audit plus tracker | blocks 12–13                                 | audit paragraph/comment and A82:G82 row applied/read back; H82 validation preserved | —                                                                       | preflight found no provider-valid native anchor for the approved A82:H82 Sheet comment; not attempted and retained locally as blocked |
+| ADAS Test Execution Tracker   | blocks 14–22                                 | row/cell writes applied/read back                                                   | —                                                                       | approved Sheet comments returned no provider-valid native anchors; unanchored attempts were resolved and retained locally as blocked  |
+| Standalone comments           | none; no P29 figure-comment block exists     | —                                                                                   | —                                                                       | —                                                                                                                                     |
 
-No Drive writes were made in this implementation. The rendered-paper page mapping remains `unconfirmed` because the connected export returned a user-scoped file reference that was not available to the local PDF renderer in this session.
+Approved Drive writes were applied and read back for the paper, audit Doc, audit tracker row, and Test Execution Tracker rows. The 18 paper comments and one audit-Doc comment have provider-valid native anchors. The audit-tracker Sheet comment was not attempted because preflight found no native anchor; Test Execution Tracker comment attempts returned anchor: null, so they were resolved rather than left unanchored. The proposed Sheet comments remain in this finding as blocked. Rendered-paper page mapping remains `unconfirmed` because the connected export returned a user-scoped file reference that was not available to the local PDF renderer in this session.
