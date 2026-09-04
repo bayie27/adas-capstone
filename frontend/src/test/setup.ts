@@ -22,3 +22,10 @@ const localStorageMock = (function () {
 Object.defineProperty(window, "localStorage", {
   value: localStorageMock,
 })
+
+// JSDOM doesn't implement layout, so scrollIntoView doesn't exist at all —
+// stub it as a no-op so components that call it (e.g. to surface an
+// off-screen validation error) don't crash under test.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = function () {}
+}

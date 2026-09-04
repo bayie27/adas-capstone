@@ -7,6 +7,7 @@ import {
   formatScalarDetailValue,
   formatTargetDisplayName,
   formatTargetType,
+  groupAuditRows,
   hasResolvedName,
   humanizeDetailKey,
   humanizeReasonValue,
@@ -17,6 +18,27 @@ import {
   isUuid,
   truncateId,
 } from "./auditFormat"
+import type { AuditLogEntry } from "@/api/audit"
+
+function makeEntry(overrides: Partial<AuditLogEntry> & { audit_id: number }): AuditLogEntry {
+  return {
+    actor_type: "user",
+    user_id: 1,
+    username: "admin",
+    role: "Admin",
+    action: "ALARM_SETTINGS_UPDATE",
+    target_type: "user",
+    target_ref: "1",
+    result: "success",
+    detail: null,
+    request_id: null,
+    source_ip: null,
+    created_at: "2026-09-03T16:35:00Z",
+    group_size: 1,
+    is_group_head: true,
+    ...overrides,
+  }
+}
 
 describe("auditFormat", () => {
   describe("formatAuditAction", () => {
@@ -149,6 +171,16 @@ describe("auditFormat", () => {
     it("returns Not set for unset values", () => {
       expect(formatScalarDetailValue("mode", null)).toBe("Not set")
       expect(formatScalarDetailValue("mode", "")).toBe("Not set")
+    })
+
+    it("title-cases alarm sound before/after values instead of showing the raw key", () => {
+      expect(formatScalarDetailValue("alarm_sound_from", "default")).toBe("Default")
+      expect(formatScalarDetailValue("alarm_sound_to", "digital_alarm")).toBe("Digital Alarm")
+    })
+
+    it("appends a seconds unit to snooze duration before/after values", () => {
+      expect(formatScalarDetailValue("snooze_duration_from", 30)).toBe("30 seconds")
+      expect(formatScalarDetailValue("snooze_duration_to", 45)).toBe("45 seconds")
     })
   })
 
@@ -291,6 +323,52 @@ describe("auditFormat", () => {
     it("is false when detail is undefined or null", () => {
       expect(hasResolvedName("camera_id", undefined)).toBe(false)
       expect(hasResolvedName("camera_id", null)).toBe(false)
+    })
+  })
+
+  describe("groupAuditRows", () => {
+    it("keeps every group_size:1 row as its own single segment", () => {
+      const rows = [makeEntry({ audit_id: 1 }), makeEntry({ audit_id: 2, action: "LOGOUT" })]
+
+      const segments = groupAuditRows(rows)
+
+      expect(segments).toEqual([
+        { kind: "single", entry: rows[0] },
+        { kind: "single", entry: rows[1] },
+      ])
+    })
+
+    it("collapses a run marked by the backend into one group segment", () => {
+      const rows = [
+        makeEntry({ audit_id: 10, group_size: 3, is_group_head: true }),
+        makeEntry({ audit_id: 11, group_size: 3, is_group_head: false }),
+        makeEntry({ audit_id: 12, group_size: 3, is_group_head: false }),
+      ]
+
+      const segments = groupAuditRows(rows)
+
+      expect(segments).toEqual([{ kind: "group", entries: rows }])
+    })
+
+    it("handles a single row, a group, then another single row in order", () => {
+      const rows = [
+        makeEntry({ audit_id: 1, action: "LOGOUT" }),
+        makeEntry({ audit_id: 20, group_size: 2, is_group_head: true }),
+        makeEntry({ audit_id: 21, group_size: 2, is_group_head: false }),
+        makeEntry({ audit_id: 30, action: "USER_UPDATE" }),
+      ]
+
+      const segments = groupAuditRows(rows)
+
+      expect(segments).toEqual([
+        { kind: "single", entry: rows[0] },
+        { kind: "group", entries: [rows[1], rows[2]] },
+        { kind: "single", entry: rows[3] },
+      ])
+    })
+
+    it("returns an empty list for an empty page", () => {
+      expect(groupAuditRows([])).toEqual([])
     })
   })
 })

@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
+import { Badge, BadgeDot } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { FilterSelect } from "@/components/ui/FilterSelect"
@@ -20,6 +21,13 @@ import { cn } from "@/utils/cn"
 
 const ALARM_SETTINGS_QUERY_KEY = ["alarm-settings"] as const
 
+// How long a field has to sit still (no edits, no Test-button presses) before
+// the settled value is sent. A single delay for every field keeps the model
+// simple: it's not "debounce per field," it's "debounce the save," and any
+// interaction that means the user is still deciding — including a Test
+// press that doesn't itself change a value — pushes the save back out.
+const AUTOSAVE_DEBOUNCE_MS = 900
+
 /** `alert_chime` -> "Alert Chime" — the backend sends raw allowlist keys,
  * not display labels (confirmed: `AlarmSettingsOptions.alarm_sound_keys` is
  * `list[str]`, nothing else). */
@@ -28,6 +36,63 @@ function formatSoundLabel(key: string): string {
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ")
+}
+
+// "invalid" and "error" both render as a red badge, but only "error" means
+// a save was actually attempted and failed — Retry re-sends the same
+// values, which can only help there. A blocked value can't be "retried"
+// into passing validation, so that state gets no retry action at all.
+type SaveStatus = "saving" | "invalid" | "error" | "pending" | "saved"
+
+function SaveStatusBadge({ status, onRetry }: { status: SaveStatus; onRetry: () => void }) {
+  switch (status) {
+    case "saving":
+      return (
+        <Badge
+          tone="neutral"
+          variant="subtle"
+          icon={<BadgeDot tone="neutral" className="animate-pulse" />}
+        >
+          Saving…
+        </Badge>
+      )
+    case "pending":
+      // Neutral, not warning — this fires on every edit, well before the
+      // debounce even attempts to send anything, so it isn't a problem to
+      // flag, just a normal in-between state.
+      return (
+        <Badge tone="neutral" variant="subtle" icon={<BadgeDot tone="neutral" />}>
+          Unsaved changes
+        </Badge>
+      )
+    case "invalid":
+      return (
+        <Badge tone="danger" variant="subtle" icon={<BadgeDot tone="danger" />}>
+          Fix errors to save
+        </Badge>
+      )
+    case "error":
+      return (
+        <div className="flex items-center gap-2">
+          <Badge tone="danger" variant="subtle" icon={<BadgeDot tone="danger" />}>
+            Couldn&apos;t save
+          </Badge>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="text-caption font-medium text-fg underline-offset-2 hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      )
+    case "saved":
+      return (
+        <Badge tone="success" variant="subtle" icon={<BadgeDot tone="success" />}>
+          All changes saved
+        </Badge>
+      )
+  }
 }
 
 /**
@@ -42,12 +107,22 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
   const [form, setForm] = useState<AlarmSettings | null>(null)
   const [snoozeInput, setSnoozeInput] = useState<string>("")
   const [validationError, setValidationError] = useState<string | null>(null)
+  const validationErrorRef = useRef<HTMLParagraphElement | null>(null)
 
   useEffect(() => {
     return () => {
       stopPreviewDetectionSound()
     }
   }, [])
+
+  // The message renders below the Snooze Duration field, which can be
+  // below the fold — scroll it into view so a validation failure isn't
+  // silently invisible, just the status badge flipping with no visible cause.
+  useEffect(() => {
+    if (validationError) {
+      validationErrorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    }
+  }, [validationError])
 
   const settingsQuery = useQuery({
     queryKey: ALARM_SETTINGS_QUERY_KEY,
@@ -74,26 +149,64 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
       setSnoozeInput(String(updated.snooze_duration))
       setDetectionSound(updated.alarm_sound, updated.volume)
       setValidationError(null)
-      toast.success("Alarm settings saved.")
     },
     onError: (error) => {
       const message = getApiErrorMessage(error, "Unable to save alarm settings.")
       toast.error(message)
     },
+    onSettled: () => {
+      // An edit that arrived while this save was in flight was queued
+      // rather than fired concurrently — send it now, on the settled state.
+      if (queuedRef.current) {
+        queuedRef.current = false
+        flush()
+      }
+    },
   })
 
-  function updateField<K extends keyof AlarmSettings>(field: K, value: AlarmSettings[K]) {
-    mutation.reset()
-    setValidationError(null)
-    setForm((current) => (current ? { ...current, [field]: value } : current))
-  }
+  // Refs mirror the latest render's state so the debounce timer and the
+  // unmount/beforeunload handlers — which close over this callback long
+  // before it actually fires — always read current values instead of a
+  // stale snapshot from whichever render scheduled them.
+  const formRef = useRef(form)
+  const snoozeInputRef = useRef(snoozeInput)
+  const settingsDataRef = useRef(settingsQuery.data)
+  const mutationRef = useRef(mutation)
+  useEffect(() => {
+    formRef.current = form
+    snoozeInputRef.current = snoozeInput
+    settingsDataRef.current = settingsQuery.data
+    mutationRef.current = mutation
+  })
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!form || !settingsQuery.data) return
+  const saveTimerRef = useRef<number | null>(null)
+  const queuedRef = useRef(false)
 
-    setValidationError(null)
-    const trimmed = snoozeInput.trim()
+  const dirty =
+    form && settingsQuery.data
+      ? form.alarm_sound !== settingsQuery.data.alarm_sound ||
+        form.volume !== settingsQuery.data.volume ||
+        snoozeInput.trim() !== String(settingsQuery.data.snooze_duration)
+      : false
+
+  const clearSaveTimer = useCallback(() => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+  }, [])
+
+  // The one place that actually sends the PUT. Validates and diffs against
+  // the last-synced server value first — an invalid or unchanged snapshot
+  // never reaches the network, which is what keeps ALARM_SETTINGS_UPDATE
+  // audit rows tied to real settled edits instead of every keystroke/tick.
+  const flush = useCallback(() => {
+    clearSaveTimer()
+    const data = settingsDataRef.current
+    const currentForm = formRef.current
+    if (!data || !currentForm) return
+
+    const trimmed = snoozeInputRef.current.trim()
     const durationNum = parseInt(trimmed, 10)
 
     if (!trimmed || isNaN(durationNum)) {
@@ -102,46 +215,99 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
     }
 
     if (
-      durationNum < form.options.snooze_min_seconds ||
-      durationNum > form.options.snooze_max_seconds
+      durationNum < currentForm.options.snooze_min_seconds ||
+      durationNum > currentForm.options.snooze_max_seconds
     ) {
       setValidationError(
-        `Snooze duration must be between ${form.options.snooze_min_seconds} and ${form.options.snooze_max_seconds} seconds.`,
+        `Snooze duration must be between ${currentForm.options.snooze_min_seconds} and ${currentForm.options.snooze_max_seconds} seconds.`,
       )
       return
     }
 
-    // Saving without an actual change writes no audit row on the backend —
-    // preserve that in the UI by not firing the request at all rather than
-    // relying on the backend to silently no-op it.
-    const unchanged =
-      form.alarm_sound === settingsQuery.data.alarm_sound &&
-      form.volume === settingsQuery.data.volume &&
-      durationNum === settingsQuery.data.snooze_duration
+    const isUnchanged =
+      currentForm.alarm_sound === data.alarm_sound &&
+      currentForm.volume === data.volume &&
+      durationNum === data.snooze_duration
 
-    if (unchanged) {
-      toast.info("No changes to save.")
+    if (isUnchanged) return
+
+    if (mutationRef.current.isPending) {
+      queuedRef.current = true
       return
     }
 
-    mutation.mutate({
-      ...form,
-      snooze_duration: durationNum,
-    })
+    setValidationError(null)
+    mutationRef.current.mutate({ ...currentForm, snooze_duration: durationNum })
+  }, [clearSaveTimer])
+
+  const scheduleSave = useCallback(() => {
+    clearSaveTimer()
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null
+      flush()
+    }, AUTOSAVE_DEBOUNCE_MS)
+  }, [clearSaveTimer, flush])
+
+  // In-app navigation away from the Profile page unmounts this card before
+  // a pending debounce fires — flush immediately rather than dropping the
+  // edit. The underlying request isn't tied to the component's lifecycle,
+  // so it completes normally even though nothing is listening for the
+  // result anymore.
+  useEffect(() => {
+    return () => {
+      flush()
+    }
+  }, [flush])
+
+  // Closing the tab or reloading can drop an in-flight request outright, so
+  // this is a stronger guard than the unmount flush above: warn before the
+  // page actually goes away rather than risk losing the edit silently.
+  useEffect(() => {
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      if (!dirty && !mutationRef.current.isPending) return
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [dirty])
+
+  function updateField<K extends keyof AlarmSettings>(field: K, value: AlarmSettings[K]) {
+    // Fields are disabled while a save is in flight, so this can only run
+    // between saves — safe to clear a previous attempt's error state here
+    // rather than have the badge show a stale "Couldn't save" until the
+    // next debounce fires.
+    mutation.reset()
+    setValidationError(null)
+    setForm((current) => (current ? { ...current, [field]: value } : current))
+    scheduleSave()
   }
 
-  const errorMessage =
-    validationError ??
-    (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to save alarm settings.") : null)
+  const status: SaveStatus = mutation.isPending
+    ? "saving"
+    : validationError
+      ? "invalid"
+      : mutation.isError
+        ? "error"
+        : dirty
+          ? "pending"
+          : "saved"
 
   return (
     <Card className={cn("p-8", className)}>
-      <div className="mb-6">
-        <h2 className="text-[18px] font-semibold text-fg">Alarm Settings</h2>
-        <p className="text-secondary text-fg-muted">
-          Control the sound and volume of the accident alarm, and how long an unverified incident
-          stays muted when you snooze it.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[18px] font-semibold text-fg">Alarm Settings</h2>
+          <p className="text-secondary text-fg-muted">
+            Control the sound and volume of the accident alarm, and how long an unverified incident
+            stays muted when you snooze it.
+          </p>
+        </div>
+        {form ? (
+          <div className="shrink-0">
+            <SaveStatusBadge status={status} onRetry={flush} />
+          </div>
+        ) : null}
       </div>
 
       {settingsQuery.isLoading ? (
@@ -155,7 +321,7 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
           onRetry={() => settingsQuery.refetch()}
         />
       ) : form ? (
-        <form onSubmit={handleSubmit} className="max-w-sm space-y-6">
+        <div className="max-w-sm space-y-6">
           <div>
             <label className="mb-2 block text-caption font-semibold text-fg-body">
               Alarm Sound
@@ -185,8 +351,15 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={form.volume === 0}
-                onClick={() => previewDetectionSound(form.alarm_sound, form.volume)}
+                disabled={form.volume === 0 || mutation.isPending}
+                onClick={() => {
+                  previewDetectionSound(form.alarm_sound, form.volume)
+                  // Auditioning the current value is still "deciding" —
+                  // push the save back out so a preview between two
+                  // slider drags doesn't split one adjustment into two
+                  // separate audit rows.
+                  scheduleSave()
+                }}
               >
                 Test
               </Button>
@@ -223,16 +396,21 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
               mutation.reset()
               setValidationError(null)
               setSnoozeInput(event.target.value)
+              scheduleSave()
+            }}
+            onBlur={flush}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur()
             }}
             hint={`Must be between ${form.options.snooze_min_seconds} and ${form.options.snooze_max_seconds} seconds.`}
           />
 
-          {errorMessage ? <p className="text-caption text-danger">{errorMessage}</p> : null}
-
-          <Button type="submit" isLoading={mutation.isPending} loadingLabel="Saving…">
-            Save Alarm Settings
-          </Button>
-        </form>
+          {validationError ? (
+            <p ref={validationErrorRef} className="text-caption text-danger">
+              {validationError}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </Card>
   )
