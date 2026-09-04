@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/Modal"
 import { updateUser } from "@/api/users"
 import type { ApiUserRole } from "@/api/auth"
 import type { UpdateUserInput, UserRecord } from "@/api/users"
-import { getApiErrorMessage } from "@/api/client"
+import { getApiError, getApiErrorMessage } from "@/api/client"
 import { formatShortDateTime } from "@/utils/datetime"
 import { cn } from "@/utils/cn"
 
@@ -79,9 +79,20 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
     })
   }
 
+  // PATCH /users/{id} (routes/users.py) can answer with three different
+  // 400s: a duplicate username, or "cannot demote/deactivate the last
+  // active Administrator" for the Role/Active controls. Only the first is
+  // about a text field on this form, so it's matched by its exact message
+  // rather than by status alone — the other two stay in the generic
+  // fallback below, where they belong next to the controls they're about.
+  const apiDetail = mutation.isError ? getApiError(mutation.error)?.detail : undefined
+  const usernameError = apiDetail === "Username already taken." ? apiDetail : undefined
+
   const errorMessage =
     validationError ??
-    (mutation.isError ? getApiErrorMessage(mutation.error, "Unable to update user.") : null)
+    (mutation.isError && !usernameError
+      ? getApiErrorMessage(mutation.error, "Unable to update user.")
+      : null)
 
   return (
     <Modal
@@ -160,6 +171,7 @@ export function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) 
               label="Username"
               value={form.username}
               disabled={mutation.isPending}
+              error={usernameError}
               onChange={(event) => updateField("username", event.target.value)}
               className="text-sm text-fg"
               labelClassName="text-sm font-medium text-fg"
