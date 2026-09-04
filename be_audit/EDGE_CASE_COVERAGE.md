@@ -25,7 +25,7 @@ all are asserted, it's `partial`, with the gap named in Evidence.
   written rationale for this row.
 - **inapplicable** — the row doesn't actually apply to this codebase; rationale given.
 
-**Totals: 140 covered · 1 partial · 0 uncovered · 1 inapplicable · 1 accepted-gap · 143 rows/units.**
+**Totals: 147 covered · 2 partial · 0 uncovered · 1 inapplicable · 1 accepted-gap · 151 rows/units.**
 
 Ten rows turned out to be more than a missing test:
 
@@ -42,6 +42,19 @@ The other six (**F27**–**F30**, plus the closures of **1.6**, **2.1**, **2.2**
 **3.1**, **3.15**, **4.2**, **4.3**, **4.7**, **4.13**, **4.14**, **5.7**–**5.9**, **5.11**, **5.12**,
 **6.13**, **6.19**, **7**'s three side-effect units, **8.11**, **8.14**, **8.16**, **9.7**) were
 closed with new tests against already-correct code.
+
+## 11. P28–P30 follow-up edges
+
+| Row | Case | Package | Status | Evidence |
+|---|---|---|---|---|
+| 11.8 | Protected path is another partition/junction/SUBST on the DB disk | P30 | covered | `test_protected_backup_storage.py::test_physical_provider_is_injected_and_reasons_are_path_free`, `test_default_provider_rejects_unverifiable_device_identity`, `test_physical_provider_rejects_a_target_volume_that_shares_one_disk`; the production provider resolves the Windows volume and disk extents, while injected identities cover same-device and unverifiable outcomes. |
+| 11.9 | Protected target fails after temp creation but before publication | P30 | covered | `test_protected_backup_storage.py::test_protected_publish_failure_cleans_orphans_and_falls_back`; protected temp residue is removed, the local fallback succeeds, and prior artifacts remain. |
+| 11.10 | Same backup id exists in both roots | P30 | covered | `test_protected_backup_storage.py::test_same_backup_id_in_both_roots_is_selected_by_tier`; combined listing retains both `(storage_tier, backup_id)` rows and the selected tier resolves the protected artifact. |
+| 11.11 | USB disappears before versus after local restore copy | P30 | covered | `test_protected_backup_storage.py::test_protected_media_loss_before_copy_does_not_mutate_live_database` and `test_protected_backup_storage.py::test_protected_media_loss_after_local_copy_can_finish_restore`; before-copy loss fails without swap, after-copy loss completes from local state. |
+| 11.12 | Recent degraded backup exists when protected storage returns | P30 | covered | `test_protected_backup_storage.py::test_recent_degraded_backup_does_not_hide_protected_overdue_state`; operational continuity is fresh while protected freshness remains overdue. |
+| 11.13 | Both protected and fallback backups fail during scheduled restart | P30 | covered | `test_protected_backup_storage.py::test_scheduled_restart_backup_phase_aborts_when_both_targets_fail`; the shared restart backup phase returns failure before any lifecycle step can run. |
+| 11.14 | Test tracker cell is updated | P28–P30 | partial | No live Sheet write was authorized in this implementation pass. The exact five-row `Backup & Recovery` manifest and preserved `Not Executed` validation are recorded in the amended local paper finding for a separately approved write. |
+| 11.15 | PowerShell and Python resolve maintenance settings with the same precedence | P30 | covered | `test_protected_backup_storage.py::test_powershell_maintenance_uses_process_environment_precedence`; the PowerShell helpers check inherited process values before the repo-root `.env`, and the maintenance wrapper reads the same resolved log path. |
 
 ---
 

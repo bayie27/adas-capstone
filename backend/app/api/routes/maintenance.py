@@ -28,6 +28,7 @@ from app.core.security import verify_password
 from app.maintenance import coordinator as coordinator_mod
 from app.maintenance import restore as restore_mod
 from app.maintenance.backup import (
+    BackupTargetsFailedError,
     RetentionConfig,
     list_backup_candidates,
     perform_backup_assuming_lock_held,
@@ -39,8 +40,12 @@ from app.maintenance.manifest import (
     ORIGIN_MANUAL,
     ORIGIN_SCHEDULED,
     InvalidBackupIdError,
-    list_manifests,
     validate_backup_id,
+)
+from app.maintenance.storage import (
+    STORAGE_TIER_PROTECTED,
+    probe_protected_storage,
+    validate_storage_tier,
 )
 from app.models import AuditResult, User
 from app.schemas.events import EventType, MaintenanceNoticeData, make_event
@@ -57,7 +62,10 @@ from app.schemas.maintenance import (
     RestoreTriggerResponse,
 )
 from app.services import audit
-from app.services.maintenance_schedule import scheduled_backup_is_due
+from app.services.maintenance_schedule import (
+    protected_backup_is_due,
+    scheduled_backup_is_due,
+)
 from app.services.realtime import RealtimeManager
 
 logger = logging.getLogger("uvicorn.error")
@@ -82,7 +90,9 @@ def _busy_error() -> AppHTTPException:
 
 def _retention() -> RetentionConfig:
     return RetentionConfig(
-        daily=settings.BACKUP_DAILY_RETENTION, manual=settings.BACKUP_MANUAL_RETENTION
+        daily=settings.BACKUP_DAILY_RETENTION,
+        manual=settings.BACKUP_MANUAL_RETENTION,
+        pre_restore=settings.BACKUP_PRE_RESTORE_RETENTION,
     )
 
 
@@ -101,7 +111,11 @@ def _run_manual_backup_job(
     try:
         db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
         manifest = perform_backup_assuming_lock_held(
-            db_path, settings.BACKUP_DIR, ORIGIN_MANUAL, retention=_retention()
+            db_path,
+            settings.BACKUP_DIR,
+            ORIGIN_MANUAL,
+            retention=_retention(),
+            protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
         )
         backup_id = manifest.backup_id
         result = AuditResult.SUCCESS if manifest.valid else AuditResult.FAILURE
@@ -110,11 +124,19 @@ def _run_manual_backup_job(
             "created_at": manifest.created_at,
             "origin": manifest.origin,
             "checks": manifest.checks,
+            "storage_tier": manifest.storage_tier,
+            "storage_reason": manifest.storage_reason,
         }
     except Exception as exc:
         logger.exception("Manual backup failed.")
         result = AuditResult.FAILURE
-        detail = {"error_type": type(exc).__name__}
+        detail = {"reason": type(exc).__name__}
+        if isinstance(exc, BackupTargetsFailedError):
+            detail = {
+                "reason": "both_targets_failed",
+                "protected_reason": exc.protected_reason,
+                "fallback_reason": exc.fallback_reason,
+            }
     finally:
         release_maintenance_lock()
 
@@ -140,7 +162,12 @@ def list_backups_route(
     """Admin only. Never returns `artifact_path` or any absolute path — only
     the backup id, timestamps, origin, size, and validation status
     (01_CONTRACTS.md §1.6, §5.8)."""
-    manifests = list_backup_candidates(settings.BACKUP_DIR)
+    db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
+    manifests = list_backup_candidates(
+        settings.BACKUP_DIR,
+        protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
+        db_path=db_path,
+    )
     items = [
         BackupRead(
             backup_id=m.backup_id,
@@ -149,6 +176,8 @@ def list_backups_route(
             file_size=m.file_size,
             valid=m.valid,
             checks=m.checks,
+            storage_tier=m.storage_tier,
+            storage_reason=m.storage_reason,
         )
         for m in manifests
     ]
@@ -222,6 +251,14 @@ async def trigger_restore(
     hex) before it is ever joined onto BACKUP_DIR (edge case 4.10). Writes
     only the restore-request file; never touches `adas.db`."""
     source_ip = _client_ip(request)
+    try:
+        validate_storage_tier(body.storage_tier)
+    except ValueError as exc:
+        raise AppHTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Not a valid storage tier.",
+            code="VALIDATION_ERROR",
+        ) from exc
 
     if not verify_password(body.current_password, current_admin.password_hash):
         audit.record_out_of_band(
@@ -327,6 +364,7 @@ async def trigger_restore(
         raise _busy_error()
 
     try:
+        restore_db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
         # The heartbeat and restore document can change between the first
         # availability check and lease acquisition, so both are read again
         # while this process owns the publish lease.
@@ -385,6 +423,9 @@ async def trigger_restore(
         state = restore_mod.write_restore_request(
             settings.BACKUP_DIR,
             backup_id=body.backup_id,
+            storage_tier=body.storage_tier,
+            protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
+            db_path=restore_db_path,
             requested_by=current_admin.username,
             grace_seconds=settings.RESTORE_REQUEST_GRACE_SECONDS,
             assume_lock_held=True,
@@ -457,7 +498,11 @@ async def trigger_restore(
         actor=current_admin,
         target_type="restore",
         target_ref=body.backup_id,
-        detail={"status": state.status, "request_id": state.request_id},
+        detail={
+            "status": state.status,
+            "request_id": state.request_id,
+            "storage_tier": body.storage_tier,
+        },
         source_ip=source_ip,
     )
     session.commit()
@@ -487,6 +532,7 @@ async def trigger_restore(
     return RestoreTriggerResponse(
         detail="Restore accepted. The system will restart automatically.",
         backup_id=body.backup_id,
+        storage_tier=body.storage_tier,
         request_id=state.request_id or "",
         status="requested",
     )
@@ -500,10 +546,12 @@ def _serialize_restore_state(
     return RestoreStateRead(
         status=state.status,
         backup_id=state.backup_id,
+        storage_tier=state.storage_tier,
         requested_at=state.requested_at,
         requested_by=state.requested_by,
         request_id=state.request_id,
         emergency_backup_id=state.emergency_backup_id,
+        emergency_storage_tier=state.emergency_storage_tier,
         steps=state.steps,
         error=state.error,
         completed_at=state.completed_at,
@@ -532,15 +580,82 @@ def latest_restore_route(
     return _serialize_restore_state(state)
 
 
-def _newest_backup_summary(origin: str) -> BackupSummaryRead | None:
-    for manifest in list_manifests(settings.BACKUP_DIR):
+def _newest_backup_summary(
+    manifests, origin: str, *, storage_tier: str | None = None
+) -> BackupSummaryRead | None:
+    for manifest in manifests:
+        if storage_tier is not None and manifest.storage_tier != storage_tier:
+            continue
         if manifest.origin == origin and manifest.valid:
             return BackupSummaryRead(
                 backup_id=manifest.backup_id,
+                storage_tier=manifest.storage_tier,
                 created_at=manifest.created_at,
                 valid=manifest.valid,
             )
     return None
+
+
+def _protected_storage_status(manifests, db_path):
+    protected_path = settings.PROTECTED_BACKUP_DIR
+    if protected_path is None:
+        return {
+            "available": False,
+            "reason": "not_configured",
+            "latest": None,
+            "overdue": True,
+        }
+
+    probe = probe_protected_storage(
+        protected_path,
+        live_db_path=db_path,
+        required_bytes=1,
+    )
+    latest = _newest_backup_summary(
+        manifests, ORIGIN_SCHEDULED, storage_tier=STORAGE_TIER_PROTECTED
+    )
+    overdue = True
+    if probe.available:
+        overdue = protected_backup_is_due(
+            settings.BACKUP_DIR,
+            protected_backup_dir=protected_path,
+            db_path=db_path,
+            now=datetime.now(UTC),
+        )
+    return {
+        "available": probe.available,
+        "reason": probe.reason,
+        "latest": latest,
+        "overdue": overdue,
+    }
+
+
+def _protection_state(
+    *, protected_available: bool, protected_overdue: bool, manifests
+) -> str:
+    if protected_available and not protected_overdue:
+        return "protected"
+    if any(manifest.valid for manifest in manifests):
+        return "degraded"
+    return "unavailable"
+
+
+def _protection_warning(
+    *, available: bool, reason: str | None, overdue: bool
+) -> str | None:
+    if available and not overdue:
+        return None
+    if reason == "not_configured":
+        return (
+            "Protected backup storage is not configured; new backups are being "
+            "kept on local degraded storage."
+        )
+    if reason:
+        return (
+            "Protected backup storage is unavailable "
+            f"({reason}); new backups are being kept on local degraded storage."
+        )
+    return "Protected backup storage is available but overdue for a fresh backup."
 
 
 def _last_restart_from_log() -> LastRestartRead | None:
@@ -582,12 +697,22 @@ def maintenance_status_route(
         if job is not None and job.next_run_time is not None:
             next_scheduled_backup_at = job.next_run_time.astimezone(UTC)
 
+    db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
+    manifests = list_backup_candidates(
+        settings.BACKUP_DIR,
+        protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
+        db_path=db_path,
+    )
+    protected = _protected_storage_status(manifests, db_path)
     return MaintenanceStatusRead(
-        last_scheduled_backup=_newest_backup_summary(ORIGIN_SCHEDULED),
-        last_manual_backup=_newest_backup_summary(ORIGIN_MANUAL),
+        last_scheduled_backup=_newest_backup_summary(manifests, ORIGIN_SCHEDULED),
+        last_manual_backup=_newest_backup_summary(manifests, ORIGIN_MANUAL),
         next_scheduled_backup_at=next_scheduled_backup_at,
         backup_overdue=scheduled_backup_is_due(
-            settings.BACKUP_DIR, now=datetime.now(UTC)
+            settings.BACKUP_DIR,
+            now=datetime.now(UTC),
+            protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
+            db_path=db_path,
         ),
         maintenance_hour_local=settings.MAINTENANCE_HOUR_LOCAL,
         maintenance_timezone=settings.REPORT_LOCAL_TIMEZONE,
@@ -600,5 +725,19 @@ def maintenance_status_route(
                 settings.BACKUP_DIR,
                 stale_seconds=settings.RESTORE_COORDINATOR_STALE_SECONDS,
             )
+        ),
+        protected_backup_available=protected["available"],
+        protected_backup_reason=protected["reason"],
+        protection_state=_protection_state(
+            protected_available=protected["available"],
+            protected_overdue=protected["overdue"],
+            manifests=manifests,
+        ),
+        latest_protected_backup=protected["latest"],
+        protected_backup_overdue=protected["overdue"],
+        backup_warning=_protection_warning(
+            available=protected["available"],
+            reason=protected["reason"],
+            overdue=protected["overdue"],
         ),
     )

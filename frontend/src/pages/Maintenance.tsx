@@ -37,7 +37,7 @@ import { toast } from "@/store/useToastStore"
 const BACKUPS_QUERY_KEY = ["system-backups"] as const
 const LATEST_RESTORE_QUERY_KEY = ["latest-restore"] as const
 const MAINTENANCE_STATUS_QUERY_KEY = ["maintenance-status"] as const
-const TABLE_COLUMN_COUNT = 5
+const TABLE_COLUMN_COUNT = 6
 
 const BACKUP_DAILY_RETENTION = 30
 const BACKUP_MANUAL_RETENTION = 10
@@ -52,6 +52,7 @@ const RESTORE_STATUS_LABEL: Record<RestoreStatus, string> = {
   completed: "Completed",
   failed: "Failed",
   rolled_back: "Rolled back",
+  manual_intervention: "Manual intervention required",
 }
 
 const CHECK_LABELS: Record<string, string> = {
@@ -77,9 +78,26 @@ function formatBackupOrigin(origin: string) {
   return origin
 }
 
+function backupIdentity(backup: Pick<BackupRead, "backup_id" | "storage_tier">) {
+  return `${backup.storage_tier}:${backup.backup_id}`
+}
+
+function formatStorageTier(tier: BackupRead["storage_tier"]) {
+  return tier === "protected" ? "Protected storage" : "Local degraded"
+}
+
+function storageTone(tier: BackupRead["storage_tier"]) {
+  return tier === "protected" ? ("success" as const) : ("warning" as const)
+}
+
+function formatStorageReason(reason: string | null) {
+  if (!reason) return null
+  return reason.replaceAll("_", " ")
+}
+
 function restoreBadgeTone(status: RestoreStatus) {
   if (status === "completed") return "success" as const
-  if (status === "failed") return "danger" as const
+  if (status === "failed" || status === "manual_intervention") return "danger" as const
   if (status === "rolled_back" || status === "db_restored") return "warning" as const
   return "neutral" as const
 }
@@ -123,6 +141,11 @@ function BackupRow({
           <div>{formatFullDateTime(backup.created_at)}</div>
         </TableCell>
         <TableCell className="text-fg-muted">{formatBackupOrigin(backup.origin)}</TableCell>
+        <TableCell>
+          <Badge variant="subtle" tone={storageTone(backup.storage_tier)} uppercase={false}>
+            {formatStorageTier(backup.storage_tier)}
+          </Badge>
+        </TableCell>
         <TableCell className="text-fg-muted">{formatFileSize(backup.file_size)}</TableCell>
         <TableCell>
           <ValidityBadge valid={backup.valid} />
@@ -161,9 +184,16 @@ function BackupRow({
 
               {backup.valid ? (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stroke pt-2.5">
-                  <span className="text-caption text-fg-muted">
-                    Choose this date, origin, and size as the restore point.
-                  </span>
+                  <div className="text-caption text-fg-muted">
+                    <span>
+                      Choose this date, origin, storage tier, and size as the restore point.
+                    </span>
+                    {backup.storage_reason ? (
+                      <span className="ml-2 text-warning">
+                        ({formatStorageReason(backup.storage_reason)})
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     {!restoreAvailable ? (
                       <span className="text-right text-caption text-fg-muted">
@@ -245,7 +275,7 @@ export default function Maintenance() {
         (
           queryClient.getQueryData<Awaited<ReturnType<typeof getBackups>>>(BACKUPS_QUERY_KEY)
             ?.items ?? []
-        ).map((backup) => backup.backup_id),
+        ).map((backup) => backupIdentity(backup)),
       )
       toast.info("Database backup started in the background.")
       window.setTimeout(async () => {
@@ -254,7 +284,9 @@ export default function Maintenance() {
           queryFn: getBackups,
           staleTime: 0,
         })
-        const hasNew = result.items.some((backup) => !preBackupIdsRef.current.has(backup.backup_id))
+        const hasNew = result.items.some(
+          (backup) => !preBackupIdsRef.current.has(backupIdentity(backup)),
+        )
         toast[hasNew ? "success" : "info"](
           hasNew
             ? "Database backup created successfully."
@@ -316,6 +348,50 @@ export default function Maintenance() {
         />
       ) : null}
 
+      {statusQuery.data?.backup_warning ? (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-warning-border bg-warning-subtle px-4 py-3 text-sm text-fg"
+        >
+          <p className="font-medium">Protected backup storage warning</p>
+          <p className="mt-1 text-caption text-fg-muted">{statusQuery.data.backup_warning}</p>
+        </div>
+      ) : null}
+
+      {statusQuery.data ? (
+        <div className="mb-4 rounded-lg border border-stroke bg-surface-1 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-fg">Backup protection</h2>
+              <p className="mt-1 text-caption text-fg-muted">
+                {statusQuery.data.protected_backup_available
+                  ? statusQuery.data.protected_backup_overdue
+                    ? "The protected device is available, but its protected backup is overdue."
+                    : "Protected backups are current."
+                  : "The configured protected device is unavailable; valid local backups remain available as degraded fallback."}
+              </p>
+              {statusQuery.data.latest_protected_backup ? (
+                <p className="mt-1 text-caption text-fg-muted">
+                  Latest protected backup:{" "}
+                  {formatFullDateTime(statusQuery.data.latest_protected_backup.created_at)}
+                </p>
+              ) : null}
+            </div>
+            <Badge
+              variant="subtle"
+              tone={statusQuery.data.protection_state === "protected" ? "success" : "warning"}
+              uppercase={false}
+            >
+              {statusQuery.data.protection_state === "protected"
+                ? "Protected"
+                : statusQuery.data.protection_state === "degraded"
+                  ? "Degraded fallback"
+                  : "Unavailable"}
+            </Badge>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-stroke bg-surface-1 px-4 py-3">
         <div>
           <h2 className="text-sm font-semibold text-fg">Automatic restore service</h2>
@@ -341,6 +417,7 @@ export default function Maintenance() {
           <TableHead>
             <TableHeaderCell>Date and time</TableHeaderCell>
             <TableHeaderCell>Origin</TableHeaderCell>
+            <TableHeaderCell>Storage tier</TableHeaderCell>
             <TableHeaderCell>Size</TableHeaderCell>
             <TableHeaderCell>Validity</TableHeaderCell>
             <TableHeaderCell className="text-right">Details</TableHeaderCell>
@@ -353,12 +430,12 @@ export default function Maintenance() {
             ) : (
               backups.map((backup) => (
                 <BackupRow
-                  key={backup.backup_id}
+                  key={backupIdentity(backup)}
                   backup={backup}
-                  expanded={expandedId === backup.backup_id}
+                  expanded={expandedId === backupIdentity(backup)}
                   onToggle={() =>
                     setExpandedId((current) =>
-                      current === backup.backup_id ? null : backup.backup_id,
+                      current === backupIdentity(backup) ? null : backupIdentity(backup),
                     )
                   }
                   onRequestRestore={setRestoreTarget}
@@ -379,6 +456,10 @@ export default function Maintenance() {
               <p className="mt-1 text-caption text-fg-muted">
                 Requested {formatFullDateTime(latestRestore.requested_at)}
                 {latestRestore.requested_by ? ` by ${latestRestore.requested_by}` : ""}
+              </p>
+              <p className="mt-1 text-caption text-fg-muted">
+                Selected storage: {formatStorageTier(latestRestore.storage_tier)} · emergency
+                reserve: {formatStorageTier(latestRestore.emergency_storage_tier)}
               </p>
             </div>
             <Badge variant="subtle" tone={restoreBadgeTone(latestRestore.status)}>
@@ -407,6 +488,12 @@ export default function Maintenance() {
             <p className="mt-3 text-caption text-warning">
               The selected restore point did not pass the readiness check. The original database was
               recovered safely.
+            </p>
+          ) : null}
+          {latestRestore.status === "manual_intervention" ? (
+            <p className="mt-3 text-caption text-danger">
+              Automatic rollback could not be completed. Stop the services and follow the local
+              recovery runbook before using the database again.
             </p>
           ) : null}
           {latestRestore.error ? (

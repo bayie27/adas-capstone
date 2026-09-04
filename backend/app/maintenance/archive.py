@@ -10,11 +10,20 @@ import json
 import os
 import sqlite3
 import zipfile
+from contextlib import suppress
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
 from app.maintenance.manifest import BackupManifest, db_path_for, manifest_path_for
+from app.maintenance.storage import (
+    STORAGE_TIER_DEGRADED,
+    STORAGE_TIER_PROTECTED,
+    StorageTargetProvider,
+    probe_protected_storage,
+    reason_for_publish_failure,
+    validate_storage_tier,
+)
 from app.maintenance.verify import compute_sha256
 
 # Case-insensitive substring scan across every archived member's raw bytes.
@@ -31,6 +40,18 @@ class ArchiveSecurityError(RuntimeError):
     only by an external test, so a bug here can never ship a leaking file."""
 
 
+class ArchiveTargetsFailedError(RuntimeError):
+    """Both archive destinations failed; message contains no paths."""
+
+    def __init__(self, protected_reason: str, fallback_reason: str):
+        self.protected_reason = protected_reason
+        self.fallback_reason = fallback_reason
+        super().__init__(
+            "Protected and degraded archive targets both failed "
+            f"({protected_reason}; {fallback_reason})."
+        )
+
+
 @dataclass
 class ArchiveManifest:
     archive_id: str
@@ -39,6 +60,15 @@ class ArchiveManifest:
     included_files: list[str] = field(default_factory=list)
     missing_files: list[str] = field(default_factory=list)
     checksums: dict[str, str] = field(default_factory=dict)
+    storage_tier: str = STORAGE_TIER_DEGRADED
+    storage_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ArchivePublishResult:
+    path: Path
+    storage_tier: str
+    storage_reason: str | None = None
 
 
 def _referenced_snapshot_keys(db_path: Path) -> list[str]:
@@ -109,7 +139,10 @@ def build_archive(
     model_weights_path: Path,
     archive_dir: Path,
     legacy_snapshot_dir: Path | None = None,
+    storage_tier: str = STORAGE_TIER_DEGRADED,
+    storage_reason: str | None = None,
 ) -> Path:
+    validate_storage_tier(storage_tier)
     legacy_snapshot_dir = (
         legacy_snapshot_dir if legacy_snapshot_dir is not None else snapshot_root
     )
@@ -165,6 +198,8 @@ def build_archive(
                 included_files=included,
                 missing_files=missing,
                 checksums=checksums,
+                storage_tier=storage_tier,
+                storage_reason=storage_reason,
             )
             zf.writestr(
                 "archive_manifest.json", json.dumps(asdict(archive_manifest), indent=2)
@@ -177,6 +212,89 @@ def build_archive(
         raise
 
     return archive_path
+
+
+def _cleanup_unpublished_archives(archive_dir: Path) -> None:
+    """Clean temp archive files without touching completed archives."""
+    if not archive_dir.exists():
+        return
+    for path in archive_dir.glob("adas_archive_*.zip.tmp"):
+        with suppress(OSError):
+            path.unlink(missing_ok=True)
+
+
+def create_archive(
+    *,
+    backup_manifest: BackupManifest,
+    backup_dir: Path,
+    snapshot_root: Path,
+    model_weights_path: Path,
+    archive_dir: Path,
+    protected_archive_dir: Path | None = None,
+    db_path: Path,
+    storage_provider: StorageTargetProvider | None = None,
+    legacy_snapshot_dir: Path | None = None,
+) -> ArchivePublishResult:
+    """Build an archive protected-first, then use the local fallback."""
+    protected_reason = "not_configured"
+    if protected_archive_dir is not None:
+        _cleanup_unpublished_archives(protected_archive_dir)
+        try:
+            same_root = (
+                Path(protected_archive_dir).resolve() == Path(archive_dir).resolve()
+            )
+        except OSError:
+            same_root = False
+        probe = (
+            None
+            if same_root
+            else probe_protected_storage(
+                protected_archive_dir,
+                live_db_path=db_path,
+                required_bytes=1,
+                provider=storage_provider,
+            )
+        )
+        if same_root:
+            protected_reason = "same_device"
+        elif probe is not None:
+            protected_reason = probe.reason or "available"
+        if probe is not None and probe.available:
+            _cleanup_unpublished_archives(protected_archive_dir)
+            try:
+                path = build_archive(
+                    backup_manifest=backup_manifest,
+                    backup_dir=backup_dir,
+                    snapshot_root=snapshot_root,
+                    legacy_snapshot_dir=legacy_snapshot_dir,
+                    model_weights_path=model_weights_path,
+                    archive_dir=protected_archive_dir,
+                    storage_tier=STORAGE_TIER_PROTECTED,
+                )
+                return ArchivePublishResult(path, STORAGE_TIER_PROTECTED)
+            except Exception as exc:
+                protected_reason = reason_for_publish_failure(exc)
+                _cleanup_unpublished_archives(protected_archive_dir)
+        else:
+            _cleanup_unpublished_archives(protected_archive_dir)
+
+    try:
+        path = build_archive(
+            backup_manifest=backup_manifest,
+            backup_dir=backup_dir,
+            snapshot_root=snapshot_root,
+            legacy_snapshot_dir=legacy_snapshot_dir,
+            model_weights_path=model_weights_path,
+            archive_dir=archive_dir,
+            storage_tier=STORAGE_TIER_DEGRADED,
+            storage_reason=protected_reason,
+        )
+        return ArchivePublishResult(path, STORAGE_TIER_DEGRADED, protected_reason)
+    except Exception as exc:
+        fallback_reason = reason_for_publish_failure(exc)
+        if protected_archive_dir is not None:
+            raise ArchiveTargetsFailedError(protected_reason, fallback_reason) from exc
+        raise
 
 
 def _assert_no_secrets(zip_path: Path) -> None:

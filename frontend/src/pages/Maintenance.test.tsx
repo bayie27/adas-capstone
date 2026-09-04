@@ -31,6 +31,8 @@ const mockBackups: BackupRead[] = [
     origin: "manual",
     valid: true,
     checks: { checksum: true, quick_check: true, foreign_key_check: true },
+    storage_tier: "protected",
+    storage_reason: null,
   },
   {
     backup_id: INVALID_ID,
@@ -39,6 +41,8 @@ const mockBackups: BackupRead[] = [
     origin: "scheduled",
     valid: false,
     checks: { checksum: false, quick_check: true, foreign_key_check: true },
+    storage_tier: "degraded",
+    storage_reason: "missing",
   },
 ]
 
@@ -51,6 +55,12 @@ const availableStatus: MaintenanceStatusRead = {
   maintenance_timezone: "Asia/Manila",
   last_restart: null,
   latest_restore: null,
+  protected_backup_available: true,
+  protected_backup_reason: null,
+  protection_state: "protected",
+  latest_protected_backup: null,
+  protected_backup_overdue: false,
+  backup_warning: null,
   restore_coordinator: {
     available: true,
     state: "idle",
@@ -111,6 +121,7 @@ describe("Maintenance page restore point picker", () => {
       backup_id: INVALID_ID,
       request_id: "a".repeat(32),
       status: "requested",
+      storage_tier: "degraded",
     })
     const user = userEvent.setup()
     renderMaintenance()
@@ -126,6 +137,7 @@ describe("Maintenance page restore point picker", () => {
       expect(requestRestore).toHaveBeenCalledWith(
         {
           backup_id: INVALID_ID,
+          storage_tier: "degraded",
           current_password: "hunter2",
           confirmation: "RESTORE DATABASE",
         },

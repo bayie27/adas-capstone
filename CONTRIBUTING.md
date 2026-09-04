@@ -16,6 +16,15 @@ cp .env.example .env
 - `pnpm install` — **run this at the repo root**, not inside `frontend/`. This is a pnpm workspace, and running install at the root is what triggers husky's `prepare` script and activates the git hooks below. Running it only inside `frontend/` will leave your hooks inert.
 - `cp .env.example .env` — then fill in real values. The backend hard-fails on startup if any of the 10 keys are missing.
 
+For the optional P30 protected-storage lane, set `PROTECTED_BACKUP_DIR` and
+`PROTECTED_ARCHIVE_DIR` to absolute paths on the explicitly mounted external
+device. The backend never discovers removable media; it compares the
+physical device with the live database and falls back to `BACKUP_DIR` or
+`ARCHIVE_DIR` as a visible degraded tier when the target is unsafe or absent.
+The local `BACKUP_DIR` remains the control/state root, including the restore
+request and emergency rollback reserve. Do not put credentials or demo
+secrets in `.env.example`.
+
 Also run this once, locally (it's a personal git config, not something that can be committed):
 
 ```bash

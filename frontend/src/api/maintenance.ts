@@ -11,6 +11,8 @@ export interface BackupRead {
   file_size: number
   valid: boolean
   checks: Record<string, boolean>
+  storage_tier: "protected" | "degraded"
+  storage_reason: string | null
 }
 
 export interface BackupListResponse {
@@ -24,6 +26,7 @@ export interface BackupTriggerResponse {
 
 export interface RestoreRequestParams {
   backup_id: string
+  storage_tier: "protected" | "degraded"
   current_password: string
   confirmation: string
 }
@@ -31,6 +34,7 @@ export interface RestoreRequestParams {
 export interface RestoreTriggerResponse {
   detail: string
   backup_id: string
+  storage_tier: "protected" | "degraded"
   request_id: string
   status: "requested"
 }
@@ -50,15 +54,23 @@ export interface RestoreStepRead {
  * GET after the backend comes back is what actually surfaces them — not a
  * live poll racing the shutdown. */
 export type RestoreStatus =
-  "requested" | "in_progress" | "db_restored" | "completed" | "failed" | "rolled_back"
+  | "requested"
+  | "in_progress"
+  | "db_restored"
+  | "completed"
+  | "failed"
+  | "rolled_back"
+  | "manual_intervention"
 
 export interface RestoreStateRead {
   status: RestoreStatus
   backup_id: string
+  storage_tier: "protected" | "degraded"
   requested_at: string
   requested_by: string | null
   request_id: string | null
   emergency_backup_id: string | null
+  emergency_storage_tier: "protected" | "degraded"
   steps: RestoreStepRead[]
   error: string | null
   completed_at: string | null
@@ -78,6 +90,7 @@ export interface RestoreCoordinatorRead {
 
 export interface BackupSummaryRead {
   backup_id: string
+  storage_tier: "protected" | "degraded"
   created_at: string
   valid: boolean
 }
@@ -99,6 +112,12 @@ export interface MaintenanceStatusRead {
   last_restart: LastRestartRead | null
   latest_restore: RestoreStateRead | null
   restore_coordinator: RestoreCoordinatorRead
+  protected_backup_available: boolean
+  protected_backup_reason: string | null
+  protection_state: "protected" | "degraded" | "unavailable"
+  latest_protected_backup: BackupSummaryRead | null
+  protected_backup_overdue: boolean
+  backup_warning: string | null
 }
 
 export async function getBackups() {

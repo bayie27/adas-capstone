@@ -20,8 +20,8 @@ the moment you first looked.
 
 ## Identity
 
-Shows the camera's name and channel number, plus its stream address in a masked form
-like `rtsp://***:***@host:port/path`. The real address and any credentials are never
+Shows the camera's name and channel number, plus a masked stream identifier. The real
+address and any credentials are never
 sent to the browser. Operators see a badge reading "Admin only" here instead; only
 Administrators can view (and, with a click, reveal) the masked address, and even then
 there's nothing usable to connect with: it's for identifying which physical feed a

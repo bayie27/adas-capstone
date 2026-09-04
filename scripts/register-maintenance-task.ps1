@@ -82,7 +82,18 @@ function Get-MaintenanceHourLocal {
     $envPath = Join-Path $RepoRoot ".env"
     $default = 3
 
-    if (-not (Test-Path $envPath)) {
+    # Match Python's pydantic-settings precedence.  A process-level value is
+    # inherited by the task registration shell and by the eventual
+    # adas-maintenance.ps1 child; otherwise both resolve the repo-root .env.
+    $processValue = [Environment]::GetEnvironmentVariable("MAINTENANCE_HOUR_LOCAL")
+    if ($processValue -match '^\d+$') {
+        $processHour = [int]$processValue
+        if ($processHour -ge 0 -and $processHour -le 23) {
+            return $processHour
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $envPath)) {
         Write-Warning ".env not found at repo root -- defaulting MAINTENANCE_HOUR_LOCAL to $default."
         return $default
     }

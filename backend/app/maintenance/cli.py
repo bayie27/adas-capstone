@@ -20,6 +20,7 @@ from app.maintenance import archive as archive_mod
 from app.maintenance import coordinator as coordinator_mod
 from app.maintenance import restore as restore_mod
 from app.maintenance.backup import (
+    BackupTargetsFailedError,
     MaintenanceBusyError,
     RetentionConfig,
     create_backup,
@@ -30,6 +31,11 @@ from app.maintenance.manifest import (
     ORIGIN_MANUAL,
     ORIGIN_SCHEDULED,
     InvalidBackupIdError,
+)
+from app.maintenance.storage import (
+    STORAGE_TIER_DEGRADED,
+    STORAGE_TIER_PROTECTED,
+    validate_storage_tier,
 )
 from app.maintenance.verify import (
     compute_sha256,
@@ -48,8 +54,65 @@ def _settings():
 
 def _retention_from_settings(settings) -> RetentionConfig:
     return RetentionConfig(
-        daily=settings.BACKUP_DAILY_RETENTION, manual=settings.BACKUP_MANUAL_RETENTION
+        daily=settings.BACKUP_DAILY_RETENTION,
+        manual=settings.BACKUP_MANUAL_RETENTION,
+        pre_restore=settings.BACKUP_PRE_RESTORE_RETENTION,
     )
+
+
+def _scheduled_backup_due(settings, db_path) -> bool:
+    from app.maintenance.storage import probe_protected_storage
+    from app.services.maintenance_schedule import (
+        protected_backup_is_due,
+        scheduled_backup_is_due,
+    )
+
+    if scheduled_backup_is_due(
+        settings.BACKUP_DIR,
+        now=datetime.now(UTC),
+        protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
+        db_path=db_path,
+    ):
+        return True
+    if settings.PROTECTED_BACKUP_DIR is None:
+        return False
+    probe = probe_protected_storage(
+        settings.PROTECTED_BACKUP_DIR,
+        live_db_path=db_path,
+        required_bytes=1,
+    )
+    return probe.available and protected_backup_is_due(
+        settings.BACKUP_DIR,
+        protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
+        db_path=db_path,
+        now=datetime.now(UTC),
+    )
+
+
+def _protected_storage_reason(settings, db_path) -> str | None:
+    from app.maintenance.storage import probe_protected_storage
+
+    if settings.PROTECTED_BACKUP_DIR is None:
+        return "not_configured"
+    probe = probe_protected_storage(
+        settings.PROTECTED_BACKUP_DIR,
+        live_db_path=db_path,
+        required_bytes=1,
+    )
+    return probe.reason
+
+
+def _skip_storage_status(settings, db_path) -> tuple[str, str | None]:
+    from app.services.maintenance_schedule import newest_scheduled_manifest
+
+    manifest = newest_scheduled_manifest(
+        settings.BACKUP_DIR,
+        protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
+        db_path=db_path,
+    )
+    if manifest is not None and manifest.storage_tier == STORAGE_TIER_PROTECTED:
+        return STORAGE_TIER_PROTECTED, None
+    return STORAGE_TIER_DEGRADED, _protected_storage_reason(settings, db_path)
 
 
 def cmd_backup(args: argparse.Namespace) -> int:
@@ -65,22 +128,22 @@ def cmd_backup(args: argparse.Namespace) -> int:
     # APScheduler job (Step 1) that already covers the daily obligation
     # independently. Only `scheduled` gets this dedup — a manual backup is
     # an intentional immediate action, never skipped.
-    if origin == ORIGIN_SCHEDULED:
-        from app.services.maintenance_schedule import scheduled_backup_is_due
-
-        if not scheduled_backup_is_due(settings.BACKUP_DIR, now=datetime.now(UTC)):
-            elapsed = time.perf_counter() - started
-            print(
-                json.dumps(
-                    {
-                        "skipped": True,
-                        "reason": "a valid scheduled backup already satisfies the daily interval",
-                        "duration_seconds": round(elapsed, 3),
-                    },
-                    indent=2,
-                )
+    if origin == ORIGIN_SCHEDULED and not _scheduled_backup_due(settings, db_path):
+        elapsed = time.perf_counter() - started
+        skip_tier, skip_reason = _skip_storage_status(settings, db_path)
+        print(
+            json.dumps(
+                {
+                    "skipped": True,
+                    "reason": "a valid scheduled backup already satisfies the daily interval",
+                    "storage_tier": skip_tier,
+                    "storage_reason": skip_reason,
+                    "duration_seconds": round(elapsed, 3),
+                },
+                indent=2,
             )
-            return 0
+        )
+        return 0
 
     try:
         manifest = create_backup(
@@ -88,9 +151,16 @@ def cmd_backup(args: argparse.Namespace) -> int:
             backup_dir=settings.BACKUP_DIR,
             origin=origin,
             retention=_retention_from_settings(settings),
+            protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
         )
     except MaintenanceBusyError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except BackupTargetsFailedError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"ERROR: backup failed ({type(exc).__name__}).", file=sys.stderr)
         return 1
     elapsed = time.perf_counter() - started
     print(
@@ -99,6 +169,8 @@ def cmd_backup(args: argparse.Namespace) -> int:
                 "backup_id": manifest.backup_id,
                 "valid": manifest.valid,
                 "checks": manifest.checks,
+                "storage_tier": manifest.storage_tier,
+                "storage_reason": manifest.storage_reason,
                 "duration_seconds": round(elapsed, 3),
             },
             indent=2,
@@ -110,14 +182,43 @@ def cmd_backup(args: argparse.Namespace) -> int:
 def cmd_verify(args: argparse.Namespace) -> int:
     settings = _settings()
     from app.maintenance.manifest import db_path_for, read_manifest
+    from app.maintenance.storage import probe_protected_storage
 
-    manifest = read_manifest(settings.BACKUP_DIR, args.backup_id)
+    validate_storage_tier(args.storage_tier)
+    artifact_dir = settings.BACKUP_DIR
+    if args.storage_tier == STORAGE_TIER_PROTECTED:
+        artifact_dir = settings.PROTECTED_BACKUP_DIR
+        if artifact_dir is None:
+            print("No protected backup storage is configured.", file=sys.stderr)
+            return 1
+        probe = probe_protected_storage(
+            artifact_dir,
+            live_db_path=resolve_sqlite_db_path(settings.DATABASE_URL),
+            required_bytes=1,
+        )
+        if not probe.available:
+            print(
+                f"Protected backup storage is unavailable ({probe.reason or 'unavailable'}).",
+                file=sys.stderr,
+            )
+            return 1
+    try:
+        manifest = read_manifest(artifact_dir, args.backup_id)
+    except InvalidBackupIdError:
+        print("ERROR: not a valid backup id.", file=sys.stderr)
+        return 1
     if manifest is None:
         print(f"No manifest found for backup id {args.backup_id}", file=sys.stderr)
         return 1
-    path = db_path_for(settings.BACKUP_DIR, args.backup_id)
+    try:
+        path = db_path_for(artifact_dir, args.backup_id)
+    except InvalidBackupIdError:
+        print("ERROR: not a valid backup id.", file=sys.stderr)
+        return 1
     result = {
         "backup_id": manifest.backup_id,
+        "storage_tier": args.storage_tier,
+        "storage_reason": manifest.storage_reason,
         "recorded_checks": manifest.checks,
         "checksum_matches": path.exists() and compute_sha256(path) == manifest.sha256,
         "integrity_check": run_integrity_check(path) if path.exists() else False,
@@ -134,7 +235,12 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
 def cmd_list(args: argparse.Namespace) -> int:
     settings = _settings()
-    manifests = list_backups(settings.BACKUP_DIR)
+    db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
+    manifests = list_backups(
+        settings.BACKUP_DIR,
+        protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
+        db_path=db_path,
+    )
     print(
         json.dumps(
             [
@@ -143,6 +249,8 @@ def cmd_list(args: argparse.Namespace) -> int:
                     "created_at": m.created_at,
                     "origin": m.origin,
                     "file_size": m.file_size,
+                    "storage_tier": m.storage_tier,
+                    "storage_reason": m.storage_reason,
                 }
                 for m in manifests
             ],
@@ -171,12 +279,18 @@ def cmd_restore(args: argparse.Namespace) -> int:
 
     try:
         state = restore_mod.perform_offline_restore(
-            backup_dir=settings.BACKUP_DIR, db_path=db_path, backup_id=args.backup_id
+            backup_dir=settings.BACKUP_DIR,
+            db_path=db_path,
+            backup_id=args.backup_id,
+            storage_tier=args.storage_tier,
+            protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
         )
     except (
         MaintenanceBusyError,
         InvalidBackupIdError,
+        restore_mod.RestoreCandidateInvalidError,
         restore_mod.RestoreError,
+        OSError,
     ) as exc:
         failed_state = restore_mod.read_restore_state(settings.BACKUP_DIR)
         if (
@@ -186,7 +300,17 @@ def cmd_restore(args: argparse.Namespace) -> int:
             restore_mod.record_restore_outcome_audit(db_path, state=failed_state)
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps({"status": state.status, "steps": state.steps}, indent=2))
+    print(
+        json.dumps(
+            {
+                "status": state.status,
+                "storage_tier": state.storage_tier,
+                "emergency_storage_tier": state.emergency_storage_tier,
+                "steps": state.steps,
+            },
+            indent=2,
+        )
+    )
     return 0 if state.status == restore_mod.STATUS_DB_RESTORED else 1
 
 
@@ -201,6 +325,7 @@ def cmd_rollback(args: argparse.Namespace) -> int:
         MaintenanceBusyError,
         InvalidBackupIdError,
         restore_mod.RestoreError,
+        OSError,
     ) as exc:
         failed_state = restore_mod.read_restore_state(settings.BACKUP_DIR)
         if (
@@ -211,7 +336,17 @@ def cmd_rollback(args: argparse.Namespace) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     restore_mod.record_restore_outcome_audit(db_path, state=state)
-    print(json.dumps({"status": state.status, "steps": state.steps}, indent=2))
+    print(
+        json.dumps(
+            {
+                "status": state.status,
+                "storage_tier": state.storage_tier,
+                "emergency_storage_tier": state.emergency_storage_tier,
+                "steps": state.steps,
+            },
+            indent=2,
+        )
+    )
     return 0 if state.status == restore_mod.STATUS_ROLLED_BACK else 1
 
 
@@ -219,24 +354,56 @@ def cmd_archive(args: argparse.Namespace) -> int:
     from app.core.config import REPO_ROOT
 
     settings = _settings()
-    backups = list_backups(settings.BACKUP_DIR)
+    db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
+    backups = list_backups(
+        settings.BACKUP_DIR,
+        protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
+        db_path=db_path,
+    )
     if not backups:
         print("ERROR: no valid backup available to archive.", file=sys.stderr)
         return 1
     latest = backups[0]
+    source_dir = (
+        settings.PROTECTED_BACKUP_DIR
+        if latest.storage_tier == STORAGE_TIER_PROTECTED
+        else settings.BACKUP_DIR
+    )
+    if source_dir is None:
+        print(
+            "ERROR: selected protected backup storage is unavailable.", file=sys.stderr
+        )
+        return 1
     try:
-        archive_path = archive_mod.build_archive(
+        archive_result = archive_mod.create_archive(
             backup_manifest=latest,
-            backup_dir=settings.BACKUP_DIR,
+            backup_dir=source_dir,
             snapshot_root=settings.SNAPSHOT_ROOT,
             legacy_snapshot_dir=settings.LEGACY_SNAPSHOT_DIR,
             model_weights_path=REPO_ROOT / "ai_engine" / "epoch50.pt",
             archive_dir=settings.ARCHIVE_DIR,
+            protected_archive_dir=settings.PROTECTED_ARCHIVE_DIR,
+            db_path=db_path,
         )
     except archive_mod.ArchiveSecurityError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps({"archive_path": archive_path.name}, indent=2))
+    except archive_mod.ArchiveTargetsFailedError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"ERROR: archive failed ({type(exc).__name__}).", file=sys.stderr)
+        return 1
+    print(
+        json.dumps(
+            {
+                "archive_path": archive_result.path.name,
+                "storage_tier": archive_result.storage_tier,
+                "storage_reason": archive_result.storage_reason,
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
@@ -259,14 +426,34 @@ def cmd_restart(args: argparse.Namespace) -> int:
 
     db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
     started = time.perf_counter()
+    if not _scheduled_backup_due(settings, db_path):
+        elapsed = time.perf_counter() - started
+        skip_tier, skip_reason = _skip_storage_status(settings, db_path)
+        print(
+            json.dumps(
+                {
+                    "skipped": True,
+                    "reason": "a valid scheduled backup already satisfies the daily interval",
+                    "storage_tier": skip_tier,
+                    "storage_reason": skip_reason,
+                    "duration_seconds": round(elapsed, 3),
+                },
+                indent=2,
+            )
+        )
+        return 0
     try:
         manifest = create_backup(
             db_path=db_path,
             backup_dir=settings.BACKUP_DIR,
             origin=ORIGIN_SCHEDULED,
             retention=_retention_from_settings(settings),
+            protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
         )
     except MaintenanceBusyError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except BackupTargetsFailedError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     elapsed = time.perf_counter() - started
@@ -276,6 +463,8 @@ def cmd_restart(args: argparse.Namespace) -> int:
                 "backup_id": manifest.backup_id,
                 "valid": manifest.valid,
                 "backup_duration_seconds": round(elapsed, 3),
+                "storage_tier": manifest.storage_tier,
+                "storage_reason": manifest.storage_reason,
             },
             indent=2,
         )
@@ -393,6 +582,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_verify = sub.add_parser("verify", help="Re-verify a specific backup.")
     p_verify.add_argument("backup_id")
+    p_verify.add_argument(
+        "--storage-tier",
+        choices=[STORAGE_TIER_DEGRADED, STORAGE_TIER_PROTECTED],
+        default=STORAGE_TIER_DEGRADED,
+    )
     p_verify.set_defaults(func=cmd_verify)
 
     p_list = sub.add_parser("list", help="List valid restore points.")
@@ -403,6 +597,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Offline restore (steps 3-7) — run only while services are stopped.",
     )
     p_restore.add_argument("backup_id", nargs="?", default=None)
+    p_restore.add_argument(
+        "--storage-tier",
+        choices=[STORAGE_TIER_DEGRADED, STORAGE_TIER_PROTECTED],
+        default=STORAGE_TIER_DEGRADED,
+    )
     p_restore.add_argument("--finalize", choices=["completed", "failed"], default=None)
     p_restore.set_defaults(func=cmd_restore)
 

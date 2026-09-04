@@ -17,39 +17,43 @@ whose live systemd behavior still needs Linux verification.
   `OnCalendar`, deliberately local rather than UTC, matching D-011's
   "low-traffic window" being a wall-clock concept. `Persistent=true` so a
   missed firing (host was off) catches up once, rather than silently
-  skipping a day (edge case 5.11). **Its `OnCalendar=*-*-* 03:00:00` is
-  still a hardcoded literal, not read from `MAINTENANCE_HOUR_LOCAL`**
-  (`.env`) — a static systemd unit file can't read a live env value
-  without a templating/generator step, and building one is out of this
-  package's scope (`be_plan/18_PKG_scheduled_maintenance.md` only builds
-  the Windows equivalent, `scripts/register-maintenance-task.ps1`).
-  Edit the literal by hand if the deployment's restart hour differs from
-  3 AM. The _backup_ half is different: `app.main`'s in-app APScheduler
-  job reads `MAINTENANCE_HOUR_LOCAL` directly and is genuinely live on
-  both platforms, since it's plain Python running inside the backend
-  process rather than a static OS unit file.
+  skipping a day (edge case 5.11). The unit's calendar is a deployment
+  value and must be regenerated/edited when `MAINTENANCE_HOUR_LOCAL` differs
+  from 3 AM; the in-app backup job reads the `.env` setting directly.
 - `adas-restore-coordinator.service` — the independently supervised
   coordinator. It publishes a heartbeat, claims one durable restore request
   at a time, waits for its grace/expiry rules, and invokes only the fixed
   restore wrapper. It has no `PartOf=` relationship to the backend or AI
   units: an application outage must not take down the coordinator.
-- `backend/scripts/restore_requested.sh` — validates exactly one bare backup
-  identifier, stops the AI service before the backend, invokes the shared
-  offline restore core as `ADAS_SERVICE_USER`, restarts the exact service
-  pair, requires readiness and an AI heartbeat, and performs the emergency
-  rollback path on failure. It contains no `eval` or user-controlled command
-  execution.
+- `backend/scripts/restore_requested.sh` — validates one bare backup
+  identifier plus its `protected`/`degraded` storage tier, stops the AI
+  service before the backend, invokes the shared offline restore core as
+  `ADAS_SERVICE_USER`, restarts the exact service pair, requires readiness
+  and an AI heartbeat, and performs the local emergency rollback path on
+  failure. It contains no `eval` or user-controlled command execution.
 - `backend/scripts/daily_restart.sh` — its own backup phase calls
   `python -m app.maintenance backup --origin scheduled`, same as the
-  Windows `-Action Restart` backup phase. That command now skips writing
-  a redundant backup when the in-app cron job already covered today's
-  obligation (`scheduled_backup_is_due`, `18_PKG_scheduled_maintenance.md`
-  Step 1) — both platforms get this for free from the one shared command
-  they both call, with no dedup logic duplicated in either script.
+  Windows `-Action Restart` backup phase. That command prefers
+  `PROTECTED_BACKUP_DIR`, falls back to `BACKUP_DIR` with a visible degraded
+  reason, and skips a redundant backup when daily continuity is already
+  satisfied. A recent degraded backup does not mask protected overdue state
+  once the external device returns.
 - `adas-backend.service.example`, `adas-ai-engine.service.example` —
   illustrative application-service templates with ordering on the
   coordinator. The AI unit preserves its backend requirement; copy and adapt
   the user, paths, resource limits, and restart policy for the host.
+
+## Protected storage
+
+Set `PROTECTED_BACKUP_DIR` and `PROTECTED_ARCHIVE_DIR` in the deployment
+environment to absolute paths on the explicitly mounted backup device. Keep
+`BACKUP_DIR` as the local control/state root: it holds the restore request,
+coordinator heartbeat, lease, and local degraded fallback. The Python storage
+provider compares physical devices and rejects same-disk partitions, bind or
+folder mounts, missing/read-only/full media, and unverifiable targets. No
+removable-device discovery is performed. The restore wrapper receives the
+selected `protected` or `degraded` tier so media loss cannot change the
+restore point during a run.
 
 ## Install (sketch, not verified)
 
