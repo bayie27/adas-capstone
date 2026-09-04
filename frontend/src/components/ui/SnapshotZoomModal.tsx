@@ -51,25 +51,42 @@ export function SnapshotZoomModal({ isOpen, onClose, src, alt }: SnapshotZoomMod
         aria-modal="true"
         aria-label={alt}
         tabIndex={-1}
-        className="relative flex max-h-full max-w-full flex-col items-center gap-4 outline-none"
+        className="relative flex h-[80vh] w-[90vw] max-h-full max-w-full flex-col items-center gap-4 outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <TransformWrapper minScale={1} maxScale={6} centerOnInit doubleClick={{ mode: "toggle" }}>
           {({ zoomIn, zoomOut, resetTransform }) => (
             <>
+              {/* wrapperClass fills the flex-allocated box (flex-1 min-h-0) —
+                  that part alone isn't enough, though: react-zoom-pan-pinch's
+                  own stylesheet sets width/height on the content div at the
+                  same specificity as a Tailwind utility class, so h-full/
+                  w-full there loses the cascade tie and content silently
+                  falls back to the image's natural size. Inline styles beat
+                  that regardless of source order, so content and the img are
+                  sized that way instead — otherwise a wide/high-res photo
+                  renders taller than the wrapper actually is, and the library
+                  "centers" the overflow by panning, which crops both edges. */}
               <TransformComponent
-                wrapperClass="max-h-[80vh] max-w-[90vw]"
-                contentClass="max-h-[80vh] max-w-[90vw]"
+                wrapperClass="w-full min-h-0 flex-1"
+                contentStyle={{
+                  width: "100%",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
                 <img
                   src={src}
                   alt={alt}
                   draggable={false}
-                  className="max-h-[80vh] max-w-[90vw] select-none object-contain"
+                  className="select-none"
+                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
                 />
               </TransformComponent>
 
-              <div className="flex items-center gap-1 rounded-full border border-white/20 bg-black/80 p-1 shadow-2xl backdrop-blur-md">
+              <div className="flex shrink-0 items-center gap-1 rounded-full border border-white/20 bg-black/80 p-1 shadow-2xl backdrop-blur-md">
                 <button
                   type="button"
                   onClick={() => zoomOut()}
