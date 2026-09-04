@@ -44,7 +44,7 @@ UAT_CAMERA_NAMES: dict[int, str] = {
 UAT_OPERATOR_PASSWORD = "UATOperator2026!"
 UAT_ADMIN_PASSWORD = "UATAdmin2026!"
 UAT_TRAY_ALERT_LABEL = "uat_preexisting_misidentified_ongoing"
-UAT_RESTORE_ANCHOR_LABEL = "uat_restore_anchor_resolved"
+UAT_RESTORE_ANCHOR_LABEL = "uat_restore_anchor_cleared"
 
 # 10_PKG_migration_evidence.md Step 2 — NFR-08's 100,000-incident dataset.
 PERF_TARGET_INCIDENT_COUNT = 100_000
@@ -196,22 +196,22 @@ def build_demo_alert_specs(now: datetime) -> list[SeedAlertSpec]:
             verified_after_minutes=3,
         ),
         SeedAlertSpec(
-            label="ayala_resolved_evening",
+            label="ayala_cleared_evening",
             camera_key="ayala",
             detected_at=seeded_timestamp(now, days_ago=1, hour=19, minute=40),
             confidence_score=0.95,
-            detection_status=DetectionStatus.RESOLVED,
+            detection_status=DetectionStatus.CLEARED,
             verified_by_key="ealonzo",
             verified_after_minutes=4,
             closed_by_key="jtenorio",
             closed_after_minutes=28,
         ),
         SeedAlertSpec(
-            label="ayala_resolved_weekend",
+            label="ayala_cleared_weekend",
             camera_key="ayala",
             detected_at=seeded_timestamp(now, days_ago=7, hour=10, minute=30),
             confidence_score=0.89,
-            detection_status=DetectionStatus.RESOLVED,
+            detection_status=DetectionStatus.CLEARED,
             verified_by_key="smeer",
             verified_after_minutes=5,
             closed_by_key="ealonzo",
@@ -225,11 +225,11 @@ def build_demo_alert_specs(now: datetime) -> list[SeedAlertSpec]:
             detection_status=DetectionStatus.UNVERIFIED,
         ),
         SeedAlertSpec(
-            label="southbound_resolved_peak",
+            label="southbound_cleared_peak",
             camera_key="southbound",
             detected_at=seeded_timestamp(now, days_ago=0, hour=14, minute=5),
             confidence_score=0.88,
-            detection_status=DetectionStatus.RESOLVED,
+            detection_status=DetectionStatus.CLEARED,
             verified_by_key="ealonzo",
             verified_after_minutes=5,
             closed_by_key="ealonzo",
@@ -265,11 +265,11 @@ def build_demo_alert_specs(now: datetime) -> list[SeedAlertSpec]:
             verified_after_minutes=6,
         ),
         SeedAlertSpec(
-            label="inosluban_resolved_crossover",
+            label="inosluban_cleared_crossover",
             camera_key="inosluban",
             detected_at=seeded_timestamp(now, days_ago=4, hour=9, minute=10),
             confidence_score=0.86,
-            detection_status=DetectionStatus.RESOLVED,
+            detection_status=DetectionStatus.CLEARED,
             verified_by_key="dsahagun",
             verified_after_minutes=3,
             closed_by_key="jtenorio",
@@ -301,11 +301,11 @@ def build_demo_alert_specs(now: datetime) -> list[SeedAlertSpec]:
             verified_after_minutes=3,
         ),
         SeedAlertSpec(
-            label="tambo_resolved_longtail",
+            label="tambo_cleared_longtail",
             camera_key="tambo",
             detected_at=seeded_timestamp(now, days_ago=6, hour=20, minute=25),
             confidence_score=0.84,
-            detection_status=DetectionStatus.RESOLVED,
+            detection_status=DetectionStatus.CLEARED,
             verified_by_key="jtenorio",
             verified_after_minutes=5,
             closed_by_key="ealonzo",
@@ -330,11 +330,11 @@ def build_demo_alert_specs(now: datetime) -> list[SeedAlertSpec]:
             verified_after_minutes=4,
         ),
         SeedAlertSpec(
-            label="dagatan_resolved_night",
+            label="dagatan_cleared_night",
             camera_key="dagatan",
             detected_at=seeded_timestamp(now, days_ago=1, hour=22, minute=10),
             confidence_score=0.94,
-            detection_status=DetectionStatus.RESOLVED,
+            detection_status=DetectionStatus.CLEARED,
             verified_by_key="jtenorio",
             verified_after_minutes=3,
             closed_by_key="jtenorio",
@@ -366,7 +366,7 @@ def build_analytics_alert_specs(now: datetime) -> list[SeedAlertSpec]:
 
         specs.append(
             SeedAlertSpec(
-                label=f"analytics_ayala_resolved_day_{day + 1}",
+                label=f"analytics_ayala_cleared_day_{day + 1}",
                 camera_key="ayala",
                 detected_at=seeded_timestamp(
                     now,
@@ -375,7 +375,7 @@ def build_analytics_alert_specs(now: datetime) -> list[SeedAlertSpec]:
                     minute=10 + (day % 3) * 7,
                 ),
                 confidence_score=0.96 - (day % 5) * 0.02,
-                detection_status=DetectionStatus.RESOLVED,
+                detection_status=DetectionStatus.CLEARED,
                 verified_by_key=verifier,
                 verified_after_minutes=3 + (day % 3),
                 closed_by_key=closer,
@@ -422,7 +422,7 @@ def build_analytics_alert_specs(now: datetime) -> list[SeedAlertSpec]:
         if day % 3 == 0:
             specs.append(
                 SeedAlertSpec(
-                    label=f"analytics_dagatan_resolved_day_{day + 1}",
+                    label=f"analytics_dagatan_cleared_day_{day + 1}",
                     camera_key="dagatan",
                     detected_at=seeded_timestamp(
                         now,
@@ -431,7 +431,7 @@ def build_analytics_alert_specs(now: datetime) -> list[SeedAlertSpec]:
                         minute=40 + (day % 3) * 5,
                     ),
                     confidence_score=0.93 - (day % 4) * 0.01,
-                    detection_status=DetectionStatus.RESOLVED,
+                    detection_status=DetectionStatus.CLEARED,
                     verified_by_key=operator_keys[(day + 2) % len(operator_keys)],
                     verified_after_minutes=3,
                     closed_by_key=operator_keys[(day + 2) % len(operator_keys)],
@@ -486,22 +486,22 @@ def build_edge_alert_specs(now: datetime) -> list[SeedAlertSpec]:
             verified_after_minutes=2,
         ),
         SeedAlertSpec(
-            label="edge_southbound_resolved_same_user",
+            label="edge_southbound_cleared_same_user",
             camera_key="southbound",
             detected_at=seeded_timestamp(now, days_ago=1, hour=14, minute=15),
             confidence_score=0.91,
-            detection_status=DetectionStatus.RESOLVED,
+            detection_status=DetectionStatus.CLEARED,
             verified_by_key="smeer",
             verified_after_minutes=3,
             closed_by_key="smeer",
             closed_after_minutes=16,
         ),
         SeedAlertSpec(
-            label="edge_southbound_resolved_different_users",
+            label="edge_southbound_cleared_different_users",
             camera_key="southbound",
             detected_at=seeded_timestamp(now, days_ago=1, hour=15, minute=5),
             confidence_score=0.89,
-            detection_status=DetectionStatus.RESOLVED,
+            detection_status=DetectionStatus.CLEARED,
             verified_by_key="dsahagun",
             verified_after_minutes=4,
             closed_by_key="jtenorio",
@@ -519,11 +519,11 @@ def build_edge_alert_specs(now: datetime) -> list[SeedAlertSpec]:
             closed_after_minutes=12,
         ),
         SeedAlertSpec(
-            label="edge_inosluban_resolved_long_close",
+            label="edge_inosluban_cleared_long_close",
             camera_key="inosluban",
             detected_at=seeded_timestamp(now, days_ago=3, hour=19, minute=10),
             confidence_score=0.85,
-            detection_status=DetectionStatus.RESOLVED,
+            detection_status=DetectionStatus.CLEARED,
             verified_by_key="ealonzo",
             verified_after_minutes=5,
             closed_by_key="dsahagun",
@@ -751,12 +751,13 @@ def build_uat_alert_specs(now: datetime) -> list[SeedAlertSpec]:
     )
     specs: list[SeedAlertSpec] = []
 
-    # Two weeks of deterministic, filterable data gives Dashboard,
-    # Detections and AI Performance meaningful CSV/PDF exports in OP-J09.
+    # Two weeks of deterministic, filterable data gives Dashboard and
+    # Detections meaningful Operator exports, while the Administrator-only
+    # AI Performance CSV/PDF checks have the same stable history to inspect.
     for day in range(14):
         verifier = operator_keys[day % len(operator_keys)]
         closer = operator_keys[(day + 1) % len(operator_keys)]
-        status = DetectionStatus.RESOLVED if day % 3 != 1 else DetectionStatus.DISMISSED
+        status = DetectionStatus.CLEARED if day % 3 != 1 else DetectionStatus.DISMISSED
         specs.append(
             SeedAlertSpec(
                 label=f"uat_history_{day + 1:02d}",
@@ -769,11 +770,9 @@ def build_uat_alert_specs(now: datetime) -> list[SeedAlertSpec]:
                 ),
                 confidence_score=0.52 + (day % 6) * 0.07,
                 detection_status=status,
-                verified_by_key=verifier
-                if status is DetectionStatus.RESOLVED
-                else None,
+                verified_by_key=verifier if status is DetectionStatus.CLEARED else None,
                 verified_after_minutes=(
-                    2 + (day % 4) if status is DetectionStatus.RESOLVED else None
+                    2 + (day % 4) if status is DetectionStatus.CLEARED else None
                 ),
                 closed_by_key=closer,
                 closed_after_minutes=12 + (day % 5) * 5,
@@ -787,7 +786,7 @@ def build_uat_alert_specs(now: datetime) -> list[SeedAlertSpec]:
                 camera_key="uat_reference",
                 detected_at=seeded_timestamp(now, days_ago=21, hour=10, minute=15),
                 confidence_score=0.91,
-                detection_status=DetectionStatus.RESOLVED,
+                detection_status=DetectionStatus.CLEARED,
                 verified_by_key="uat_op01",
                 verified_after_minutes=3,
                 closed_by_key="uat_op02",
@@ -1095,7 +1094,7 @@ def build_edge_alert_specs_enriched(now: datetime) -> list[SeedAlertSpec]:
             camera_key="inosluban",
             detected_at=seeded_timestamp(now, days_ago=6, hour=16, minute=45),
             confidence_score=1.0,
-            detection_status=DetectionStatus.RESOLVED,
+            detection_status=DetectionStatus.CLEARED,
             verified_by_key="smeer",
             verified_after_minutes=1,
             closed_by_key="smeer",

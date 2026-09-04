@@ -128,7 +128,7 @@ class TestGetAlerts:
         second_log = make_alert(
             session,
             camera,
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             detected_at=datetime.now(UTC) + timedelta(minutes=1),
         )
 
@@ -144,20 +144,20 @@ class TestGetAlerts:
         _, headers = operator_with_headers(client, session)
         camera = make_camera(session, name="Status Cam", channel_id=1)
         make_alert(session, camera, status=DetectionStatus.UNVERIFIED)
-        resolved_log = make_alert(
+        cleared_log = make_alert(
             session,
             camera,
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             detected_at=datetime.now(UTC) + timedelta(minutes=1),
         )
 
-        resp = client.get("/api/alerts/?status=Resolved", headers=headers)
+        resp = client.get("/api/alerts/?status=Cleared", headers=headers)
 
         assert resp.status_code == 200
         body = resp.json()
         assert body["total_filtered"] == 1
-        assert body["logs"][0]["log_id"] == resolved_log.log_id
-        assert body["logs"][0]["detection_status"] == "Resolved"
+        assert body["logs"][0]["log_id"] == cleared_log.log_id
+        assert body["logs"][0]["detection_status"] == "Cleared"
 
     def test_filter_by_camera_id(self, client: TestClient, session: Session):
         _, headers = operator_with_headers(client, session)
@@ -232,9 +232,9 @@ class TestGetAlerts:
         # Only one open (Unverified/Ongoing) incident is allowed per camera
         # at a time (ux_detection_open_camera) — `middle` stays open, the
         # other two are terminal so all three can coexist on one camera.
-        make_alert(session, camera, status=DetectionStatus.RESOLVED, detected_at=early)
+        make_alert(session, camera, status=DetectionStatus.CLEARED, detected_at=early)
         target_log = make_alert(session, camera, detected_at=middle)
-        make_alert(session, camera, status=DetectionStatus.RESOLVED, detected_at=late)
+        make_alert(session, camera, status=DetectionStatus.CLEARED, detected_at=late)
 
         resp = client.get(
             "/api/alerts/?start_date=2026-01-02T00:00:00Z&end_date=2026-01-02T23:59:59Z",
@@ -255,7 +255,7 @@ class TestGetAlerts:
         oldest = make_alert(
             session,
             camera,
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             detected_at=datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
         )
         middle = make_alert(
@@ -266,7 +266,7 @@ class TestGetAlerts:
         newest = make_alert(
             session,
             camera,
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             detected_at=datetime(2026, 1, 3, 9, 0, tzinfo=UTC),
         )
 
@@ -298,13 +298,13 @@ class TestGetAlerts:
         camera = make_camera(session, name="Instant Window Cam", channel_id=3)
         target_at = datetime(2026, 1, 2, 9, 0, tzinfo=UTC)
         target = make_alert(
-            session, camera, status=DetectionStatus.RESOLVED, detected_at=target_at
+            session, camera, status=DetectionStatus.CLEARED, detected_at=target_at
         )
         other_camera = make_camera(session, name="Instant Window Cam 2", channel_id=4)
         make_alert(
             session,
             other_camera,
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             detected_at=target_at + timedelta(hours=1),
         )
 
@@ -353,7 +353,7 @@ class TestGetAlerts:
     ):
         _, headers = operator_with_headers(client, session)
         camera = make_camera(session, name="Beyond Offset Cam", channel_id=2)
-        make_alert(session, camera, status=DetectionStatus.RESOLVED)
+        make_alert(session, camera, status=DetectionStatus.CLEARED)
 
         resp = client.get("/api/alerts/?offset=50", headers=headers)
 
@@ -430,25 +430,25 @@ class TestExportAlerts:
         before = make_alert(
             session,
             camera,
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             detected_at=datetime(2026, 8, 29, 15, 59, 59, 999999, tzinfo=UTC),
         )
         at_start = make_alert(
             session,
             camera,
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             detected_at=datetime(2026, 8, 29, 16, 0, 0, tzinfo=UTC),
         )
         at_end = make_alert(
             session,
             camera,
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             detected_at=datetime(2026, 8, 30, 15, 59, 59, 999999, tzinfo=UTC),
         )
         after = make_alert(
             session,
             camera,
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             detected_at=datetime(2026, 8, 30, 16, 0, 0, tzinfo=UTC),
         )
         params = {
@@ -591,7 +591,7 @@ class TestExportAlerts:
         _, headers = operator_with_headers(client, session, username="csvempty")
 
         resp = client.get(
-            "/api/alerts/export?status=Resolved",
+            "/api/alerts/export?status=Cleared",
             headers=headers,
         )
 
@@ -636,7 +636,7 @@ class TestGetAlertDetails:
         log = make_alert(
             session,
             camera,
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             verified_by_id=operator.user_id,
             verified_at=datetime(2026, 7, 2, 8, 5, tzinfo=UTC),
             closed_by_id=operator.user_id,
@@ -801,10 +801,10 @@ class TestAlertTransitions:
         assert log.verified_by_id == verifier.user_id
         assert log.closed_by_id == corrector.user_id
 
-    def test_dismiss_rejects_resolved_alert(self, client: TestClient, session: Session):
+    def test_dismiss_rejects_cleared_alert(self, client: TestClient, session: Session):
         _, headers = operator_with_headers(client, session)
         camera = make_camera(session, name="Reject Dismiss Cam", channel_id=1)
-        log = make_alert(session, camera, status=DetectionStatus.RESOLVED)
+        log = make_alert(session, camera, status=DetectionStatus.CLEARED)
 
         resp = client.post(f"/api/alerts/{log.log_id}/dismiss", headers=headers)
 
@@ -820,9 +820,9 @@ class TestAlertTransitions:
 
         assert resp.status_code == 404
 
-    def test_resolve_ongoing_alert(self, client: TestClient, session: Session):
+    def test_clear_ongoing_alert(self, client: TestClient, session: Session):
         operator, headers = operator_with_headers(client, session)
-        camera = make_camera(session, name="Resolve Cam", channel_id=1)
+        camera = make_camera(session, name="Clear Cam", channel_id=1)
         log = make_alert(
             session,
             camera,
@@ -831,41 +831,63 @@ class TestAlertTransitions:
             verified_at=datetime.now(UTC),
         )
 
-        resp = client.post(f"/api/alerts/{log.log_id}/resolve", headers=headers)
+        resp = client.post(f"/api/alerts/{log.log_id}/clear", headers=headers)
 
         assert resp.status_code == 200
         body = resp.json()
-        assert body["detection_status"] == "Resolved"
+        assert body["detection_status"] == "Cleared"
         assert body["closed_by_id"] == operator.user_id
         assert body["closed_by_name"] == "Test Operator"
         assert body["closed_at"] is not None
         assert body["verified_by_id"] == operator.user_id
 
         session.refresh(log)
-        assert log.detection_status == DetectionStatus.RESOLVED
+        assert log.detection_status == DetectionStatus.CLEARED
         assert log.closed_by_id == operator.user_id
         assert log.closed_at is not None
 
-    def test_resolve_rejects_non_ongoing_alert(
+    def test_clear_rejects_non_ongoing_alert(
         self, client: TestClient, session: Session
     ):
         _, headers = operator_with_headers(client, session)
-        camera = make_camera(session, name="Reject Resolve Cam", channel_id=1)
+        camera = make_camera(session, name="Reject Clear Cam", channel_id=1)
         log = make_alert(session, camera, status=DetectionStatus.UNVERIFIED)
 
-        resp = client.post(f"/api/alerts/{log.log_id}/resolve", headers=headers)
+        resp = client.post(f"/api/alerts/{log.log_id}/clear", headers=headers)
 
         assert resp.status_code == 409
         assert resp.json()["code"] == "CONFLICT_STATE"
 
-    def test_resolve_missing_alert_returns_404(
+    def test_clear_missing_alert_returns_404(
         self, client: TestClient, session: Session
     ):
         _, headers = operator_with_headers(client, session)
 
-        resp = client.post("/api/alerts/99999/resolve", headers=headers)
+        resp = client.post("/api/alerts/99999/clear", headers=headers)
 
         assert resp.status_code == 404
+
+    def test_legacy_resolve_route_is_absent(self, client: TestClient, session: Session):
+        """P28 is a breaking route rename; the removed endpoint must not
+        silently remain reachable under its former path."""
+        _, headers = operator_with_headers(client, session)
+        camera = make_camera(session, name="Legacy Route Cam", channel_id=1)
+        log = make_alert(session, camera, status=DetectionStatus.ONGOING)
+
+        resp = client.post(f"/api/alerts/{log.log_id}/resolve", headers=headers)
+
+        assert resp.status_code == 404
+
+    def test_legacy_resolved_status_filter_is_rejected(
+        self, client: TestClient, session: Session
+    ):
+        """The status query is enum-validated, so the old value returns
+        validation failure instead of acting as a compatibility alias."""
+        _, headers = operator_with_headers(client, session)
+
+        resp = client.get("/api/alerts/?status=Resolved", headers=headers)
+
+        assert resp.status_code == 422
 
     def test_conflict_body_names_the_winner(self, client: TestClient, session: Session):
         """01_CONTRACTS.md §5.3 — the exact 409 shape the frontend's
@@ -897,13 +919,13 @@ class TestTransitionSideEffects:
     the four legal transitions, verified directly rather than inferred
     from a plausible-sounding assertion elsewhere: the audit_log row's
     `action` (previously only checked via the WS broadcast payload, and
-    only for resolve/correction), detected_at/created_at immutability, and
+    only for clear/correction), detected_at/created_at immutability, and
     snooze-field clearing."""
 
     _TRANSITIONS = [
         ("confirm", DetectionStatus.UNVERIFIED, "ALERT_CONFIRM"),
         ("dismiss", DetectionStatus.UNVERIFIED, "ALERT_DISMISS"),
-        ("resolve", DetectionStatus.ONGOING, "ALERT_RESOLVE"),
+        ("clear", DetectionStatus.ONGOING, "ALERT_CLEAR"),
         ("dismiss", DetectionStatus.ONGOING, "ALERT_CORRECTION"),
     ]
 
@@ -1024,7 +1046,7 @@ class TestStateMachineExhaustiveness:
     ROUTES = {
         "confirm": DetectionStatus.ONGOING,
         "dismiss": DetectionStatus.DISMISSED,
-        "resolve": DetectionStatus.RESOLVED,
+        "clear": DetectionStatus.CLEARED,
     }
 
     @pytest.mark.parametrize(
@@ -1032,12 +1054,12 @@ class TestStateMachineExhaustiveness:
         [
             ("confirm", DetectionStatus.ONGOING),
             ("confirm", DetectionStatus.DISMISSED),
-            ("confirm", DetectionStatus.RESOLVED),
+            ("confirm", DetectionStatus.CLEARED),
             ("dismiss", DetectionStatus.DISMISSED),
-            ("dismiss", DetectionStatus.RESOLVED),
-            ("resolve", DetectionStatus.UNVERIFIED),
-            ("resolve", DetectionStatus.DISMISSED),
-            ("resolve", DetectionStatus.RESOLVED),
+            ("dismiss", DetectionStatus.CLEARED),
+            ("clear", DetectionStatus.UNVERIFIED),
+            ("clear", DetectionStatus.DISMISSED),
+            ("clear", DetectionStatus.CLEARED),
         ],
     )
     def test_illegal_transition_rejected(
@@ -1091,7 +1113,7 @@ class TestStateMachineExhaustiveness:
                     assert path.rsplit("/", 1)[-1] in {
                         "confirm",
                         "dismiss",
-                        "resolve",
+                        "clear",
                         "snooze",
                     }, f"unexpected POST route {path} could reopen an incident"
 
@@ -1229,7 +1251,7 @@ class TestAlertCameraStatusSideEffects:
         assert camera.desired_state_reason == "disabled"
         assert [p["type"] for p in payloads] == ["ALERT_STATUS_UPDATE"]
 
-    def test_resolve_ongoing_reactivates_enabled_camera_and_broadcasts(
+    def test_clear_ongoing_reactivates_enabled_camera_and_broadcasts(
         self,
         client: TestClient,
         session: Session,
@@ -1238,11 +1260,11 @@ class TestAlertCameraStatusSideEffects:
         payloads = _capture_broadcasts(client, monkeypatch)
 
         operator, headers = operator_with_headers(
-            client, session, username="resolveactive"
+            client, session, username="clearactive"
         )
         camera = make_camera(
             session,
-            name="Resolve Status Cam",
+            name="Clear Status Cam",
             channel_id=105,
             desired_ai_state="Paused",
             desired_state_reason="incident",
@@ -1255,7 +1277,7 @@ class TestAlertCameraStatusSideEffects:
             verified_at=datetime.now(UTC),
         )
 
-        resp = client.post(f"/api/alerts/{log.log_id}/resolve", headers=headers)
+        resp = client.post(f"/api/alerts/{log.log_id}/clear", headers=headers)
 
         assert resp.status_code == 200
         session.refresh(camera)
@@ -1265,10 +1287,10 @@ class TestAlertCameraStatusSideEffects:
             "ALERT_STATUS_UPDATE",
         ]
         assert payloads[1]["data"]["log_id"] == log.log_id
-        assert payloads[1]["data"]["detection_status"] == DetectionStatus.RESOLVED.value
-        assert payloads[1]["data"]["action"] == "ALERT_RESOLVE"
+        assert payloads[1]["data"]["detection_status"] == DetectionStatus.CLEARED.value
+        assert payloads[1]["data"]["action"] == "ALERT_CLEAR"
 
-    def test_resolve_ongoing_does_not_reactivate_disabled_camera(
+    def test_clear_ongoing_does_not_reactivate_disabled_camera(
         self,
         client: TestClient,
         session: Session,
@@ -1277,11 +1299,11 @@ class TestAlertCameraStatusSideEffects:
         payloads = _capture_broadcasts(client, monkeypatch)
 
         operator, headers = operator_with_headers(
-            client, session, username="resolvedisabled"
+            client, session, username="cleardisabled"
         )
         camera = make_camera(
             session,
-            name="Disabled Resolve Cam",
+            name="Disabled Clear Cam",
             channel_id=106,
             is_enabled=False,
             desired_ai_state="Inactive",
@@ -1295,15 +1317,15 @@ class TestAlertCameraStatusSideEffects:
             verified_at=datetime.now(UTC),
         )
 
-        resp = client.post(f"/api/alerts/{log.log_id}/resolve", headers=headers)
+        resp = client.post(f"/api/alerts/{log.log_id}/clear", headers=headers)
 
         assert resp.status_code == 200
         session.refresh(camera)
         assert camera.desired_ai_state == "Inactive"
         assert [p["type"] for p in payloads] == ["ALERT_STATUS_UPDATE"]
         assert payloads[0]["data"]["log_id"] == log.log_id
-        assert payloads[0]["data"]["detection_status"] == DetectionStatus.RESOLVED.value
-        assert payloads[0]["data"]["action"] == "ALERT_RESOLVE"
+        assert payloads[0]["data"]["detection_status"] == DetectionStatus.CLEARED.value
+        assert payloads[0]["data"]["action"] == "ALERT_CLEAR"
 
 
 class TestSnooze:
@@ -1418,7 +1440,7 @@ class TestSnooze:
     ):
         _, headers = operator_with_headers(client, session)
         camera = make_camera(session, name="Precondition Cam", channel_id=1)
-        log = make_alert(session, camera, status=DetectionStatus.RESOLVED)
+        log = make_alert(session, camera, status=DetectionStatus.CLEARED)
 
         resp = client.post(f"/api/alerts/{log.log_id}/snooze", headers=headers)
 
@@ -1462,9 +1484,9 @@ class TestSnooze:
         assert [p["type"] for p in payloads] == ["SNOOZE_ACTIVATED"]
         assert payloads[0]["data"]["log_id"] == log.log_id
         # P21 Step 3 (breaking) — a formatted name, not the raw user id an
-        # Operator could never resolve (GET /api/users/ is admin-only). The
+        # Operator could never clear (GET /api/users/ is admin-only). The
         # broadcast happens after commit against log.snoozed_by, a lazy
-        # relationship (D-005) — this also proves that resolves without a
+        # relationship (D-005) — this also proves that clears without a
         # DetachedInstanceError, mirroring closed_by's post-commit call
         # site in alert_status_update_event.
         assert (
@@ -1529,14 +1551,12 @@ class TestConcurrency:
         session.refresh(log)
         assert log.detection_status == DetectionStatus.ONGOING.value
 
-    def test_two_resolves_race_exactly_one_wins(
+    def test_two_clears_race_exactly_one_wins(
         self, client: TestClient, session: Session
     ):
-        operator, headers_a = operator_with_headers(
-            client, session, username="resolve_a"
-        )
-        _, headers_b = operator_with_headers(client, session, username="resolve_b")
-        camera = make_camera(session, name="Resolve Race Cam", channel_id=1)
+        operator, headers_a = operator_with_headers(client, session, username="clear_a")
+        _, headers_b = operator_with_headers(client, session, username="clear_b")
+        camera = make_camera(session, name="Clear Race Cam", channel_id=1)
         log = make_alert(
             session,
             camera,
@@ -1545,8 +1565,8 @@ class TestConcurrency:
             verified_at=datetime.now(UTC),
         )
 
-        resp_a = client.post(f"/api/alerts/{log.log_id}/resolve", headers=headers_a)
-        resp_b = client.post(f"/api/alerts/{log.log_id}/resolve", headers=headers_b)
+        resp_a = client.post(f"/api/alerts/{log.log_id}/clear", headers=headers_a)
+        resp_b = client.post(f"/api/alerts/{log.log_id}/clear", headers=headers_b)
 
         assert {resp_a.status_code, resp_b.status_code} == {200, 409}
 

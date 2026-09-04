@@ -583,7 +583,7 @@ export default function Cameras() {
         error={deleteCameraMutation.error}
         errorMessage={
           getApiError(deleteCameraMutation.error)?.code === "PRECONDITION_FAILED"
-            ? "This camera has an open incident. Resolve or dismiss it under Detections first — deleting it now would strand the incident on a camera that no longer exists."
+            ? "This camera has an open incident. Clear or dismiss it under Detections first — deleting it now would strand the incident on a camera that no longer exists."
             : null
         }
         onClose={() => setModal({ kind: "closed" })}

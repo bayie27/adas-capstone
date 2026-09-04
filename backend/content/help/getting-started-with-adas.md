@@ -20,15 +20,16 @@ person-in-the-loop step is on purpose: the AI flags candidates, but only a logge
 user ever confirms that something is a real accident.
 
 The moment a camera reports a possible accident, that camera pauses its own detection
-until the alert is resolved. This keeps the system from raising a flood of duplicate
+until the alert is cleared. This keeps the system from raising a flood of duplicate
 alerts for the same event while someone is already looking at it.
 
 ## The two account types
 
-- **Operator**: the day-to-day monitoring role. Confirms or dismisses alerts, resolves
-  ongoing incidents, manages cameras, and checks system health and AI performance.
-- **Administrator**: everything an Operator can do, plus managing user accounts,
-  reading the audit trail, and backing up or restoring the system's database.
+- **Operator**: the day-to-day monitoring role. Confirms or dismisses alerts, clears
+  ongoing incidents, manages cameras, and checks system health.
+- **Administrator**: everything an Operator can do, plus reviewing AI performance,
+  managing user accounts, reading the audit trail, and backing up or restoring the
+  system's database.
 
 Your account type is assigned when it's created and shown in the sidebar under your
 name. If something in this Help Center is missing from your view, it's most likely
@@ -45,8 +46,9 @@ Trail?](faq-who-can-see-the-audit-trail) for an example.
   search and filters. See [Viewing and Filtering Incidents](viewing-and-filtering-incidents).
 - **System Health**: server and hardware diagnostics. See [Monitoring System
   Health](monitoring-system-health).
-- **AI Performance**: how accurate the detection model has been. See [Understanding AI
-  Performance Metrics](understanding-ai-performance-metrics).
+- **AI Performance**: an Administrator-only view of detection-model accuracy and
+  per-camera performance. Operators can use the Dashboard and Detections pages for
+  their day-to-day monitoring.
 - **Profile**: your own name, username, password, and alarm sound preferences. See
   [Updating Your Profile and Password](updating-your-profile-and-password).
 - **Users, Audit Log, Maintenance**: Administrator-only areas for managing accounts,

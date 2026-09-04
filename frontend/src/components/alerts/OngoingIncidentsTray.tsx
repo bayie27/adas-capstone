@@ -5,7 +5,7 @@ import { RiArrowRightSLine, RiCameraLine, RiCheckLine, RiTimeLine } from "@remix
 import {
   dismissAlert,
   getIncidentConflict,
-  resolveAlert,
+  clearAlert,
   type AlertLog,
   type IncidentHandledInfo,
 } from "@/api/alerts"
@@ -113,7 +113,7 @@ function OngoingIncidentCard({
           )}
         </div>
         <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={onOpenDetails}>
-          <span>Review &amp; Resolve</span>
+          <span>Review Incident</span>
           <RiArrowRightSLine size={14} />
         </Button>
       </div>
@@ -140,7 +140,7 @@ export function OngoingIncidentsTray() {
 
   const [isOpen, setIsOpen] = useState(false)
   const [activeDetailAlert, setActiveDetailAlert] = useState<AlertLog | null>(null)
-  const [isResolving, setIsResolving] = useState(false)
+  const [isClearing, setIsClearing] = useState(false)
   const [isDismissing, setIsDismissing] = useState(false)
   const [conflictNotice, setConflictNotice] = useState<IncidentHandledInfo | null>(null)
 
@@ -166,7 +166,7 @@ export function OngoingIncidentsTray() {
     setThumbHover(null)
     setActiveDetailAlert(alert)
     // Filter out stale "Now Ongoing" notices from when the incident was initially
-    // confirmed. Only show if another operator resolved or dismissed it.
+    // confirmed. Only show if another operator cleared or dismissed it.
     const notice = handledByOther[alert.log_id]
     setConflictNotice(notice && notice.currentStatus !== "Ongoing" ? notice : null)
   }
@@ -181,25 +181,25 @@ export function OngoingIncidentsTray() {
     void queryClient.invalidateQueries({ queryKey: ["dashboard-analytics"] })
   }
 
-  async function handleResolve(logId: number) {
-    setIsResolving(true)
+  async function handleClear(logId: number) {
+    setIsClearing(true)
     setConflictNotice(null)
     try {
-      await resolveAlert(logId)
+      await clearAlert(logId)
       removeAlert(logId)
       handleCloseDetails()
       invalidateQueries()
-      toast.success("Incident resolved successfully.")
+      toast.success("Incident cleared successfully.")
     } catch (err) {
       const conflict = getIncidentConflict(err)
       if (conflict) {
         setConflictNotice(conflict)
         removeAlert(logId)
       } else {
-        toast.error("Failed to resolve incident.")
+        toast.error("Failed to clear incident.")
       }
     } finally {
-      setIsResolving(false)
+      setIsClearing(false)
     }
   }
 
@@ -317,17 +317,17 @@ export function OngoingIncidentsTray() {
         </div>
       ) : null}
 
-      {/* ── Reused IncidentDetailModal for Full Telemetry & Resolve ─────── */}
+      {/* ── Reused IncidentDetailModal for Full Telemetry & Clear ─────── */}
       {selectedAlert ? (
         <IncidentDetailModal
           isOpen={Boolean(selectedAlert)}
           alert={selectedAlert}
           onClose={handleCloseDetails}
-          isTransitionPending={isResolving || isDismissing}
-          isResolving={isResolving}
+          isTransitionPending={isClearing || isDismissing}
+          isClearing={isClearing}
           isDismissing={isDismissing}
           isConfirming={false}
-          onResolve={handleResolve}
+          onClear={handleClear}
           onDismiss={handleDismiss}
           onConfirm={() => {}}
           notice={

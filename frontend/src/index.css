@@ -42,7 +42,7 @@
   --color-fg-on-primary: #18181b; /* Dark/primary-foreground — text on a light fill */
 
   /* --- Semantic (§2.2) -------------------------------------------------- */
-  --color-success: #48bb78; /* Connected, Active, Resolved, positive delta */
+  --color-success: #48bb78; /* Connected, Active, Cleared, positive delta */
   --color-warning: #ecc94b; /* Reconnecting, Paused, Ongoing */
   --color-danger: #f56565; /* Disconnected, Inactive, destructive, ACCIDENT DETECTED */
 

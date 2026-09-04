@@ -18,15 +18,14 @@ accident: a false trigger, an empty road, a shadow the model misread, glare, or 
 vehicle that merely slowed down rather than collided. This is the everyday, expected
 outcome for a share of alerts: the AI is deliberately tuned to flag anything that might
 be an accident rather than only the ones it's certain about, so seeing false positives
-in your queue is normal, not a sign something is broken. See [Understanding AI
-Performance Metrics](understanding-ai-performance-metrics) for how that trade-off is
-measured.
+in your queue is normal, not a sign something is broken. Administrators can review how
+that trade-off appears in the AI Performance metrics.
 
 ## What happens after you dismiss
 
 - The alert moves to **Dismissed**, a final state. It cannot be reopened, edited, or
-  restored. See [Can I Undo a Confirmed or Resolved
-  Incident?](faq-can-i-undo-a-confirmed-or-resolved-incident).
+  restored. See [Can I Undo a Confirmed or Cleared
+  Incident?](faq-can-i-undo-a-confirmed-or-cleared-incident).
 - You are recorded as the operator who closed it.
 - The camera stays paused for a short cooldown period (about 60 seconds) before AI
   detection resumes automatically on that camera. You don't need to do anything to

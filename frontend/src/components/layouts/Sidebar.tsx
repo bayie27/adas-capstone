@@ -77,11 +77,9 @@ export function Sidebar() {
   const basePath = role === "Admin" ? "/admin" : "/user"
 
   /**
-   * Design gate D-1, settled: `Administration` is three flat nav items —
-   * Users, Audit Log, Maintenance — with the same treatment as every other
-   * row, no sub-group and no fourth eyebrow. The last two ship with their
-   * screens in Phases 16 and 18; adding them is one entry each rather than a
-   * sidebar rebuild, which is what the gate existed to prevent.
+   * Administration is a flat role-specific group. AI Performance is
+   * deliberately last, after Maintenance, because it is an Administrator-
+   * only surface even though its data is analytical rather than operational.
    */
   const navGroups: Array<{ title: string; links: NavLinkItem[] }> = [
     {
@@ -94,10 +92,7 @@ export function Sidebar() {
     },
     {
       title: "MONITORING",
-      links: [
-        { name: "System Health", to: `${basePath}/health`, icon: RiPulseLine },
-        { name: "AI Performance", to: `${basePath}/ai`, icon: RiRobot2Line },
-      ],
+      links: [{ name: "System Health", to: `${basePath}/health`, icon: RiPulseLine }],
     },
     {
       title: "ADMINISTRATION",
@@ -107,6 +102,7 @@ export function Sidebar() {
               { name: "Users", to: "/admin/users", icon: RiGroupLine },
               { name: "Audit Log", to: "/admin/audit", icon: RiFileHistoryLine },
               { name: "Maintenance", to: "/admin/maintenance", icon: RiWrenchLine },
+              { name: "AI Performance", to: "/admin/ai", icon: RiRobot2Line },
             ]
           : [],
     },

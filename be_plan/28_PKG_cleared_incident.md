@@ -107,3 +107,30 @@ these Sheet writes before the separate tracker approval.
 - AI-engine changes; the engine consumes desired camera state, not incident status.
 - Editing historical UAT evidence prose as though it were newly executed.
 
+## Completion notes
+
+Completed 2026-09-03 in the P28 worktree.
+
+- Replaced the active incident vocabulary end to end: `Resolved`/`RESOLVED`, `/resolve`,
+  `ALERT_RESOLVE`, and `total_resolved*` are removed from the active backend and frontend
+  contracts. The new route is `/api/alerts/{log_id}/clear`; the terminal status is `Cleared`,
+  the audit action is `ALERT_CLEAR`, and the dashboard fields are `total_cleared*`.
+- Added Alembic revision `c28d3f1a9e7b`, upgrading from `b0a3652a3d4d`. It rewrites only the
+  authorized persisted status/action values, preserves history/indexes/row counts, temporarily
+  removes and restores the audit append-only triggers, and is covered by preservation, trigger,
+  index, and injected-failure rollback tests.
+- Renamed the two help articles and slugs, updated internal links, and added seed replacement,
+  idempotency, and link-integrity coverage. The Ongoing modal keeps one immediate button whose
+  visible text is exactly `Cleared`; the tray CTA is exactly `Review Incident`; no confirmation
+  UI or AI-engine code was added.
+- Verification passed: `uv run pytest -n auto` (1,088 passed, 8 skipped),
+  `pnpm --filter frontend test:run` (275 passed), `uv run ruff format --check .`,
+  `uv run ruff check .`, migration schema verification, and `pnpm full:check` with UTF-8
+  Python console settings for the Windows E2E server (including the 1 Chromium test).
+- Added local paper-sync finding `PS-20260903-CLEARED-INCIDENT-TERMINOLOGY` and regenerated
+  `paper_sync/TRACKER.md` (17 findings, 13 unsynced). The Defense paper, `ADAS_Paper_Audit`,
+  audit tracker, and ADAS Test Execution Tracker were read for evidence only; no Drive or live
+  Sheet writes were approved, attempted, or performed. The finding contains the exact pending
+  replacement/redraw blocks and the separate six-range Test Execution Tracker approval manifest.
+- No compatibility aliases, historical migration edits, AI-engine edits, push, or live evidence
+  relabeling were performed.

@@ -31,7 +31,7 @@ import {
   getAlertDetails,
   getAlerts,
   getIncidentConflict,
-  resolveAlert,
+  clearAlert,
   snoozeAlert,
 } from "@/api/alerts"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
@@ -74,7 +74,7 @@ const STATUS_OPTIONS = [
   { value: "", label: "All statuses" },
   { value: "Unverified", label: "Unverified" },
   { value: "Ongoing", label: "Ongoing" },
-  { value: "Resolved", label: "Resolved" },
+  { value: "Cleared", label: "Cleared" },
   { value: "Dismissed", label: "Dismissed" },
 ]
 
@@ -227,12 +227,12 @@ export default function Detections() {
     },
   })
 
-  const resolveMutation = useMutation({
-    mutationFn: resolveAlert,
-    onSuccess: (alert) => handleMutationSuccess(alert, "resolved"),
+  const clearMutation = useMutation({
+    mutationFn: clearAlert,
+    onSuccess: (alert) => handleMutationSuccess(alert, "cleared"),
     onError: (err) => {
       if (!getIncidentConflict(err)) {
-        toast.error(getApiErrorMessage(err, "Failed to resolve incident."))
+        toast.error(getApiErrorMessage(err, "Failed to clear incident."))
       }
     },
   })
@@ -342,11 +342,11 @@ export default function Detections() {
   const isTransitionPending =
     confirmMutation.isPending ||
     dismissMutation.isPending ||
-    resolveMutation.isPending ||
+    clearMutation.isPending ||
     snoozeMutation.isPending
 
   const transitionFailure =
-    confirmMutation.error ?? dismissMutation.error ?? resolveMutation.error ?? snoozeMutation.error
+    confirmMutation.error ?? dismissMutation.error ?? clearMutation.error ?? snoozeMutation.error
 
   // A lost race is not a failure to report as one — it is news about what a
   // colleague did. It gets the named notice; everything else gets a banner.
@@ -365,7 +365,7 @@ export default function Detections() {
     setSelectedAlertPreview(null)
     confirmMutation.reset()
     dismissMutation.reset()
-    resolveMutation.reset()
+    clearMutation.reset()
     snoozeMutation.reset()
   }
 
@@ -374,7 +374,7 @@ export default function Detections() {
     setSelectedAlertId(alert.log_id)
     confirmMutation.reset()
     dismissMutation.reset()
-    resolveMutation.reset()
+    clearMutation.reset()
     snoozeMutation.reset()
   }
 
@@ -384,11 +384,11 @@ export default function Detections() {
     const info = handledByOther[selectedAlertId]
     if (!info) return null
 
-    // 1. Closed incidents (Resolved or Dismissed) are historical records with no actions;
+    // 1. Closed incidents (Cleared or Dismissed) are historical records with no actions;
     // never show a transition banner on a terminal incident.
     const isTerminal =
       selectedAlert?.detection_status === "Dismissed" ||
-      selectedAlert?.detection_status === "Resolved"
+      selectedAlert?.detection_status === "Cleared"
     if (isTerminal) return null
 
     // 2. If the modal's status already matches the broadcast status (e.g. an already Ongoing
@@ -631,10 +631,10 @@ export default function Detections() {
         isTransitionPending={isTransitionPending}
         isDismissing={dismissMutation.isPending}
         isConfirming={confirmMutation.isPending}
-        isResolving={resolveMutation.isPending}
+        isClearing={clearMutation.isPending}
         onDismiss={(logId) => dismissMutation.mutate(logId)}
         onConfirm={(logId) => confirmMutation.mutate(logId)}
-        onResolve={(logId) => resolveMutation.mutate(logId)}
+        onClear={(logId) => clearMutation.mutate(logId)}
         snoozeAction={
           selectedAlert ? (
             <Button

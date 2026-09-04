@@ -6,7 +6,7 @@ import { cn } from "@/utils/cn"
  * The `Badge Primary` component from the Figma frames, in the three shapes
  * the screens actually draw:
  *
- * - `solid`   the status badge on the accident modals (ONGOING / RESOLVED),
+ * - `solid`   the status badge on the accident modals (ONGOING / CLEARED),
  *             a filled pill with --color-fg-on-primary text.
  * - `subtle`  the tinted pill: the Online/Offline status dot on System Health
  *             and the delta indicators on the KPI cards, using the
@@ -66,7 +66,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-caption font-medium",
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-caption font-medium",
         uppercase && "uppercase tracking-[0.08em]",
         VARIANTS[variant][tone],
         className,

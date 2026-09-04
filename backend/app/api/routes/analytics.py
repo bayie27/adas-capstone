@@ -9,7 +9,7 @@ Two UI modules, four endpoints:
   GET  /api/analytics/export/performance   — CSV/PDF export
 
 Accident definition (from the paper, FR-09 / Use Case 8):
-  "Accidents" = Ongoing + Resolved  (operator-verified true positives)
+  "Accidents" = Ongoing + Cleared  (operator-verified true positives)
   "Dismissed" = Dismissed           (operator-verified false positives)
   "Unverified" is excluded from all analytics — it has not yet been acted on.
 
@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, func, select
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_admin, get_current_user
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
 from app.models import AuditResult, Camera, DetectionLog, DetectionStatus, User
@@ -52,7 +52,7 @@ router = APIRouter(
 # Module-level constants
 # ---------------------------------------------------------------------------
 
-_ACCIDENT_STATUSES = (DetectionStatus.ONGOING, DetectionStatus.RESOLVED)
+_ACCIDENT_STATUSES = (DetectionStatus.ONGOING, DetectionStatus.CLEARED)
 _DISMISSED_STATUSES = (DetectionStatus.DISMISSED,)
 
 
@@ -113,11 +113,11 @@ def _compute_dashboard_kpi_counts(
     }
 
     ongoing_count = status_counts.get(DetectionStatus.ONGOING.value, 0)
-    resolved_count = status_counts.get(DetectionStatus.RESOLVED.value, 0)
+    cleared_count = status_counts.get(DetectionStatus.CLEARED.value, 0)
     return {
         "ongoing": ongoing_count,
-        "total_accidents": ongoing_count + resolved_count,
-        "total_resolved": resolved_count,
+        "total_accidents": ongoing_count + cleared_count,
+        "total_cleared": cleared_count,
     }
 
 
@@ -168,7 +168,7 @@ def _compute_dashboard_data(
 
     previous_window = _previous_window(start_date, end_date)
     if previous_window is None:
-        ongoing_delta_pct = total_accidents_delta_pct = total_resolved_delta_pct = None
+        ongoing_delta_pct = total_accidents_delta_pct = total_cleared_delta_pct = None
     else:
         previous_start, previous_end = previous_window
         previous = _compute_dashboard_kpi_counts(
@@ -181,8 +181,8 @@ def _compute_dashboard_data(
         total_accidents_delta_pct = _delta_pct(
             current["total_accidents"], previous["total_accidents"]
         )
-        total_resolved_delta_pct = _delta_pct(
-            current["total_resolved"], previous["total_resolved"]
+        total_cleared_delta_pct = _delta_pct(
+            current["total_cleared"], previous["total_cleared"]
         )
 
     # --- Accident frequency by location -----------------------------------
@@ -250,7 +250,7 @@ def _compute_dashboard_data(
             **current,
             "ongoing_delta_pct": ongoing_delta_pct,
             "total_accidents_delta_pct": total_accidents_delta_pct,
-            "total_resolved_delta_pct": total_resolved_delta_pct,
+            "total_cleared_delta_pct": total_cleared_delta_pct,
         },
         "frequency_by_location": frequency_by_location,
         "peak_accident_times": peak_accident_times,
@@ -279,10 +279,10 @@ def get_dashboard_analytics(
     Returns three sections in a single round-trip to avoid waterfall fetches
     from the frontend:
 
-    **kpis** — Ongoing count, Total Accidents (Ongoing + Resolved), Total Resolved.
+    **kpis** — Ongoing count, Total Accidents (Ongoing + Cleared), Total Cleared.
 
     **frequency_by_location** — Accident count per camera name, sorted descending.
-    Only confirmed accidents (Ongoing + Resolved) are counted.
+    Only confirmed accidents (Ongoing + Cleared) are counted.
 
     **peak_accident_times** — Hour-of-day distribution (0-23) of confirmed accidents.
     Always returns all 24 buckets so the frontend chart never needs gap-filling.
@@ -351,7 +351,7 @@ def export_dashboard(
     """
     Export the dashboard's supporting data as CSV or PDF (`?format=csv|pdf`).
 
-    The CSV is the underlying confirmed-accident (Ongoing + Resolved) log
+    The CSV is the underlying confirmed-accident (Ongoing + Cleared) log
     rows behind the dashboard — matching the active date/camera filters —
     so an analyst can drill from the KPI cards into the records that back
     them. The PDF instead renders the KPI/frequency/peak-times summary
@@ -373,7 +373,7 @@ def export_dashboard(
         "camera_id": list(camera_id or ()),
     }
     source_ip = _client_ip(request)
-    # Resolved once and threaded through both the audit row (Step 5) and
+    # Camera names are resolved once and threaded through both the audit row (Step 5) and
     # the PDF filter-summary header (Step 6) so a camera-filtered export
     # issues exactly one resolve_camera_names query, not two.
     camera_names = resolve_camera_names(session, camera_id or ())
@@ -699,6 +699,7 @@ def get_ai_performance(
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
+    _current_admin: User = Depends(get_current_admin),
 ):
     """
     AI Performance module (FR-14).
@@ -713,7 +714,8 @@ def get_ai_performance(
     pages don't shuffle between requests. `total_filtered` is the full
     filtered count, not `len(per_camera)`. Optionally filtered by camera
     name via `?search=`. Only cameras that have at least one detection in
-    the filtered window appear in the table.
+    the filtered window appear in the table. This administrator-only view is
+    deliberately separate from the operator-facing Dashboard analytics.
 
     **CHANGED (P19 §4, breaking):** previously returned every matching
     camera in one array with no `limit`/`offset`. `GET
@@ -753,12 +755,12 @@ def export_performance(
     search: str | None = Query(default=None, min_length=1, max_length=100),
     format: str = Query(default="csv", pattern="^(csv|pdf)$"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin),
 ):
     """
     Export the per-camera AI performance breakdown as CSV or PDF.
     Applies the same filters as GET /api/analytics/performance so the
-    export always matches exactly what the operator sees on screen.
+    export always matches exactly what the administrator sees on screen.
     """
     validate_common_filters(
         start_date=start_date,
@@ -772,7 +774,7 @@ def export_performance(
         "search": search,
     }
     source_ip = _client_ip(request)
-    # Resolved once and threaded through both the audit row (Step 5) and
+    # Camera names are resolved once and threaded through both the audit row (Step 5) and
     # the PDF filter-summary header (Step 6) so a camera-filtered export
     # issues exactly one resolve_camera_names query, not two.
     camera_names = resolve_camera_names(session, camera_id or ())

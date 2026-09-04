@@ -215,6 +215,114 @@ class TestAuditReportJobIsAdminOnly:
         assert resp.status_code == 202, resp.text
 
 
+class TestPerformanceReportJobIsAdminOnly:
+    """P29 — performance jobs are protected at every async-job seam,
+    including rows created before the authorization boundary changed."""
+
+    def test_operator_cannot_create_a_performance_job(
+        self, client: TestClient, session: Session
+    ):
+        operator = make_operator(session, username="perfjobop")
+        headers = auth_headers(client, "perfjobop", "Operator123")
+
+        resp = client.post(
+            "/api/exports/jobs",
+            json={"report_type": "performance", "format": "csv"},
+            headers=headers,
+        )
+
+        assert resp.status_code == 403
+        assert resp.json()["code"] == "FORBIDDEN"
+        assert (
+            session.exec(
+                select(ExportJob).where(ExportJob.requested_by_id == operator.user_id)
+            ).all()
+            == []
+        )
+
+    def _seed_legacy_job(
+        self,
+        session: Session,
+        *,
+        requested_by_id: int,
+        artifact_path: str | None = None,
+    ) -> ExportJob:
+        job = ExportJob(
+            job_id=str(uuid.uuid4()),
+            requested_by_id=requested_by_id,
+            report_type="performance",
+            format="csv",
+            status="completed",
+            progress_current=1,
+            progress_total=1,
+            artifact_path=artifact_path,
+            artifact_bytes=1 if artifact_path else None,
+            completed_at=datetime.now(UTC),
+        )
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        return job
+
+    def test_operator_cannot_list_a_legacy_performance_job(
+        self, client: TestClient, session: Session
+    ):
+        operator = make_operator(session, username="legacylistop")
+        headers = auth_headers(client, "legacylistop", "Operator123")
+        legacy = self._seed_legacy_job(session, requested_by_id=operator.user_id)
+
+        resp = client.get("/api/exports/jobs", headers=headers)
+
+        assert resp.status_code == 200
+        assert resp.json() == {"total_filtered": 0, "items": []}
+        assert legacy.job_id not in resp.text
+
+    def test_operator_cannot_poll_or_download_a_legacy_performance_job(
+        self, client: TestClient, session: Session, tmp_path
+    ):
+        operator = make_operator(session, username="legacyaccessop")
+        headers = auth_headers(client, "legacyaccessop", "Operator123")
+        artifact = tmp_path / "legacy-performance.csv"
+        artifact.write_text("Camera ID,Camera Name\n", encoding="utf-8")
+        legacy = self._seed_legacy_job(
+            session, requested_by_id=operator.user_id, artifact_path=str(artifact)
+        )
+
+        status_resp = client.get(f"/api/exports/jobs/{legacy.job_id}", headers=headers)
+        download_resp = client.get(
+            f"/api/exports/jobs/{legacy.job_id}/download", headers=headers
+        )
+
+        assert status_resp.status_code == 403
+        assert status_resp.json()["code"] == "FORBIDDEN"
+        assert download_resp.status_code == 403
+        assert download_resp.json()["code"] == "FORBIDDEN"
+
+    def test_admin_retains_access_to_a_legacy_performance_job(
+        self, client: TestClient, session: Session, tmp_path
+    ):
+        operator = make_operator(session, username="legacyadminowner")
+        artifact = tmp_path / "legacy-performance.csv"
+        artifact.write_text("Camera ID,Camera Name\n", encoding="utf-8")
+        legacy = self._seed_legacy_job(
+            session, requested_by_id=operator.user_id, artifact_path=str(artifact)
+        )
+        make_admin(session)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        status_resp = client.get(f"/api/exports/jobs/{legacy.job_id}", headers=headers)
+        download_resp = client.get(
+            f"/api/exports/jobs/{legacy.job_id}/download", headers=headers
+        )
+        list_resp = client.get("/api/exports/jobs?all_users=true", headers=headers)
+
+        assert status_resp.status_code == 200
+        assert status_resp.json()["report_type"] == "performance"
+        assert download_resp.status_code == 200
+        assert download_resp.text.startswith("Camera ID")
+        assert legacy.job_id in {item["job_id"] for item in list_resp.json()["items"]}
+
+
 class TestListExportJobs:
     """P21 Step 4 — 01_CONTRACTS.md §5.10, own jobs by default for every
     role, admin-only widening, expired included, F29 pagination boundaries."""
@@ -585,7 +693,7 @@ class TestArtifactExpiry:
         _make_log(
             session,
             camera,
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             snapshot_key="keep_me.jpg",
         )
 
@@ -948,7 +1056,7 @@ class TestRetraining:
         camera = make_camera(session, name="Retrain Cam", channel_id=6)
 
         true_positive = _make_log(
-            session, camera, status=DetectionStatus.RESOLVED, snapshot_key="present.jpg"
+            session, camera, status=DetectionStatus.CLEARED, snapshot_key="present.jpg"
         )
         false_positive = _make_log(
             session,

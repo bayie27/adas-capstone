@@ -18,7 +18,7 @@ export const AUDIT_ACTIONS = [
   "LOGOUT",
   "ALERT_CONFIRM",
   "ALERT_DISMISS",
-  "ALERT_RESOLVE",
+  "ALERT_CLEAR",
   "ALERT_CORRECTION",
   "ALERT_SNOOZE",
   "CAMERA_CREATE",
@@ -100,6 +100,16 @@ export interface AuditLogEntry {
   request_id: string | null
   source_ip: string | null
   created_at: string
+  /**
+   * Viewer-only annotations computed per request by the list route
+   * (`_annotate_groups`, `routes/audit.py`) — never stored, and absent from
+   * `GET /export`, which stays fully granular. `group_size` is the number
+   * of consecutive same-actor/action/target/result rows chained together
+   * (each within 2 minutes of the last); `is_group_head` marks the first
+   * row of that run, the one the list renders as the collapsed summary.
+   */
+  group_size: number
+  is_group_head: boolean
 }
 
 export interface AuditLogListResponse {

@@ -78,6 +78,10 @@ function App() {
               <Route path="/login" element={<Login />} />
             </Route>
             <Route path="/" element={<Navigate to="/login" replace />} />
+            {/* AI Performance is an Administrator-only surface. Keep a
+                deterministic redirect for stale Operator bookmarks instead
+                of allowing the old /user/ai path to mount the page. */}
+            <Route path="/user/ai" element={<Navigate to="/user" replace />} />
 
             <Route
               path="/admin"
@@ -111,7 +115,6 @@ function App() {
               <Route path="cameras" element={<Cameras />} />
               <Route path="detections" element={<Detections />} />
               <Route path="health" element={<SystemHealth />} />
-              <Route path="ai" element={<AiPerformance />} />
               <Route path="profile" element={<ProfileSettings />} />
               <Route path="help" element={<HelpCenterRoute />} />
             </Route>

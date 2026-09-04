@@ -344,7 +344,7 @@ def export_alerts(
     filters_dict = _filters_as_dict(filters)
     sort_dict = {"sort_by": sort_by, "sort_order": sort_order}
     source_ip = _client_ip(request)
-    # Resolved once and threaded through both the audit row (Step 5) and
+    # Camera names are resolved once and threaded through both the audit row (Step 5) and
     # the PDF filter-summary header (Step 6) so a camera-filtered export
     # issues exactly one resolve_camera_names query, not two.
     camera_names = resolve_camera_names(session, filters.camera_ids)
@@ -608,8 +608,8 @@ def dismiss_alert(
     return _to_detection_log_read(log)
 
 
-@router.post("/{log_id}/resolve", response_model=DetectionLogRead)
-def resolve_alert(
+@router.post("/{log_id}/clear", response_model=DetectionLogRead)
+def clear_alert(
     log_id: int,
     request: Request,
     session: Session = Depends(get_session),
@@ -624,7 +624,7 @@ def resolve_alert(
             session,
             log_id=log_id,
             expected=DetectionStatus.ONGOING,
-            new=DetectionStatus.RESOLVED,
+            new=DetectionStatus.CLEARED,
             actor=current_user,
             now=now,
         )

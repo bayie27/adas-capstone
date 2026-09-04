@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -82,6 +82,19 @@ describe("Sidebar", () => {
     expect(screen.getByText("Detections")).toBeInTheDocument()
     expect(screen.queryByText("Users")).not.toBeInTheDocument()
     expect(screen.queryByText("Audit Log")).not.toBeInTheDocument()
+    expect(screen.queryByText("AI Performance")).not.toBeInTheDocument()
+  })
+
+  it("places AI Performance last in the Administrator group", () => {
+    render(renderWithProviders(<Sidebar />))
+
+    const administration = screen.getByRole("heading", { name: "ADMINISTRATION" }).parentElement
+    expect(administration).not.toBeNull()
+    expect(
+      within(administration!)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["Users", "Audit Log", "Maintenance", "AI Performance"])
   })
 
   it("displays clock skew warning when clockOffsetMs exceeds threshold", () => {

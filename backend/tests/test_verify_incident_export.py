@@ -40,7 +40,7 @@ def export_row(
         detected_at,
         "1",
         "North Gate",
-        "Resolved",
+        "Cleared",
         "0.9500",
         f"/api/alerts/{log_id}/snapshot",
         "N/A",

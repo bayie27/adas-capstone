@@ -53,7 +53,7 @@ function incidentToAlertLog(payload: IncidentPayload): AlertLog {
     // snoozed_at field at all — unlike DetectionLogRead, which does. Not a
     // frontend gap: the WS envelope genuinely never carries it, so this
     // falls back to null rather than asserting a value that was never sent.
-    // A REST refetch (confirm/dismiss/resolve invalidation, or the recovery
+    // A REST refetch (confirm/dismiss/clear invalidation, or the recovery
     // sequence) still gets the real value from DetectionLogRead.
     snoozed_at: null,
     snoozed_until: payload.snoozed_until,
@@ -140,7 +140,7 @@ export function RealtimeAlertsBridge() {
   }
 
   /**
-   * `handled_by` / `handled_at` ride every ALERT_STATUS_UPDATE and were parsed
+   * `handled_by` / `handled_at` ride every ALERT_STATUS_UPDATE and are parsed
    * and discarded. They are how an operator who made no request learns that a
    * colleague just acted on the incident they are looking at — the 409 only
    * reaches whoever lost a race, but the broadcast reaches everyone.

@@ -7,6 +7,8 @@
  * human-readable UI text so `AuditLog.tsx` stays a layout-only file.
  */
 
+import type { AuditLogEntry } from "@/api/audit"
+
 // ---------------------------------------------------------------------------
 // 1. Human-readable key labels
 // ---------------------------------------------------------------------------
@@ -42,6 +44,12 @@ const DETAIL_KEY_LABELS: Record<string, string> = {
   target_ref: "Target Reference",
   target_type: "Target Type",
   target_username: "Target Username",
+  alarm_sound_from: "Previous Alarm Sound",
+  alarm_sound_to: "New Alarm Sound",
+  volume_from: "Previous Volume",
+  volume_to: "New Volume",
+  snooze_duration_from: "Previous Snooze Duration",
+  snooze_duration_to: "New Snooze Duration",
   user_id: "User ID",
   username: "Username",
   role: "Role",
@@ -119,7 +127,7 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   LOGOUT: "Logged Out",
   ALERT_CONFIRM: "Confirmed Alert",
   ALERT_DISMISS: "Dismissed Alert",
-  ALERT_RESOLVE: "Resolved Alert",
+  ALERT_CLEAR: "Cleared Alert",
   ALERT_CORRECTION: "Corrected Alert",
   ALERT_SNOOZE: "Snoozed Alert",
   CAMERA_CREATE: "Created Camera",
@@ -413,6 +421,19 @@ export function formatScalarDetailValue(detailKey: string, value: unknown): stri
     return new Intl.NumberFormat("en-US").format(value)
   }
 
+  // Raw alarm-sound allowlist keys ("digital_alarm") — same title-casing the
+  // Alarm Settings page itself uses for the sound dropdown, not the backend's
+  // internal key.
+  if (detailKey === "alarm_sound_from" || detailKey === "alarm_sound_to") {
+    return humanizeDetailKey(strVal)
+  }
+
+  // A bare number reads fine on the settings page next to a "(seconds)"
+  // label, but not on its own in an audit row with no such context.
+  if (detailKey === "snooze_duration_from" || detailKey === "snooze_duration_to") {
+    return `${strVal} seconds`
+  }
+
   return strVal
 }
 
@@ -431,4 +452,34 @@ export function formatChangedFields(fields: unknown[]): string {
         : String(f),
     )
     .join(", ")
+}
+
+// ---------------------------------------------------------------------------
+// 7. Slice an already-grouped page of rows back into groups for rendering
+// ---------------------------------------------------------------------------
+
+export type AuditRowSegment =
+  { kind: "single"; entry: AuditLogEntry } | { kind: "group"; entries: AuditLogEntry[] }
+
+/**
+ * The backend (`_annotate_groups`, `routes/audit.py`) already chains
+ * consecutive same-actor/action/target/result rows into runs and marks them
+ * with `group_size`/`is_group_head` — this only slices that flat,
+ * already-contiguous list back into single rows and groups for rendering.
+ * It never recomputes the grouping decision itself.
+ */
+export function groupAuditRows(items: AuditLogEntry[]): AuditRowSegment[] {
+  const result: AuditRowSegment[] = []
+  let i = 0
+  while (i < items.length) {
+    const entry = items[i]
+    if (entry.is_group_head && entry.group_size > 1) {
+      result.push({ kind: "group", entries: items.slice(i, i + entry.group_size) })
+      i += entry.group_size
+    } else {
+      result.push({ kind: "single", entry })
+      i += 1
+    }
+  }
+  return result
 }

@@ -5,6 +5,7 @@ Tests for app.services.help (FR-20) and GET /api/help/* — 09_PKG_help_center.m
 
 import json
 import logging
+import re
 from pathlib import Path
 
 import pytest
@@ -159,6 +160,37 @@ class TestIdempotentSeeding:
         remaining = session.exec(select(HelpArticle)).all()
         assert [r.slug for r in remaining] == ["b"]
 
+    def test_cleared_incident_slugs_replace_obsolete_rows(self, session: Session):
+        """P28 renames the two incident articles, so a reseed must remove
+        rows for the old slugs and remain safe to repeat."""
+        _seed_rows(
+            session,
+            [
+                {"slug": "resolving-an-ongoing-incident"},
+                {"slug": "faq-can-i-undo-a-confirmed-or-resolved-incident"},
+            ],
+        )
+
+        seed_help_articles(session, content_dir=REAL_CONTENT_DIR)
+        seed_help_articles(session, content_dir=REAL_CONTENT_DIR)
+
+        slugs = {row.slug for row in session.exec(select(HelpArticle))}
+        assert "clearing-an-ongoing-incident" in slugs
+        assert "faq-can-i-undo-a-confirmed-or-cleared-incident" in slugs
+        assert "resolving-an-ongoing-incident" not in slugs
+        assert "faq-can-i-undo-a-confirmed-or-resolved-incident" not in slugs
+
+    def test_real_help_internal_links_target_existing_slugs(self):
+        """Every renamed help link must resolve to a seeded article slug."""
+        articles = load_articles(REAL_CONTENT_DIR)
+        slugs = {article["slug"] for article in articles}
+        for article in articles:
+            targets = re.findall(r"\]\(([^)\s#]+)", article["body_markdown"])
+            for target in targets:
+                if target.startswith(("/", "http://", "https://")):
+                    continue
+                assert target in slugs, (article["slug"], target)
+
 
 # ---------------------------------------------------------------------------
 # Role filter
@@ -219,6 +251,60 @@ class TestRoleFilter:
 
         resp = client.get("/api/help/articles/admin-thing", headers=headers)
         assert resp.status_code == 200
+
+    def test_real_ai_performance_guidance_is_admin_only_and_shared_articles_have_no_dead_links(
+        self, client: TestClient, session: Session
+    ):
+        """P29 — role-filtered list/search/detail must agree with the
+        navigation boundary, and shared Operator guidance must not link to a
+        restricted article."""
+        seed_help_articles(session, content_dir=REAL_CONTENT_DIR)
+        make_operator(session)
+        operator_headers = auth_headers(client, "operator", "Operator123")
+
+        listed = client.get(
+            "/api/help/articles",
+            params={"search": "precision"},
+            headers=operator_headers,
+        )
+        assert listed.status_code == 200
+        assert {article["slug"] for article in listed.json()["items"]}.isdisjoint(
+            {
+                "understanding-ai-performance-metrics",
+                "faq-what-does-precision-score-mean",
+            }
+        )
+
+        for slug in (
+            "understanding-ai-performance-metrics",
+            "faq-what-does-precision-score-mean",
+        ):
+            detail = client.get(f"/api/help/articles/{slug}", headers=operator_headers)
+            assert detail.status_code == 404
+
+        for slug in (
+            "getting-started-with-adas",
+            "dismissing-a-false-positive",
+            "reading-the-dashboard-kpis",
+            "clearing-an-ongoing-incident",
+        ):
+            detail = client.get(f"/api/help/articles/{slug}", headers=operator_headers)
+            assert detail.status_code == 200
+            assert (
+                "(understanding-ai-performance-metrics)"
+                not in detail.json()["body_markdown"]
+            )
+
+        make_admin(session)
+        admin_headers = auth_headers(client, "admin", "Admin123")
+        admin_list = client.get(
+            "/api/help/articles", params={"search": "precision"}, headers=admin_headers
+        )
+        assert admin_list.status_code == 200
+        assert {article["slug"] for article in admin_list.json()["items"]} >= {
+            "understanding-ai-performance-metrics",
+            "faq-what-does-precision-score-mean",
+        }
 
 
 # ---------------------------------------------------------------------------

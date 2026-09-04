@@ -9,7 +9,7 @@ from app.models import DetectionLog, DetectionStatus
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from .conftest import auth_headers, make_camera, make_operator
+from .conftest import auth_headers, make_admin, make_camera, make_operator
 
 
 def operator_with_headers(
@@ -22,6 +22,18 @@ def operator_with_headers(
     operator = make_operator(session, username=username, password=password)
     headers = auth_headers(client, username, password)
     return operator, headers
+
+
+def admin_with_headers(
+    client: TestClient,
+    session: Session,
+    *,
+    username: str = "analytics_admin",
+    password: str = "Admin123",
+):
+    admin = make_admin(session, username=username, password=password)
+    headers = auth_headers(client, username, password)
+    return admin, headers
 
 
 def make_analytics_log(
@@ -76,7 +88,7 @@ class TestDashboardAnalytics:
             session,
             beta,
             detected_at=datetime(2026, 1, 1, 14, 0, tzinfo=UTC),
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             confidence_score=0.88,
         )
         make_analytics_log(
@@ -101,11 +113,11 @@ class TestDashboardAnalytics:
         assert body["kpis"] == {
             "ongoing": 1,
             "total_accidents": 2,
-            "total_resolved": 1,
+            "total_cleared": 1,
             # No start_date/end_date — all time has no previous period.
             "ongoing_delta_pct": None,
             "total_accidents_delta_pct": None,
-            "total_resolved_delta_pct": None,
+            "total_cleared_delta_pct": None,
         }
         assert body["frequency_by_location"] == [
             {"camera_name": "Alpha Road", "accident_count": 1},
@@ -132,14 +144,14 @@ class TestDashboardAnalytics:
             session,
             camera,
             detected_at=datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC),
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             confidence_score=0.8,
         )
         make_analytics_log(
             session,
             camera,
             detected_at=datetime(2026, 1, 1, 23, 0, 0, tzinfo=UTC),
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             confidence_score=0.8,
         )
 
@@ -171,14 +183,14 @@ class TestDashboardAnalytics:
             session,
             north,
             detected_at=datetime(2026, 1, 2, 9, 0, tzinfo=UTC),
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             confidence_score=0.83,
         )
         make_analytics_log(
             session,
             south,
             detected_at=datetime(2026, 1, 2, 10, 0, tzinfo=UTC),
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             confidence_score=0.77,
         )
 
@@ -193,16 +205,16 @@ class TestDashboardAnalytics:
         body = resp.json()
         # Previous window (same ~24h duration immediately before the
         # request's range, same camera_id filter): north's Ongoing log at
-        # Jan 1 09:00 falls in it, giving previous ongoing=1, resolved=0,
+        # Jan 1 09:00 falls in it, giving previous ongoing=1, cleared=0,
         # total_accidents=1 — south is excluded from both windows by the
         # camera_id filter.
         assert body["kpis"] == {
             "ongoing": 0,
             "total_accidents": 1,
-            "total_resolved": 1,
+            "total_cleared": 1,
             "ongoing_delta_pct": -100.0,  # 0 vs previous 1
             "total_accidents_delta_pct": 0.0,  # 1 vs previous 1
-            "total_resolved_delta_pct": None,  # previous resolved was 0
+            "total_cleared_delta_pct": None,  # previous cleared was 0
         }
         assert body["frequency_by_location"] == [
             {"camera_name": "North Gate", "accident_count": 1}
@@ -231,7 +243,7 @@ class TestDashboardAnalytics:
             session,
             camera,
             detected_at=datetime(2026, 2, 2, 12, 0, tzinfo=UTC),
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             confidence_score=0.65,
             verified_by_id=operator.user_id,
             verified_at=datetime(2026, 2, 2, 12, 5, tzinfo=UTC),
@@ -256,7 +268,7 @@ class TestDashboardAnalytics:
 
         rows = list(csv.DictReader(StringIO(resp.text[1:])))
         assert len(rows) == 2
-        assert [row["Status"] for row in rows] == ["Resolved", "Ongoing"]
+        assert [row["Status"] for row in rows] == ["Cleared", "Ongoing"]
         assert rows[0]["Camera Name"] == "Export Camera"
         assert rows[0]["Confidence"] == "0.6500"
         assert rows[0]["Closed By ID"] == str(operator.user_id)
@@ -290,16 +302,16 @@ class TestDashboardDeltas:
 
     `ux_detection_open_camera` (CLAUDE.md) allows at most one Unverified/
     Ongoing row per camera, so these tests build multi-count Ongoing totals
-    across distinct cameras (one Ongoing row each) and use Resolved — which
+    across distinct cameras (one Ongoing row each) and use Cleared — which
     has no such limit — for anything that needs several rows on one camera."""
 
-    def _make_resolved_logs(self, session, camera, *, day: int, count: int):
+    def _make_cleared_logs(self, session, camera, *, day: int, count: int):
         for i in range(count):
             make_analytics_log(
                 session,
                 camera,
                 detected_at=datetime(2026, 5, day, 14, i, tzinfo=UTC),
-                status=DetectionStatus.RESOLVED,
+                status=DetectionStatus.CLEARED,
                 confidence_score=0.7,
             )
 
@@ -322,21 +334,21 @@ class TestDashboardDeltas:
         self, client: TestClient, session: Session
     ):
         _, headers = operator_with_headers(client, session, username="deltaknown")
-        resolved_camera = make_camera(
-            session, name="Delta Resolved Camera", channel_id=71
+        cleared_camera = make_camera(
+            session, name="Delta Cleared Camera", channel_id=71
         )
         # Previous window (May 1): 4 ongoing (4 distinct cameras), 2
-        # resolved -> 6 accidents.
+        # cleared -> 6 accidents.
         self._make_ongoing_logs_on_fresh_cameras(
             session, day=1, count=4, name_prefix="Delta Prev Ongoing", channel_start=700
         )
-        self._make_resolved_logs(session, resolved_camera, day=1, count=2)
+        self._make_cleared_logs(session, cleared_camera, day=1, count=2)
         # Current window (May 2): 6 ongoing (6 distinct cameras), 4
-        # resolved -> 10 accidents.
+        # cleared -> 10 accidents.
         self._make_ongoing_logs_on_fresh_cameras(
             session, day=2, count=6, name_prefix="Delta Curr Ongoing", channel_start=710
         )
-        self._make_resolved_logs(session, resolved_camera, day=2, count=4)
+        self._make_cleared_logs(session, cleared_camera, day=2, count=4)
 
         resp = client.get(
             "/api/analytics/dashboard"
@@ -347,19 +359,17 @@ class TestDashboardDeltas:
         assert resp.status_code == 200
         kpis = resp.json()["kpis"]
         assert kpis["ongoing"] == 6
-        assert kpis["total_resolved"] == 4
+        assert kpis["total_cleared"] == 4
         assert kpis["total_accidents"] == 10
         assert kpis["ongoing_delta_pct"] == 50.0  # (6-4)/4
-        assert kpis["total_resolved_delta_pct"] == 100.0  # (4-2)/2
+        assert kpis["total_cleared_delta_pct"] == 100.0  # (4-2)/2
         assert kpis["total_accidents_delta_pct"] == 66.7  # (10-6)/6, rounded
 
     def test_empty_previous_window_gives_null_not_zero_not_error(
         self, client: TestClient, session: Session
     ):
         _, headers = operator_with_headers(client, session, username="deltaempty")
-        resolved_camera = make_camera(
-            session, name="Delta Empty Resolved", channel_id=72
-        )
+        cleared_camera = make_camera(session, name="Delta Empty Cleared", channel_id=72)
         self._make_ongoing_logs_on_fresh_cameras(
             session,
             day=2,
@@ -367,7 +377,7 @@ class TestDashboardDeltas:
             name_prefix="Delta Empty Ongoing",
             channel_start=720,
         )
-        self._make_resolved_logs(session, resolved_camera, day=2, count=1)
+        self._make_cleared_logs(session, cleared_camera, day=2, count=1)
         # Nothing at all on May 1 — the previous window is genuinely empty.
 
         resp = client.get(
@@ -380,7 +390,7 @@ class TestDashboardDeltas:
         kpis = resp.json()["kpis"]
         assert kpis["ongoing"] == 2
         assert kpis["ongoing_delta_pct"] is None
-        assert kpis["total_resolved_delta_pct"] is None
+        assert kpis["total_cleared_delta_pct"] is None
         assert kpis["total_accidents_delta_pct"] is None
 
     def test_only_start_date_gives_null_deltas(
@@ -388,7 +398,7 @@ class TestDashboardDeltas:
     ):
         _, headers = operator_with_headers(client, session, username="deltastart")
         camera = make_camera(session, name="Delta Half Open A", channel_id=73)
-        self._make_resolved_logs(session, camera, day=2, count=1)
+        self._make_cleared_logs(session, camera, day=2, count=1)
 
         resp = client.get(
             "/api/analytics/dashboard?start_date=2026-05-02T00:00:00Z",
@@ -398,7 +408,7 @@ class TestDashboardDeltas:
         assert resp.status_code == 200
         kpis = resp.json()["kpis"]
         assert kpis["ongoing_delta_pct"] is None
-        assert kpis["total_resolved_delta_pct"] is None
+        assert kpis["total_cleared_delta_pct"] is None
         assert kpis["total_accidents_delta_pct"] is None
 
     def test_only_end_date_gives_null_deltas(
@@ -406,7 +416,7 @@ class TestDashboardDeltas:
     ):
         _, headers = operator_with_headers(client, session, username="deltaend")
         camera = make_camera(session, name="Delta Half Open B", channel_id=74)
-        self._make_resolved_logs(session, camera, day=2, count=1)
+        self._make_cleared_logs(session, camera, day=2, count=1)
 
         resp = client.get(
             "/api/analytics/dashboard?end_date=2026-05-02T23:59:59Z",
@@ -416,7 +426,7 @@ class TestDashboardDeltas:
         assert resp.status_code == 200
         kpis = resp.json()["kpis"]
         assert kpis["ongoing_delta_pct"] is None
-        assert kpis["total_resolved_delta_pct"] is None
+        assert kpis["total_cleared_delta_pct"] is None
         assert kpis["total_accidents_delta_pct"] is None
 
     def test_detection_exactly_on_window_boundary_counts_once_not_twice(
@@ -455,11 +465,11 @@ class TestDashboardDeltas:
         _, headers = operator_with_headers(client, session, username="deltacamfilter")
         target = make_camera(session, name="Delta Target Camera", channel_id=76)
         other = make_camera(session, name="Delta Other Camera", channel_id=77)
-        # Previous window: target gets 2 resolved, other gets 5 resolved.
-        self._make_resolved_logs(session, target, day=1, count=2)
-        self._make_resolved_logs(session, other, day=1, count=5)
-        # Current window: target gets 4 resolved.
-        self._make_resolved_logs(session, target, day=2, count=4)
+        # Previous window: target gets 2 cleared, other gets 5 cleared.
+        self._make_cleared_logs(session, target, day=1, count=2)
+        self._make_cleared_logs(session, other, day=1, count=5)
+        # Current window: target gets 4 cleared.
+        self._make_cleared_logs(session, target, day=2, count=4)
 
         resp = client.get(
             f"/api/analytics/dashboard?camera_id={target.camera_id}"
@@ -469,17 +479,17 @@ class TestDashboardDeltas:
 
         assert resp.status_code == 200
         kpis = resp.json()["kpis"]
-        assert kpis["total_resolved"] == 4
+        assert kpis["total_cleared"] == 4
         # If `other`'s 5 leaked into the previous count, this would be
         # (4-5)/5*100 = -20.0 instead of the target-only (4-2)/2*100 = 100.0.
-        assert kpis["total_resolved_delta_pct"] == 100.0
+        assert kpis["total_cleared_delta_pct"] == 100.0
 
 
 class TestPerformanceAnalytics:
     def test_performance_returns_global_and_per_camera_metrics(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfmetrics")
+        _, headers = admin_with_headers(client, session, username="perfmetrics")
         north = make_camera(session, name="North Corridor", channel_id=31)
         south = make_camera(session, name="South Corridor", channel_id=32)
         east = make_camera(session, name="East Corridor", channel_id=33)
@@ -497,7 +507,7 @@ class TestPerformanceAnalytics:
             session,
             north,
             detected_at=datetime(2026, 3, 1, 8, 30, tzinfo=UTC),
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             confidence_score=0.60,
         )
         make_analytics_log(
@@ -525,7 +535,7 @@ class TestPerformanceAnalytics:
             session,
             east,
             detected_at=datetime(2026, 3, 1, 11, 0, tzinfo=UTC),
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             confidence_score=0.75,
         )
         make_analytics_log(
@@ -604,7 +614,7 @@ class TestPerformanceAnalytics:
     def test_performance_search_is_case_insensitive_and_tie_sorted(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfsearch")
+        _, headers = admin_with_headers(client, session, username="perfsearch")
         alpha = make_camera(session, name="Alpha Bridge", channel_id=41)
         zulu = make_camera(session, name="zulu Tunnel", channel_id=42)
 
@@ -652,7 +662,7 @@ class TestPerformanceAnalytics:
     def test_export_performance_csv_matches_filtered_table(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfcsv")
+        _, headers = admin_with_headers(client, session, username="perfcsv")
         alpha = make_camera(session, name="Alpha Bridge", channel_id=51)
         zulu = make_camera(session, name="zulu Tunnel", channel_id=52)
 
@@ -667,7 +677,7 @@ class TestPerformanceAnalytics:
             session,
             zulu,
             detected_at=datetime(2026, 4, 2, 9, 0, tzinfo=UTC),
-            status=DetectionStatus.RESOLVED,
+            status=DetectionStatus.CLEARED,
             confidence_score=0.95,
         )
 
@@ -694,7 +704,7 @@ class TestPerformanceAnalytics:
         ]
 
     def test_export_performance_pdf(self, client: TestClient, session: Session):
-        operator, headers = operator_with_headers(client, session, username="perfpdf")
+        _, headers = admin_with_headers(client, session, username="perfpdf")
         camera = make_camera(session, name="PDF Perf Camera", channel_id=53)
         make_analytics_log(
             session,
@@ -735,7 +745,7 @@ class TestPerformancePagination:
     def test_total_filtered_reflects_full_set_per_camera_holds_one_page(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfpage1")
+        _, headers = admin_with_headers(client, session, username="perfpage1")
         self._make_n_quiet_cameras(session, 15, start_channel=100)
 
         resp = client.get("/api/analytics/performance", headers=headers)
@@ -750,7 +760,7 @@ class TestPerformancePagination:
         self, client: TestClient, session: Session, query: str
     ):
         """Edge case 2.1/2.2, same bounds every other list endpoint uses."""
-        _, headers = operator_with_headers(client, session, username="perfpage2")
+        _, headers = admin_with_headers(client, session, username="perfpage2")
         resp = client.get(f"/api/analytics/performance?{query}", headers=headers)
         assert resp.status_code == 422
 
@@ -758,14 +768,14 @@ class TestPerformancePagination:
     def test_pagination_boundary_accepted(
         self, client: TestClient, session: Session, query: str
     ):
-        _, headers = operator_with_headers(client, session, username="perfpage3")
+        _, headers = admin_with_headers(client, session, username="perfpage3")
         resp = client.get(f"/api/analytics/performance?{query}", headers=headers)
         assert resp.status_code == 200
 
     def test_offset_beyond_total_returns_empty_page_with_correct_total(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfpage4")
+        _, headers = admin_with_headers(client, session, username="perfpage4")
         self._make_n_quiet_cameras(session, 3, start_channel=120)
 
         resp = client.get("/api/analytics/performance?offset=100", headers=headers)
@@ -778,7 +788,7 @@ class TestPerformancePagination:
     def test_paging_through_whole_set_yields_every_camera_exactly_once(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfpage5")
+        _, headers = admin_with_headers(client, session, username="perfpage5")
         cameras = self._make_n_quiet_cameras(session, 23, start_channel=140)
         expected_ids = {c.camera_id for c in cameras}
 
@@ -806,7 +816,7 @@ class TestPerformancePagination:
         """F24 still holds under pagination: a camera with zero confirmed
         and zero dismissed incidents is still counted and still paged, not
         silently dropped by the slice."""
-        _, headers = operator_with_headers(client, session, username="perfpage6")
+        _, headers = admin_with_headers(client, session, username="perfpage6")
         make_camera(session, name="Only Quiet Camera", channel_id=160)
 
         resp = client.get("/api/analytics/performance", headers=headers)
@@ -820,7 +830,7 @@ class TestPerformancePagination:
     def test_export_ignores_limit_and_offset_and_exports_every_row(
         self, client: TestClient, session: Session
     ):
-        _, headers = operator_with_headers(client, session, username="perfpage7")
+        _, headers = admin_with_headers(client, session, username="perfpage7")
         cameras = self._make_n_quiet_cameras(session, 15, start_channel=180)
 
         resp = client.get(
@@ -838,7 +848,7 @@ class TestPerformancePagination:
         """The exact trap the package doc warns about: if pagination ever
         leaked into _compute_performance_data, this pre-flight would see
         only one page and under-report a large export as small."""
-        _, headers = operator_with_headers(client, session, username="perfpage8")
+        _, headers = admin_with_headers(client, session, username="perfpage8")
         self._make_n_quiet_cameras(session, 12, start_channel=200)
 
         seen_row_counts: list[int] = []
@@ -871,7 +881,10 @@ def test_analytics_endpoints_reject_invalid_camera_ids(
     session: Session,
     path: str,
 ):
-    _, headers = operator_with_headers(client, session, username="invalidcam")
+    header_factory = (
+        admin_with_headers if "performance" in path else operator_with_headers
+    )
+    _, headers = header_factory(client, session, username="invalidcam")
 
     resp = client.get(f"{path}?camera_id=0", headers=headers)
 
@@ -896,7 +909,10 @@ def test_analytics_endpoints_reject_inverted_date_ranges(
     session: Session,
     path: str,
 ):
-    _, headers = operator_with_headers(client, session, username="invaliddate")
+    header_factory = (
+        admin_with_headers if "performance" in path else operator_with_headers
+    )
+    _, headers = header_factory(client, session, username="invaliddate")
 
     resp = client.get(
         f"{path}?start_date=2026-05-03T00:00:00Z&end_date=2026-05-02T00:00:00Z",
@@ -947,6 +963,31 @@ def test_analytics_endpoints_reject_invalid_tokens(path: str, client: TestClient
     assert resp.status_code == 401
 
 
+@pytest.mark.parametrize(
+    "path",
+    ["/api/analytics/performance", "/api/analytics/export/performance"],
+)
+def test_operator_cannot_access_admin_only_performance_endpoints(
+    path: str, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
+):
+    """P29 — the role check runs before the performance query or export
+    generation, so an Operator cannot use either synchronous endpoint as an
+    analytics side door."""
+    _, headers = operator_with_headers(client, session, username="perfdenied")
+
+    def fail_if_performance_work_runs(*args, **kwargs):
+        raise AssertionError("performance work must not run for an Operator")
+
+    monkeypatch.setattr(
+        analytics_routes, "_compute_performance_data", fail_if_performance_work_runs
+    )
+
+    resp = client.get(path, headers=headers)
+
+    assert resp.status_code == 403
+    assert resp.json()["code"] == "FORBIDDEN"
+
+
 def test_dashboard_ignores_unverified_logs_and_returns_empty_state(
     client: TestClient, session: Session
 ):
@@ -967,10 +1008,10 @@ def test_dashboard_ignores_unverified_logs_and_returns_empty_state(
     assert body["kpis"] == {
         "ongoing": 0,
         "total_accidents": 0,
-        "total_resolved": 0,
+        "total_cleared": 0,
         "ongoing_delta_pct": None,
         "total_accidents_delta_pct": None,
-        "total_resolved_delta_pct": None,
+        "total_cleared_delta_pct": None,
     }
     assert body["frequency_by_location"] == []
     assert len(body["peak_accident_times"]) == 24
@@ -991,10 +1032,10 @@ def test_dashboard_with_a_genuinely_empty_database_returns_the_same_empty_state(
     assert body["kpis"] == {
         "ongoing": 0,
         "total_accidents": 0,
-        "total_resolved": 0,
+        "total_cleared": 0,
         "ongoing_delta_pct": None,
         "total_accidents_delta_pct": None,
-        "total_resolved_delta_pct": None,
+        "total_cleared_delta_pct": None,
     }
     assert body["frequency_by_location"] == []
     assert len(body["peak_accident_times"]) == 24
@@ -1043,7 +1084,7 @@ def test_performance_ignores_unverified_logs_but_still_lists_the_camera(
     number (global KPIs all zero/null), but the camera itself is not
     omitted from the per-camera breakdown just because it has no
     confirmed/dismissed rows."""
-    _, headers = operator_with_headers(client, session, username="perfempty")
+    _, headers = admin_with_headers(client, session, username="perfempty")
     camera = make_camera(session, name="Silent Camera", channel_id=63)
     make_analytics_log(
         session,
@@ -1088,13 +1129,13 @@ def test_performance_soft_deleted_camera_with_history_still_appears(
     in range still appears in the per-camera breakdown; one with no history
     does not (it just isn't a *quiet active* camera, edge case 3.5's
     concern doesn't extend to deleted-and-silent cameras)."""
-    _, headers = operator_with_headers(client, session, username="perfsoftdel")
+    _, headers = admin_with_headers(client, session, username="perfsoftdel")
     camera = make_camera(session, name="Soon Deleted Cam", channel_id=65)
     make_analytics_log(
         session,
         camera,
         detected_at=datetime(2026, 6, 5, 8, 0, tzinfo=UTC),
-        status=DetectionStatus.RESOLVED,
+        status=DetectionStatus.CLEARED,
         confidence_score=0.8,
     )
     camera.is_active = False
@@ -1123,7 +1164,7 @@ def test_performance_with_zero_cameras_registered_returns_empty_state(
     client: TestClient, session: Session
 ):
     """The genuinely-empty case (edge case 3.1/3.6): no cameras at all."""
-    _, headers = operator_with_headers(client, session, username="perfnocams")
+    _, headers = admin_with_headers(client, session, username="perfnocams")
 
     resp = client.get("/api/analytics/performance", headers=headers)
 
@@ -1145,7 +1186,7 @@ def test_export_performance_csv_lists_camera_row_when_no_analytics_rows(
     client: TestClient, session: Session
 ):
     """Edge case 3.5 / F24 at the export layer — same fix, CSV surface."""
-    _, headers = operator_with_headers(client, session, username="perfheader")
+    _, headers = admin_with_headers(client, session, username="perfheader")
     camera = make_camera(session, name="Header Perf Camera", channel_id=64)
     make_analytics_log(
         session,

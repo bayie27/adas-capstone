@@ -13,7 +13,7 @@ applied](/help/incident-detail-modal.png)
 
 You'll get an error explaining the alert is no longer in the status your action
 expects, and nothing changes on your end. Only the operator who acted first has their
-action applied. A second confirm, dismiss, or resolve on the same alert never goes
+action applied. A second confirm, dismiss, or clear on the same alert never goes
 through silently on top of the first one.
 
 This matters most when several operators are watching the same alert queue on a busy

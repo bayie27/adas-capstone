@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ExportJobsTray } from "./ExportJobsTray"
 import { useExportJobsStore } from "@/store/useExportJobsStore"
+import { useAuthStore } from "@/store/useAuthStore"
 
 vi.mock("@/api/exports", async () => {
   const actual = await vi.importActual<typeof import("@/api/exports")>("@/api/exports")
@@ -27,7 +28,7 @@ vi.mock("@/api/exports", async () => {
   }
 })
 
-import { listExportJobs } from "@/api/exports"
+import { getExportJob, listExportJobs } from "@/api/exports"
 
 function renderTray() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -54,6 +55,7 @@ const HISTORY_JOB = {
 
 describe("ExportJobsTray", () => {
   beforeEach(() => {
+    useAuthStore.setState({ role: "Admin", username: "admin" })
     useExportJobsStore.setState({
       jobs: [
         {
@@ -65,6 +67,26 @@ describe("ExportJobsTray", () => {
       ],
     })
     vi.mocked(listExportJobs).mockReset()
+    vi.mocked(getExportJob).mockClear()
+  })
+
+  it("does not expose or poll a legacy performance job for an Operator", () => {
+    useAuthStore.setState({ role: "Operator", username: "operator" })
+    useExportJobsStore.setState({
+      jobs: [
+        {
+          jobId: "legacy-performance",
+          reportType: "performance",
+          format: "csv",
+          createdAt: "2026-01-01T00:00:00Z",
+        },
+      ],
+    })
+
+    renderTray()
+
+    expect(screen.queryByRole("button", { name: /export jobs/i })).not.toBeInTheDocument()
+    expect(getExportJob).not.toHaveBeenCalled()
   })
 
   it("does not render the trigger button when there are no tracked jobs", () => {

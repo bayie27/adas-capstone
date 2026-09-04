@@ -25,8 +25,8 @@ for what those actions actually do.
 The incident history list can be narrowed down by:
 
 - **Date range**: a start and end date.
-- **Status**: Unverified, Ongoing, Dismissed, Resolved (you can select more than one
-  at once, so you can view, for example, both Dismissed and Resolved together while
+- **Status**: Unverified, Ongoing, Dismissed, Cleared (you can select more than one
+  at once, so you can view, for example, both Dismissed and Cleared together while
   excluding anything still open).
 - **Camera**: one or more cameras.
 - **Operator**: incidents an operator verified or closed. This finds incidents by who
@@ -52,6 +52,6 @@ for how filtering here is also how you scope a report before downloading it.
 ## Undoing a mistaken action
 
 Once you're looking at an incident's detail, be aware that most actions taken from
-there are final. See [Can I Undo a Confirmed or Resolved
-Incident?](faq-can-i-undo-a-confirmed-or-resolved-incident) before clicking Confirm,
-Dismiss, or Resolve if you're not certain.
+there are final. See [Can I Undo a Confirmed or Cleared
+Incident?](faq-can-i-undo-a-confirmed-or-cleared-incident) before clicking Confirm,
+Dismiss, or Clear if you're not certain.
