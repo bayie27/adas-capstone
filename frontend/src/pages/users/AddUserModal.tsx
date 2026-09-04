@@ -10,7 +10,7 @@ import { createUser } from "@/api/users"
 import { cn } from "@/utils/cn"
 import type { ApiUserRole } from "@/api/auth"
 import type { CreateUserInput, UserRecord } from "@/api/users"
-import { getApiErrorMessage } from "@/api/client"
+import { getApiError, getApiErrorMessage } from "@/api/client"
 import { getFieldValidationMessage } from "@/utils/apiFieldErrors"
 import { validateNewPassword, validatePasswordConfirmation } from "@/utils/passwordValidation"
 
@@ -100,9 +100,17 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
     : undefined
   const passwordError = fieldErrors.password ?? apiPasswordError
 
+  // create_user (routes/users.py) answers a duplicate with a plain 400 —
+  // the one collision this form can have is on username, so that's where it
+  // belongs rather than a banner disconnected from the field.
+  const usernameError =
+    mutation.isError && getApiError(mutation.error)?.status === 400
+      ? getApiErrorMessage(mutation.error, "Username already taken.")
+      : undefined
+
   const errorMessage =
     validationError ??
-    (mutation.isError && !apiPasswordError
+    (mutation.isError && !apiPasswordError && !usernameError
       ? getApiErrorMessage(mutation.error, "Unable to create user.")
       : null)
 
@@ -186,6 +194,7 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
               placeholder="jdoe"
               value={form.username}
               disabled={mutation.isPending}
+              error={usernameError}
               onChange={(event) => updateField("username", event.target.value)}
               className="text-sm text-fg"
               labelClassName="text-sm font-medium text-fg"
