@@ -20,6 +20,12 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from app.maintenance.storage import (
+    STORAGE_TIER_DEGRADED,
+    VALID_STORAGE_TIERS,
+    sanitize_storage_reason,
+)
+
 # Matches main.py's FastAPI(version=...); duplicated here rather than
 # imported so this package never imports anything FastAPI-adjacent.
 APP_VERSION = "1.0.0"
@@ -67,7 +73,9 @@ def read_schema_revision(db_path: Path) -> str | None:
 
 def validate_backup_id(backup_id: str) -> str:
     if not isinstance(backup_id, str) or not _BACKUP_ID_PATTERN.fullmatch(backup_id):
-        raise InvalidBackupIdError(f"Not a valid backup id: {backup_id!r}")
+        # Do not echo an untrusted CLI/API value: a rejected value may be an
+        # absolute path or another secret-bearing string.
+        raise InvalidBackupIdError("Not a valid backup id.")
     return backup_id
 
 
@@ -75,15 +83,15 @@ def db_path_for(backup_dir: Path, backup_id: str) -> Path:
     """The final `.db` path for an already-validated backup id. Callers
     must validate the id first — this never re-derives safety from path
     resolution, only from the id having already passed the regex."""
-    return backup_dir / f"adas_backup_{backup_id}.db"
+    return backup_dir / f"adas_backup_{validate_backup_id(backup_id)}.db"
 
 
 def tmp_path_for(backup_dir: Path, backup_id: str) -> Path:
-    return backup_dir / f"adas_backup_{backup_id}.tmp"
+    return backup_dir / f"adas_backup_{validate_backup_id(backup_id)}.tmp"
 
 
 def manifest_path_for(backup_dir: Path, backup_id: str) -> Path:
-    return backup_dir / f"adas_backup_{backup_id}.json"
+    return backup_dir / f"adas_backup_{validate_backup_id(backup_id)}.json"
 
 
 @dataclass
@@ -97,6 +105,15 @@ class BackupManifest:
     file_size: int
     sha256: str
     checks: dict[str, bool] = field(default_factory=dict)
+    # P30: a local-root artifact is always degraded; a protected-root
+    # artifact was written only after the physical-device probe passed.
+    storage_tier: str = STORAGE_TIER_DEGRADED
+    storage_reason: str | None = None
+
+    @property
+    def degraded_reason(self) -> str | None:
+        """Compatibility/readability alias for callers using P30 wording."""
+        return self.storage_reason
 
     @property
     def valid(self) -> bool:
@@ -104,6 +121,8 @@ class BackupManifest:
         required checks passed (Step 1). Missing keys count as failed. The
         live listing adds artifact-name and file-size checks; older manifests
         without those additive keys remain backward compatible."""
+        if self.storage_tier not in VALID_STORAGE_TIERS:
+            return False
         if not all(self.checks.get(name) for name in _REQUIRED_CHECKS):
             return False
         return all(
@@ -117,7 +136,7 @@ class BackupManifest:
 
     @classmethod
     def from_dict(cls, data: dict) -> "BackupManifest":
-        return cls(
+        manifest = cls(
             backup_id=data["backup_id"],
             filename=data["filename"],
             created_at=data["created_at"],
@@ -127,7 +146,21 @@ class BackupManifest:
             file_size=data["file_size"],
             sha256=data["sha256"],
             checks=data.get("checks", {}),
+            storage_tier=data.get("storage_tier", STORAGE_TIER_DEGRADED),
+            storage_reason=sanitize_storage_reason(
+                data.get("storage_reason", data.get("degraded_reason"))
+            ),
         )
+        # Legacy local manifests predate P30.  Retention can preserve them
+        # without copying or deleting them as part of the classification
+        # transition, while newly created degraded manifests remain eligible
+        # for the configured retention policy.
+        object.__setattr__(manifest, "_storage_tier_explicit", "storage_tier" in data)
+        return manifest
+
+    @property
+    def storage_tier_explicit(self) -> bool:
+        return bool(getattr(self, "_storage_tier_explicit", True))
 
 
 def write_manifest(backup_dir: Path, manifest: BackupManifest) -> Path:

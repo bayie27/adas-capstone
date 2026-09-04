@@ -36,6 +36,11 @@
     Required for -Action Restore — the backup id to restore (see
     `uv run python -m app.maintenance list`).
 
+.PARAMETER StorageTier
+    Required for -Action Restore when selecting a point from the combined
+    list: protected or degraded. The default is degraded for direct legacy
+    CLI use; the dashboard and coordinator always pass the selected tier.
+
 .PARAMETER LogDir
     Where transcripts, component stdout/stderr logs, and
     maintenance-runs.jsonl are written. Relative paths resolve against the
@@ -45,7 +50,7 @@
     scripts\adas-maintenance.ps1 -Action Start
     scripts\adas-maintenance.ps1 -Action Backup
     scripts\adas-maintenance.ps1 -Action Restart
-    scripts\adas-maintenance.ps1 -Action Restore -BackupId 69c760b1a0d24f6e8c16e675564a5ecd
+    scripts\adas-maintenance.ps1 -Action Restore -BackupId 69c760b1a0d24f6e8c16e675564a5ecd -StorageTier protected
     scripts\adas-maintenance.ps1 -Action Archive
 #>
 
@@ -56,9 +61,12 @@ param(
 
     [string]$BackupId,
 
+    [ValidateSet("protected", "degraded")]
+    [string]$StorageTier = "degraded",
+
     [int]$ReadyTimeoutSeconds = 60,
 
-    [string]$LogDir = "var\log"
+    [string]$LogDir
 )
 
 $ErrorActionPreference = "Stop"
@@ -99,7 +107,13 @@ New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
 $BackendPidFile = Join-Path $RunDir "backend.pid"
 $AiPidFile = Join-Path $RunDir "ai_engine.pid"
 
-$LogDirFull = if ([System.IO.Path]::IsPathRooted($LogDir)) { $LogDir } else { Join-Path $RepoRoot $LogDir }
+$configuredLogDir = if ($PSBoundParameters.ContainsKey("LogDir")) {
+    $LogDir
+}
+else {
+    Get-AdasLogDirectory -RepoRoot $RepoRoot
+}
+$LogDirFull = if ([System.IO.Path]::IsPathRooted($configuredLogDir)) { $configuredLogDir } else { Join-Path $RepoRoot $configuredLogDir }
 New-Item -ItemType Directory -Force -Path $LogDirFull | Out-Null
 $script:LaunchProfile = Read-AdasLaunchProfile -RepoRoot $RepoRoot
 if ($null -eq $script:LaunchProfile -and $Action -eq "Start") {
@@ -257,6 +271,8 @@ function Invoke-RestartAction {
     $startedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     $backupId = $null
     $backupDurationS = $null
+    $backupStorageTier = $null
+    $backupStorageReason = $null
     $downtimeS = $null
     $ready = $false
     $heartbeatConfirmed = $false
@@ -270,6 +286,12 @@ function Invoke-RestartAction {
         if ($backupResult.Data) {
             $backupId = $backupResult.Data.backup_id
             $backupDurationS = $backupResult.Data.duration_seconds
+            $backupStorageTier = $backupResult.Data.storage_tier
+            $backupStorageReason = $backupResult.Data.storage_reason
+            if ($backupResult.Data.storage_tier -eq "degraded") {
+                $reason = if ($backupResult.Data.storage_reason) { $backupResult.Data.storage_reason } else { "unavailable" }
+                Write-Warning "Protected backup storage was not used (reason=$reason); continuing with the verified local degraded backup."
+            }
         }
 
         if ($backupResult.ExitCode -eq 0) {
@@ -306,6 +328,8 @@ function Invoke-RestartAction {
             action              = "Restart"
             backup_id           = $backupId
             backup_duration_s   = $backupDurationS
+            backup_storage_tier = $backupStorageTier
+            backup_storage_reason = $backupStorageReason
             downtime_s          = $downtimeS
             ready               = $ready
             heartbeat_confirmed = $heartbeatConfirmed
@@ -373,7 +397,7 @@ try {
             }
 
             Write-Step "Running offline restore for backup $BackupId..."
-            $restoreResult = Invoke-Maintenance @("restore", $BackupId)
+            $restoreResult = Invoke-Maintenance @("restore", $BackupId, "--storage-tier", $StorageTier)
 
             if ($restoreResult.ExitCode -ne 0) {
                 Write-Error "Offline restore reported failure before touching the primary database. Restarting original services unchanged." -ErrorAction Continue

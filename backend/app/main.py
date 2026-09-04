@@ -258,7 +258,9 @@ async def lifespan(app: FastAPI):
         # would fire at 03:00 UTC — 11:00 Manila, the middle of a demo day.
         add_job(
             scheduler,
-            lambda: run_daily_backup(engine, trigger="scheduled"),
+            lambda: run_daily_backup(
+                engine, trigger="scheduled", app_settings=app_settings
+            ),
             job_id="daily_backup",
             trigger="cron",
             hour=app_settings.MAINTENANCE_HOUR_LOCAL,
@@ -267,7 +269,7 @@ async def lifespan(app: FastAPI):
         )
         add_job(
             scheduler,
-            lambda: run_daily_backup_if_due(engine),
+            lambda: run_daily_backup_if_due(engine, app_settings=app_settings),
             job_id="daily_backup_catch_up",
             trigger="interval",
             hours=1,
@@ -275,7 +277,7 @@ async def lifespan(app: FastAPI):
         # One due-check now, before the scheduler starts — turns "the
         # laptop was off at 3 AM" into "we got today's backup at 09:04"
         # rather than nothing.
-        run_daily_backup_if_due(engine)
+        run_daily_backup_if_due(engine, app_settings=app_settings)
 
         scheduler.start()
         app.state.scheduler = scheduler

@@ -1065,6 +1065,7 @@ class TestRestoreRoutes:
     def _body(self, backup_id: str, password: str = "Admin123") -> dict:
         return {
             "backup_id": backup_id,
+            "storage_tier": "degraded",
             "current_password": password,
             "confirmation": "RESTORE DATABASE",
         }
@@ -1316,6 +1317,12 @@ class TestMaintenanceStatusRoute:
         assert body["restore_coordinator"]["reason"] == "not_running"
         assert body["maintenance_hour_local"] == 3
         assert body["maintenance_timezone"] == "Asia/Manila"
+        assert body["protected_backup_available"] is False
+        assert body["protected_backup_reason"] == "not_configured"
+        assert body["protection_state"] == "unavailable"
+        assert body["latest_protected_backup"] is None
+        assert body["protected_backup_overdue"] is True
+        assert "not configured" in body["backup_warning"]
 
     def test_backup_overdue_false_after_a_fresh_scheduled_backup(
         self, client, session, maintenance_settings
@@ -1334,6 +1341,7 @@ class TestMaintenanceStatusRoute:
         body = resp.json()
         assert body["backup_overdue"] is False
         assert body["last_scheduled_backup"]["valid"] is True
+        assert body["last_scheduled_backup"]["storage_tier"] == "degraded"
 
     def test_no_absolute_path_anywhere_in_body(
         self, client, session, maintenance_settings
@@ -1352,6 +1360,7 @@ class TestMaintenanceStatusRoute:
             "/api/system/restores",
             json={
                 "backup_id": backup_id,
+                "storage_tier": "degraded",
                 "current_password": "Admin123",
                 "confirmation": "RESTORE DATABASE",
             },
@@ -1392,6 +1401,7 @@ class TestCrossOperationLock:
     def _restore_body(self, backup_id: str, password: str = "Admin123") -> dict:
         return {
             "backup_id": backup_id,
+            "storage_tier": "degraded",
             "current_password": password,
             "confirmation": "RESTORE DATABASE",
         }

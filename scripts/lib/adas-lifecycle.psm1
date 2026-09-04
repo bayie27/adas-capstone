@@ -52,6 +52,14 @@ function Get-AdasEnvValue {
         [Parameter(Mandatory = $true)][string]$Name,
         [Parameter(Mandatory = $true)][string]$DefaultValue
     )
+    # Match pydantic-settings precedence used by the Python process: an
+    # explicitly inherited environment variable wins over the repo-root
+    # .env.  The scheduled task normally has no such override, so it reads
+    # the same .env value as the backend.
+    $processValue = [Environment]::GetEnvironmentVariable($Name)
+    if ($processValue) {
+        return $processValue
+    }
     $envPath = Join-Path $RepoRoot ".env"
     if (-not (Test-Path -LiteralPath $envPath)) {
         return $DefaultValue
@@ -83,6 +91,34 @@ function Resolve-AdasConfiguredPath {
 function Get-AdasBackupDirectory([string]$RepoRoot) {
     $value = Get-AdasEnvValue -RepoRoot $RepoRoot -Name "BACKUP_DIR" -DefaultValue "var\backups"
     return Resolve-AdasConfiguredPath -RepoRoot $RepoRoot -PathValue $value
+}
+
+function Get-AdasArchiveDirectory([string]$RepoRoot) {
+    $value = Get-AdasEnvValue -RepoRoot $RepoRoot -Name "ARCHIVE_DIR" -DefaultValue "var\archive"
+    return Resolve-AdasConfiguredPath -RepoRoot $RepoRoot -PathValue $value
+}
+
+function Get-AdasLogDirectory([string]$RepoRoot) {
+    $value = Get-AdasEnvValue -RepoRoot $RepoRoot -Name "LOG_DIR" -DefaultValue "var\log"
+    return Resolve-AdasConfiguredPath -RepoRoot $RepoRoot -PathValue $value
+}
+
+function Get-AdasProtectedBackupDirectory([string]$RepoRoot) {
+    $value = Get-AdasEnvValue -RepoRoot $RepoRoot -Name "PROTECTED_BACKUP_DIR" -DefaultValue ""
+    if (-not $value) {
+        return $null
+    }
+    # P30 requires explicit absolute external targets.  Do not make a
+    # relative value look valid by silently anchoring it to the repo.
+    return $value
+}
+
+function Get-AdasProtectedArchiveDirectory([string]$RepoRoot) {
+    $value = Get-AdasEnvValue -RepoRoot $RepoRoot -Name "PROTECTED_ARCHIVE_DIR" -DefaultValue ""
+    if (-not $value) {
+        return $null
+    }
+    return $value
 }
 
 function New-AdasLaunchProfile {

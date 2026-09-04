@@ -120,15 +120,25 @@ DSS_PASS=your-vms-password
 Everything else (session lifetime, rate limiting, snooze/cooldown windows,
 health-sampling intervals, export row limits and TTLs, WebSocket connection
 limits, backup retention) has a safe default and only needs overriding for
-production. Four storage roots are worth knowing about up front since
-they're where the backend writes files outside the database:
+production. Storage roots are worth knowing about up front since they're
+where the backend writes files outside the database:
 
-| Setting         | Default                      | What lives there                                                                                                                                       |
-| --------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SNAPSHOT_ROOT` | `<repo>/ai_engine/snapshots` | Incident snapshot JPEGs, served only via the authenticated `GET /api/alerts/{log_id}/snapshot` — never a public static mount                           |
-| `BACKUP_DIR`    | `<repo>/var/backups`         | Verified online backups, durable restore state, coordinator heartbeat, and maintenance lease files                                                     |
-| `EXPORT_DIR`    | `<repo>/var/exports`         | Generated CSV/PDF/ZIP export artifacts (expire after `EXPORT_ARTIFACT_TTL_HOURS`)                                                                      |
-| `LOG_DIR`       | `<repo>/var/log`             | `scripts\adas-maintenance.ps1`'s transcripts, per-component stdout/stderr, and `maintenance-runs.jsonl` (read by `GET /api/system/maintenance/status`) |
+| Setting                 | Default                      | What lives there                                                                                                                                       |
+| ----------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SNAPSHOT_ROOT`         | `<repo>/ai_engine/snapshots` | Incident snapshot JPEGs, served only via the authenticated `GET /api/alerts/{log_id}/snapshot` — never a public static mount                           |
+| `BACKUP_DIR`            | `<repo>/var/backups`         | Local degraded-fallback backups plus durable restore/coordinator state and the maintenance lease                                                       |
+| `PROTECTED_BACKUP_DIR`  | _(unset)_                    | Optional explicit external backup root; used only after a physical-device probe proves it differs from the live database device                        |
+| `EXPORT_DIR`            | `<repo>/var/exports`         | Generated CSV/PDF/ZIP export artifacts (expire after `EXPORT_ARTIFACT_TTL_HOURS`)                                                                      |
+| `ARCHIVE_DIR`           | `<repo>/var/archive`         | Local degraded-fallback maintenance archives                                                                                                           |
+| `PROTECTED_ARCHIVE_DIR` | _(unset)_                    | Optional explicit external archive root; uses the same physical-device safety probe                                                                    |
+| `LOG_DIR`               | `<repo>/var/log`             | `scripts\adas-maintenance.ps1`'s transcripts, per-component stdout/stderr, and `maintenance-runs.jsonl` (read by `GET /api/system/maintenance/status`) |
+
+`PROTECTED_BACKUP_DIR` and `PROTECTED_ARCHIVE_DIR` must be absolute paths to
+an explicitly mounted, writable device. ADAS never scans for USB/NAS media.
+If the device is missing, full, unwritable, unverifiable, or physically the
+same device as the live database, the operation writes to the local root and
+records a visible `degraded` tier and reason. Existing local artifacts are
+classified as degraded; they are not migrated to the external root.
 
 `var/` is gitignored — safe scratch space for local backups, exports, and
 migration testing.
@@ -439,13 +449,17 @@ Tests use an in-memory SQLite database and never touch `adas.db`. This excludes 
 **Back up or restore from the Administrator dashboard:**
 
 Open **Maintenance** while signed in as an Administrator. The backup table
-shows each restore point by date/time, origin, size, and validation status.
+shows each restore point by date/time, origin, storage tier, size, and
+validation status. Protected and local rows remain distinct even when their
+backup IDs match.
 Expand a valid row and choose **Restore this backup…**. Review the repeated
 metadata in the confirmation window, enter the current Administrator
 password, type the exact confirmation phrase shown there, and choose
 **Restore database**. The dashboard reports when the supervised maintenance
 service is unavailable; an invalid backup can be inspected but has no restore
-action. The newest point is never selected automatically.
+action. The newest point is never selected automatically. The selected
+storage tier is sent with the request, so a protected restore cannot silently
+fall back to a same-device row if the external media disappears.
 
 The confirmation starts a durable, audited request. The system takes the
 services offline briefly, restores the selected point, verifies readiness and
@@ -461,7 +475,9 @@ uv run python -m app.maintenance list
 ```
 
 These are deployment-recovery tools, not steps in the Administrator dashboard
-workflow. On Windows, `scripts\adas-maintenance.ps1` wraps the full
+workflow. `backup` and `archive` try the configured protected roots first,
+then use the local degraded roots with a path-free reason in their JSON
+result. On Windows, `scripts\adas-maintenance.ps1` wraps the full
 backup/restore/restart lifecycle with the independently supervised
 coordinator. Every run is captured under `var\log\` (transcript,
 per-component stdout/stderr, coordinator logs, and one JSON line per
@@ -477,7 +493,7 @@ scripts\register-maintenance-task.ps1 -Verify       # show trigger, next/last ru
 scripts\register-maintenance-task.ps1 -Unregister   # remove
 ```
 
-Registers a Windows Scheduled Task (`\ADAS\DailyRestart`) that fires `adas-maintenance.ps1 -Action Restart` daily at the configured local hour. The daily _backup_ (NFR-18) needs no separate registration — it's an in-app APScheduler cron job (`app.main`, gated on `SCHEDULER_ENABLED`) that runs inside the backend process itself, with an hourly catch-up job and a startup due-check so a laptop that was off at 3 AM still gets that day's backup once it's back on.
+Registers a Windows Scheduled Task (`\ADAS\DailyRestart`) that fires `adas-maintenance.ps1 -Action Restart` daily at the configured local hour. The daily _backup_ (NFR-18) needs no separate registration — it's an in-app APScheduler cron job (`app.main`, gated on `SCHEDULER_ENABLED`) that runs inside the backend process itself, with an hourly catch-up job and a startup due-check so a laptop that was off at 3 AM still gets that day's backup once it's back on. A recent local degraded backup satisfies daily continuity, but a returning protected device still triggers a protected catch-up.
 
 ---
 

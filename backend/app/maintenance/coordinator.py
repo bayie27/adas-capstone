@@ -8,6 +8,7 @@ perform the already-tested offline database operation.
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import os
@@ -30,6 +31,7 @@ from app.maintenance.restore import (
     STATUS_DB_RESTORED,
     STATUS_FAILED,
     STATUS_IN_PROGRESS,
+    STATUS_MANUAL_INTERVENTION,
     STATUS_REQUESTED,
     STATUS_ROLLED_BACK,
     RestoreState,
@@ -62,7 +64,12 @@ ACTIVE_RESTORE_STATUSES = frozenset(
     {STATUS_REQUESTED, STATUS_IN_PROGRESS, STATUS_DB_RESTORED}
 )
 TERMINAL_RESTORE_STATUSES = frozenset(
-    {STATUS_COMPLETED, STATUS_FAILED, STATUS_ROLLED_BACK}
+    {
+        STATUS_COMPLETED,
+        STATUS_FAILED,
+        STATUS_ROLLED_BACK,
+        STATUS_MANUAL_INTERVENTION,
+    }
 )
 _UNIT_NAME = re.compile(r"^[A-Za-z0-9_.@-]+\.service$")
 _USER_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,31}$")
@@ -239,6 +246,11 @@ def get_coordinator_availability(
         return CoordinatorAvailability(
             False, "error", state.platform, state.last_seen_at, "error"
         )
+    restore_state = read_restore_state(backup_dir)
+    if restore_state is not None and restore_state.status == STATUS_MANUAL_INTERVENTION:
+        return CoordinatorAvailability(
+            False, "error", state.platform, state.last_seen_at, "error"
+        )
     if not state.runtime_ready:
         return CoordinatorAvailability(
             False,
@@ -374,9 +386,13 @@ def build_runner_command(
     backup_id: str,
     repo_root: Path,
     powershell_executable: str | None = None,
+    storage_tier: str = "degraded",
 ) -> list[str]:
     """Build the only two runner commands the coordinator is permitted to run."""
     validate_backup_id(backup_id)
+    from app.maintenance.storage import validate_storage_tier
+
+    validate_storage_tier(storage_tier)
     if platform == "windows":
         executable = (
             powershell_executable or shutil.which("pwsh") or shutil.which("powershell")
@@ -392,11 +408,14 @@ def build_runner_command(
             "Restore",
             "-BackupId",
             backup_id,
+            "-StorageTier",
+            storage_tier,
         ]
     if platform == "systemd":
         return [
             str(Path(repo_root) / "backend" / "scripts" / "restore_requested.sh"),
             backup_id,
+            storage_tier,
         ]
     raise ValueError(f"Unsupported restore coordinator platform: {platform!r}")
 
@@ -507,7 +526,7 @@ def watch_restore_requests(
     max_age_seconds: int = RESTORE_REQUEST_MAX_AGE_SECONDS,
     stop_event: Event | None = None,
     runtime_ready_checker: Callable[[str, Path], bool] = runtime_ready,
-    runner_builder: Callable[[str, str, Path], list[str]] | None = None,
+    runner_builder: Callable[..., list[str]] | None = None,
     popen_factory: Callable[..., object] = subprocess.Popen,
     sleep_fn: Callable[[float], None] = time.sleep,
     max_loops: int | None = None,
@@ -605,13 +624,16 @@ def watch_restore_requests(
                     if return_code != 0 and after.status not in {
                         STATUS_FAILED,
                         STATUS_ROLLED_BACK,
+                        STATUS_MANUAL_INTERVENTION,
                     }:
                         logger.warning("Restore runner returned %s.", return_code)
                     heartbeat.state = (
-                        "error" if after.status == STATUS_FAILED else "idle"
+                        "error"
+                        if after.status in {STATUS_FAILED, STATUS_MANUAL_INTERVENTION}
+                        else "idle"
                     )
                     publish()
-                    if after.status == STATUS_FAILED:
+                    if after.status in {STATUS_FAILED, STATUS_MANUAL_INTERVENTION}:
                         # Keep the coordinator alive for diagnostics, but do
                         # not advertise a usable runtime after an unknown
                         # failure.
@@ -738,13 +760,39 @@ def watch_restore_requests(
                 safe_sleep(poll_seconds)
                 continue
             try:
-                command = (
-                    runner_builder(platform, claimed.backup_id, repo_root)
-                    if runner_builder is not None
-                    else build_runner_command(
-                        platform, backup_id=claimed.backup_id, repo_root=repo_root
+                if runner_builder is None:
+                    command = build_runner_command(
+                        platform,
+                        backup_id=claimed.backup_id,
+                        repo_root=repo_root,
+                        storage_tier=claimed.storage_tier,
                     )
-                )
+                else:
+                    parameters = inspect.signature(runner_builder).parameters
+                    if "storage_tier" in parameters:
+                        command = runner_builder(
+                            platform,
+                            claimed.backup_id,
+                            repo_root,
+                            storage_tier=claimed.storage_tier,
+                        )
+                    elif (
+                        any(
+                            parameter.kind == inspect.Parameter.VAR_POSITIONAL
+                            for parameter in parameters.values()
+                        )
+                        or len(parameters) >= 4
+                    ):
+                        command = runner_builder(
+                            platform,
+                            claimed.backup_id,
+                            repo_root,
+                            claimed.storage_tier,
+                        )
+                    else:
+                        # Preserve the small three-argument seam used by
+                        # pre-P30 coordinator tests and integrations.
+                        command = runner_builder(platform, claimed.backup_id, repo_root)
                 heartbeat.state = "executing"
                 publish(executing=True, current_request_id=request_id)
                 child = popen_factory(

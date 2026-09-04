@@ -275,6 +275,8 @@ def test_runner_command_is_fixed_and_validates_the_only_variable(tmp_path):
         "Restore",
         "-BackupId",
         "a" * 32,
+        "-StorageTier",
+        "degraded",
     ]
     with pytest.raises(ValueError):
         coordinator.build_runner_command(
