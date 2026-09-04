@@ -171,6 +171,16 @@ describe("auditFormat", () => {
       expect(formatScalarDetailValue("mode", null)).toBe("Not set")
       expect(formatScalarDetailValue("mode", "")).toBe("Not set")
     })
+
+    it("title-cases alarm sound before/after values instead of showing the raw key", () => {
+      expect(formatScalarDetailValue("alarm_sound_from", "default")).toBe("Default")
+      expect(formatScalarDetailValue("alarm_sound_to", "digital_alarm")).toBe("Digital Alarm")
+    })
+
+    it("appends a seconds unit to snooze duration before/after values", () => {
+      expect(formatScalarDetailValue("snooze_duration_from", 30)).toBe("30 seconds")
+      expect(formatScalarDetailValue("snooze_duration_to", 45)).toBe("45 seconds")
+    })
   })
 
   describe("isOpaqueIdKey", () => {

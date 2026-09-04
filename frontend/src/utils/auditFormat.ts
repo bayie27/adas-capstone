@@ -44,6 +44,12 @@ const DETAIL_KEY_LABELS: Record<string, string> = {
   target_ref: "Target Reference",
   target_type: "Target Type",
   target_username: "Target Username",
+  alarm_sound_from: "Previous Alarm Sound",
+  alarm_sound_to: "New Alarm Sound",
+  volume_from: "Previous Volume",
+  volume_to: "New Volume",
+  snooze_duration_from: "Previous Snooze Duration",
+  snooze_duration_to: "New Snooze Duration",
   user_id: "User ID",
   username: "Username",
   role: "Role",
@@ -413,6 +419,19 @@ export function formatScalarDetailValue(detailKey: string, value: unknown): stri
 
   if (detailKey === "row_count" && typeof value === "number") {
     return new Intl.NumberFormat("en-US").format(value)
+  }
+
+  // Raw alarm-sound allowlist keys ("digital_alarm") — same title-casing the
+  // Alarm Settings page itself uses for the sound dropdown, not the backend's
+  // internal key.
+  if (detailKey === "alarm_sound_from" || detailKey === "alarm_sound_to") {
+    return humanizeDetailKey(strVal)
+  }
+
+  // A bare number reads fine on the settings page next to a "(seconds)"
+  // label, but not on its own in an audit row with no such context.
+  if (detailKey === "snooze_duration_from" || detailKey === "snooze_duration_to") {
+    return `${strVal} seconds`
   }
 
   return strVal
