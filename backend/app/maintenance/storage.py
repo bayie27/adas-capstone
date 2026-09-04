@@ -131,6 +131,24 @@ def _windows_volume_path(path: Path) -> str | None:
         return None
 
 
+def _parse_windows_disk_extent_ids(
+    raw: bytes, returned_bytes: int
+) -> tuple[int, ...] | None:
+    """Read physical disk numbers from a VOLUME_DISK_EXTENTS buffer."""
+    if returned_bytes < 8:
+        return None
+    extent_count = struct.unpack_from("<I", raw, 0)[0]
+    extent_offset = 8
+    extent_size = 24
+    disk_numbers: list[int] = []
+    for index in range(extent_count):
+        offset = extent_offset + index * extent_size
+        if offset + 4 > returned_bytes or offset + 4 > len(raw):
+            return None
+        disk_numbers.append(struct.unpack_from("<I", raw, offset)[0])
+    return tuple(sorted(set(disk_numbers))) or None
+
+
 def _windows_device_identity(path: Path) -> tuple[int, ...] | None:
     """Return the physical disk numbers for a Windows volume.
 
@@ -180,20 +198,9 @@ def _windows_device_identity(path: Path) -> tuple[int, ...] | None:
                 ctypes.byref(returned),
                 None,
             )
-            if not ok or returned.value < 4:
+            if not ok:
                 return None
-            extent_count = struct.unpack_from("<I", output.raw, 0)[0]
-            # DISK_EXTENT is DWORD + LARGE_INTEGER + LARGE_INTEGER.  The
-            # first field is the physical disk number; the structure is 24
-            # bytes on Windows because the two 64-bit fields are aligned.
-            extent_size = 24
-            disk_numbers: list[int] = []
-            for index in range(extent_count):
-                offset = 4 + index * extent_size
-                if offset + 4 > returned.value:
-                    return None
-                disk_numbers.append(struct.unpack_from("<I", output.raw, offset)[0])
-            return tuple(sorted(set(disk_numbers))) or None
+            return _parse_windows_disk_extent_ids(output.raw, returned.value)
         finally:
             kernel32.CloseHandle(handle)
     except (AttributeError, OSError, TypeError, ValueError):

@@ -3,6 +3,7 @@
 import json
 import shutil
 import sqlite3
+import struct
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -147,6 +148,16 @@ def test_protected_probe_rejects_relative_and_unc_paths_before_injected_provider
         == "unc_unsupported"
     )
     assert provider.calls == []
+
+
+def test_windows_disk_extent_parser_reads_aligned_disk_numbers():
+    raw = bytearray(56)
+    struct.pack_into("<I", raw, 0, 2)
+    struct.pack_into("<I", raw, 4, 99)  # alignment padding, not a disk id
+    struct.pack_into("<I", raw, 8, 1)
+    struct.pack_into("<I", raw, 32, 3)
+
+    assert storage_mod._parse_windows_disk_extent_ids(bytes(raw), len(raw)) == (1, 3)
 
 
 def test_default_provider_rejects_unverifiable_device_identity(tmp_path, monkeypatch):
