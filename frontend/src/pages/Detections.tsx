@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { Button } from "@/components/ui/Button"
+import { Button, focusRing } from "@/components/ui/Button"
 import { ClearFiltersButton } from "@/components/ui/ClearFiltersButton"
 import { DateRangePicker } from "@/components/ui/DateRangePicker"
 import { ExportButton } from "@/components/ui/ExportButton"
@@ -580,7 +580,19 @@ export default function Detections() {
               </TableStateRow>
             ) : (
               currentRows.map((item) => (
-                <TableRow key={item.log_id}>
+                <TableRow
+                  key={item.log_id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`View ${formatAlertCode(item.log_id)}`}
+                  onClick={() => openAlertModal(item)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return
+                    event.preventDefault()
+                    openAlertModal(item)
+                  }}
+                  className={cn("cursor-pointer", focusRing)}
+                >
                   <TableCell className="font-medium text-fg">
                     {formatAlertCode(item.log_id)}
                   </TableCell>
