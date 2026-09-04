@@ -540,9 +540,9 @@ The live paper’s Context DFD paragraph currently says the Operator receives AI
 
 The fresh live-paper sweep found three other role-adjacent AI-performance matches that are not additional P29 replacement sites. The Definition of Terms precision paragraph (`31238–31514`) describes operator-confirmed and dismissed labels as metric inputs, not module access. The system-boundary paragraph (`79972–80490`) says the application is available only to authenticated, authorized users; it does not assign AI Performance to Operators and remains accurate. The Context DFD paragraph (`148750–149552`) does assign AI-performance metrics to the Operator, but it is explicitly owned by the pending logical-DFD finding above. Headings, metric definitions, the generic Use Case 7 login/postcondition wording, and the FR-16 content are either role-neutral or covered by blocks 4–6, 7a–8c, and 9–11; no new P29 replacement block is needed.
 
-## Test Execution Tracker manifest (prepared; no live write)
+## Test Execution Tracker manifest and readback
 
-The live `ADAS Test Execution Tracker` was re-read on 2026-09-04 immediately before the approved writes. The manifest below records the exact targets and values; only listed content cells were changed. Native row structure and validation were preserved, manual/evidence columns not listed were retained, and `#D9EAD3` was applied only to changed cells.
+The live `ADAS Test Execution Tracker` was re-read on 2026-09-04 immediately before the approved writes. The manifest below records the exact targets and values; only listed content cells were changed. Native row structure and validation were preserved, manual/evidence columns not listed were retained. After the final whole-cell comment probe failed, the changed text in `G2` received the orange fallback `#E67E22`.
 
 ### 14. `Unit Testing`!A35:J35 — refresh with Administrator evidence
 
@@ -652,17 +652,11 @@ Changed cells: `G2 = 1. Secure access opens /user. 2. Cameras, Detections, Syste
 
 #### Evidence
 
-The Operator journey currently promises AI Performance availability. Preserve A2:F2, H2:I2, row formatting, and any validation; change only G2.
+The Operator journey currently promises AI Performance availability. Preserve A2:F2, H2:I2, row formatting, and any validation; change only G2. The final whole-cell native-comment probe also returned `anchor: null`, so no comment is attached; the changed G2 text is orange `#E67E22` as the requested fallback.
 
-#### Proposed comment (same gate as associated replacement)
+#### Comment status
 
-Comment scope: Logical-paragraph scope — highlight the full changed UAT Journeys G2 acceptance cell.
-
-Previous: 1. Secure access opens /user. 2. Cameras, Detections, System Health, AI Performance, Profile, and Help are available. 3. Users, Audit Log, and Maintenance are unavailable. 4. No new Unverified alert appears from the silent baseline. 5. The pre-seeded Ongoing incident is visible through the bottom-right tray without blocking monitoring.
-
-Codex ID: PS-20260903-ADMIN-AI-PERFORMANCE
-
-Done by Codex.
+No comment — provider-native Sheet anchor unavailable. The final whole-cell probe returned `anchor: null`; the probe thread was removed from the active comment view, and the changed G2 text was colored orange `#E67E22`.
 
 ### 19. `UAT Journeys`!A4:I4 — update OP-J03
 
@@ -776,11 +770,11 @@ Done by Codex.
 
 Package ID: `PS-20260903-ADMIN-AI-PERFORMANCE`
 
-| Target                        | Approved scope                               | Applied/read back                                                                   | Skipped/pending                                                         | Blocked                                                                                                                               |
-| ----------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Defense paper                 | blocks 1a–1c, 2a–2b, 3–6, 7a–7c, 8a–8c, 9–11 | paper text and 18 native comments applied/read back                                 | DFD coordination note pending with `2026-08-23-logical-dfd-overhaul.md` | —                                                                                                                                     |
-| ADAS_Paper_Audit plus tracker | blocks 12–13                                 | audit paragraph/comment and A82:G82 row applied/read back; H82 validation preserved | —                                                                       | preflight found no provider-valid native anchor for the approved A82:H82 Sheet comment; not attempted and retained locally as blocked |
-| ADAS Test Execution Tracker   | blocks 14–22                                 | row/cell writes applied/read back                                                   | —                                                                       | approved Sheet comments returned no provider-valid native anchors; unanchored attempts were resolved and retained locally as blocked  |
-| Standalone comments           | none; no P29 figure-comment block exists     | —                                                                                   | —                                                                       | —                                                                                                                                     |
+| Target                        | Approved scope                               | Applied/read back                                                                   | Skipped/pending                                                         | Blocked                                                                                                                                              |
+| ----------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Defense paper                 | blocks 1a–1c, 2a–2b, 3–6, 7a–7c, 8a–8c, 9–11 | paper text and 18 native comments applied/read back                                 | DFD coordination note pending with `2026-08-23-logical-dfd-overhaul.md` | —                                                                                                                                                    |
+| ADAS_Paper_Audit plus tracker | blocks 12–13                                 | audit paragraph/comment and A82:G82 row applied/read back; H82 validation preserved | —                                                                       | preflight found no provider-valid native anchor for the approved A82:H82 Sheet comment; not attempted and retained locally as blocked                |
+| ADAS Test Execution Tracker   | blocks 14–22                                 | row/cell writes and G2 orange-text fallback applied/read back                       | —                                                                       | approved Sheet comments returned no provider-valid native anchors; final G2 whole-cell probe also returned `anchor: null`; no active comment remains |
+| Standalone comments           | none; no P29 figure-comment block exists     | —                                                                                   | —                                                                       | —                                                                                                                                                    |
 
-Approved Drive writes were applied and read back for the paper, audit Doc, audit tracker row, and Test Execution Tracker rows. The 18 paper comments and one audit-Doc comment have provider-valid native anchors. The audit-tracker Sheet comment was not attempted because preflight found no native anchor; Test Execution Tracker comment attempts returned anchor: null, so they were resolved rather than left unanchored. The proposed Sheet comments remain in this finding as blocked. Rendered-paper page mapping remains `unconfirmed` because the connected export returned a user-scoped file reference that was not available to the local PDF renderer in this session.
+Approved Drive writes were applied and read back for the paper, audit Doc, audit tracker row, and Test Execution Tracker rows. The 18 paper comments and one audit-Doc comment have provider-valid native anchors. The audit-tracker Sheet comment was not attempted because preflight found no native anchor. The final whole-cell Test Tracker probe on `UAT Journeys!G2` also returned `anchor: null`; no active Sheet comment remains, and the changed G2 text is orange `#E67E22`. Rendered-paper page mapping remains `unconfirmed` because the connected export returned a user-scoped file reference that was not available to the local PDF renderer in this session.
