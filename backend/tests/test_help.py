@@ -286,7 +286,7 @@ class TestRoleFilter:
             "getting-started-with-adas",
             "dismissing-a-false-positive",
             "reading-the-dashboard-kpis",
-            "resolving-an-ongoing-incident",
+            "clearing-an-ongoing-incident",
         ):
             detail = client.get(f"/api/help/articles/{slug}", headers=operator_headers)
             assert detail.status_code == 200
