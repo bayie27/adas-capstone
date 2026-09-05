@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   addCalendarDays,
+  getLastSevenDaysRange,
   getPhilippineToday,
   isReversedDateRange,
   startOfCalendarMonth,
@@ -56,5 +57,15 @@ describe("Calendar-day arithmetic for the quick-range presets", () => {
   it("finds the first day of the month regardless of which day it's asked from", () => {
     expect(startOfCalendarMonth("2026-08-30")).toBe("2026-08-01")
     expect(startOfCalendarMonth("2026-08-01")).toBe("2026-08-01")
+  })
+
+  it("builds the inclusive 7-day window ending today from an explicit today", () => {
+    expect(getLastSevenDaysRange("2026-09-05")).toEqual({ start: "2026-08-30", end: "2026-09-05" })
+  })
+
+  it("defaults to the Philippine calendar day when today isn't passed in", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-09-05T04:00:00Z"))
+    expect(getLastSevenDaysRange()).toEqual({ start: "2026-08-30", end: "2026-09-05" })
   })
 })

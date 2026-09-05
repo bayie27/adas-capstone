@@ -46,6 +46,19 @@ export function addCalendarDays(value: string, days: number): string {
   return toCalendarDateString(date)
 }
 
+/**
+ * The inclusive 7-day window ending today, in Philippine calendar days.
+ * `today` defaults to `getPhilippineToday()`; a caller that already computed
+ * it (DateRangePicker builds every preset off one shared `today`) can pass it
+ * through instead of asking `Intl` twice for the same instant.
+ */
+export function getLastSevenDaysRange(today: string = getPhilippineToday()): {
+  start: string
+  end: string
+} {
+  return { start: addCalendarDays(today, -6), end: today }
+}
+
 /** The first day of `value`'s month, same UTC-anchored arithmetic as `addCalendarDays`. */
 export function startOfCalendarMonth(value: string): string {
   const [year, month] = value.split("-").map(Number)
