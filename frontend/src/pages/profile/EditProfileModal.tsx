@@ -7,7 +7,12 @@ import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
 import { Button } from "@/components/ui/Button"
 import { ConfirmDiscardModal } from "@/components/ui/ConfirmDiscardModal"
-import { updateMyProfile, type UpdateMyProfileInput, type UserRecord } from "@/api/users"
+import {
+  myProfileQueryKey,
+  updateMyProfile,
+  type UpdateMyProfileInput,
+  type UserRecord,
+} from "@/api/users"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getApiError, getApiErrorMessage } from "@/api/client"
 import { useConfirmedClose } from "@/hooks/useConfirmedClose"
@@ -17,8 +22,6 @@ interface EditProfileModalProps {
   profile: UserRecord
   onClose: () => void
 }
-
-const PROFILE_QUERY_KEY = ["my-profile"] as const
 
 export function EditProfileModal({ profile, onClose }: EditProfileModalProps) {
   const navigate = useNavigate()
@@ -38,8 +41,9 @@ export function EditProfileModal({ profile, onClose }: EditProfileModalProps) {
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateMyProfileInput) => updateMyProfile(payload),
     onSuccess: (updatedProfile) => {
-      queryClient.setQueryData(PROFILE_QUERY_KEY, updatedProfile)
-      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY })
+      const profileQueryKey = myProfileQueryKey(currentUserId)
+      queryClient.setQueryData(profileQueryKey, updatedProfile)
+      queryClient.invalidateQueries({ queryKey: profileQueryKey })
 
       const usernameChanged =
         currentUsername !== null && updatedProfile.username !== currentUsername

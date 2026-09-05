@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 
 import { logoutUser } from "@/api/auth"
-import { getMyProfile } from "@/api/users"
+import { getMyProfile, myProfileQueryKey } from "@/api/users"
 import { useAlertStore } from "@/store/useAlertStore"
 import { useAuthStore } from "@/store/useAuthStore"
 import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/format"
@@ -70,6 +70,7 @@ export function Sidebar() {
   const navigate = useNavigate()
   const role = useAuthStore((state) => state.role)
   const username = useAuthStore((state) => state.username)
+  const userId = useAuthStore((state) => state.userId)
   const clearSession = useAuthStore((state) => state.clearSession)
   const clockOffsetMs = useAlertStore((state) => state.clockOffsetMs)
   const clockIsSkewed = Math.abs(clockOffsetMs) > CLOCK_SKEW_WARNING_MS
@@ -113,7 +114,7 @@ export function Sidebar() {
   ]
 
   const profileQuery = useQuery({
-    queryKey: ["my-profile"],
+    queryKey: myProfileQueryKey(userId),
     queryFn: getMyProfile,
     enabled: Boolean(username),
     staleTime: 60_000,
