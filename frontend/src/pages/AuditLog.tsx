@@ -52,6 +52,7 @@ import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useUserOptions } from "@/hooks/useUserOptions"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
+import { toPhilippineDayEnd, toPhilippineDayStart } from "@/utils/dateRange"
 import { formatFullDateTime } from "@/utils/datetime"
 import { getUserFullName } from "@/utils/format"
 import { cn } from "@/utils/cn"
@@ -179,8 +180,8 @@ export default function AuditLog() {
 
   const filters = {
     search: debouncedSearch || undefined,
-    start_date: startDate || undefined,
-    end_date: endDate || undefined,
+    start_date: toPhilippineDayStart(startDate),
+    end_date: toPhilippineDayEnd(endDate),
     action: action ? [action as (typeof AUDIT_ACTIONS)[number]] : undefined,
     result: result ? [result as (typeof AUDIT_RESULTS)[number]] : undefined,
     user_id: userId ? [Number(userId)] : undefined,
@@ -350,8 +351,8 @@ export default function AuditLog() {
               report_type: "audit",
               format,
               search: debouncedSearch || undefined,
-              start_date: startDate || undefined,
-              end_date: endDate || undefined,
+              start_date: toPhilippineDayStart(startDate),
+              end_date: toPhilippineDayEnd(endDate),
               user_id: userId ? [Number(userId)] : undefined,
               action: action ? [action] : undefined,
               result: result ? [result] : undefined,

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
 import Dashboard from "./Dashboard"
@@ -124,5 +125,42 @@ describe("Dashboard KPI delta badges", () => {
     const delta = await screen.findByText("0%")
     expect(delta).not.toHaveClass("text-danger")
     expect(delta).not.toHaveClass("text-success")
+  })
+})
+
+describe("Dashboard date-filter API bounds", () => {
+  it("sends full Philippine day-boundary instants, not bare calendar dates", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date("2026-08-20T04:00:00Z"))
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
+
+    vi.mocked(getDashboardAnalytics).mockResolvedValue(
+      response({
+        ongoing: 0,
+        total_accidents: 0,
+        total_cleared: 0,
+        ongoing_delta_pct: null,
+        total_accidents_delta_pct: null,
+        total_cleared_delta_pct: null,
+      }),
+    )
+    renderDashboard()
+
+    await user.click(screen.getByRole("button", { name: "Filter analytics by date" }))
+    await user.click(screen.getByRole("button", { name: "Custom range" }))
+    await user.click(screen.getByRole("button", { name: "August 16, 2026" }))
+    await user.click(screen.getByRole("button", { name: "August 30, 2026" }))
+    await user.click(screen.getByRole("button", { name: "Apply" }))
+
+    await waitFor(() =>
+      expect(getDashboardAnalytics).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          start_date: "2026-08-16T00:00:00+08:00",
+          end_date: "2026-08-30T23:59:59.999999+08:00",
+        }),
+      ),
+    )
+
+    vi.useRealTimers()
   })
 })

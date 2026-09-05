@@ -33,6 +33,7 @@ import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { useAuthStore } from "@/store/useAuthStore"
+import { toPhilippineDayEnd, toPhilippineDayStart } from "@/utils/dateRange"
 import { formatPercent } from "@/utils/format"
 import { getApiErrorMessage } from "@/api/client"
 import { toast } from "@/store/useToastStore"
@@ -51,6 +52,8 @@ export default function AiPerformance() {
   const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
 
   const hasDateFilter = Boolean(startDate || endDate || cameraId)
+  const phStartDate = toPhilippineDayStart(startDate)
+  const phEndDate = toPhilippineDayEnd(endDate)
 
   const camerasQuery = useCameraOptions()
 
@@ -92,8 +95,8 @@ export default function AiPerformance() {
     queryFn: () =>
       getPerformanceAnalytics({
         search: debouncedSearchTerm || undefined,
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
+        start_date: phStartDate,
+        end_date: phEndDate,
         camera_id: cameraId ? [Number(cameraId)] : undefined,
         limit: pageSize,
         offset,
@@ -106,8 +109,8 @@ export default function AiPerformance() {
       exportPerformanceAnalytics(
         {
           search: debouncedSearchTerm || undefined,
-          start_date: startDate || undefined,
-          end_date: endDate || undefined,
+          start_date: phStartDate,
+          end_date: phEndDate,
           camera_id: cameraId ? [Number(cameraId)] : undefined,
         },
         format,
@@ -144,8 +147,8 @@ export default function AiPerformance() {
     queryFn: () =>
       getAlerts({
         status: ["Cleared", "Dismissed"],
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
+        start_date: phStartDate,
+        end_date: phEndDate,
         camera_id: cameraId ? [Number(cameraId)] : undefined,
         limit: 1,
       }),
@@ -181,8 +184,8 @@ export default function AiPerformance() {
     setShowWarningModal(false)
     toast.info("Preparing retraining dataset export...")
     retrainingJobMutation.mutate({
-      start_date: startDate || undefined,
-      end_date: endDate || undefined,
+      start_date: phStartDate,
+      end_date: phEndDate,
       camera_id: cameraId ? [Number(cameraId)] : undefined,
     })
   }

@@ -12,6 +12,7 @@ import { ExportButton, type ExportFormat } from "@/components/ui/ExportButton"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
+import { toPhilippineDayEnd, toPhilippineDayStart } from "@/utils/dateRange"
 import { formatHourLabel, truncateLabel } from "@/utils/format"
 import type { AnalyticsFilters } from "@/api/analytics"
 import { RiCarLine, RiCheckboxLine, RiRefreshLine } from "@remixicon/react"
@@ -47,8 +48,8 @@ export default function Dashboard() {
   const [cameraId, setCameraId] = useState("")
 
   const filters: AnalyticsFilters = {
-    start_date: startDate || undefined,
-    end_date: endDate || undefined,
+    start_date: toPhilippineDayStart(startDate),
+    end_date: toPhilippineDayEnd(endDate),
     camera_id: cameraId ? [Number(cameraId)] : undefined,
   }
 
