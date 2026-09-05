@@ -35,7 +35,7 @@ export function ConfirmDiscardModal({
           <Button type="button" variant="outline" size="md" onClick={onCancel}>
             Cancel
           </Button>
-          <Button type="button" variant="destructive" size="md" onClick={onDiscard}>
+          <Button type="button" variant="primary" size="md" onClick={onDiscard}>
             Discard changes
           </Button>
         </div>

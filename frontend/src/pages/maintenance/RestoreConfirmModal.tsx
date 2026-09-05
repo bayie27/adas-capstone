@@ -210,7 +210,7 @@ export function RestoreConfirmModal({ backup, onClose, onSuccess }: RestoreConfi
             </Button>
             <Button
               type="submit"
-              variant="destructive"
+              variant="primary"
               size="sm"
               disabled={!canSubmit}
               isLoading={mutation.isPending}
