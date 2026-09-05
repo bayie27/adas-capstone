@@ -6,9 +6,11 @@ import { RiUser3Line } from "@remixicon/react"
 import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
 import { Button } from "@/components/ui/Button"
+import { ConfirmDiscardModal } from "@/components/ui/ConfirmDiscardModal"
 import { updateMyProfile, type UpdateMyProfileInput, type UserRecord } from "@/api/users"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getApiError, getApiErrorMessage } from "@/api/client"
+import { useConfirmedClose } from "@/hooks/useConfirmedClose"
 import { toast } from "@/store/useToastStore"
 
 interface EditProfileModalProps {
@@ -83,6 +85,10 @@ export function EditProfileModal({ profile, onClose }: EditProfileModalProps) {
     firstName.trim() !== profile.first_name ||
     lastName.trim() !== profile.last_name ||
     username.trim() !== profile.username
+  const { requestClose, isConfirmOpen, confirmDiscard, cancelDiscard } = useConfirmedClose(
+    isDirty,
+    onClose,
+  )
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -112,78 +118,85 @@ export function EditProfileModal({ profile, onClose }: EditProfileModalProps) {
   }
 
   return (
-    <Modal
-      isOpen
-      onClose={onClose}
-      title="Edit Personal Information"
-      subtitle="Update your personal account details."
-      icon={
-        <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
-          <RiUser3Line size={28} className="text-fg" />
-        </div>
-      }
-    >
-      <form onSubmit={handleSubmit} className="flex flex-col">
-        <hr className="mb-6 -mx-6 border-t border-stroke" />
+    <>
+      <Modal
+        isOpen
+        onClose={requestClose}
+        title="Edit Personal Information"
+        subtitle="Update your personal account details."
+        icon={
+          <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
+            <RiUser3Line size={28} className="text-fg" />
+          </div>
+        }
+      >
+        <form onSubmit={handleSubmit} className="flex flex-col">
+          <hr className="mb-6 -mx-6 border-t border-stroke" />
 
-        <div className="space-y-4">
-          <Input
-            label="First Name"
-            type="text"
-            value={firstName}
-            onChange={(event) => {
-              setErrorMessage(null)
-              setFirstName(event.target.value)
-            }}
-          />
+          <div className="space-y-4">
+            <Input
+              label="First Name"
+              type="text"
+              value={firstName}
+              onChange={(event) => {
+                setErrorMessage(null)
+                setFirstName(event.target.value)
+              }}
+            />
 
-          <Input
-            label="Last Name"
-            type="text"
-            value={lastName}
-            onChange={(event) => {
-              setErrorMessage(null)
-              setLastName(event.target.value)
-            }}
-          />
+            <Input
+              label="Last Name"
+              type="text"
+              value={lastName}
+              onChange={(event) => {
+                setErrorMessage(null)
+                setLastName(event.target.value)
+              }}
+            />
 
-          <Input
-            label="Username"
-            type="text"
-            value={username}
-            error={usernameError ?? undefined}
-            onChange={(event) => {
-              setErrorMessage(null)
-              setUsernameError(null)
-              setUsername(event.target.value)
-            }}
-          />
-        </div>
+            <Input
+              label="Username"
+              type="text"
+              value={username}
+              error={usernameError ?? undefined}
+              onChange={(event) => {
+                setErrorMessage(null)
+                setUsernameError(null)
+                setUsername(event.target.value)
+              }}
+            />
+          </div>
 
-        {errorMessage ? <p className="mt-4 text-xs text-danger">{errorMessage}</p> : null}
+          {errorMessage ? <p className="mt-4 text-xs text-danger">{errorMessage}</p> : null}
 
-        <hr className="my-6 -mx-6 border-t border-stroke" />
+          <hr className="my-6 -mx-6 border-t border-stroke" />
 
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="outline"
-            className="border-stroke-strong"
-            onClick={onClose}
-            disabled={updateMutation.isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={!isDirty}
-            isLoading={updateMutation.isPending}
-            loadingLabel="Saving..."
-          >
-            Save Changes
-          </Button>
-        </div>
-      </form>
-    </Modal>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              className="border-stroke-strong"
+              onClick={requestClose}
+              disabled={updateMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={!isDirty}
+              isLoading={updateMutation.isPending}
+              loadingLabel="Saving..."
+            >
+              Save Changes
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      <ConfirmDiscardModal
+        isOpen={isConfirmOpen}
+        onCancel={cancelDiscard}
+        onDiscard={confirmDiscard}
+      />
+    </>
   )
 }
