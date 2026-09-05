@@ -4,7 +4,12 @@ import { RiCalendar2Line, RiCheckLine } from "@remixicon/react"
 import { cn } from "@/utils/cn"
 import { focusRing } from "@/components/ui/Button"
 import { DateRangeCalendar } from "@/components/ui/DateRangeCalendar"
-import { addCalendarDays, getPhilippineToday, startOfCalendarMonth } from "@/utils/dateRange"
+import {
+  addCalendarDays,
+  getLastSevenDaysRange,
+  getPhilippineToday,
+  startOfCalendarMonth,
+} from "@/utils/dateRange"
 
 type PresetKey = "today" | "7" | "30" | "month" | "custom"
 
@@ -38,7 +43,7 @@ function computePresetRange(
     case "today":
       return { start: today, end: today }
     case "7":
-      return { start: addCalendarDays(today, -6), end: today }
+      return getLastSevenDaysRange(today)
     case "30":
       return { start: addCalendarDays(today, -29), end: today }
     case "month":
