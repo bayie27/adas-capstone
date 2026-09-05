@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import Detections from "./Detections"
 import type { AlertListResponse } from "@/api/alerts"
@@ -71,12 +71,11 @@ function renderDetections() {
 }
 
 async function setDateRangeAndStatus(user: ReturnType<typeof userEvent.setup>) {
-  fireEvent.input(screen.getByLabelText("Filter incidents by date start"), {
-    target: { value: "2026-08-16" },
-  })
-  fireEvent.input(screen.getByLabelText("Filter incidents by date end"), {
-    target: { value: "2026-08-30" },
-  })
+  await user.click(screen.getByRole("button", { name: "Filter incidents by date" }))
+  await user.click(screen.getByRole("button", { name: "Custom range" }))
+  await user.click(screen.getByRole("button", { name: "August 16, 2026" }))
+  await user.click(screen.getByRole("button", { name: "August 30, 2026" }))
+  await user.click(screen.getByRole("button", { name: "Apply" }))
   await user.click(screen.getByRole("button", { name: "All statuses" }))
   await user.click(screen.getByText("Cleared"))
 }
@@ -90,16 +89,26 @@ describe("Detections date-filter export parity", () => {
     vi.mocked(getCameras).mockResolvedValue(EMPTY_CAMERAS)
     vi.mocked(exportAlerts).mockResolvedValue(undefined)
     vi.mocked(createExportJob).mockResolvedValue({ job_id: "job-1", status: "queued" })
+    // Inside August 2026 so the date picker's "Custom range" calendar opens
+    // straight onto the month setDateRangeAndStatus clicks into, with no
+    // month-nav clicks needed.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date("2026-08-20T04:00:00Z"))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it("uses committed Philippine date bounds for the list and CSV export", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
     renderDetections()
 
     await setDateRangeAndStatus(user)
 
-    expect(screen.getByLabelText("Filter incidents by date start")).toHaveValue("2026-08-16")
-    expect(screen.getByLabelText("Filter incidents by date end")).toHaveValue("2026-08-30")
+    expect(screen.getByRole("button", { name: "Filter incidents by date" })).toHaveTextContent(
+      "Aug 16 – Aug 30, 2026",
+    )
     await waitFor(() =>
       expect(getAlerts).toHaveBeenLastCalledWith({ ...PHILIPPINE_FILTERS, limit: 10, offset: 0 }),
     )
@@ -111,7 +120,7 @@ describe("Detections date-filter export parity", () => {
   })
 
   it("uses the same effective filters for an incident background export job", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
     vi.mocked(getAlerts).mockResolvedValue({ total_filtered: 60_000, logs: [] })
     renderDetections()
 
@@ -129,7 +138,7 @@ describe("Detections date-filter export parity", () => {
   })
 
   it("clears dates from the next list request", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
     renderDetections()
 
     await setDateRangeAndStatus(user)
@@ -170,51 +179,12 @@ describe("Detections date-filter export parity", () => {
     )
   })
 
-  it("blocks export rather than sending an unfiltered reversed date range", async () => {
-    const user = userEvent.setup()
-    renderDetections()
-    await user.click(screen.getByRole("button", { name: "Export" }))
-
-    fireEvent.input(screen.getByLabelText("Filter incidents by date start"), {
-      target: { value: "2026-08-31" },
-    })
-    fireEvent.input(screen.getByLabelText("Filter incidents by date end"), {
-      target: { value: "2026-08-30" },
-    })
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Start date must be on or before end date.",
-    )
-    expect(screen.getByRole("button", { name: "Export" })).toBeDisabled()
-    await user.click(screen.getByRole("menuitem", { name: /export as csv/i }))
-    expect(exportAlerts).not.toHaveBeenCalled()
-    expect(createExportJob).not.toHaveBeenCalled()
-    expect(getAlerts).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        start_date: "2026-08-31T00:00:00+08:00",
-        end_date: "2026-08-30T23:59:59.999999+08:00",
-      }),
-    )
-  })
-
-  it("blocks a background job that was opened before the date range became invalid", async () => {
-    const user = userEvent.setup()
-    vi.mocked(getAlerts).mockResolvedValue({ total_filtered: 60_000, logs: [] })
-    renderDetections()
-    await waitFor(() => expect(getAlerts).toHaveBeenCalled())
-    await user.click(screen.getByRole("button", { name: "Export" }))
-
-    fireEvent.input(screen.getByLabelText("Filter incidents by date start"), {
-      target: { value: "2026-08-31" },
-    })
-    fireEvent.input(screen.getByLabelText("Filter incidents by date end"), {
-      target: { value: "2026-08-30" },
-    })
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Start date must be on or before end date.",
-    )
-    await user.click(screen.getByRole("button", { name: /run as a background job \(csv\)/i }))
-    expect(createExportJob).not.toHaveBeenCalled()
-  })
+  // The two tests that used to live here ("blocks export rather than sending
+  // an unfiltered reversed date range" / "...background job...") drove the
+  // old two independent native inputs into a reversed start > end state by
+  // firing raw input events. DateRangeCalendar's two-click range picker
+  // always orders its picks (see DateRangePicker.test.tsx's "orders a custom
+  // range regardless of which day is clicked first"), so that state is no
+  // longer reachable through this UI — isReversedDateRange itself is still
+  // covered directly in dateRange.test.ts.
 })

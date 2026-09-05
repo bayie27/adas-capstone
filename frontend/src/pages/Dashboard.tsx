@@ -12,6 +12,7 @@ import { ExportButton, type ExportFormat } from "@/components/ui/ExportButton"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
+import { getLastSevenDaysRange, toPhilippineDayEnd, toPhilippineDayStart } from "@/utils/dateRange"
 import { formatHourLabel, truncateLabel } from "@/utils/format"
 import type { AnalyticsFilters } from "@/api/analytics"
 import { RiCarLine, RiCheckboxLine, RiRefreshLine } from "@remixicon/react"
@@ -42,13 +43,18 @@ function deltaTone(value: number, worseWhenPositive: boolean): boolean | null {
 }
 
 export default function Dashboard() {
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
+  // Trends are what this screen is for -- a fresh load defaults to the last
+  // 7 days rather than an unbounded all-time query. Seeded from one
+  // lazily-initialized range so both fields agree even if the initializers
+  // ran a millisecond apart across a day boundary.
+  const [defaultRange] = useState(() => getLastSevenDaysRange())
+  const [startDate, setStartDate] = useState(defaultRange.start)
+  const [endDate, setEndDate] = useState(defaultRange.end)
   const [cameraId, setCameraId] = useState("")
 
   const filters: AnalyticsFilters = {
-    start_date: startDate || undefined,
-    end_date: endDate || undefined,
+    start_date: toPhilippineDayStart(startDate),
+    end_date: toPhilippineDayEnd(endDate),
     camera_id: cameraId ? [Number(cameraId)] : undefined,
   }
 
