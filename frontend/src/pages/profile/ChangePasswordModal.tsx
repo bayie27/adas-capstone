@@ -6,9 +6,11 @@ import { Modal } from "@/components/ui/Modal"
 import { Button } from "@/components/ui/Button"
 import { PasswordInput } from "@/components/ui/PasswordInput"
 import { NoticeBanner, type NoticeState } from "@/components/ui/NoticeBanner"
+import { ConfirmDiscardModal } from "@/components/ui/ConfirmDiscardModal"
 import { changeMyPassword } from "@/api/users"
 import { getApiError, getApiErrorMessage } from "@/api/client"
 import { getFieldValidationMessage } from "@/utils/apiFieldErrors"
+import { useConfirmedClose } from "@/hooks/useConfirmedClose"
 import {
   validateNewPassword,
   validatePasswordConfirmation,
@@ -80,6 +82,13 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
     onSuccess,
   })
 
+  const isDirty =
+    form.old_password !== "" || form.new_password !== "" || form.confirm_password !== ""
+  const { requestClose, isConfirmOpen, confirmDiscard, cancelDiscard } = useConfirmedClose(
+    isDirty,
+    onClose,
+  )
+
   function updateField<K extends keyof PasswordFormState>(field: K, value: PasswordFormState[K]) {
     setNotice(null)
     setFieldErrors((current) => ({ ...current, [field]: undefined }))
@@ -113,72 +122,79 @@ export function ChangePasswordModal({ onClose, onSuccess }: ChangePasswordModalP
     notice ?? (apiOutcome?.generic ? { tone: "error" as const, message: apiOutcome.generic } : null)
 
   return (
-    <Modal
-      isOpen
-      onClose={onClose}
-      title="Change Password"
-      subtitle="Update your account password."
-      icon={
-        <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
-          <RiLockLine size={28} className="text-fg" />
-        </div>
-      }
-    >
-      <form onSubmit={handleSubmit} className="flex flex-col">
-        <hr className="mb-6 -mx-6 border-t border-stroke" />
+    <>
+      <Modal
+        isOpen
+        onClose={requestClose}
+        title="Change Password"
+        subtitle="Update your account password."
+        icon={
+          <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full border border-stroke">
+            <RiLockLine size={28} className="text-fg" />
+          </div>
+        }
+      >
+        <form onSubmit={handleSubmit} className="flex flex-col">
+          <hr className="mb-6 -mx-6 border-t border-stroke" />
 
-        <div className="space-y-4">
-          <PasswordInput
-            label="Current Password"
-            value={form.old_password}
-            autoComplete="current-password"
-            error={oldPasswordError}
-            onChange={(value) => updateField("old_password", value)}
-          />
+          <div className="space-y-4">
+            <PasswordInput
+              label="Current Password"
+              value={form.old_password}
+              autoComplete="current-password"
+              error={oldPasswordError}
+              onChange={(value) => updateField("old_password", value)}
+            />
 
-          <PasswordInput
-            label="New Password"
-            value={form.new_password}
-            error={newPasswordError}
-            onChange={(value) => updateField("new_password", value)}
-          />
+            <PasswordInput
+              label="New Password"
+              value={form.new_password}
+              error={newPasswordError}
+              onChange={(value) => updateField("new_password", value)}
+            />
 
-          <PasswordInput
-            label="Confirm New Password"
-            value={form.confirm_password}
-            error={confirmPasswordError}
-            onChange={(value) => updateField("confirm_password", value)}
-          />
+            <PasswordInput
+              label="Confirm New Password"
+              value={form.confirm_password}
+              error={confirmPasswordError}
+              onChange={(value) => updateField("confirm_password", value)}
+            />
 
-          <p className="text-[12px] text-fg-muted">
-            Must be at least 8 characters long and contain at least 1 number.
-          </p>
-        </div>
+            <p className="text-[12px] text-fg-muted">
+              Must be at least 8 characters long and contain at least 1 number.
+            </p>
+          </div>
 
-        {currentNotice ? <NoticeBanner notice={currentNotice} /> : null}
+          {currentNotice ? <NoticeBanner notice={currentNotice} /> : null}
 
-        <hr className="my-6 -mx-6 border-t border-stroke" />
+          <hr className="my-6 -mx-6 border-t border-stroke" />
 
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="outline"
-            className="border-stroke-strong"
-            onClick={onClose}
-            disabled={mutation.isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={mutation.isPending}
-            isLoading={mutation.isPending}
-            loadingLabel="Saving..."
-          >
-            Save Changes
-          </Button>
-        </div>
-      </form>
-    </Modal>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              className="border-stroke-strong"
+              onClick={requestClose}
+              disabled={mutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={mutation.isPending}
+              isLoading={mutation.isPending}
+              loadingLabel="Saving..."
+            >
+              Save Changes
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      <ConfirmDiscardModal
+        isOpen={isConfirmOpen}
+        onCancel={cancelDiscard}
+        onDiscard={confirmDiscard}
+      />
+    </>
   )
 }
