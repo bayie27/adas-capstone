@@ -125,6 +125,17 @@ function activeUnverifiedCount(alerts: AlertLog[], snoozedUntil: Record<number, 
   ).length
 }
 
+/**
+ * Reactive counterpart to `detectionSound.ts`'s `isAlarmSounding()` — the
+ * same 0<->non-0 fact `syncSound` drives the alarm off, but readable by a
+ * component via the store hook rather than only imperatively.
+ */
+export function useHasActiveAlarm(): boolean {
+  const alerts = useAlertStore((state) => state.alerts)
+  const snoozedUntil = useAlertStore((state) => state.snoozedUntil)
+  return activeUnverifiedCount(alerts, snoozedUntil) > 0
+}
+
 const snoozeTimers: Record<number, ReturnType<typeof setTimeout>> = {}
 
 function cancelSnoozeTimer(logId: number) {
