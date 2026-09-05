@@ -6,9 +6,9 @@ Run this deliberately, not on every change. It exists because development ran ah
 
 ## How to run it
 
-Steps 3–7 of `PROCEDURE.md` apply unchanged — same evidence rules, same OLD/NEW/JUSTIFICATION shape, same dedupe against the live artifacts, same queue. Only the input differs: instead of a diff, you walk one area from the list below.
+Steps 3–7 of `PROCEDURE.md` apply unchanged — same evidence rules, same OLD/NEW/Evidence shape, same dedupe against the live artifacts, same queue. Only the input differs: instead of a diff, you walk the requested areas below in batches. Step 8 remains available only for explicitly approved writes in a permitted runtime.
 
-**Do one area per run.** A sweep of everything in a single pass produces a wall of findings nobody triages, and blows past the point where you can still check each one properly.
+**Review one area at a time.** For a whole-system request, continue through all requested areas in successive batches within the task, recording coverage and reporting progress. For an unspecified inventory request, choose and state a starting area. Ask for clarification only when the requested scope cannot reasonably be determined. Batching is not a reason to stop before the requested scope is complete.
 
 ## Areas, and what to enumerate in each
 

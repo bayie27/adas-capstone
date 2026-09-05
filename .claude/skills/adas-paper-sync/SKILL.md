@@ -11,7 +11,7 @@ For a whole-system sweep rather than a diff, read [`paper_sync/INVENTORY.md`](..
 
 ## Claude-specific notes
 
-- **Read the paper and both audit artifacts with the native Google Drive connector.** This runtime is read-only; do not enter the optional Codex Drive-write phase in the shared procedure.
+- **Read the paper and both audit artifacts with the native Google Drive connector.** This runtime is read-only with respect to Drive; do not enter the optional Codex Drive-write phase in the shared procedure. End with the local report and human-application instructions, without soliciting approval for prohibited writes. Local findings and tracker regeneration remain part of the analysis workflow.
 - **Every finding is written to a file** under `paper_sync/findings/`. Claude does not write the Doc, Sheet, or comments; a human applies them. Do not describe a local finding as though it reached Drive.
 - **`gh` is available** for the PR input mode (`gh pr diff`, `gh pr view`).
 
@@ -25,7 +25,7 @@ The paper is ~271k characters and `ADAS_Paper_Audit` ~90k, so `read_file_content
 uv run python paper_sync/extract_doc.py <saved-path> <scratchpad>/paper.txt
 ```
 
-Do not re-fetch the document to get around this, and do not reach for `jq` — it is not installed here.
+Reuse this session extraction for the same verified document version; refresh when it changes or cannot be verified. Do not re-fetch merely to get around the output cap, and do not reach for `jq` — it is not installed here.
 
 **Grep hides what you are looking for in these files.** Every Doc paragraph exports as one very long line, and Grep's content mode replaces a long matching line with `[Omitted long matching line]` — so the sentence you need is invisible exactly when you have found it. Search with a context window and `-o` instead, which prints the window rather than the line:
 
