@@ -129,6 +129,37 @@ describe("Dashboard KPI delta badges", () => {
 })
 
 describe("Dashboard date-filter API bounds", () => {
+  it("defaults to the last 7 days on first load, with no interaction", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date("2026-09-05T04:00:00Z"))
+
+    vi.mocked(getDashboardAnalytics).mockResolvedValue(
+      response({
+        ongoing: 0,
+        total_accidents: 0,
+        total_cleared: 0,
+        ongoing_delta_pct: null,
+        total_accidents_delta_pct: null,
+        total_cleared_delta_pct: null,
+      }),
+    )
+    renderDashboard()
+
+    await waitFor(() =>
+      expect(getDashboardAnalytics).toHaveBeenCalledWith(
+        expect.objectContaining({
+          start_date: "2026-08-30T00:00:00+08:00",
+          end_date: "2026-09-05T23:59:59.999999+08:00",
+        }),
+      ),
+    )
+    expect(
+      await screen.findByRole("button", { name: "Filter analytics by date" }),
+    ).toHaveTextContent("Last 7 days")
+
+    vi.useRealTimers()
+  })
+
   it("sends full Philippine day-boundary instants, not bare calendar dates", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date("2026-08-20T04:00:00Z"))
