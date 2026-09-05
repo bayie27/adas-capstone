@@ -19,8 +19,8 @@ describe("Button", () => {
     rerender(<Button variant="outline">x</Button>)
     expect(screen.getByRole("button")).toHaveClass("border-border")
 
-    rerender(<Button variant="destructive">x</Button>)
-    expect(screen.getByRole("button")).toHaveClass("bg-danger")
+    rerender(<Button variant="ghost">x</Button>)
+    expect(screen.getByRole("button")).toHaveClass("bg-transparent")
   })
 
   it("swaps the label and disables itself while loading", () => {

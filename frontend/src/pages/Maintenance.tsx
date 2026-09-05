@@ -202,7 +202,7 @@ function BackupRow({
                     ) : null}
                     <Button
                       type="button"
-                      variant="destructive"
+                      variant="primary"
                       size="sm"
                       disabled={!restoreAvailable}
                       onClick={() => onRequestRestore(backup)}

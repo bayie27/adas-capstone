@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Modal } from "@/components/ui/Modal"
 import { PasswordInput } from "@/components/ui/PasswordInput"
+import { ConfirmDiscardModal } from "@/components/ui/ConfirmDiscardModal"
+import { useConfirmedClose } from "@/hooks/useConfirmedClose"
 import { truncateId } from "@/utils/auditFormat"
 import { formatFullDateTime } from "@/utils/datetime"
 import { formatFileSize } from "@/utils/format"
@@ -72,6 +74,11 @@ export function RestoreConfirmModal({ backup, onClose, onSuccess }: RestoreConfi
   const [copied, setCopied] = useState(false)
   const expected = expectedRestoreConfirmation()
   const canSubmit = password.length > 0 && confirmation === expected
+  const isDirty = password !== "" || confirmation !== ""
+  const { requestClose, isConfirmOpen, confirmDiscard, cancelDiscard } = useConfirmedClose(
+    isDirty,
+    onClose,
+  )
 
   async function handleCopyBackupId() {
     try {
@@ -102,116 +109,123 @@ export function RestoreConfirmModal({ backup, onClose, onSuccess }: RestoreConfi
   const apiError = mutation.isError ? describeRestoreError(mutation.error) : null
 
   return (
-    <Modal
-      isOpen
-      onClose={onClose}
-      title="Restore database"
-      subtitle="Review the selected restore point before continuing."
-      icon={
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-danger-border bg-danger-subtle">
-          <RiAlertLine size={20} className="text-danger" />
-        </div>
-      }
-    >
-      <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-6">
-        <div className="rounded-lg border border-stroke bg-surface-2 p-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Selected backup
-          </h2>
-          <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs">
-            <dt className="text-fg-muted">Created</dt>
-            <dd className="text-right text-fg">{formatFullDateTime(backup.created_at)}</dd>
-            <dt className="text-fg-muted">Origin</dt>
-            <dd className="text-right text-fg">{formatBackupOrigin(backup.origin)}</dd>
-            <dt className="text-fg-muted">Storage tier</dt>
-            <dd className="text-right text-fg">{formatStorageTier(backup.storage_tier)}</dd>
-            {backup.storage_reason ? (
-              <>
-                <dt className="text-fg-muted">Fallback reason</dt>
-                <dd className="text-right text-warning">
-                  {backup.storage_reason.replaceAll("_", " ")}
-                </dd>
-              </>
-            ) : null}
-            <dt className="text-fg-muted">Size</dt>
-            <dd className="text-right text-fg">{formatFileSize(backup.file_size)}</dd>
-            <dt className="text-fg-muted">Validation</dt>
-            <dd className="text-right">
-              <Badge variant="subtle" tone={backup.valid ? "success" : "danger"}>
-                {backup.valid ? "Valid" : "Invalid"}
-              </Badge>
-            </dd>
-            <dt className="text-fg-muted">Reference (optional)</dt>
-            <dd className="flex items-center justify-end gap-1 text-right text-fg">
-              <span className="font-mono" title={backup.backup_id}>
-                {truncateId(backup.backup_id)}
-              </span>
-              <button
-                type="button"
-                aria-label="Copy full backup ID"
-                title={copied ? "Copied!" : "Copy full backup ID"}
-                onClick={handleCopyBackupId}
-                className="rounded p-0.5 text-fg-muted transition-colors hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stroke-strong"
-              >
-                <RiFileCopyLine size={12} />
-              </button>
-            </dd>
-          </dl>
-        </div>
+    <>
+      <Modal
+        isOpen
+        onClose={requestClose}
+        title="Restore database"
+        subtitle="Review the selected restore point before continuing."
+        icon={
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-danger-border bg-danger-subtle">
+            <RiAlertLine size={20} className="text-danger" />
+          </div>
+        }
+      >
+        <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-6">
+          <div className="rounded-lg border border-stroke bg-surface-2 p-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              Selected backup
+            </h2>
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs">
+              <dt className="text-fg-muted">Created</dt>
+              <dd className="text-right text-fg">{formatFullDateTime(backup.created_at)}</dd>
+              <dt className="text-fg-muted">Origin</dt>
+              <dd className="text-right text-fg">{formatBackupOrigin(backup.origin)}</dd>
+              <dt className="text-fg-muted">Storage tier</dt>
+              <dd className="text-right text-fg">{formatStorageTier(backup.storage_tier)}</dd>
+              {backup.storage_reason ? (
+                <>
+                  <dt className="text-fg-muted">Fallback reason</dt>
+                  <dd className="text-right text-warning">
+                    {backup.storage_reason.replaceAll("_", " ")}
+                  </dd>
+                </>
+              ) : null}
+              <dt className="text-fg-muted">Size</dt>
+              <dd className="text-right text-fg">{formatFileSize(backup.file_size)}</dd>
+              <dt className="text-fg-muted">Validation</dt>
+              <dd className="text-right">
+                <Badge variant="subtle" tone={backup.valid ? "success" : "danger"}>
+                  {backup.valid ? "Valid" : "Invalid"}
+                </Badge>
+              </dd>
+              <dt className="text-fg-muted">Reference (optional)</dt>
+              <dd className="flex items-center justify-end gap-1 text-right text-fg">
+                <span className="font-mono" title={backup.backup_id}>
+                  {truncateId(backup.backup_id)}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Copy full backup ID"
+                  title={copied ? "Copied!" : "Copy full backup ID"}
+                  onClick={handleCopyBackupId}
+                  className="rounded p-0.5 text-fg-muted transition-colors hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stroke-strong"
+                >
+                  <RiFileCopyLine size={12} />
+                </button>
+              </dd>
+            </dl>
+          </div>
 
-        <div className="space-y-2 rounded-lg border border-danger-border bg-danger-subtle p-4 text-xs leading-relaxed text-fg">
-          <p>This replaces the current database with the selected historical restore point.</p>
-          <p>
-            Users will be signed out, and monitoring may be briefly unavailable while the system
-            restarts.
-          </p>
-          <p>The system will restart automatically after you accept.</p>
-          <p>Restoration is available only for a validated backup point.</p>
-        </div>
+          <div className="space-y-2 rounded-lg border border-danger-border bg-danger-subtle p-4 text-xs leading-relaxed text-fg">
+            <p>This replaces the current database with the selected historical restore point.</p>
+            <p>
+              Users will be signed out, and monitoring may be briefly unavailable while the system
+              restarts.
+            </p>
+            <p>The system will restart automatically after you accept.</p>
+            <p>Restoration is available only for a validated backup point.</p>
+          </div>
 
-        <div className="space-y-4">
-          <PasswordInput
-            label="Current Password"
-            value={password}
-            autoComplete="current-password"
-            error={apiError?.password}
-            onChange={(value) => {
-              mutation.reset()
-              setPassword(value)
-            }}
-          />
+          <div className="space-y-4">
+            <PasswordInput
+              label="Current Password"
+              value={password}
+              autoComplete="current-password"
+              error={apiError?.password}
+              onChange={(value) => {
+                mutation.reset()
+                setPassword(value)
+              }}
+            />
 
-          <Input
-            label={`Type "${expected}" to confirm`}
-            value={confirmation}
-            error={apiError?.confirmation}
-            onChange={(event) => {
-              mutation.reset()
-              setConfirmation(event.target.value)
-            }}
-            autoComplete="off"
-            placeholder={expected}
-          />
-        </div>
+            <Input
+              label={`Type "${expected}" to confirm`}
+              value={confirmation}
+              error={apiError?.confirmation}
+              onChange={(event) => {
+                mutation.reset()
+                setConfirmation(event.target.value)
+              }}
+              autoComplete="off"
+              placeholder={expected}
+            />
+          </div>
 
-        {apiError?.generic ? <p className="text-xs text-danger">{apiError.generic}</p> : null}
+          {apiError?.generic ? <p className="text-xs text-danger">{apiError.generic}</p> : null}
 
-        <div className="flex items-center justify-end gap-3">
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="destructive"
-            size="sm"
-            disabled={!canSubmit}
-            isLoading={mutation.isPending}
-            loadingLabel="Starting restore…"
-          >
-            Restore database
-          </Button>
-        </div>
-      </form>
-    </Modal>
+          <div className="flex items-center justify-end gap-3">
+            <Button type="button" variant="outline" size="sm" onClick={requestClose}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={!canSubmit}
+              isLoading={mutation.isPending}
+              loadingLabel="Starting restore…"
+            >
+              Restore database
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      <ConfirmDiscardModal
+        isOpen={isConfirmOpen}
+        onCancel={cancelDiscard}
+        onDiscard={confirmDiscard}
+      />
+    </>
   )
 }

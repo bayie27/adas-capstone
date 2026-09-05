@@ -16,7 +16,7 @@ export const focusRing =
 /** §2.8 — opacity only, no colour change, consistent across the app. */
 export const disabledTreatment = "disabled:cursor-not-allowed disabled:opacity-60"
 
-export type ButtonVariant = "primary" | "secondary" | "outline" | "destructive" | "ghost"
+export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost"
 export type ButtonSize = "sm" | "md" | "icon"
 
 const VARIANTS: Record<ButtonVariant, string> = {
@@ -25,7 +25,6 @@ const VARIANTS: Record<ButtonVariant, string> = {
   // §2.2 — Dark/Secondary fill; §2.8 hover raises it to the elevated surface.
   secondary: "bg-surface-3 text-fg hover:bg-surface-2",
   outline: "border border-border bg-transparent text-fg hover:bg-surface-2",
-  destructive: "bg-danger text-fg-on-primary hover:bg-danger/90",
   ghost: "bg-transparent text-fg hover:bg-surface-2",
 }
 
