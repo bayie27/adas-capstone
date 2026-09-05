@@ -33,7 +33,7 @@ import { usePagination } from "@/hooks/usePagination"
 import { useCameraOptions } from "@/hooks/useCameraOptions"
 import { useExportJobSubmit } from "@/hooks/useExportJobSubmit"
 import { useAuthStore } from "@/store/useAuthStore"
-import { toPhilippineDayEnd, toPhilippineDayStart } from "@/utils/dateRange"
+import { getLastSevenDaysRange, toPhilippineDayEnd, toPhilippineDayStart } from "@/utils/dateRange"
 import { formatPercent } from "@/utils/format"
 import { getApiErrorMessage } from "@/api/client"
 import { toast } from "@/store/useToastStore"
@@ -46,8 +46,11 @@ const ITEMS_PER_PAGE = 10
 export default function AiPerformance() {
   const role = useAuthStore((state) => state.role)
   const [searchTerm, setSearchTerm] = useState("")
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
+  // Same reasoning as Dashboard.tsx: a performance-trend screen defaults to
+  // the last 7 days rather than an unbounded all-time query.
+  const [defaultRange] = useState(() => getLastSevenDaysRange())
+  const [startDate, setStartDate] = useState(defaultRange.start)
+  const [endDate, setEndDate] = useState(defaultRange.end)
   const [cameraId, setCameraId] = useState("")
   const debouncedSearchTerm = useDebouncedValue(searchTerm.trim(), 300)
 
