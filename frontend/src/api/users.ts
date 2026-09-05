@@ -70,6 +70,15 @@ export async function getMyProfile() {
   return data
 }
 
+/**
+ * Scoped by userId so a logged-out session's cached profile can never be
+ * served back to the next user who logs in under the same shared
+ * QueryClient (see Sidebar.tsx, ProfileSettings.tsx, profile/EditProfileModal.tsx).
+ */
+export function myProfileQueryKey(userId: number | null) {
+  return ["my-profile", userId] as const
+}
+
 export async function updateMyProfile(input: UpdateMyProfileInput) {
   const { data } = await api.patch<UserRecord>("/users/me", input)
   return data

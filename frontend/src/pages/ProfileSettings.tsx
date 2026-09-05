@@ -5,7 +5,7 @@ import { RiEditBoxLine, RiLockPasswordLine } from "@remixicon/react"
 import { Badge, BadgeDot } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
-import { getMyProfile } from "@/api/users"
+import { getMyProfile, myProfileQueryKey } from "@/api/users"
 import { useAuthStore } from "@/store/useAuthStore"
 import { formatUserRole, getUserFullName, getUserInitials } from "@/utils/format"
 import { formatShortDateTime, formatRelativeDateTime } from "@/utils/datetime"
@@ -14,17 +14,16 @@ import { EditProfileModal } from "@/pages/profile/EditProfileModal"
 import { AlarmSettingsCard } from "@/pages/profile/AlarmSettingsCard"
 import { toast } from "@/store/useToastStore"
 
-const PROFILE_QUERY_KEY = ["my-profile"] as const
-
 type ModalState = { kind: "closed" } | { kind: "password" } | { kind: "edit_profile" }
 
 export default function ProfileSettings() {
   const role = useAuthStore((state) => state.role)
   const username = useAuthStore((state) => state.username)
+  const userId = useAuthStore((state) => state.userId)
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
 
   const profileQuery = useQuery({
-    queryKey: PROFILE_QUERY_KEY,
+    queryKey: myProfileQueryKey(userId),
     queryFn: getMyProfile,
   })
 

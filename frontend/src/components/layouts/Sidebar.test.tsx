@@ -31,6 +31,7 @@ vi.mock("@/api/users", () => ({
     role: "Admin",
     is_active: true,
   }),
+  myProfileQueryKey: (userId: number | null) => ["my-profile", userId],
 }))
 
 describe("Sidebar", () => {
