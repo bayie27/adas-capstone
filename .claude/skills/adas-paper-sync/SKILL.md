@@ -1,6 +1,6 @@
 ---
 name: adas-paper-sync
-description: Check whether a code change has invalidated something the ADAS capstone defense document claims, and produce the exact replacement text plus a tracker row. Use this whenever someone asks if a change, branch, PR, or commit range affects the paper; asks what needs updating in the paper, a chapter, an FR/NFR, a use case, a figure, or the data dictionary; asks for something to be added to the paper audit or the tracker; or asks to sweep the built system for things the paper never described. Also use it when a change touches routes, model columns, constants the paper quotes, dependencies, deployment, or AI-engine behaviour and nobody has checked the paper yet. Do NOT use it to edit the defense document itself (a human applies the change), and do NOT use it for code review.
+description: Check whether a code change has invalidated something the ADAS capstone defense document claims, and produce the exact replacement text plus a tracker row. Use this whenever someone asks if a change, branch, PR, or commit range affects the paper; asks what needs updating in the paper, a chapter, an FR/NFR, a use case, a figure, or the data dictionary; asks for something to be added to the paper-sync findings or the tracker; or asks to sweep the built system for things the paper never described. Also use it when a change touches routes, model columns, constants the paper quotes, dependencies, deployment, or AI-engine behaviour and nobody has checked the paper yet. Do NOT use it to edit the defense document itself (a human applies the change), and do NOT use it for code review.
 ---
 
 # ADAS paper sync
@@ -11,7 +11,7 @@ For a whole-system sweep rather than a diff, read [`paper_sync/INVENTORY.md`](..
 
 ## Claude-specific notes
 
-- **Read the paper and both audit artifacts with the native Google Drive connector.** This runtime is read-only with respect to Drive; do not enter the optional Codex Drive-write phase in the shared procedure. End with the local report and human-application instructions, without soliciting approval for prohibited writes. Local findings and tracker regeneration remain part of the analysis workflow.
+- **Read the paper and tracker Sheet with the native Google Drive connector.** This runtime is read-only with respect to Drive; do not enter the optional Codex Drive-write phase in the shared procedure. End with the local report and human-application instructions, without soliciting approval for prohibited writes. Local findings and tracker regeneration remain part of the analysis workflow.
 - **Every finding is written to a file** under `paper_sync/findings/`. Claude does not write the Doc, Sheet, or comments; a human applies them. Do not describe a local finding as though it reached Drive.
 - **`gh` is available** for the PR input mode (`gh pr diff`, `gh pr view`).
 
@@ -19,7 +19,7 @@ For a whole-system sweep rather than a diff, read [`paper_sync/INVENTORY.md`](..
 
 The Drive tools are **deferred** — `ToolSearch` for them before the first call, or they will not be available.
 
-The paper is ~271k characters and `ADAS_Paper_Audit` ~90k, so `read_file_content` overflows the tool output cap on both and the harness hands back a saved file path instead of the content. Extract once, then work on the plain text:
+The paper can exceed the output cap of `read_file_content`, causing the harness to return a saved file path instead of content. Extract once, then work on the plain text:
 
 ```bash
 uv run python paper_sync/extract_doc.py <saved-path> <scratchpad>/paper.txt

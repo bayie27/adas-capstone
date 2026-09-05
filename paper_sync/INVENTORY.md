@@ -31,7 +31,7 @@ Steps 3–7 of `PROCEDURE.md` apply unchanged — same evidence rules, same OLD/
 3. **Described as absent, but it exists?** Drift class 2. The expensive one — the paper is understating the system to a panel.
 4. **Not described at all?** Drift class 3. Judge whether it _should_ be: not every internal helper belongs in a defense document. A subsystem with its own failure modes, its own operational story, or its own requirement does. A utility function does not.
 
-The already-known class-3 items are listed in [`PROCEDURE.md`](PROCEDURE.md) Step 4 — one list, one place, so it cannot drift. Check it and the live `ADAS_Paper_Audit` before re-raising any of them.
+The already-known class-3 items are listed in [`PROCEDURE.md`](PROCEDURE.md) Step 4 — one list, one place, so it cannot drift. Check it, the live tracker Sheet, and local findings before re-raising any of them.
 
 ## Scoping honestly
 

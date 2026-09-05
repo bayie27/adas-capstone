@@ -18,7 +18,7 @@ Three that catch everyone, repeated here because they cost the most time:
 
 The code has run ahead of the paper. When a change touches something the paper describes — routes, model columns, constants quoted by value, dependencies, deployment, AI-engine behaviour — check it with [`paper_sync/PROCEDURE.md`](paper_sync/PROCEDURE.md).
 
-When verified drift exists, that procedure produces a local proposed edit with evidence. Otherwise report no drift within the examined scope; do not create an empty finding. Codex can read the whole native Docs through Google Drive MCP, map passages to rendered PDF pages, and apply explicitly approved updates to the defense paper, audit Doc, and tracker Sheet with read-back verification; a TXT export is only a fallback. Claude Code remains read-only and requires a human to apply them.
+When verified drift exists, that procedure produces a local proposed edit with evidence. Otherwise report no drift within the examined scope; do not create an empty finding. Codex can read the whole native Docs through Google Drive MCP, map passages to rendered PDF pages, and apply explicitly approved updates to the defense paper and tracker Sheet with read-back verification; a TXT export is only a fallback. Claude Code remains read-only and requires a human to apply them.
 
 It is also packaged as an invocable skill, `adas-paper-sync`, in both directories this repo carries:
 

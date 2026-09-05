@@ -8,17 +8,16 @@ This procedure answers one question — **the code changed; which paper claims d
 
 ---
 
-## The three Drive artifacts
+## The two Drive artifacts
 
 Everything live is in Google Drive. **Nothing in this repo is authoritative for paper state.**
 
 | Artifact                                               | Type  | Role                                                                                   |
 | ------------------------------------------------------ | ----- | -------------------------------------------------------------------------------------- |
 | `Group7_Capstone Project Defense Document - ITCAPROJ1` | Doc   | **The paper.** Read during analysis; write only under the defense-paper approval gate. |
-| `ADAS_Paper_Audit`                                     | Doc   | **The full explanation** of each proposed change.                                      |
 | `ADAS_Paper_Audit_Tracker`                             | Sheet | **The assignable summary.** One row per change.                                        |
 
-First perform the local claim-bearing triage in Step 2. If no relevant surface changed, report that result without fetching Drive artifacts. Otherwise read all three during analysis. Findings always go to `paper_sync/findings/`. Codex may apply approved updates to the relevant Doc and Sheet in a separate gated phase; Claude remains read-only and leaves the Drive write to a human.
+First perform the local claim-bearing triage in Step 2. If no relevant surface changed, report that result without fetching Drive artifacts. Otherwise read both during analysis. Findings always go to `paper_sync/findings/`. Codex may apply approved updates to the relevant Doc and Sheet in a separate gated phase; Claude remains read-only and leaves the Drive write to a human.
 
 `paper-audit.md` and `ADAS_Paper_Revisions_Tracker.pdf` in this repo are **superseded snapshots**. Useful history, never current state. Do not read them to decide what the paper says today.
 
@@ -53,18 +52,15 @@ For each claim-bearing surface, find its ground truth using [`CLAIM_SOURCES.md`]
 
 Before reading the paper, read what has already been decided:
 
-1. `ADAS_Paper_Audit` — already an entry, or a recorded verified-correct note?
-2. `ADAS_Paper_Audit_Tracker` — already a row?
-3. `paper_sync/findings/` — already written locally, waiting to be moved up?
+1. `ADAS_Paper_Audit_Tracker` — already a row?
+2. `paper_sync/findings/` — already written locally, waiting to be moved up?
 
-`ADAS_Paper_Audit` holds proposed text that has not reached the paper yet, so it is worth checking rather than trusting: a wrong number there becomes a wrong number in the paper the moment someone applies it.
-
-Re-raising something already cleared is the fastest way to lose the panel's trust, and all three exist partly to prevent it.
+Re-raising something already cleared is the fastest way to lose the panel's trust, and these records help prevent it.
 
 **Deduplicate each site individually, then continue reviewing the remaining input.** Check the live site and the existing finding's ledger:
 
 - **OLD still there** — report the existing pending block without duplicating it. Resume it when application is already authorized.
-- **OLD absent** — verify the intended replacement or deletion at the correct site and every outstanding ledger obligation, including comments, audit updates, and tracker changes, before describing the finding as fully synced. Absence of OLD alone proves neither application nor completion.
+- **OLD absent** — verify the intended replacement or deletion at the correct site and every outstanding ledger obligation, including comments and tracker changes, before describing the finding as fully synced. Absence of OLD alone proves neither application nor completion.
 
 Report verified historical status corrections for the user to apply; do not automatically rewrite older findings. Newly implicated sites belong to the current finding under Step 5. Resuming an approved package is not a new analysis: retain its package ID and block numbers and maintain its execution ledger under Step 8.
 
@@ -153,7 +149,7 @@ For a logical-paragraph comment with three or more distinct changes, replace the
 
 For a standalone review comment, put the review text first, then the `Codex ID:` line, and keep `Done by Codex.` as the exact final line. This comment is an audit trail, not part of NEW. Do not add it to unchanged sites, preserved tracker cells, or redraw-only items unless a separate comment is useful.
 
-The comment uses the same approval gate as its replacement: a defense-paper replacement and its `Previous` comment are approved together under **Defense paper**; an audit-Doc replacement and its comment are approved under **Audit + tracker**; a tracker Sheet replacement uses the exact orange text fallback in that same gate. Only a standalone review comment uses the separate Comments gate.
+The comment uses the same approval gate as its replacement: a defense-paper replacement and its `Previous` comment are approved together under **Defense paper**; a tracker Sheet replacement and its exact orange text fallback are approved together under **Tracker Sheet**. Only a standalone review comment uses the separate Comments gate.
 
 For Sheets, do not create comments. Color only the exact new or changed word/phrase text orange (`#E67E22`) using rich-text `textFormatRuns`; preserve unchanged characters and all other cell formatting. Never color the whole cell unless the entire cell value is new or changed.
 
@@ -178,7 +174,7 @@ synced: false
 
 ## Changes
 
-### 1. Defense paper or audit Doc — visible heading/table label
+### 1. Defense paper — visible heading/table label
 
 Page/s: <rendered pages and observation date>
 
@@ -275,11 +271,11 @@ Done by Codex.
 Package ID: PS-YYYYMMDD-FINDING-SLUG
 Approval source: <user approval reference, or not yet approved>
 
-| Target                        | Approved scope | Applied/read back | Skipped/pending        | Blocked |
-| ----------------------------- | -------------- | ----------------- | ---------------------- | ------- |
-| Defense paper                 | —              | —                 | blocks 1 and 3         | —       |
-| ADAS_Paper_Audit plus tracker | —              | —                 | block 2                | —       |
-| Standalone comments           | —              | —                 | comment 3, if proposed | —       |
+| Target              | Approved scope | Applied/read back | Skipped/pending        | Blocked |
+| ------------------- | -------------- | ----------------- | ---------------------- | ------- |
+| Defense paper       | —              | —                 | blocks 1 and 3         | —       |
+| Tracker Sheet       | —              | —                 | block 2                | —       |
+| Standalone comments | —              | —                 | comment 3, if proposed | —       |
 ```
 
 For paragraph, insertion, and deletion variants, retain every field and use the operation and comment-scope rules in Step 5. Record redraw execution separately from its optional comment; a verified comment does not mean the figure has been redrawn.
@@ -340,10 +336,10 @@ Include the finding/package's stable `Codex ID:` in the report so the user can s
 Keep these three permission categories separate. Request approval only for applicable, unapproved scope; mark empty gates "Not applicable" and already-approved gates "Approved" without asking again:
 
 1. **Defense paper** — permission for only the listed defense-paper replacements.
-2. **ADAS_Paper_Audit plus tracker Sheet** — one combined permission for the listed audit-Doc and Sheet updates.
+2. **Tracker Sheet** — permission for only the listed tracker updates and their formatting fallbacks.
 3. **Standalone comments** — a separate permission only for comments that are not attached to a replacement, such as a figure/redraw review comment.
 
-The Defense paper gate includes each paper replacement's `Previous` comment. The combined Audit + tracker gate includes each audit-Doc replacement's `Previous` comment or tracker replacement's exact text-format fallback. For native Google Docs, use the Docs `insertComment` request through `google_drive_batch_update_document`, with the exact NEW range, only after its associated replacement has been read back. Do not synthesize Drive `kix.*` anchors or use the Drive comments bulk endpoint for Doc highlighting. If a native highlight cannot be created and verified, leave the proposed comment in the report and do not create an unanchored comment.
+The Defense paper gate includes each paper replacement's `Previous` comment. The Tracker Sheet gate includes each tracker replacement's exact text-format fallback. For native Google Docs, use the Docs `insertComment` request through `google_drive_batch_update_document`, with the exact NEW range, only after its associated replacement has been read back. Do not synthesize Drive `kix.*` anchors or use the Drive comments bulk endpoint for Doc highlighting. If a native highlight cannot be created and verified, leave the proposed comment in the report and do not create an unanchored comment.
 
 Claude ends with the local report and human-application instructions; do not solicit permission for Drive writes this workflow forbids it to perform. Sharing a wrapper does not grant another runtime Codex write capability or permission; follow its explicitly configured runtime policy.
 
