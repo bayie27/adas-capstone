@@ -6,9 +6,9 @@ Run this deliberately, not on every change. It exists because development ran ah
 
 ## How to run it
 
-Steps 3–7 of `PROCEDURE.md` apply unchanged — same evidence rules, same OLD/NEW/JUSTIFICATION shape, same dedupe against the live artifacts, same queue. Only the input differs: instead of a diff, you walk one area from the list below.
+Steps 3–7 of `PROCEDURE.md` apply unchanged — same evidence rules, same OLD/NEW/Evidence shape, same dedupe against the live artifacts, same queue. Only the input differs: instead of a diff, you walk the requested areas below in batches. Step 8 remains available only for explicitly approved writes in a permitted runtime.
 
-**Do one area per run.** A sweep of everything in a single pass produces a wall of findings nobody triages, and blows past the point where you can still check each one properly.
+**Review one area at a time.** For a whole-system request, continue through all requested areas in successive batches within the task, recording coverage and reporting progress. For an unspecified inventory request, choose and state a starting area. Ask for clarification only when the requested scope cannot reasonably be determined. Batching is not a reason to stop before the requested scope is complete.
 
 ## Areas, and what to enumerate in each
 
@@ -31,7 +31,7 @@ Steps 3–7 of `PROCEDURE.md` apply unchanged — same evidence rules, same OLD/
 3. **Described as absent, but it exists?** Drift class 2. The expensive one — the paper is understating the system to a panel.
 4. **Not described at all?** Drift class 3. Judge whether it _should_ be: not every internal helper belongs in a defense document. A subsystem with its own failure modes, its own operational story, or its own requirement does. A utility function does not.
 
-The already-known class-3 items are listed in [`PROCEDURE.md`](PROCEDURE.md) Step 4 — one list, one place, so it cannot drift. Check it and the live `ADAS_Paper_Audit` before re-raising any of them.
+The already-known class-3 items are listed in [`PROCEDURE.md`](PROCEDURE.md) Step 4 — one list, one place, so it cannot drift. Check it, the live tracker Sheet, and local findings before re-raising any of them.
 
 ## Scoping honestly
 

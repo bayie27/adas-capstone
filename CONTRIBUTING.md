@@ -1,20 +1,23 @@
 # Contributing
 
-This is the "what to run before committing" doc. **To get the system actually running, follow the [Quickstart](README.md#quickstart--clone-to-first-detection) in the README** — it is the full ordered path from clone to first detection, including the database seed and the camera streams, which the three commands below do not cover.
+This documents development setup, verification, and the contribution workflow. Testing scope and completion rules live in [CLAUDE.md](CLAUDE.md#verification-policy). **To get the system actually running, follow the [Quickstart](README.md#quickstart--clone-to-first-detection) in the README** — it is the full ordered path from clone to first detection, including the database seed and the camera streams, which the three commands below do not cover.
 
 ## First-time setup (development tooling)
 
-```bash
-uv sync --extra ai
-pnpm install
-cp .env.example .env
-```
+These steps are for an unconfigured checkout, not prerequisites to repeat on every task. Run commands from the repo root. Reuse working dependencies and configuration; install only what the task needs.
 
-- `uv sync --extra ai` — installs the backend plus the AI engine's heavy ML deps (torch, ultralytics, opencv). Use plain `uv sync` if you're only touching the backend/frontend and don't need to run the AI engine.
-  - **No NVIDIA GPU?** Use `uv sync --extra ai-cpu` instead. The two are mutually exclusive: `ai` pins torch to the CUDA index, `ai-cpu` to PyTorch's CPU index so it pulls no `nvidia-*` packages at all.
-  - **TensorRT is not included** in either. It is a speed optimisation nothing currently uses, and its PyPI package downloads several GB inside a build step with no timeout — which hung a dev machine indefinitely, twice. It lives in an opt-in `ai-trt` extra; the GPU works fine without it, since CUDA comes from torch.
-- `pnpm install` — **run this at the repo root**, not inside `frontend/`. This is a pnpm workspace, and running install at the root is what triggers husky's `prepare` script and activates the git hooks below. Running it only inside `frontend/` will leave your hooks inert.
-- `cp .env.example .env` — then fill in real values. The backend hard-fails on startup if any of the 10 keys are missing.
+- Backend tooling: `uv sync`.
+- Running the AI engine: `uv sync --extra ai` for NVIDIA GPU support, or `uv sync --extra ai-cpu` without it. The extras are mutually exclusive. Neither includes TensorRT; the optional `ai-trt` extra and its source/pinning constraints are documented in `pyproject.toml`.
+- Frontend/root tooling: `pnpm install` at the repo root activates the Husky hooks.
+- Create `.env` from `.env.example` only when it is absent; preserve existing values. Fill in the required settings documented by `.env.example` and `backend/app/core/config.py`. Do not display secrets while checking configuration.
+
+For example, in PowerShell:
+
+```powershell
+if (-not (Test-Path -LiteralPath .env)) {
+    Copy-Item -LiteralPath .env.example -Destination .env
+}
+```
 
 For the optional P30 protected-storage lane, set `PROTECTED_BACKUP_DIR` and
 `PROTECTED_ARCHIVE_DIR` to absolute paths on the explicitly mounted external
@@ -25,7 +28,7 @@ The local `BACKUP_DIR` remains the control/state root, including the restore
 request and emergency rollback reserve. Do not put credentials or demo
 secrets in `.env.example`.
 
-Also run this once, locally (it's a personal git config, not something that can be committed):
+Optional, once per checkout: configure Git blame to skip the bulk formatting commit. This local Git setting is not a prerequisite for development:
 
 ```bash
 git config blame.ignoreRevsFile .git-blame-ignore-revs
@@ -33,27 +36,29 @@ git config blame.ignoreRevsFile .git-blame-ignore-revs
 
 Without it, `git blame` will stop at the repo's one bulk formatting commit (`style: apply ruff and prettier formatting`) instead of the commit that actually introduced a line.
 
-## The one command
+## Verification commands
 
-`pnpm check` is what pre-push runs, so **you don't need to run it yourself first** — just push. Run `pnpm full:check` before opening a PR; it's everything `pnpm check` does, plus a production build and the E2E suite.
+When a push is already authorized, let pre-push run `pnpm check`; do not run it manually beforehand. This instruction does not authorize a push. Run `pnpm full:check` before opening a PR; it includes `check`, a production build, and the E2E suite.
+
+The table is a command reference, not a checklist to execute in full. During implementation, format changed files and run the narrowest relevant checks. Pre-commit handles staged files; pre-push runs `pnpm check`; the pre-PR gate is `pnpm full:check`. Do not add separate full-suite confirmation runs immediately before a gate that includes them. Required gates remain required even when they overlap earlier targeted verification.
 
 `check` is two independent language lanes run in parallel, because nothing in the Python lane depends on anything in the TypeScript lane. `run-p -l` prefixes each output line with its lane so a failure in either is still readable.
 
-| Script                | Runs                                                                |
-| --------------------- | ------------------------------------------------------------------- |
-| `pnpm format`         | `prettier --write .` + `uv run ruff format .`                       |
-| `pnpm format:check`   | Same, in check mode (no writes)                                     |
-| `pnpm lint`           | `pnpm --filter frontend lint` + `uv run ruff check .`               |
-| `pnpm lint:fix`       | Same, with `--fix`                                                  |
-| `pnpm test:be`        | `uv run pytest -n auto` (xdist, one worker per core)                |
-| `pnpm test:fe`        | `pnpm --filter frontend test:run` (Vitest)                          |
-| `pnpm test`           | `test:be` then `test:fe`                                            |
-| `pnpm test:e2e`       | `playwright test` — boots both servers, CI-only, not in `check`     |
-| `pnpm build`          | `pnpm --filter frontend build`                                      |
-| `pnpm check:be`       | `format:check:ruff` → `lint:ruff` → `test:be`                       |
-| `pnpm check:fe`       | `format:check:prettier` → `lint:frontend` → `typecheck` → `test:fe` |
-| **`pnpm check`**      | `check:be` ‖ `check:fe`, in parallel — **what pre-push runs**       |
-| **`pnpm full:check`** | `check` → `build` → `test:e2e` — the pre-PR command                 |
+| Script                | Runs                                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| `pnpm format`         | `prettier --write .` + `uv run ruff format .`                                          |
+| `pnpm format:check`   | Same, in check mode (no writes)                                                        |
+| `pnpm lint`           | `pnpm --filter frontend lint` + `uv run ruff check .`                                  |
+| `pnpm lint:fix`       | Same, with `--fix`                                                                     |
+| `pnpm test:be`        | `uv run pytest -n auto` (xdist, one worker per core)                                   |
+| `pnpm test:fe`        | `pnpm --filter frontend test:run` (Vitest)                                             |
+| `pnpm test`           | `test:be` then `test:fe`                                                               |
+| `pnpm test:e2e`       | `playwright test --project=chromium` — local pre-PR gate and CI; excluded from `check` |
+| `pnpm build`          | `pnpm --filter frontend build`                                                         |
+| `pnpm check:be`       | `format:check:ruff` → `lint:ruff` → `test:be`                                          |
+| `pnpm check:fe`       | `format:check:prettier` → `lint:frontend` → `typecheck` → `test:fe`                    |
+| **`pnpm check`**      | `check:be` ‖ `check:fe`, in parallel — **what pre-push runs**                          |
+| **`pnpm full:check`** | `check` → `build` → `test:e2e` — the pre-PR command                                    |
 
 **Running the backend suite directly:** `uv run pytest -n auto` for everything, or just `uv run pytest backend/tests/test_alerts.py` for one area — a targeted run skips xdist's worker startup and gives cleaner tracebacks.
 
@@ -63,7 +68,7 @@ Hooks live in `.husky/` and only activate after `pnpm install` has run at the re
 
 - **pre-commit** — runs `lint-staged`: Prettier/ESLint/Ruff against only the files you staged. Fast (~1-3s), auto-fixes in place.
 - **commit-msg** — runs `commitlint` against your commit message. Rejects anything that isn't [Conventional Commits](https://www.conventionalcommits.org/).
-- **pre-push** — runs `pnpm check` (format check, lint, typecheck, both test suites) against the whole repo. This is the real gate. It used to take ~15 minutes; it's now well under two. If it ever creeps back up, profile it (`uv run pytest --durations=20`) rather than deleting checks from it — the last regression was ~900 full-cost Argon2 hashes and 352 redundant `alembic upgrade head` runs hiding inside the `client` fixture, none of which any test was asserting on.
+- **pre-push** — runs `pnpm check` (format check, lint, typecheck, both test suites) against the whole repo. If it becomes slow, profile the affected lane (for pytest, `uv run pytest --durations=20`) rather than removing checks. Runtime depends on the machine and selected tests.
 
 ## Commit conventions
 
@@ -82,25 +87,25 @@ Conventional Commits, matching the existing history. No fixed scope list — use
 
 ## Escape hatch
 
-`git commit --no-verify` / `git push --no-verify` skip the hooks. They exist for genuine WIP commits on your own branch — CI runs the same checks (`pnpm check`-equivalent jobs) on every PR, so skipping locally just defers the failure, it doesn't avoid it. Don't push straight to `main` with `--no-verify` expecting it to slide through unnoticed.
+`git commit --no-verify` and `git push --no-verify` skip hooks. The WIP exception applies to intermediate commits on the contributor's own branch; it does not make them verified or ready to land. Record skipped checks. Do not infer permission to bypass pre-push from the WIP-commit exception. Required landing checks still apply.
 
 ## Branch protection
 
-CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`, but **requiring those checks to pass before merge is a manual GitHub repo setting** (Settings → Branches → branch protection rules) — it can't be committed as a file. `gh` CLI is available if you'd rather script it than click through the UI.
-
-**This is currently not enabled**, which means CI is advisory: a red PR can still be merged. Turning it on is what makes CI the real gate rather than the pre-push hook. Settings → Branches → Add branch ruleset, targeting `main`:
+Branch protection is remote repository configuration. Inspect its current state when working on repository governance; do not infer it from this document. Ordinary development does not require changing repository settings. The following is the recommended configuration for `main`, not an instruction to apply it during unrelated work:
 
 - Require a pull request before merging
 - Require status checks to pass, selecting: `backend`, `frontend`, `format`, `migration`, `e2e`
 - Require branches to be up to date before merging
 
-The `migration` job is the one worth caring about most — the `alembic upgrade head` → `verify_migration_schema.py` → `alembic downgrade base` round-trip is the only check in the whole system that **no local gate covers**. `pnpm check` will never catch a migration that drifts from the models.
+The `migration` CI job verifies upgrade, schema equivalence, and downgrade. Neither `pnpm check` nor `pnpm full:check` includes that migration-specific verification; run the checks below when changing the schema.
 
 ## Database migrations
 
-D-005: the dev database is disposable until the schema is decision-complete; it no longer is. Every schema change now goes through a reviewed Alembic migration — never `SQLModel.metadata.create_all()` against a real file, which is reserved for the fast in-memory unit-test fixture in `backend/tests/conftest.py`.
+Application databases must be provisioned and changed through Alembic (D-005). `create_all()` is permitted only in isolated test fixtures and the existing disposable schema-comparison verifier; never use it to provision or repair an application database. Generate, inspect, and test migrations within the authorized implementation task; "reviewed" does not require permission before that preparation. Preserve applicable human review before deployment.
 
-**Resetting your local dev database:**
+**Resetting your local dev database (separate from migration verification):**
+
+Use fresh disposable databases for verification. The command below deletes existing data in the configured development database and its SQLite sidecars; run it only when that reset is within the user’s authorized scope. Generating and testing a migration does not require resetting the application database.
 
 ```bash
 uv run python backend/scripts/reset_db.py
@@ -122,27 +127,39 @@ Then **review the generated file line by line** before trusting it. Alembic's SQ
 
 Every one of those needs a hand-written `op.execute(...)`, mirrored in both `upgrade()` and `downgrade()`. `backend/alembic/versions/09e6d3163265_initial_production_schema.py`'s module docstring is a worked example.
 
-Test the new migration against a fresh empty file before committing it:
+Before committing a schema change, test upgrade and downgrade against a fresh disposable file, then run the schema-comparison verifier. The PowerShell example below runs from the repo root, isolates `DATABASE_URL`, checks each exit status, and restores the prior environment value even on failure. The unique scratch directory is under gitignored `var/tmp`; it is retained for inspection.
 
-```bash
-DATABASE_URL="sqlite:///var/tmp/migration_check.db" uv run alembic upgrade head
-DATABASE_URL="sqlite:///var/tmp/migration_check.db" uv run alembic downgrade base
-```
-
-(`var/` is gitignored — safe scratch space.) Then confirm the migrated schema is identical to what `SQLModel.metadata` describes — the exact check the CI `migration` job runs on every PR, against a fresh checkout:
-
-```bash
-uv run python backend/scripts/verify_migration_schema.py
+```powershell
+$taskMigrationDir = Join-Path $PWD ("var/tmp/migration-" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $taskMigrationDir -ErrorAction Stop | Out-Null
+$taskHadDatabaseUrl = Test-Path Env:DATABASE_URL
+$taskPreviousDatabaseUrl = $env:DATABASE_URL
+try {
+    $taskMigrationDb = (Join-Path $taskMigrationDir 'check.db').Replace('\', '/')
+    $env:DATABASE_URL = "sqlite:///$taskMigrationDb"
+    uv run alembic upgrade head
+    if ($LASTEXITCODE -ne 0) { throw 'Migration upgrade failed' }
+    uv run alembic downgrade base
+    if ($LASTEXITCODE -ne 0) { throw 'Migration downgrade failed' }
+    uv run python backend/scripts/verify_migration_schema.py
+    if ($LASTEXITCODE -ne 0) { throw 'Schema comparison failed' }
+} finally {
+    if ($taskHadDatabaseUrl) {
+        $env:DATABASE_URL = $taskPreviousDatabaseUrl
+    } else {
+        Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+    }
+}
 ```
 
 It builds two disposable databases (one via your migration, one via `create_all()`) and diffs every table/index/trigger object-by-object, tolerating only constraint-ordering noise. A missing index, a forgotten trigger, or a hand-edit that drifted from the model shows up here as a real failure.
 
 **Startup revision check.** The running app refuses to start in production against a database whose Alembic revision doesn't match the code's head (older, newer, or missing entirely) — see `app/core/migrations.py::check_schema_revision`. In development it only warns, except for a genuinely fresh/uninitialized database, which it provisions automatically. `ordinary application startup never silently changes the production schema` (D-005) — schema changes always come from an explicit `alembic upgrade head`, run by a human or a deploy script, never implicitly by the app booting.
 
-**Post-deployment migration policy**, once a database has real production data:
+**Post-deployment migration policy**, once a database has real production data: these steps apply to an authorized deployment, not ordinary local migration verification.
 
-1. Before running a migration: take and verify a WAL-safe backup (`POST /api/system/backups`, or `(cd backend && uv run python -m app.maintenance backup)`).
-2. Run `alembic upgrade head`.
+1. Before running a migration: take and verify a WAL-safe backup using `POST /api/system/backups`.
+2. From the repo root, run `uv run alembic upgrade head` against the intended deployment database.
 3. After: run `PRAGMA integrity_check` and confirm the recorded Alembic revision matches head. The backup manifest's `schema_revision` field records this automatically for every new backup going forward.
 4. If something goes wrong once new-version data has been written, **do not attempt a destructive schema downgrade.** Restore the verified pre-migration backup instead — `app.maintenance.restore` already rejects restoring a backup whose recorded schema revision isn't one this codebase's migration chain recognizes, so a stale/incompatible restore fails loudly instead of silently running the wrong schema.
 
@@ -158,20 +175,20 @@ uv run pytest -m slow backend/tests/perf/ -s
 
 ## CI jobs
 
-| Job         | Runs on                                   | What it does                                                                                                           |
-| ----------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `backend`   | every PR/push                             | format check, lint, `pytest` (with `--cov` reporting — no coverage gate, per the testing policy)                       |
-| `migration` | every PR/push                             | `alembic upgrade head` against a fresh empty DB, asserts it matches `SQLModel.metadata`, then `alembic downgrade base` |
-| `frontend`  | every PR/push                             | ESLint, typecheck, Vitest, production build                                                                            |
-| `format`    | every PR/push                             | repo-wide Prettier check                                                                                               |
-| `e2e`       | every PR/push, after `backend`+`frontend` | Playwright against both real servers                                                                                   |
-| `perf`      | manual (`workflow_dispatch`) only         | seeds the 100,000-row `perf` profile, runs `backend/tests/perf/`, uploads timings as an artifact                       |
+| Job         | Runs on                                                                      | What it does                                                                                                           |
+| ----------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `backend`   | PRs to `main`, pushes to `main`, and manual runs                             | format check, lint, `pytest` (with `--cov` reporting — no coverage gate, per the testing policy)                       |
+| `migration` | PRs to `main`, pushes to `main`, and manual runs                             | `alembic upgrade head` against a fresh empty DB, asserts it matches `SQLModel.metadata`, then `alembic downgrade base` |
+| `frontend`  | PRs to `main`, pushes to `main`, and manual runs                             | ESLint, typecheck, Vitest, production build                                                                            |
+| `format`    | PRs to `main`, pushes to `main`, and manual runs                             | repo-wide Prettier check                                                                                               |
+| `e2e`       | PRs to `main`, pushes to `main`, and manual runs, after `backend`+`frontend` | Playwright against both real servers                                                                                   |
+| `perf`      | manual (`workflow_dispatch`) only                                            | seeds the 100,000-row `perf` profile, runs `backend/tests/perf/`, uploads timings as an artifact                       |
 
 ## Troubleshooting
 
 - **Hooks aren't firing.** You probably ran `pnpm install` inside `frontend/` instead of the repo root. Run it at the root.
 - **`ruff` / `uv run ruff ...` says command not found.** Run `uv sync` (or `uv sync --extra ai`) at the repo root first.
 - **Playwright says browsers are missing.** Run `pnpm exec playwright install --with-deps chromium`.
-- **`pnpm check` fails on files you didn't touch.** `lint`/`format:check` run against the whole repo, not just your change — if `main` already had lint debt when you branched, you'll see it too. Not a bug in your change; fix it or coordinate before landing more on top of it.
+- **`pnpm check` fails on files you didn't touch.** `lint`/`format:check` run against the whole repo, not just your change — if `main` already had lint debt when you branched, you'll see it too. Investigate whether the change caused the failure, even when the reported file was untouched. Fix task-related failures. For verified baseline failures, report evidence and continue independent work without silently expanding scope. A required failing gate still blocks landing; report that separately from completed implementation work.
 - **The daily restart (NFR-16) didn't fire.** On Windows, confirm the Scheduled Task is actually registered: `scripts\register-maintenance-task.ps1 -Verify` shows the resolved trigger time, `NextRunTime`, `LastRunTime`, and `LastTaskResult`. A `LastTaskResult` other than `0` (success) or `267011` (never run) means the last firing failed — check `var\log\maintenance-<timestamp>.transcript.log` for that run. The task only fires while the registering user is logged on (`LogonType=Interactive`, deliberate — see the script's own header comment); it will not fire if the account is logged out, only if the laptop is merely locked or the lid is closed while logged on.
 - **The daily backup (NFR-18) seems to be missing.** `GET /api/system/maintenance/status` (Admin only) reports `last_scheduled_backup`, `next_scheduled_backup_at`, and `backup_overdue`. Unlike the restart, the backup runs inside the backend process itself (`SCHEDULER_ENABLED=true`) — if it's `null`/`overdue`, check the backend's own log rather than the Windows Task Scheduler.

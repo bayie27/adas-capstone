@@ -1,17 +1,13 @@
 # Findings queue
 
-One current finding per analysis, named `<YYYY-MM-DD>-<slug>.md`. This is where every newly implicated site from the current analysis lands, whether the run stops after reporting or Codex later applies an explicitly approved Drive update. The local Markdown remains the reviewable record; `synced` is set only after the approved target writes and readback verification succeed.
+Local findings are the reviewable record of verified paper drift, including work that is later applied to Drive. Follow [`../PROCEDURE.md`](../PROCEDURE.md) for the single complete template, current-finding ownership, runtime permissions, approval gates, comments, sync ledger, and completion rules. Resuming an approved package retains its existing identity; newly implicated sites follow the current-analysis ownership rule.
 
-Claude Code remains read-only and leaves Drive application to a human. Codex may update the defense paper under its own approval gate, and may update `ADAS_Paper_Audit` plus `ADAS_Paper_Audit_Tracker` under their combined approval gate. Every finding/package receives one stable searchable `Codex ID:` shared by all of its Codex-created comments; every textual replacement also carries a proposed comment containing `Previous: <OLD>` and ending with `Done by Codex.`. Replacement comments use the same approval gate as their replacement. Standalone comments require separate approval and a verifiable native anchor. Existing comments created before the ID convention are historical unless explicitly approved for backfill.
+Use `<YYYY-MM-DD>-<slug>.md` for each current analysis that finds drift. A clean analysis needs no empty finding. Local generation does not mean anything reached Drive, and `synced: false` does not mean the live tracker row is absent; check the ledger and live artifacts before appending.
 
-Findings that may be applied in subsets must include an `Approval / sync ledger` listing exact approved, applied/read-back, skipped/pending, and blocked block numbers or standalone comments. Keep `synced: false` while any scope remains skipped, pending, or blocked. For tracker appends, record the resolved first fully blank A1 range after checking `userEnteredValue` immediately before writing. For Sheets, color only the exact new or changed word/phrase text orange (`#E67E22`) using rich-text `textFormatRuns`; preserve unchanged characters and all other cell formatting. Do not add Sheet comments. For Docs insertions, record the live paragraph-boundary evidence used to determine the insertion index rather than reusing stale indexes.
-
-**The current finding owns the current analysis.** If an older finding discussed the same surface, repeat the relevant OLD, NEW, and Evidence in the current file; older finding files remain untouched historical records by default and are not the owner of new work.
-
-The template and the rules that govern what goes in one are in [`../PROCEDURE.md`](../PROCEDURE.md). After adding or editing a file here, regenerate the summary:
+After adding or editing a finding, regenerate the summary:
 
 ```bash
 uv run python paper_sync/build_tracker.py
 ```
 
-`TRACKER.md` is generated from these files. Edit the findings, never the tracker.
+`TRACKER.md` is generated from these files. Edit findings, never the generated tracker.
