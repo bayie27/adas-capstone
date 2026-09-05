@@ -1,7 +1,8 @@
 import { defineConfig, devices } from "@playwright/test"
 
 // E2E spans both the backend and the frontend, so this lives at the repo
-// root rather than inside frontend/. CI-only — excluded from `pnpm check`.
+// root rather than inside frontend/. Runs locally before PRs and in CI;
+// excluded from `pnpm check`.
 const isLiveDeployment = process.env.E2E_LIVE_DEPLOYMENT === "1"
 if (isLiveDeployment && !process.env.E2E_BASE_URL) {
   throw new Error("E2E_BASE_URL must be set when E2E_LIVE_DEPLOYMENT=1")

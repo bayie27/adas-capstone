@@ -40,7 +40,9 @@ Built from `paper_sync/findings/`, which is where every finding is written. The
 live `ADAS_Paper_Audit_Tracker` sheet is authoritative; this file makes the same
 rows reviewable and diffable in the repo.
 
-Rows marked **unsynced** have not been copied into the sheet by anyone yet.
+**Unsynced** means some finding scope remains pending, blocked, or unverified.
+The live tracker row may already exist; check the finding ledger and live Sheet
+before appending.
 """
 
 # A finding may cite several pages, so the key is `page/s`. Files written before
