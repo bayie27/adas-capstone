@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 
 import { logoutUser } from "@/api/auth"
@@ -72,6 +72,7 @@ export function Sidebar() {
   const username = useAuthStore((state) => state.username)
   const userId = useAuthStore((state) => state.userId)
   const clearSession = useAuthStore((state) => state.clearSession)
+  const queryClient = useQueryClient()
   const clockOffsetMs = useAlertStore((state) => state.clockOffsetMs)
   const clockIsSkewed = Math.abs(clockOffsetMs) > CLOCK_SKEW_WARNING_MS
 
@@ -136,6 +137,10 @@ export function Sidebar() {
     // already be gone, and the user shouldn't be stuck if the request fails.
     logoutUser().catch(() => {})
     clearSession()
+    // Drop every cached profile variant (prefix match), not just this
+    // user's, so a logged-out session never leaves stale profile data
+    // sitting in the process-lifetime QueryClient.
+    queryClient.removeQueries({ queryKey: ["my-profile"] })
     navigate("/login", { replace: true })
   }
 
