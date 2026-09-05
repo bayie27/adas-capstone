@@ -22,6 +22,9 @@ let activeSoundKey = "default"
 let activeVolume = 80
 let previewAudio: HTMLAudioElement | null = null
 let previewTimeoutId: ReturnType<typeof setTimeout> | null = null
+// Tracked explicitly rather than read off `detectionAudio.paused` so it holds
+// even where jsdom/tests stub `play()`/`pause()` without updating that flag.
+let alarmIsSounding = false
 
 const detectionAudio = typeof Audio !== "undefined" ? new Audio(getSoundUrl(activeSoundKey)) : null
 if (detectionAudio) {
@@ -51,6 +54,7 @@ export const setDetectionSoundKey = (soundKey: string) => {
 
 export const playDetectionSound = () => {
   if (!detectionAudio) return
+  alarmIsSounding = true
   // Browsers require user interaction before playing audio. Catching the error prevents console spam.
   detectionAudio.play()?.catch((err) => {
     console.warn("[detectionSound] Autoplay blocked or failed:", err)
@@ -59,9 +63,13 @@ export const playDetectionSound = () => {
 
 export const stopDetectionSound = () => {
   if (!detectionAudio) return
+  alarmIsSounding = false
   detectionAudio.pause()
   detectionAudio.currentTime = 0
 }
+
+/** Whether the live, looped accident alarm is currently sounding. */
+export const isAlarmSounding = () => alarmIsSounding
 
 export const stopPreviewDetectionSound = () => {
   if (previewTimeoutId !== null) {
@@ -94,6 +102,10 @@ export const setDetectionSoundVolume = (volume: number) => {
  * affordance, distinct from the looped alarm instance so previewing never
  * starts or stops a live alarm.
  * Stops any previously running preview so rapid clicks don't overlap audio.
+ *
+ * No-ops entirely while the live alarm is sounding: it plays independently of
+ * `detectionAudio`, so without this guard an operator auditioning a sound
+ * during a real accident would hear two different alarms at once.
  */
 export const previewDetectionSound = (
   soundKeyOrVolume: string | number = "default",
@@ -101,6 +113,7 @@ export const previewDetectionSound = (
   durationMs: number = PREVIEW_DURATION_MS,
 ) => {
   if (typeof Audio === "undefined") return
+  if (alarmIsSounding) return
 
   let soundKey = activeSoundKey
   let resolvedVolume = activeVolume
