@@ -16,6 +16,7 @@ import {
   setDetectionSoundVolume,
   stopPreviewDetectionSound,
 } from "@/utils/detectionSound"
+import { useHasActiveAlarm } from "@/store/useAlertStore"
 import { toast } from "@/store/useToastStore"
 import { cn } from "@/utils/cn"
 
@@ -104,6 +105,7 @@ function SaveStatusBadge({ status, onRetry }: { status: SaveStatus; onRetry: () 
  */
 export function AlarmSettingsCard({ className }: { className?: string } = {}) {
   const queryClient = useQueryClient()
+  const alarmIsActive = useHasActiveAlarm()
   const [form, setForm] = useState<AlarmSettings | null>(null)
   const [snoozeInput, setSnoozeInput] = useState<string>("")
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -334,11 +336,17 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
               }))}
               onChange={(value) => {
                 updateField("alarm_sound", value)
-                if (form.volume > 0) previewDetectionSound(value, form.volume)
+                if (form.volume > 0 && !alarmIsActive) previewDetectionSound(value, form.volume)
               }}
               disabled={mutation.isPending}
               className="w-full"
             />
+            {alarmIsActive ? (
+              <p className="mt-1 text-caption text-warning">
+                An accident alarm is currently sounding — preview is disabled so it doesn&apos;t
+                play over the real alarm.
+              </p>
+            ) : null}
           </div>
 
           <div>
@@ -351,7 +359,8 @@ export function AlarmSettingsCard({ className }: { className?: string } = {}) {
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={form.volume === 0 || mutation.isPending}
+                disabled={form.volume === 0 || mutation.isPending || alarmIsActive}
+                title={alarmIsActive ? "Disabled while an accident alarm is sounding" : undefined}
                 onClick={() => {
                   previewDetectionSound(form.alarm_sound, form.volume)
                   // Auditioning the current value is still "deciding" —

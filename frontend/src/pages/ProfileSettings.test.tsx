@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -36,10 +36,22 @@ vi.mock("@/api/settings", async () => {
   }
 })
 
+vi.mock("@/utils/detectionSound", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/utils/detectionSound")>("@/utils/detectionSound")
+  return {
+    ...actual,
+    previewDetectionSound: vi.fn(),
+  }
+})
+
 import { getMyProfile, updateMyProfile } from "@/api/users"
 import { updateAlarmSettings } from "@/api/settings"
+import { previewDetectionSound } from "@/utils/detectionSound"
 import { ToastContainer } from "@/components/ui/ToastContainer"
 import { toast } from "@/store/useToastStore"
+import { useAlertStore } from "@/store/useAlertStore"
+import type { AlertLog } from "@/api/alerts"
 
 const mockProfile: UserRecord = {
   user_id: 10,
@@ -66,10 +78,33 @@ function renderProfileSettings() {
   )
 }
 
+const mockActiveAlert: AlertLog = {
+  log_id: 999,
+  source_event_id: "evt-999",
+  camera_id: 1,
+  detected_at: "2026-08-27T10:00:00Z",
+  confidence_score: 0.9,
+  detection_status: "Unverified",
+  snapshot_url: "https://example.com/999.jpg",
+  verified_by_id: null,
+  verified_by_name: null,
+  verified_at: null,
+  closed_by_id: null,
+  closed_by_name: null,
+  closed_at: null,
+  snoozed_at: null,
+  snoozed_until: null,
+  snoozed_by_id: null,
+  camera_name: "Camera 1",
+  created_at: "2026-08-27T10:00:00Z",
+  updated_at: "2026-08-27T10:00:00Z",
+}
+
 describe("ProfileSettings Page", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     toast.clear()
+    useAlertStore.getState().clearAlerts()
   })
 
   it("renders profile details in card-based layout", async () => {
@@ -227,5 +262,31 @@ describe("ProfileSettings Page", () => {
     expect(updateAlarmSettings).not.toHaveBeenCalled()
 
     vi.useRealTimers()
+  })
+
+  it("disables the alarm sound preview while a live accident alarm is sounding", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getMyProfile).mockResolvedValue(mockProfile)
+
+    renderProfileSettings()
+
+    const testButton = await screen.findByRole("button", { name: "Test" })
+    expect(testButton).not.toBeDisabled()
+    expect(screen.queryByText(/preview is disabled/i)).not.toBeInTheDocument()
+
+    act(() => useAlertStore.getState().addAlert(mockActiveAlert))
+
+    expect(await screen.findByText(/preview is disabled/i)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Test" })).toBeDisabled()
+
+    await user.click(screen.getByRole("button", { name: "Test" }))
+    expect(previewDetectionSound).not.toHaveBeenCalled()
+
+    act(() => useAlertStore.getState().removeAlert(mockActiveAlert.log_id))
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Test" })).not.toBeDisabled())
+
+    await user.click(screen.getByRole("button", { name: "Test" }))
+    expect(previewDetectionSound).toHaveBeenCalledWith("default", 80)
   })
 })

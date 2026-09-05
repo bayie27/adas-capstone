@@ -1,5 +1,6 @@
+import { act, renderHook } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { useAlertStore } from "./useAlertStore"
+import { useAlertStore, useHasActiveAlarm } from "./useAlertStore"
 import type { AlertLog } from "@/api/alerts"
 import * as soundModule from "@/utils/detectionSound"
 
@@ -166,5 +167,33 @@ describe("useAlertStore", () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe("useHasActiveAlarm", () => {
+    it("reflects the same 0<->non-0 unsnoozed-Unverified edge that drives the siren", () => {
+      const { result } = renderHook(() => useHasActiveAlarm())
+      expect(result.current).toBe(false)
+
+      act(() => useAlertStore.getState().addAlert(mockUnverifiedAlert))
+      expect(result.current).toBe(true)
+
+      act(() => useAlertStore.getState().removeAlert(mockUnverifiedAlert.log_id))
+      expect(result.current).toBe(false)
+    })
+
+    it("is false while the only Unverified alert is snoozed", () => {
+      const { result } = renderHook(() => useHasActiveAlarm())
+
+      act(() => useAlertStore.getState().addAlert(mockUnverifiedAlert))
+      expect(result.current).toBe(true)
+
+      const futureDate = new Date(Date.now() + 60_000).toISOString()
+      act(() =>
+        useAlertStore
+          .getState()
+          .activateSnooze(mockUnverifiedAlert.log_id, futureDate, "Operator A"),
+      )
+      expect(result.current).toBe(false)
+    })
   })
 })

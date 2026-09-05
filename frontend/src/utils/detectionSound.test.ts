@@ -9,6 +9,7 @@ import {
   playDetectionSound,
   stopDetectionSound,
   stopPreviewDetectionSound,
+  isAlarmSounding,
 } from "./detectionSound"
 
 describe("detectionSound utility", () => {
@@ -59,5 +60,26 @@ describe("detectionSound utility", () => {
 
     playSpy.mockRestore()
     pauseSpy.mockRestore()
+  })
+
+  it("does not play a preview while the live alarm is sounding, so two different alarms can never overlap", () => {
+    const playSpy = vi
+      .spyOn(window.HTMLMediaElement.prototype, "play")
+      .mockImplementation(() => Promise.resolve())
+
+    playDetectionSound()
+    expect(isAlarmSounding()).toBe(true)
+    playSpy.mockClear()
+
+    previewDetectionSound("digital_alarm", 60)
+    expect(playSpy).not.toHaveBeenCalled()
+
+    stopDetectionSound()
+    expect(isAlarmSounding()).toBe(false)
+
+    previewDetectionSound("digital_alarm", 60)
+    expect(playSpy).toHaveBeenCalled()
+
+    playSpy.mockRestore()
   })
 })
