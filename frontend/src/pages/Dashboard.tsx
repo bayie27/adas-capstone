@@ -48,15 +48,17 @@ function deltaTone(value: number, worseWhenPositive: boolean): boolean | null {
 }
 
 /**
- * What a KPI's delta chip is actually comparing against, e.g. "vs previous
- * 7 days" -- the backend compares to the immediately preceding window of
- * the *same* length as whatever's selected (`_previous_window()`,
- * analytics.py), which is not always 7 days once an operator picks a
- * custom range, so this is derived from the live selection rather than a
- * fixed string.
+ * What a KPI's delta chip is actually comparing against, e.g. "Compared to
+ * the previous 7 days" -- the backend compares to the immediately
+ * preceding window of the *same* length as whatever's selected
+ * (`_previous_window()`, analytics.py), which is not always 7 days once an
+ * operator picks a custom range, so this is derived from the live
+ * selection rather than a fixed string. Spelled out in full, no "vs"
+ * shorthand, to match this app's existing caption voice (e.g.
+ * `describeCameraDesiredState`'s "Held for an open incident").
  */
 function formatDeltaCaption(days: number): string {
-  return `vs previous ${days} day${days === 1 ? "" : "s"}`
+  return `Compared to the previous ${days} day${days === 1 ? "" : "s"}`
 }
 
 /**
