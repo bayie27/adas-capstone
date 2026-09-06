@@ -54,10 +54,25 @@ export function isAuthRedirectSuspended(): boolean {
   return authRedirectSuspensions > 0
 }
 
+// `AUTH_INVALID_CREDENTIALS` is a 401 too, but it means "the password you
+// just re-submitted for this action is wrong" (login, and the restore
+// modal's re-auth step) — the session cookie itself is still perfectly
+// valid. Only AUTH_REQUIRED / AUTH_EXPIRED / AUTH_REVOKED (dependencies.py)
+// mean the session actually needs the operator bounced to /login; treating
+// every 401 the same forced a hard reload out of the restore modal on a
+// mistyped password instead of showing the inline "incorrect password"
+// error the modal already renders for exactly this response.
+const SESSION_LOSS_EXCLUDED_CODES = new Set(["AUTH_INVALID_CREDENTIALS"])
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && authRedirectSuspensions === 0) {
+    const code = error.response?.data?.code
+    if (
+      error.response?.status === 401 &&
+      authRedirectSuspensions === 0 &&
+      !SESSION_LOSS_EXCLUDED_CODES.has(code)
+    ) {
       useAuthStore.getState().clearSession()
       redirectToLogin("Your session expired. Please sign in again.")
     }
