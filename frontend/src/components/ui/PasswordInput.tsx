@@ -32,6 +32,7 @@ export function PasswordInput({
   iconSize = 14,
   disabled,
   error,
+  ignorePasswordManagers,
 }: {
   label: string
   value: string
@@ -44,6 +45,14 @@ export function PasswordInput({
   iconSize?: number
   disabled?: boolean
   error?: string
+  /**
+   * Opts this field out of third-party password-manager extensions
+   * (1Password, LastPass, Bitwarden) via their documented ignore attributes.
+   * Use for a re-authentication step where the field isn't a login/signup
+   * password — an injected in-field overlay has been observed stealing
+   * focus away from the input mid-type on some Chrome/Windows setups.
+   */
+  ignorePasswordManagers?: boolean
 }) {
   const [visible, setVisible] = useState(false)
 
@@ -58,6 +67,10 @@ export function PasswordInput({
       disabled={disabled}
       error={error}
       labelClassName={labelClassName}
+      data-1p-ignore={ignorePasswordManagers || undefined}
+      data-lpignore={ignorePasswordManagers ? "true" : undefined}
+      data-bwignore={ignorePasswordManagers || undefined}
+      data-form-type={ignorePasswordManagers ? "other" : undefined}
       className={cn(
         "h-auto border-stroke px-3 py-2 text-sm",
         error && "border-danger",

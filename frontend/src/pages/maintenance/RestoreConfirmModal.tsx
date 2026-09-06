@@ -183,6 +183,7 @@ export function RestoreConfirmModal({ backup, onClose, onSuccess }: RestoreConfi
               value={password}
               autoComplete="current-password"
               error={apiError?.password}
+              ignorePasswordManagers
               onChange={(value) => {
                 mutation.reset()
                 setPassword(value)
@@ -199,6 +200,10 @@ export function RestoreConfirmModal({ backup, onClose, onSuccess }: RestoreConfi
               }}
               autoComplete="off"
               placeholder={expected}
+              data-1p-ignore
+              data-lpignore="true"
+              data-bwignore
+              data-form-type="other"
             />
           </div>
 
