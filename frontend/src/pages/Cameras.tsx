@@ -34,7 +34,11 @@ import type {
 } from "@/api/cameras"
 import { getApiError, getApiErrorMessage } from "@/api/client"
 import { shouldApplyCameraEvent } from "@/utils/merge"
-import { describeCameraDesiredState, isCameraInCooldown } from "@/utils/format"
+import {
+  describeCameraDesiredState,
+  isCameraDetectionDisabled,
+  isCameraInCooldown,
+} from "@/utils/format"
 import { cn } from "@/utils/cn"
 import { AddCameraModal } from "@/pages/cameras/AddCameraModal"
 import { EditCameraModal } from "@/pages/cameras/EditCameraModal"
@@ -463,12 +467,16 @@ export default function Cameras() {
                     </TableCell>
                     <TableCell className="text-fg-muted">{camera.channel_id}</TableCell>
                     <TableCell>
-                      <CameraConnectionText status={camera.connection_status} />
+                      <CameraConnectionText
+                        status={camera.connection_status}
+                        disabled={isCameraDetectionDisabled(camera)}
+                      />
                     </TableCell>
                     <TableCell>
                       <CameraAiText
                         status={camera.ai_status}
                         description={describeCameraDesiredState(camera, now)}
+                        disabled={isCameraDetectionDisabled(camera)}
                       />
                     </TableCell>
                     <TableCell className="w-[133px]" onClick={(event) => event.stopPropagation()}>
