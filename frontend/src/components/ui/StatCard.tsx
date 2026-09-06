@@ -83,7 +83,7 @@ export function StatCard({
             </Tooltip>
           ) : null}
         </div>
-        <div className="flex items-end gap-2.5">
+        <div className="flex items-center justify-between gap-2.5">
           <div className="text-3xl font-semibold leading-none tracking-tight text-fg">
             {isLoading ? "…" : value}
           </div>
@@ -93,7 +93,6 @@ export function StatCard({
             <DeltaIndicator
               value={delta}
               tone={deltaPositive === undefined ? false : deltaPositive}
-              className="mb-1"
             />
           ) : null}
         </div>
