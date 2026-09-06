@@ -28,6 +28,16 @@ describe("StatCard", () => {
     expect(delta).toHaveClass("text-success")
   })
 
+  it("renders the delta as a neutral-bordered box, not a tinted pill", () => {
+    render(<StatCard icon={DummyIcon} title="Uptime" value="99.9%" delta="+0.4%" deltaPositive />)
+
+    const delta = screen.getByText("+0.4%")
+    // The colour lives on the icon/text only; the container itself stays
+    // the same neutral border/background regardless of tone.
+    expect(delta).toHaveClass("border-stroke", "bg-surface-1")
+    expect(delta).not.toHaveClass("bg-success-subtle", "rounded-full")
+  })
+
   it("renders subtext when provided", () => {
     render(<StatCard icon={DummyIcon} title="Alerts" value={2} subtext="Last 24 hours" />)
 
