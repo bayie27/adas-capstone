@@ -145,7 +145,7 @@ describe("Dashboard KPI delta caption", () => {
     )
     renderDashboard()
 
-    expect(await screen.findByText("vs previous 7 days")).toBeInTheDocument()
+    expect(await screen.findByText("Compared to the previous 7 days")).toBeInTheDocument()
 
     vi.useRealTimers()
   })
@@ -166,7 +166,7 @@ describe("Dashboard KPI delta caption", () => {
     // The static description still renders on its own -- the caption is
     // additive, not a replacement.
     expect(await screen.findByText("Live incident queue")).toBeInTheDocument()
-    expect(screen.queryByText(/vs previous/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Compared to the previous/)).not.toBeInTheDocument()
   })
 
   it("keeps a KPI's own description alongside the delta caption", async () => {
@@ -186,7 +186,7 @@ describe("Dashboard KPI delta caption", () => {
     renderDashboard()
 
     expect(await screen.findByText("Live incident queue")).toBeInTheDocument()
-    expect(await screen.findByText("vs previous 7 days")).toBeInTheDocument()
+    expect(await screen.findByText("Compared to the previous 7 days")).toBeInTheDocument()
 
     vi.useRealTimers()
   })
@@ -215,7 +215,7 @@ describe("Dashboard KPI delta caption", () => {
     await user.click(screen.getByRole("button", { name: "Apply" }))
 
     // August 16 through August 30 inclusive is 15 days, not the default 7.
-    expect(await screen.findByText("vs previous 15 days")).toBeInTheDocument()
+    expect(await screen.findByText("Compared to the previous 15 days")).toBeInTheDocument()
 
     vi.useRealTimers()
   })
