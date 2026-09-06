@@ -8,9 +8,8 @@ import { cn } from "@/utils/cn"
  *
  * - `solid`   the status badge on the accident modals (ONGOING / CLEARED),
  *             a filled pill with --color-fg-on-primary text.
- * - `subtle`  the tinted pill: the Online/Offline status dot on System Health
- *             and the delta indicators on the KPI cards, using the
- *             `-subtle` / `-border` token pairs from §2.2.
+ * - `subtle`  the tinted pill: the Online/Offline status dot on System
+ *             Health, using the `-subtle` / `-border` token pairs from §2.2.
  * - `outline` a neutral chip with only a border.
  *
  * Geometry is §2.3: py-0.5 / px-2.5, and §2.4's uppercase-tracked caption

@@ -2,9 +2,9 @@ import type { ElementType, ReactNode } from "react"
 import { RiInformationLine } from "@remixicon/react"
 
 import { cn } from "@/utils/cn"
-import { Badge } from "@/components/ui/Badge"
 import { focusRing } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
+import { DeltaIndicator } from "@/components/ui/DeltaIndicator"
 import { Tooltip } from "@/components/ui/Tooltip"
 
 /**
@@ -15,9 +15,8 @@ import { Tooltip } from "@/components/ui/Tooltip"
  *
  * - `elevated` — the highlighted first card in a KPI row, filled with
  *   --color-surface-2 (§2.2).
- * - `delta` — the "+12.5% compared to last month" indicator, which Figma
- *   draws as a tinted pill, so it is a Badge on the subtle triplet rather
- *   than bare coloured text.
+ * - `delta` — the "+12.5% compared to last month" indicator, a neutral
+ *   boxed chip (see `DeltaIndicator`) rather than bare coloured text.
  *
  * §2.8's loading treatment for a KPI value is the single character `…`; pass
  * `isLoading` rather than threading that string through every call site.
@@ -84,19 +83,17 @@ export function StatCard({
             </Tooltip>
           ) : null}
         </div>
-        <div className="flex items-end gap-2.5">
+        <div className="flex items-center justify-between gap-2.5">
           <div className="text-3xl font-semibold leading-none tracking-tight text-fg">
             {isLoading ? "…" : value}
           </div>
           {delta ? (
-            <Badge
-              variant="subtle"
-              tone={deltaPositive === null ? "neutral" : deltaPositive ? "success" : "danger"}
-              uppercase={false}
-              className="mb-1"
-            >
-              {delta}
-            </Badge>
+            // Undefined (no explicit sign passed) reads as danger, same as
+            // `false` -- `null` is the only value that means neutral.
+            <DeltaIndicator
+              value={delta}
+              tone={deltaPositive === undefined ? false : deltaPositive}
+            />
           ) : null}
         </div>
       </div>

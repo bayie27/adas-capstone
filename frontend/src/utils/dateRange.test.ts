@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   addCalendarDays,
+  daysBetweenInclusive,
   getLastSevenDaysRange,
   getPhilippineToday,
   isReversedDateRange,
@@ -67,5 +68,18 @@ describe("Calendar-day arithmetic for the quick-range presets", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-09-05T04:00:00Z"))
     expect(getLastSevenDaysRange()).toEqual({ start: "2026-08-30", end: "2026-09-05" })
+  })
+
+  it("counts both ends of the range, matching the 'last 7 days' preset's own window", () => {
+    const { start, end } = getLastSevenDaysRange("2026-09-05")
+    expect(daysBetweenInclusive(start, end)).toBe(7)
+  })
+
+  it("counts a single selected day as 1, not 0", () => {
+    expect(daysBetweenInclusive("2026-08-30", "2026-08-30")).toBe(1)
+  })
+
+  it("counts across a month boundary", () => {
+    expect(daysBetweenInclusive("2026-08-30", "2026-09-02")).toBe(4)
   })
 })

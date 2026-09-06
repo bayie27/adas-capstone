@@ -12,7 +12,12 @@ import { ExportButton, type ExportFormat } from "@/components/ui/ExportButton"
 import { FilterSelect } from "@/components/ui/FilterSelect"
 import { QueryErrorBanner } from "@/components/ui/QueryErrorBanner"
 import { StatCard } from "@/components/ui/StatCard"
-import { getLastSevenDaysRange, toPhilippineDayEnd, toPhilippineDayStart } from "@/utils/dateRange"
+import {
+  daysBetweenInclusive,
+  getLastSevenDaysRange,
+  toPhilippineDayEnd,
+  toPhilippineDayStart,
+} from "@/utils/dateRange"
 import { formatHourLabel, truncateLabel } from "@/utils/format"
 import type { AnalyticsFilters } from "@/api/analytics"
 import { RiCarLine, RiCheckboxLine, RiRefreshLine } from "@remixicon/react"
@@ -40,6 +45,36 @@ function deltaTone(value: number, worseWhenPositive: boolean): boolean | null {
   if (value === 0) return null
   const isGood = worseWhenPositive ? value < 0 : value > 0
   return isGood
+}
+
+/**
+ * What a KPI's delta chip is actually comparing against, e.g. "Compared to
+ * the previous 7 days" -- the backend compares to the immediately
+ * preceding window of the *same* length as whatever's selected
+ * (`_previous_window()`, analytics.py), which is not always 7 days once an
+ * operator picks a custom range, so this is derived from the live
+ * selection rather than a fixed string. Spelled out in full, no "vs"
+ * shorthand, to match this app's existing caption voice (e.g.
+ * `describeCameraDesiredState`'s "Held for an open incident").
+ */
+function formatDeltaCaption(days: number): string {
+  return `Compared to the previous ${days} day${days === 1 ? "" : "s"}`
+}
+
+/**
+ * Stacks a KPI's own description (if any) over its delta caption (if a
+ * comparison window applies) into one subtext block -- `undefined` when
+ * neither is present, so `StatCard` still omits the row entirely rather
+ * than rendering an empty one.
+ */
+function renderKpiSubtext(description: string | undefined, deltaCaption: string | undefined) {
+  if (!description && !deltaCaption) return undefined
+  return (
+    <div className="flex flex-col gap-0.5">
+      {description ? <div>{description}</div> : null}
+      {deltaCaption ? <div>{deltaCaption}</div> : null}
+    </div>
+  )
 }
 
 export default function Dashboard() {
@@ -101,6 +136,12 @@ export default function Dashboard() {
   )
 
   const kpis = dashboardQuery.data?.kpis
+
+  // Both dates present is exactly the condition under which the backend's
+  // own _previous_window() returns a comparison window (see its
+  // start_date/end_date None check) -- an absent bound means "all time",
+  // which has no previous period to name.
+  const comparisonDays = startDate && endDate ? daysBetweenInclusive(startDate, endDate) : null
 
   return (
     <div className="mx-auto max-w-[1400px] p-8">
@@ -226,7 +267,12 @@ export default function Dashboard() {
               title="Ongoing Accidents"
               value={kpis?.ongoing ?? 0}
               isLoading={dashboardQuery.isLoading}
-              subtext="Live incident queue"
+              subtext={renderKpiSubtext(
+                "Live incident queue",
+                kpis?.ongoing_delta_pct != null && comparisonDays != null
+                  ? formatDeltaCaption(comparisonDays)
+                  : undefined,
+              )}
               delta={
                 kpis?.ongoing_delta_pct != null
                   ? formatDeltaText(kpis.ongoing_delta_pct)
@@ -245,6 +291,12 @@ export default function Dashboard() {
               title="Total Accidents"
               value={kpis?.total_accidents ?? 0}
               isLoading={dashboardQuery.isLoading}
+              subtext={renderKpiSubtext(
+                undefined,
+                kpis?.total_accidents_delta_pct != null && comparisonDays != null
+                  ? formatDeltaCaption(comparisonDays)
+                  : undefined,
+              )}
               delta={
                 kpis?.total_accidents_delta_pct != null
                   ? formatDeltaText(kpis.total_accidents_delta_pct)
@@ -263,6 +315,12 @@ export default function Dashboard() {
               title="Total Cleared"
               value={kpis?.total_cleared ?? 0}
               isLoading={dashboardQuery.isLoading}
+              subtext={renderKpiSubtext(
+                undefined,
+                kpis?.total_cleared_delta_pct != null && comparisonDays != null
+                  ? formatDeltaCaption(comparisonDays)
+                  : undefined,
+              )}
               delta={
                 kpis?.total_cleared_delta_pct != null
                   ? formatDeltaText(kpis.total_cleared_delta_pct)
