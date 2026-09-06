@@ -29,7 +29,7 @@ export function Switch({
     >
       <span
         className={cn(
-          "inline-block h-4 w-4 transform rounded-full transition-transform",
+          "inline-block h-4 w-4 transform rounded-full transition-all duration-150",
           // fg-on-primary (near-black) is legible on the light `checked`
           // track, but the same dark thumb on the dark `surface-3` track
           // read as invisible — the unchecked thumb needs the light `fg`
