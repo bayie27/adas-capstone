@@ -29,8 +29,12 @@ export function Switch({
     >
       <span
         className={cn(
-          "inline-block h-4 w-4 transform rounded-full bg-fg-on-primary transition-transform",
-          checked ? "translate-x-4" : "translate-x-0",
+          "inline-block h-4 w-4 transform rounded-full transition-all duration-150",
+          // fg-on-primary (near-black) is legible on the light `checked`
+          // track, but the same dark thumb on the dark `surface-3` track
+          // read as invisible — the unchecked thumb needs the light `fg`
+          // token instead.
+          checked ? "translate-x-4 bg-fg-on-primary" : "translate-x-0 bg-fg",
         )}
       />
     </button>
