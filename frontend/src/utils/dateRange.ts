@@ -65,6 +65,21 @@ export function startOfCalendarMonth(value: string): string {
   return toCalendarDateString(new Date(Date.UTC(year, month - 1, 1)))
 }
 
+/**
+ * The number of calendar days in `[start, end]`, both ends included --
+ * `getLastSevenDaysRange()`'s own window (today minus 6, through today)
+ * must come back as 7, not 6. Same UTC-anchored arithmetic as
+ * `addCalendarDays`, so a DST-observing host clock can't shift it by an
+ * hour and round to the wrong day count.
+ */
+export function daysBetweenInclusive(start: string, end: string): number {
+  const [startYear, startMonth, startDay] = start.split("-").map(Number)
+  const [endYear, endMonth, endDay] = end.split("-").map(Number)
+  const startUtc = Date.UTC(startYear, startMonth - 1, startDay)
+  const endUtc = Date.UTC(endYear, endMonth - 1, endDay)
+  return Math.round((endUtc - startUtc) / (24 * 60 * 60 * 1000)) + 1
+}
+
 function toCalendarDateString(date: Date): string {
   const year = date.getUTCFullYear()
   const month = String(date.getUTCMonth() + 1).padStart(2, "0")
