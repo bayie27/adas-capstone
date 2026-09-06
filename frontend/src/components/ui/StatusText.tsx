@@ -66,19 +66,37 @@ export function AlertStatusText({
   )
 }
 
-export function CameraConnectionText({ status }: { status: CameraConnectionStatus }) {
-  return <StatusText tone={getCameraConnectionTone(status)}>{status}</StatusText>
+export function CameraConnectionText({
+  status,
+  disabled,
+}: {
+  status: CameraConnectionStatus
+  /**
+   * A disabled camera keeps its last-observed status verbatim (it stops
+   * heartbeating, so there is nothing fresher to show) — see
+   * `presented_statuses()` in the backend. Rendering that stale value in its
+   * usual success/warning/danger colour reads as "this is fine" right next
+   * to a caption saying detection is off, so the caller mutes it instead.
+   */
+  disabled?: boolean
+}) {
+  return (
+    <StatusText tone={disabled ? "neutral" : getCameraConnectionTone(status)}>{status}</StatusText>
+  )
 }
 
 export function CameraAiText({
   status,
   description,
+  disabled,
 }: {
   status: CameraAiStatus
   description?: ReactNode
+  /** See `CameraConnectionText`'s `disabled`. */
+  disabled?: boolean
 }) {
   return (
-    <StatusText tone={getCameraAiTone(status)} description={description}>
+    <StatusText tone={disabled ? "neutral" : getCameraAiTone(status)} description={description}>
       {status}
     </StatusText>
   )

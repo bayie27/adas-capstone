@@ -4,6 +4,7 @@ import {
   describeCameraDesiredState,
   describeSnoozeStatus,
   formatFileSize,
+  isCameraDetectionDisabled,
   isCameraInCooldown,
 } from "@/utils/format"
 
@@ -60,6 +61,15 @@ describe("isCameraInCooldown", () => {
     expect(isCameraInCooldown(camera("cooldown"))).toBe(true)
     expect(isCameraInCooldown(camera("incident"))).toBe(false)
     expect(isCameraInCooldown(camera(null))).toBe(false)
+  })
+})
+
+describe("isCameraDetectionDisabled", () => {
+  it("is true only for the disabled reason", () => {
+    expect(isCameraDetectionDisabled(camera("disabled"))).toBe(true)
+    expect(isCameraDetectionDisabled(camera("incident"))).toBe(false)
+    expect(isCameraDetectionDisabled(camera("cooldown"))).toBe(false)
+    expect(isCameraDetectionDisabled(camera(null))).toBe(false)
   })
 })
 

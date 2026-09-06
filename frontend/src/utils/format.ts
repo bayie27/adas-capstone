@@ -193,6 +193,16 @@ export function isCameraInCooldown(camera: Pick<CameraRecord, "desired_state_rea
   return camera.desired_state_reason === "cooldown"
 }
 
+/**
+ * Is detection off for this camera (disabled, or soft-deleted)? Its
+ * connection/AI status columns still show the last-observed value in this
+ * state (see `presented_statuses()`, backend), so a caller uses this to mute
+ * their colour rather than let a stale "Connected"/"Active" read as healthy.
+ */
+export function isCameraDetectionDisabled(camera: Pick<CameraRecord, "desired_state_reason">) {
+  return camera.desired_state_reason === "disabled"
+}
+
 export function buildCameraUpdatePayload(
   current: CameraRecord,
   next: { camera_name: string; channel_id: number; is_enabled?: boolean },

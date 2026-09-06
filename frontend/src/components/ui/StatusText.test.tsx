@@ -42,4 +42,27 @@ describe("status tone mapping", () => {
     rerender(<AlertStatusText status="Cleared" />)
     expect(screen.getByText("Cleared")).toHaveClass("text-success")
   })
+
+  // A disabled camera keeps its last-observed status verbatim (see
+  // presented_statuses(), backend), which can be "Connected"/"Active" right
+  // next to a caption saying detection is off. The success colour must not
+  // survive that combination.
+  it("mutes camera connection status to neutral when disabled", () => {
+    render(<CameraConnectionText status="Connected" disabled />)
+    const el = screen.getByText("Connected")
+    expect(el).toHaveClass("text-fg-muted")
+    expect(el).not.toHaveClass("text-success")
+  })
+
+  it("mutes camera AI status to neutral when disabled", () => {
+    render(<CameraAiText status="Active" disabled />)
+    const el = screen.getByText("Active")
+    expect(el).toHaveClass("text-fg-muted")
+    expect(el).not.toHaveClass("text-success")
+  })
+
+  it("keeps normal tone mapping when not disabled", () => {
+    render(<CameraConnectionText status="Connected" disabled={false} />)
+    expect(screen.getByText("Connected")).toHaveClass("text-success")
+  })
 })
