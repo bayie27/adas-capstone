@@ -42,6 +42,7 @@ from app.services.realtime import RealtimeManager
 from app.services.reports.common import (
     check_row_limit,
     format_confidence_pct,
+    format_date_range,
     format_export_datetime,
     record_export_attempt,
 )
@@ -159,10 +160,7 @@ def _filters_summary(
 ) -> list[str]:
     lines = []
     if f.start_date or f.end_date:
-        lines.append(
-            f"Date range: {f.start_date.isoformat() if f.start_date else '…'} "
-            f"to {f.end_date.isoformat() if f.end_date else '…'}"
-        )
+        lines.append(format_date_range(f.start_date, f.end_date))
     if f.statuses:
         lines.append("Status: " + ", ".join(s.value for s in f.statuses))
     if f.camera_ids:

@@ -17,6 +17,7 @@ from app.services.reports.common import (
     format_audit_detail,
     format_audit_result,
     format_audit_target,
+    format_date_range,
     format_export_datetime,
     record_export_attempt,
 )
@@ -262,7 +263,7 @@ def _audit_filters_summary(
         lines.append(f"Target Ref: {filters['target_ref']}")
     if filters.get("start_date") or filters.get("end_date"):
         lines.append(
-            f"Date range: {filters.get('start_date') or '…'} to {filters.get('end_date') or '…'}"
+            format_date_range(filters.get("start_date"), filters.get("end_date"))
         )
     if filters.get("search"):
         lines.append(f"Search: {filters['search']!r}")

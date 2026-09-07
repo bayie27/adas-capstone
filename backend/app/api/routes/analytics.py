@@ -40,6 +40,7 @@ from app.services.formatting import format_user_name
 from app.services.reports.common import (
     check_row_limit,
     format_confidence_pct,
+    format_date_range,
     format_export_datetime,
     record_export_attempt,
 )
@@ -313,10 +314,7 @@ def _dashboard_filters_summary(
 ) -> list[str]:
     lines = []
     if start_date or end_date:
-        lines.append(
-            f"Date range: {start_date.isoformat() if start_date else '…'} "
-            f"to {end_date.isoformat() if end_date else '…'}"
-        )
+        lines.append(format_date_range(start_date, end_date))
     if camera_id:
         lines.append(format_camera_filter_line(camera_names, camera_id))
     return lines
@@ -332,10 +330,7 @@ def _performance_filters_summary(
 ) -> list[str]:
     lines = []
     if start_date or end_date:
-        lines.append(
-            f"Date range: {start_date.isoformat() if start_date else '…'} "
-            f"to {end_date.isoformat() if end_date else '…'}"
-        )
+        lines.append(format_date_range(start_date, end_date))
     if camera_id:
         lines.append(format_camera_filter_line(camera_names, camera_id))
     if search:

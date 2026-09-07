@@ -32,6 +32,31 @@ def format_export_datetime(value: datetime | None) -> str | None:
     return value.astimezone(tz).strftime("%b %d, %Y %I:%M %p")
 
 
+def format_filter_date(value: datetime | str | None) -> str | None:
+    """Human-readable date for a date-range filter summary, e.g.
+    "Aug 23, 2026" instead of a raw ISO string like
+    "2026-08-23T00:00:00". These filters are always whole-day boundaries
+    (a date picker, not a precise instant), so the time-of-day component
+    carries no information for a reader and is dropped rather than shown
+    as a redundant "12:00 AM"."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return value
+    return value.strftime("%b %d, %Y")
+
+
+def format_date_range(start: datetime | str | None, end: datetime | str | None) -> str:
+    """ "Date range: Aug 23, 2026 to Sep 07, 2026" — the shared, plain-language
+    rendering used by every export's filter summary line."""
+    start_label = format_filter_date(start) or "…"
+    end_label = format_filter_date(end) or "…"
+    return f"Date range: {start_label} to {end_label}"
+
+
 def format_confidence_pct(value: float | None) -> str | None:
     """Human-readable confidence/precision percentage, e.g. "87.3%" instead
     of the raw decimal `0.8734`."""
