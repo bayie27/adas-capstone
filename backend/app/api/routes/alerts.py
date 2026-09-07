@@ -39,7 +39,13 @@ from app.services.incidents import (
     transition,
 )
 from app.services.realtime import RealtimeManager
-from app.services.reports.common import check_row_limit, record_export_attempt
+from app.services.reports.common import (
+    check_row_limit,
+    format_confidence_pct,
+    format_date_range,
+    format_export_datetime,
+    record_export_attempt,
+)
 from app.services.reports.csv_writer import csv_response
 from app.services.reports.pdf_writer import build_incident_pdf
 from app.services.snapshots import resolve as resolve_snapshot
@@ -154,10 +160,7 @@ def _filters_summary(
 ) -> list[str]:
     lines = []
     if f.start_date or f.end_date:
-        lines.append(
-            f"Date range: {f.start_date.isoformat() if f.start_date else '…'} "
-            f"to {f.end_date.isoformat() if f.end_date else '…'}"
-        )
+        lines.append(format_date_range(f.start_date, f.end_date))
     if f.statuses:
         lines.append("Status: " + ", ".join(s.value for s in f.statuses))
     if f.camera_ids:
@@ -173,50 +176,38 @@ def _filters_summary(
 def _incident_csv_row(log: DetectionLog) -> list:
     return [
         log.log_id,
-        log.detected_at.isoformat(),
-        log.camera_id,
+        format_export_datetime(log.detected_at),
         log.camera.camera_name if log.camera else None,
         log.detection_status,
-        log.confidence_score,
-        f"/api/alerts/{log.log_id}/snapshot",
-        log.verified_by_id,
+        format_confidence_pct(log.confidence_score),
         format_user_name(log.verified_by),
-        log.verified_at.isoformat() if log.verified_at else None,
-        log.closed_by_id,
+        format_export_datetime(log.verified_at),
         format_user_name(log.closed_by),
-        log.closed_at.isoformat() if log.closed_at else None,
+        format_export_datetime(log.closed_at),
     ]
 
 
+# Camera ID / Verified By ID / Closed By ID / Snapshot URL are deliberately
+# left out here: internal foreign keys and an API-relative path add nothing
+# for a CDRRMO reader once the Camera/Verified By/Closed By name columns
+# are right there, and Log ID already works as the record's reference
+# number. Same column set as the PDF, so CSV and PDF never disagree.
 INCIDENT_CSV_COLUMNS = [
     "Log ID",
     "Detected At",
-    "Camera ID",
     "Camera Name",
     "Status",
     "Confidence",
-    "Snapshot URL",
-    "Verified By ID",
-    "Verified By Name",
+    "Verified By",
     "Verified At",
-    "Closed By ID",
-    "Closed By Name",
+    "Closed By",
     "Closed At",
 ]
 
 
-def _incident_pdf_row(log: DetectionLog) -> list:
-    return [
-        log.log_id,
-        log.detected_at.isoformat(),
-        log.camera.camera_name if log.camera else None,
-        log.detection_status,
-        log.confidence_score,
-        format_user_name(log.verified_by),
-        log.verified_at.isoformat() if log.verified_at else None,
-        format_user_name(log.closed_by),
-        log.closed_at.isoformat() if log.closed_at else None,
-    ]
+# Same column set as the CSV (see INCIDENT_CSV_COLUMNS) — a single row
+# shape shared by both formats, so they can never drift apart.
+_incident_pdf_row = _incident_csv_row
 
 
 def _incident_query_stmt(filters: IncidentFilters):

@@ -29,7 +29,15 @@ from app.models import AuditResult, DetectionLog, DetectionStatus, ExportJob, Us
 from app.services.cameras import resolve_camera_names
 from app.services.filters import IncidentFilters, apply_sort
 from app.services.formatting import format_user_name
-from app.services.reports.common import record_export_attempt
+from app.services.reports.common import (
+    format_audit_action,
+    format_audit_detail,
+    format_audit_result,
+    format_audit_target,
+    format_confidence_pct,
+    format_export_datetime,
+    record_export_attempt,
+)
 from app.services.reports.csv_writer import UTF8_BOM, stream_csv
 from app.services.reports.pdf_writer import (
     build_audit_pdf,
@@ -194,17 +202,14 @@ def _generate_dashboard(
     def _row(log: DetectionLog) -> list:
         return [
             log.log_id,
-            log.detected_at.isoformat(),
-            log.camera_id,
+            format_export_datetime(log.detected_at),
             log.camera.camera_name if log.camera else None,
             log.detection_status,
-            log.confidence_score,
-            log.verified_by_id,
+            format_confidence_pct(log.confidence_score),
             format_user_name(log.verified_by),
-            log.verified_at.isoformat() if log.verified_at else None,
-            log.closed_by_id,
+            format_export_datetime(log.verified_at),
             format_user_name(log.closed_by),
-            log.closed_at.isoformat() if log.closed_at else None,
+            format_export_datetime(log.closed_at),
         ]
 
     logs = session.exec(logs_stmt).all()
@@ -213,15 +218,12 @@ def _generate_dashboard(
             [
                 "Log ID",
                 "Detected At",
-                "Camera ID",
                 "Camera Name",
                 "Status",
                 "Confidence",
-                "Verified By ID",
-                "Verified By Name",
+                "Verified By",
                 "Verified At",
-                "Closed By ID",
-                "Closed By Name",
+                "Closed By",
                 "Closed At",
             ],
             (_row(log) for log in logs),
@@ -268,10 +270,34 @@ def _generate_performance(
         camera_names=camera_names,
     )
 
+    def _friendly_kpis(kpis: dict[str, object]) -> dict[str, object]:
+        return {
+            **kpis,
+            "precision_score": format_confidence_pct(kpis["precision_score"]),
+            "avg_accident_confidence": format_confidence_pct(
+                kpis["avg_accident_confidence"]
+            ),
+            "avg_dismissed_confidence": format_confidence_pct(
+                kpis["avg_dismissed_confidence"]
+            ),
+        }
+
+    def _friendly_camera_row(row: dict[str, object]) -> dict[str, object]:
+        return {
+            **row,
+            "precision_score": format_confidence_pct(row["precision_score"]),
+            "avg_accident_confidence": format_confidence_pct(
+                row["avg_accident_confidence"]
+            ),
+            "avg_dismissed_confidence": format_confidence_pct(
+                row["avg_dismissed_confidence"]
+            ),
+        }
+
     if job.format == "pdf":
         content = build_performance_pdf(
-            global_kpis=data["global_kpis"],
-            per_camera=data["per_camera"],
+            global_kpis=_friendly_kpis(data["global_kpis"]),
+            per_camera=[_friendly_camera_row(row) for row in data["per_camera"]],
             filters_summary=summary,
             requested_by=requested_by,
             generated_at=datetime.now(UTC),
@@ -280,7 +306,6 @@ def _generate_performance(
 
     rows = (
         [
-            row["camera_id"],
             row["camera_name"],
             row["total_accidents"],
             row["total_dismissed"],
@@ -288,12 +313,11 @@ def _generate_performance(
             row["avg_accident_confidence"],
             row["avg_dismissed_confidence"],
         ]
-        for row in data["per_camera"]
+        for row in (_friendly_camera_row(row) for row in data["per_camera"])
     )
     text = UTF8_BOM + "".join(
         stream_csv(
             [
-                "Camera ID",
                 "Camera Name",
                 "Total Accidents",
                 "Total Dismissed",
@@ -378,10 +402,16 @@ def _generate_audit(
             return None
         return f"{log.username} ({log.role})" if log.role else log.username
 
-    def _target(log: AuditLog) -> str | None:
-        if log.target_type is None and log.target_ref is None:
-            return None
-        return f"{log.target_type or '?'}:{log.target_ref or '?'}"
+    def _row(log: AuditLog) -> list:
+        return [
+            log.audit_id,
+            format_export_datetime(log.created_at),
+            _actor(log),
+            format_audit_action(log.action),
+            format_audit_target(log.target_type, log.target_ref),
+            format_audit_result(log.result),
+            format_audit_detail(log.detail),
+        ]
 
     summary = _audit_filters_summary(
         filters_dict, sort_by=sort_by, sort_order=sort_order
@@ -389,39 +419,25 @@ def _generate_audit(
 
     if job.format == "pdf":
         content = build_audit_pdf(
-            rows=[
-                [
-                    log.audit_id,
-                    log.created_at.isoformat(),
-                    _actor(log),
-                    log.action,
-                    _target(log),
-                    log.result,
-                    log.detail,
-                ]
-                for log in logs
-            ],
+            rows=[_row(log) for log in logs],
             filters_summary=summary,
             requested_by=requested_by,
             generated_at=datetime.now(UTC),
         )
         return content, len(logs)
 
-    rows = (
-        [
-            log.audit_id,
-            log.created_at.isoformat(),
-            _actor(log),
-            log.action,
-            _target(log),
-            log.result,
-            log.detail,
-        ]
-        for log in logs
-    )
+    rows = (_row(log) for log in logs)
     text = UTF8_BOM + "".join(
         stream_csv(
-            ["Audit ID", "Created At", "Actor", "Action", "Target", "Result", "Detail"],
+            [
+                "Audit ID",
+                "Date & Time",
+                "User",
+                "Action",
+                "Affected Record",
+                "Result",
+                "Details",
+            ],
             rows,
         )
     )

@@ -240,6 +240,8 @@ __marimo__/
 # Help Center article screenshots are intentional, tracked content, not
 # incidental media.
 !frontend/public/help/*.png
+# Lipa CDRRMO report logo — intentional, tracked branding asset.
+!backend/app/assets/lipa-cdrrmo-logo.png
 
 # Frontend
 # Logs

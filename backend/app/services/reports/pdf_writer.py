@@ -17,6 +17,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from fpdf import FPDF
+from fpdf.fonts import FontFace
 
 from app.core.config import REPO_ROOT, settings
 from app.services.reports.csv_writer import stringify_cell
@@ -24,16 +25,37 @@ from app.services.reports.csv_writer import stringify_cell
 _ASSETS_DIR = REPO_ROOT / "backend" / "app" / "assets"
 _REGULAR_FONT_PATH = _ASSETS_DIR / "fonts" / "DejaVuSans.ttf"
 _BOLD_FONT_PATH = _ASSETS_DIR / "fonts" / "DejaVuSans-Bold.ttf"
-_LOGO_PATH = REPO_ROOT / "frontend" / "public" / "adas-logo.png"
+_LOGO_PATH = REPO_ROOT / "backend" / "app" / "assets" / "lipa-cdrrmo-logo.png"
 
 _FONT_FAMILY = "DejaVu"
+
+# Lipa CDRRMO report palette — plain black on white, no color design of
+# any kind (fills, accents, or status colors), so the report reads as a
+# plain formal document sheet that's easy to edit or reprint. The CDRRMO
+# logo is the only branding element.
+_INK = (0, 0, 0)
+_LINE = (0, 0, 0)
+_WHITE = (255, 255, 255)
+_BAND_META_TEXT = _INK
+
+_BAND_HEIGHT = 30
 
 
 def format_local_display(value: datetime, tz_name: str = "") -> str:
     """01_CONTRACTS.md §1.1 / D-010 — every PDF shows both the UTC
-    generation timestamp and a configured local-display timestamp."""
+    generation timestamp and a configured local-display timestamp, each in
+    a plain human-readable format rather than a raw ISO string."""
     tz = ZoneInfo(tz_name or settings.REPORT_LOCAL_TIMEZONE)
-    return value.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S %Z")
+    return value.astimezone(tz).strftime("%b %d, %Y %I:%M %p %Z")
+
+
+def _format_hour_label(hour: int) -> str:
+    """0-23 -> "12 AM" / "1 AM" / ... / "11 PM" — a 24-hour integer is a
+    database convention, not something a CDRRMO reader should have to
+    convert in their head."""
+    period = "AM" if hour < 12 else "PM"
+    display_hour = hour % 12 or 12
+    return f"{display_hour} {period}"
 
 
 class ReportPDF(FPDF):
@@ -42,7 +64,9 @@ class ReportPDF(FPDF):
     keeps every report in this package looking like one system."""
 
     def __init__(self, *, report_title: str, generated_at: datetime, requested_by: str):
-        super().__init__(orientation="L", unit="mm", format="A4")
+        # Short bond paper (8.5x11in / Letter), portrait — the format
+        # CDRRMO staff print and file these reports on.
+        super().__init__(orientation="P", unit="mm", format="Letter")
         self.report_title = report_title
         self.generated_at = generated_at
         self.requested_by = requested_by
@@ -53,80 +77,148 @@ class ReportPDF(FPDF):
         self.add_font(_FONT_FAMILY, "", str(_REGULAR_FONT_PATH))
         self.add_font(_FONT_FAMILY, "B", str(_BOLD_FONT_PATH))
         self.set_font(_FONT_FAMILY, size=9)
+        self.set_text_color(*_INK)
 
-        self.set_auto_page_break(auto=True, margin=15)
+        self.set_auto_page_break(auto=True, margin=18)
         self.alias_nb_pages()
         self.add_page()
 
     # -- fpdf2 lifecycle hooks -------------------------------------------------
 
     def header(self) -> None:
+        self.set_fill_color(*_WHITE)
+        self.rect(0, 0, self.w, _BAND_HEIGHT, style="F")
+        self.set_draw_color(*_LINE)
+        self.set_line_width(0.3)
+        self.line(0, _BAND_HEIGHT, self.w, _BAND_HEIGHT)
+
+        logo_h = 20
         text_x = 10
         if _LOGO_PATH.exists():
-            info = self.image(str(_LOGO_PATH), x=10, y=8, h=12)
+            info = self.image(
+                str(_LOGO_PATH), x=8, y=(_BAND_HEIGHT - logo_h) / 2, h=logo_h
+            )
             # Logos aren't necessarily square — position the title text
             # after the logo's actual rendered width (plus a gap), not a
             # guessed constant, so text never overlaps a wider logo.
-            text_x = 10 + info.rendered_width + 4
+            text_x = 8 + info.rendered_width + 5
 
-        self.set_xy(text_x, 8)
-        self.set_font(_FONT_FAMILY, "B", 13)
-        self.cell(0, 6, "A.D.A.S.", new_x="LMARGIN", new_y="NEXT")
-
-        self.set_x(text_x)
-        self.set_font(_FONT_FAMILY, "B", 10)
-        self.cell(0, 5, self.report_title, new_x="LMARGIN", new_y="NEXT")
+        self.set_text_color(*_INK)
+        self.set_xy(text_x, 7)
+        self.set_font(_FONT_FAMILY, "B", 15)
+        self.cell(0, 7, "Lipa CDRRMO", new_x="LMARGIN", new_y="NEXT")
 
         self.set_x(text_x)
-        self.set_font(_FONT_FAMILY, "", 8)
-        local_str = format_local_display(self.generated_at)
+        self.set_font(_FONT_FAMILY, "", 9)
         self.cell(
-            0,
-            5,
-            (
-                f"Generated {self.generated_at.isoformat()} "
-                f"({local_str}) — requested by {self.requested_by}"
-            ),
+            0, 5, "Accident Detection & Alert System", new_x="LMARGIN", new_y="NEXT"
+        )
+
+        right_w = 85
+        right_x = self.w - 10 - right_w
+        self.set_xy(right_x, 8)
+        self.set_font(_FONT_FAMILY, "B", 12)
+        self.cell(
+            right_w, 6, self.report_title, align="R", new_x="LMARGIN", new_y="NEXT"
+        )
+
+        self.set_text_color(*_BAND_META_TEXT)
+        self.set_font(_FONT_FAMILY, "", 7.5)
+        self.set_x(right_x)
+        generated_utc = self.generated_at.strftime("%b %d, %Y %I:%M %p UTC")
+        self.cell(
+            right_w,
+            4.5,
+            f"Generated {generated_utc}",
+            align="R",
             new_x="LMARGIN",
             new_y="NEXT",
         )
 
-        self.ln(1)
-        self.set_draw_color(190, 190, 190)
-        self.line(10, self.get_y(), self.w - 10, self.get_y())
-        self.ln(4)
+        self.set_x(right_x)
+        generated_local = format_local_display(self.generated_at)
+        self.cell(
+            right_w,
+            4.5,
+            f"Local time {generated_local}",
+            align="R",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+
+        self.set_text_color(*_INK)
+        self.set_xy(10, _BAND_HEIGHT + 5)
 
     def footer(self) -> None:
-        self.set_y(-12)
-        self.set_font(_FONT_FAMILY, "", 8)
-        self.set_text_color(120, 120, 120)
-        self.cell(0, 8, f"Page {self.page_no()} of {{nb}}", align="C")
-        self.set_text_color(0, 0, 0)
+        y = self.h - 15
+        self.set_draw_color(*_LINE)
+        self.set_line_width(0.2)
+        self.line(10, y, self.w - 10, y)
+
+        self.set_y(y + 2)
+        self.set_font(_FONT_FAMILY, "", 7.5)
+        self.set_text_color(*_INK)
+        self.cell(0, 6, "Lipa CDRRMO - Accident Detection & Alert System")
+
+        self.set_xy(self.w - 60, y + 2)
+        self.cell(50, 6, f"Page {self.page_no()} of {{nb}}", align="R")
+        self.set_text_color(*_INK)
 
     # -- shared report components ----------------------------------------------
 
-    def add_filter_summary(self, lines: Sequence[str]) -> None:
-        self.set_font(_FONT_FAMILY, "B", 9)
-        self.cell(0, 5, "Filters & Sorting", new_x="LMARGIN", new_y="NEXT")
+    def add_section_label(self, text: str) -> None:
+        """A small uppercase eyebrow used above every section (filters,
+        KPI blocks, sub-tables) so the report has one consistent way of
+        introducing a new part of the page."""
+        self.set_font(_FONT_FAMILY, "B", 8.5)
+        self.set_text_color(*_INK)
+        self.cell(0, 5, text.upper(), new_x="LMARGIN", new_y="NEXT")
         self.set_font(_FONT_FAMILY, "", 9)
-        text = "; ".join(lines) if lines else "None (all records)"
+
+    def add_filter_summary(self, lines: Sequence[str]) -> None:
+        self.add_section_label("Filters & Sorting")
+        text = "; ".join(lines) if lines else "All records, no filters applied"
         self.multi_cell(0, 5, text)
         self.ln(2)
 
     def add_kpi_section(self, title: str, items: Sequence[tuple[str, object]]) -> None:
-        self.set_font(_FONT_FAMILY, "B", 10)
-        self.cell(0, 6, title, new_x="LMARGIN", new_y="NEXT")
-        self.set_font(_FONT_FAMILY, "", 9)
-        col_width = (self.w - 20) / 2
-        for i in range(0, len(items), 2):
-            for label, value in items[i : i + 2]:
-                self.cell(col_width, 6, f"{label}: {stringify_cell(value)}", border=0)
-            self.ln(6)
-        self.ln(2)
+        """Renders each KPI as its own plain bordered box (no fill) instead
+        of plain "Label: value" text pairs, so the headline numbers are
+        the first thing a reader's eye lands on."""
+        self.add_section_label(title)
 
-    def add_empty_state(
-        self, message: str = "No records match the applied filters."
-    ) -> None:
+        per_row = 3
+        gap = 4
+        box_h = 20
+        usable_w = self.w - 20
+        box_w = (usable_w - gap * (per_row - 1)) / per_row
+        x0 = 10
+        top_y = self.get_y()
+
+        self.set_draw_color(*_LINE)
+        self.set_line_width(0.2)
+        for i, (label, value) in enumerate(items):
+            col = i % per_row
+            row = i // per_row
+            x = x0 + col * (box_w + gap)
+            y = top_y + row * (box_h + gap)
+
+            self.rect(x, y, box_w, box_h, style="D")
+
+            self.set_xy(x + 3, y + 3.5)
+            self.set_text_color(*_INK)
+            self.set_font(_FONT_FAMILY, "B", 13)
+            self.cell(box_w - 6, 7, stringify_cell(value), align="L")
+
+            self.set_xy(x + 3, y + 11.5)
+            self.set_font(_FONT_FAMILY, "", 7.5)
+            self.cell(box_w - 6, 5, label.upper(), align="L")
+
+        row_count = -(-len(items) // per_row)
+        self.set_xy(x0, top_y + row_count * (box_h + gap))
+        self.set_font(_FONT_FAMILY, "", 9)
+
+    def add_empty_state(self, message: str = "No records match your filters.") -> None:
         self.ln(2)
         self.set_font(_FONT_FAMILY, "", 10)
         self.cell(0, 8, message, new_x="LMARGIN", new_y="NEXT", align="C")
@@ -138,26 +230,50 @@ class ReportPDF(FPDF):
         rows: Sequence[Sequence[object]],
         *,
         col_widths: Sequence[float] | None = None,
+        status_col: int | None = None,
     ) -> None:
         """Repeated headings across pages (fpdf2's `Table` handles this via
         `repeat_headings`, on by default), wrapped cell values, and stable
         `N/A` rendering (`stringify_cell` — the same formatter the CSV
-        writer uses, so a report never disagrees with its own export)."""
+        writer uses, so a report never disagrees with its own export).
+
+        `status_col`, when given, bolds that column's text (a small scan
+        aid, not decoration — a reader triaging a printed incident list
+        can spot a status change at a glance).
+        """
         self.set_font(_FONT_FAMILY, "", 8)
+        heading_style = FontFace(emphasis="B", color=_INK, fill_color=_WHITE)
+        status_style = FontFace(emphasis="B", color=_INK)
+        self.set_fill_color(*_WHITE)
+
         if not rows:
             with self.table(
-                col_widths=col_widths, text_align="LEFT", line_height=5
+                col_widths=col_widths,
+                text_align="LEFT",
+                line_height=5.5,
+                padding=(1.5, 2),
+                headings_style=heading_style,
+                borders_layout="ALL",
             ) as table:
                 table.row(list(headers))
             self.add_empty_state()
             return
 
         with self.table(
-            col_widths=col_widths, text_align="LEFT", line_height=5
+            col_widths=col_widths,
+            text_align="LEFT",
+            line_height=5.5,
+            padding=(1.5, 2),
+            headings_style=heading_style,
+            borders_layout="ALL",
         ) as table:
             table.row(list(headers))
-            for row in rows:
-                table.row([stringify_cell(value) for value in row])
+            for values in rows:
+                table_row = table.row()
+                for col_idx, value in enumerate(values):
+                    text = stringify_cell(value)
+                    style = status_style if col_idx == status_col else None
+                    table_row.cell(text, style=style)
 
     def output_bytes(self) -> bytes:
         return bytes(self.output())
@@ -194,7 +310,8 @@ def build_incident_pdf(
             "Closed At",
         ],
         rows,
-        col_widths=(15, 30, 35, 22, 20, 30, 30, 30, 30),
+        col_widths=(14, 26, 32, 15, 15, 20, 26, 20, 20),
+        status_col=3,
     )
     return pdf.output_bytes()
 
@@ -222,23 +339,37 @@ def build_dashboard_pdf(
             ("Total Cleared", kpis["total_cleared"]),
         ],
     )
+    pdf.ln(4)
 
-    pdf.set_font(_FONT_FAMILY, "B", 10)
-    pdf.cell(0, 6, "Accident Frequency by Location", new_x="LMARGIN", new_y="NEXT")
+    pdf.add_section_label("Accident Frequency by Location")
     pdf.add_table(
         ["Camera Name", "Accident Count"],
         [[row["camera_name"], row["accident_count"]] for row in frequency_by_location],
-        col_widths=(120, 40),
+        col_widths=(150, 40),
     )
 
-    pdf.set_font(_FONT_FAMILY, "B", 10)
-    pdf.cell(
-        0, 6, "Peak Accident Times (UTC hour of day)", new_x="LMARGIN", new_y="NEXT"
-    )
+    pdf.ln(4)
+    pdf.add_section_label("Peak Accident Times (UTC Hour of Day)")
+    # 24 single "Hour | Count" rows would spill this report onto extra,
+    # nearly-empty pages for no reason -- four hours per row keeps the
+    # whole day on one compact grid that still fits short bond's narrower
+    # portrait width.
+    pairs_per_row = 4
+    hours = list(peak_accident_times)
+    grid_headers = ["Hour", "Count"] * pairs_per_row
+    grid_rows = []
+    for i in range(0, len(hours), pairs_per_row):
+        chunk = hours[i : i + pairs_per_row]
+        row: list[object] = []
+        for entry in chunk:
+            row.extend([_format_hour_label(entry["hour"]), entry["count"]])
+        while len(row) < pairs_per_row * 2:
+            row.extend(["", ""])
+        grid_rows.append(row)
     pdf.add_table(
-        ["Hour", "Count"],
-        [[row["hour"], row["count"]] for row in peak_accident_times],
-        col_widths=(40, 40),
+        grid_headers,
+        grid_rows,
+        col_widths=(24, 15) * pairs_per_row,
     )
     return pdf.output_bytes()
 
@@ -267,9 +398,10 @@ def build_performance_pdf(
             ("Avg Dismissed Confidence", global_kpis["avg_dismissed_confidence"]),
         ],
     )
+    pdf.ln(4)
+    pdf.add_section_label("Per-Camera Breakdown")
     pdf.add_table(
         [
-            "Camera ID",
             "Camera Name",
             "Total Accidents",
             "Total Dismissed",
@@ -279,7 +411,6 @@ def build_performance_pdf(
         ],
         [
             [
-                row["camera_id"],
                 row["camera_name"],
                 row["total_accidents"],
                 row["total_dismissed"],
@@ -289,7 +420,7 @@ def build_performance_pdf(
             ]
             for row in per_camera
         ],
-        col_widths=(22, 55, 30, 30, 25, 35, 35),
+        col_widths=(55, 25, 25, 22, 32, 31),
     )
     return pdf.output_bytes()
 
@@ -310,14 +441,14 @@ def build_audit_pdf(
     pdf.add_table(
         [
             "Audit ID",
-            "Created At",
-            "Actor",
+            "Date & Time",
+            "User",
             "Action",
-            "Target",
+            "Affected Record",
             "Result",
-            "Detail",
+            "Details",
         ],
         rows,
-        col_widths=(18, 30, 35, 35, 40, 20, 60),
+        col_widths=(12, 20, 22, 22, 20, 12, 82),
     )
     return pdf.output_bytes()

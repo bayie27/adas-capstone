@@ -240,7 +240,7 @@ class TestPdfContent:
         assert len(reader.pages) >= 1
         text = reader.pages[0].extract_text()
         assert "Incident Report" in text
-        assert "A.D.A.S." in text
+        assert "Lipa CDRRMO" in text
         assert "Search:" in text
         assert "Page 1 of" in text
         _assert_no_filesystem_paths(text)
@@ -328,7 +328,7 @@ class TestHostileAndDegenerateInput:
         csv_resp = client.get("/api/alerts/export", headers=headers)
         assert csv_resp.status_code == 200
         rows = list(csv.reader(StringIO(csv_resp.text[1:])))
-        assert any(row[3] == 'Weird "Camera"\nSecond Line' for row in rows[1:])
+        assert any(row[2] == 'Weird "Camera"\nSecond Line' for row in rows[1:])
 
         pdf_resp = client.get("/api/alerts/export?format=pdf", headers=headers)
         assert pdf_resp.status_code == 200
@@ -394,7 +394,7 @@ class TestHostileAndDegenerateInput:
         csv_resp = client.get("/api/alerts/export", headers=headers)
         assert csv_resp.status_code == 200
         rows = list(csv.reader(StringIO(csv_resp.text[1:])))
-        assert rows[1][3] == unicode_name
+        assert rows[1][2] == unicode_name
 
         pdf_resp = client.get("/api/alerts/export?format=pdf", headers=headers)
         assert pdf_resp.status_code == 200
@@ -481,7 +481,7 @@ class TestHostileAndDegenerateInput:
         resp = client.get("/api/alerts/export", headers=admin_headers)
         assert resp.status_code == 200
         rows = list(csv.reader(StringIO(resp.text[1:])))
-        assert rows[1][8] == "Test Operator"  # Verified By Name
+        assert rows[1][5] == "Test Operator"  # Verified By
         assert viewer_headers  # keeps the fixture alive/used
 
     def test_soft_deleted_camera_still_appears_in_export_history(
@@ -510,7 +510,7 @@ class TestHostileAndDegenerateInput:
         resp = client.get("/api/alerts/export", headers=headers)
         assert resp.status_code == 200
         rows = list(csv.reader(StringIO(resp.text[1:])))
-        assert any(row[3] == "Soon Deleted Cam" for row in rows[1:])
+        assert any(row[2] == "Soon Deleted Cam" for row in rows[1:])
 
 
 class TestRowLimitBoundary:

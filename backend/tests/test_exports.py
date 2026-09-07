@@ -959,7 +959,7 @@ class TestAuditJobFilters:
         rows = list(csv.reader(StringIO(download_resp.text[1:])))
         header, data_rows = rows[0], rows[1:]
         action_col = header.index("Action")
-        assert {row[action_col] for row in data_rows} == {"LOGIN_SUCCESS"}
+        assert {row[action_col] for row in data_rows} == {"Signed in"}
         assert len(data_rows) == expected_count
 
     def test_result_filter_reaches_the_worker(
@@ -985,7 +985,7 @@ class TestAuditJobFilters:
         rows = list(csv.reader(StringIO(download_resp.text[1:])))
         header, data_rows = rows[0], rows[1:]
         result_col = header.index("Result")
-        assert {row[result_col] for row in data_rows} == {"denied"}
+        assert {row[result_col] for row in data_rows} == {"Denied"}
 
     def test_target_type_filter_reaches_the_worker(
         self, client: TestClient, session: Session
@@ -1025,8 +1025,8 @@ class TestAuditJobFilters:
         )
         rows = list(csv.reader(StringIO(download_resp.text[1:])))
         header, data_rows = rows[0], rows[1:]
-        target_col = header.index("Target")
-        assert all(row[target_col].startswith("camera:") for row in data_rows)
+        target_col = header.index("Affected Record")
+        assert all(row[target_col].startswith("Camera:") for row in data_rows)
         assert len(data_rows) == 1
 
 

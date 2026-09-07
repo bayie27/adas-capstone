@@ -11,7 +11,16 @@ from app.models import AuditAction, AuditLog, AuditResult, User
 from app.schemas import AuditLogListResponse, AuditLogRead
 from app.services.filters import apply_sort, validate_common_filters
 from app.services.formatting import format_user_name
-from app.services.reports.common import check_row_limit, record_export_attempt
+from app.services.reports.common import (
+    check_row_limit,
+    format_audit_action,
+    format_audit_detail,
+    format_audit_result,
+    format_audit_target,
+    format_date_range,
+    format_export_datetime,
+    record_export_attempt,
+)
 from app.services.reports.csv_writer import csv_response
 from app.services.reports.pdf_writer import build_audit_pdf
 
@@ -254,7 +263,7 @@ def _audit_filters_summary(
         lines.append(f"Target Ref: {filters['target_ref']}")
     if filters.get("start_date") or filters.get("end_date"):
         lines.append(
-            f"Date range: {filters.get('start_date') or '…'} to {filters.get('end_date') or '…'}"
+            format_date_range(filters.get("start_date"), filters.get("end_date"))
         )
     if filters.get("search"):
         lines.append(f"Search: {filters['search']!r}")
@@ -385,25 +394,20 @@ def export_audit_logs(
             return None
         return f"{log.username} ({log.role})" if log.role else log.username
 
-    def _target(log: AuditLog) -> str | None:
-        if log.target_type is None and log.target_ref is None:
-            return None
-        return f"{log.target_type or '?'}:{log.target_ref or '?'}"
+    def _row(log: AuditLog) -> list:
+        return [
+            log.audit_id,
+            format_export_datetime(log.created_at),
+            _actor(log),
+            format_audit_action(log.action),
+            format_audit_target(log.target_type, log.target_ref),
+            format_audit_result(log.result),
+            format_audit_detail(log.detail),
+        ]
 
     if format == "pdf":
         logs = session.exec(stmt).all()
-        rows = [
-            [
-                log.audit_id,
-                log.created_at.isoformat(),
-                _actor(log),
-                log.action,
-                _target(log),
-                log.result,
-                log.detail,
-            ]
-            for log in logs
-        ]
+        rows = [_row(log) for log in logs]
         pdf_bytes = build_audit_pdf(
             rows=rows,
             filters_summary=_audit_filters_summary(
@@ -420,28 +424,17 @@ def export_audit_logs(
             },
         )
 
-    rows_iter = (
-        [
-            log.audit_id,
-            log.created_at.isoformat(),
-            _actor(log),
-            log.action,
-            _target(log),
-            log.result,
-            log.detail,
-        ]
-        for log in session.exec(stmt).yield_per(500)
-    )
+    rows_iter = (_row(log) for log in session.exec(stmt).yield_per(500))
     return csv_response(
         "adas_audit_export.csv",
         [
             "Audit ID",
-            "Created At",
-            "Actor",
+            "Date & Time",
+            "User",
             "Action",
-            "Target",
+            "Affected Record",
             "Result",
-            "Detail",
+            "Details",
         ],
         rows_iter,
     )
