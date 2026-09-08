@@ -9,6 +9,17 @@ from config import FPS_BAND_MIN, RECONNECT_INTERVAL_SECONDS, UNRESPONSIVE_AFTER_
 
 _FPS_WINDOW_SECONDS = 5.0
 
+# Bound the RTSP handshake and each read. Without these, ten cameras opening at
+# once contend during startup and one of them loses the TCP SETUP race, after
+# which the FFmpeg backend silently proceeds over UDP — observed live, on an
+# arbitrary channel each restart, and UDP then drops RTP packets on a busy
+# loopback and corrupts the H.264 reference chain. The backend is named
+# explicitly for the same reason `config.py` sets OPENCV_FFMPEG_CAPTURE_OPTIONS:
+# the transport preference only applies to the FFmpeg backend, so choosing it by
+# accident is not good enough. Both diagnostic harnesses already open this way.
+_OPEN_TIMEOUT_MSEC = 10_000
+_READ_TIMEOUT_MSEC = 5_000
+
 
 @dataclass(frozen=True)
 class FrameRead:
@@ -151,7 +162,16 @@ class CameraStream:
                 print(
                     f"[SYSTEM] Channel {self.channel_id} is offline. Attempting connection to {self.url}..."
                 )
-                self.cap = cv2.VideoCapture(self.url)
+                self.cap = cv2.VideoCapture(
+                    self.url,
+                    cv2.CAP_FFMPEG,
+                    [
+                        cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
+                        _OPEN_TIMEOUT_MSEC,
+                        cv2.CAP_PROP_READ_TIMEOUT_MSEC,
+                        _READ_TIMEOUT_MSEC,
+                    ],
+                )
                 # Always want the newest frame; a stale one is worse than a
                 # dropped one for an alerting system. Not supported by every
                 # backend, so a failure here is harmless.
