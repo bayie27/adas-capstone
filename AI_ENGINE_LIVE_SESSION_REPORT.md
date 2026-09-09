@@ -36,7 +36,7 @@ document to the same standard, including against my own most attractive result.
 
 ## Summary
 
-Eighteen findings, in the order they were discovered:
+Nineteen findings, in the order they were discovered:
 
 1. **The AI engine could not talk to the backend at all.** `AI_BACKEND_BASE_URL` defaulted to
    `http://` against a TLS-only backend. Every heartbeat and every alert delivery had been failing
@@ -80,19 +80,23 @@ Eighteen findings, in the order they were discovered:
     where previously one arbitrary camera per start fell back to UDP. 167 tests pass.
 16. **Lower-copy preprocessing costs no detection**, proven at event level: 8/16 with 3 FP, and
     **17/17 clips byte-identical** in their full event records.
-17. **A 15-minute soak at ten cameras confirms the fixes and corrects the throughput claim.** Zero
-    decode errors, zero heartbeat failures, zero false alarms, 10/10 cameras up — but **~6.8 FPS
-    (3.2–8.9), below the floor**, with troughs tracking available RAM. The earlier 12–13 FPS was an
-    artefact of three cameras being paused. Roughly **seven cameras** clears the floor at full
-    accuracy; ten does not.
+17. **A 15-minute soak at ten cameras confirms the fixes**: zero decode errors, zero heartbeat
+    failures, zero false alarms, 10/10 cameras up. Its throughput figure (~6.8 FPS, 3.2–8.9) was
+    later **retracted** — see Finding 19.
 18. **Shipped: the MediaMTX queue line and the lower-copy preprocessing.** Parity gate passes, all
     17 per-clip hits unchanged, 169 tests green. One clip-gate failure — 4 false positives vs the
     baseline's 3 — is **pre-existing**, caused by running `.engine` at native frame rate, and
     predates the code change; at a reduced publish rate the count is 3.
+19. **Detection is frame-rate invariant, and ten cameras are viable.** The full clip set scores an
+    identical 8/16 at native, 10, 8 and 6 FPS sampling, with flat latency and _fewer_ false
+    positives as the rate drops. A clean re-run with Chrome closed puts ten cameras at a stable
+    **8.17 FPS (7.8–8.5)**, not 6.8 — so ten cameras sit inside measured-safe territory. Proposed:
+    `FPS_BAND_MIN` 10.0 → 7.0.
 
 Finding 6 is the most consequential for the optimisation question: finding 4's speedup was partly
 bought with detection capability, so the substream proposal cannot be adopted as specified.
-Finding 7 is the way forward — the one large, measured, accuracy-neutral saving available.
+Finding 7, extended by Finding 19, is the way forward — frame-rate reduction is the one large,
+measured, accuracy-neutral saving available, and it is what makes ten cameras viable.
 **Finding 8 is the most consequential overall**, and it outranks the performance work: it says the
 recall baseline is fragile to perturbations nobody would expect to matter, which affects deployment
 generalisation and means every input-pipeline change needs a full re-evaluation.
@@ -768,7 +772,13 @@ exactly the guarantee Finding 8 says an input-pipeline change must carry.
 The change itself is **not applied** to `detector.py` — it remains a reviewed proposal, exercised
 here through a scratch harness.
 
-## Finding 17: the 15-minute soak — fixes hold, but ten cameras do not clear the floor
+## Finding 17: the first 15-minute soak — fixes hold, throughput figure later retracted
+
+> **Superseded in part by Finding 19.** The throughput numbers in this section were measured with
+> Chrome running and holding roughly 3 GB, which the user identified afterwards. A clean re-run with
+> Chrome closed gives **8.17 FPS with a 7.8–8.5 range**, not 6.8 FPS with a 3.2–8.9 range. The
+> stream-health results below stand; the FPS distribution and the "seven cameras" conclusion drawn
+> from it do not. The section is kept as the record of what was measured and why it misled.
 
 The full recommended stack, all ten cameras genuinely active (the Finding 12 incidents having been
 dismissed by the operator): native 1440p, 15 fps publish, `writeQueueSize: 8192`, TCP-only, the
@@ -890,6 +900,87 @@ fourth false positive and re-baseline with that disclosed, or keep `.pt` as the 
 document that the deployed engine differs. Note that under the configuration this report actually
 recommends — a reduced publish rate — the count is **3**, matching the documented baseline. Do not
 weaken the test or silently edit `baseline_epoch50.json`.
+
+## Finding 19: detection is frame-rate invariant, and ten cameras sit inside the safe band
+
+Two measurements, taken after the shipped changes were committed. Together they replace the capacity
+conclusion in Finding 17.
+
+### Detection does not depend on frame rate
+
+Full 17-clip harness, native resolution, `ai_engine/epoch50.engine`, shipped preprocessing, varying
+only `--sample-fps`:
+
+| Sampling           | Recall | False positives | Median detection latency |
+| ------------------ | ------ | --------------: | -----------------------: |
+| Native (25–30 fps) | 8/16   |               4 |                   3.01 s |
+| 10 FPS             | 8/16   |               3 |                   2.82 s |
+| 8 FPS              | 8/16   |               3 |                   2.94 s |
+| 6 FPS              | 8/16   |               2 |                   2.93 s |
+
+**The same eight clips hit at every rate**, latency is flat across a five-fold reduction, and false
+positives fall monotonically as the rate drops. The native median of 3.01 s reproduces the +3.02 s
+recorded in `ai_engine/docs/training_docs/results-and-limitations.md`, which is a useful check that
+this harness measures the same quantity the paper reports.
+
+This is empirical confirmation of the accumulator's design rather than a surprise: `accumulate.py`
+integrates `conf × dt` in conf-seconds, so halving the sampling rate doubles each frame's weight.
+Below 6 FPS is **not measured**; the run that would extend the ladder is the same harness at
+`--sample-fps 4`.
+
+There is a floor to this invariance that is structural rather than measured:
+`config.MAX_FRAME_GAP_SECONDS = 0.5` resets a camera's accumulated evidence when consecutive
+processed frames are more than half a second apart — below roughly 2 FPS instantaneous. Evidence
+accumulated before such a gap is discarded, so sustained operation near 2 FPS would lose crashes
+silently. That is the real lower bound, and it is well below the rates measured here.
+
+### The ten-camera figure, measured cleanly
+
+The Finding 17 soak ran with Chrome holding ~3 GB. Re-run with it closed, everything else identical —
+ten cameras, native 2304×1296 at 15 fps publish, `writeQueueSize: 8192`, TCP-only, shipped
+`camera.py` and `detector.py`, AC power — sampling every 105 seconds for 15 minutes:
+
+| Sample | Mean FPS | Worst camera | CPU % | RAM free (MB) | Chrome (MB) | Engine (MB) |
+| -----: | -------: | -----------: | ----: | ------------: | ----------: | ----------: |
+|      1 |     7.80 |          7.8 |  48.1 |          2649 |           0 |        3532 |
+|      2 |     8.34 |          7.2 |  48.2 |          3354 |           0 |        3303 |
+|      3 |     8.20 |          7.4 |  48.6 |          3320 |           0 |        3275 |
+|      4 |     8.16 |          7.8 |  45.1 |          3367 |           0 |        3314 |
+|      5 |     8.50 |          8.0 |  39.5 |          3447 |           0 |        3227 |
+|      6 |     8.20 |          8.2 |  41.8 |          3461 |           0 |        3271 |
+|      7 |     8.22 |          7.2 |  41.8 |          3421 |           0 |        3279 |
+|      8 |     7.92 |          7.4 |  53.1 |          3224 |           0 |        3251 |
+
+**Mean 8.17 FPS, range 7.8–8.5, worst single camera 7.2.** Against Finding 17's contaminated
+6.8 FPS and 3.2–8.9 range, Chrome accounted for both the shortfall and nearly all of the variance:
+free memory now holds flat at 3.2–3.5 GB instead of collapsing to 785 MB. Zero H.264 decoder errors,
+all ten readers on TCP, 353 heartbeats all 200 OK.
+
+### What follows
+
+Ten cameras deliver a stable 8.17 FPS, and 8 FPS sampling was measured above as detection-identical
+to native. **Ten cameras therefore sit inside measured-safe territory, not below it**, and the
+margin over the `MAX_FRAME_GAP_SECONDS` cliff is about 3.5× rather than the 1.6× that Finding 17's
+contaminated minimum implied. The obstacle to claiming ten cameras is no longer detection quality;
+it is NFR-03's stated "minimum of 10 to 15 frames per second", which is a documentation decision.
+
+**Proposed, not applied:** move `config.FPS_BAND_MIN` from 10.0 to **7.0**. Detection is measured
+identical down to 6 FPS, healthy ten-camera operation is 8.17 with a per-camera floor of 7.2, so a
+threshold of 7 warns before the system leaves measured-safe territory without firing during normal
+operation. A threshold of 8 would have raised `INFERENCE_FPS_BELOW_MIN` on the 7.2 and 7.8 samples
+above, which is a false alarm. This is a requirement-level change: it contradicts NFR-03 as written,
+it is carried as a change block in `paper_sync/findings/2026-09-09-substream-recall-and-poc-capacity.md`,
+and applying it also means updating `ai_engine/tests/test_config.py`, which pins the constant at 10.0.
+
+### A methodological note worth keeping
+
+The contaminated soak is the more instructive result. Nothing in the measurement looked wrong: ten
+cameras were up, no errors were logged, the numbers were internally consistent, and the low samples
+correlated with available memory exactly as a genuine capacity limit would. The confound was found
+because the user remembered opening a browser, not because the instrumentation caught it. The
+per-sample memory attribution now in the sampler exists so the next run does not depend on that.
+`paper_sync/CLAIM_SOURCES.md` already warns that a measurement taken while the demo stack is running
+is void; this extends the same rule to anything else sharing the machine.
 
 ## Where this stops
 
