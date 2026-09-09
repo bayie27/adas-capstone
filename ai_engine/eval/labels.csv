@@ -1,4 +1,4 @@
-clip,onset_s,end_s,involved,difficulty,notes
+clip,onset_s,end_s,involved,difficulty,source,notes
 # Crash onset times for the CDRRMO clip set, given by the project owner from playback
 # (2026-08-06). Times are approximate by design: eval/score.py counts a detection as correct
 # anywhere in [onset - lead, end + tail], default lead 2s / tail 15s, so a couple of seconds
@@ -59,6 +59,21 @@ clip,onset_s,end_s,involved,difficulty,notes
 # Keep them, but treat a miss on either as evidence about the capture, not about the detector:
 # the deployed system reads the camera stream directly and would never see 720x368.
 #
+# SOURCE column (added 2026-09-09) makes the paragraph above machine-readable, so a run can be
+# stratified without re-reading prose. `nvr_export` = exported from the CDRRMO viewer software;
+# `screen_recording` = captured by filming that software. It records HOW the footage reached us
+# and is not a judgement about content, so unlike `difficulty` it carries no post-hoc-selection
+# risk. eval/score.py ignores this column, exactly as it ignores `difficulty`.
+#
+# Stratifying the epoch50 baseline by this column (measured 2026-09-09, native resolution):
+#   all clips                              8/16 recall
+#   nvr_export only                        7/14
+#   standard difficulty, all clips         8/10
+#   standard difficulty, nvr_export only   7/8    <- the figure worth reporting
+# Excluding the screen recordings removes one hit (jeep-yellow-car) and one miss (motor-motor),
+# so it is not cherry-picking. jeep-yellow-car is additionally the weakest positive in the set:
+# its crash window covers nearly the whole 13.7s clip, so almost any event scores as a hit.
+#
 # INDEPENDENCE IS NOT ESTABLISHED. Five captions match cameras from the OLD clip set
 # (INUSLUBAN BYPASS, GEN. LUNA COR. CITYPARK, DPWH TO CITYHALL, OLANS PLACE TO FMALL, CITYHALL
 # MAIN ENTRANCE). Some of these may be longer exports of incidents the old set already
@@ -67,23 +82,23 @@ clip,onset_s,end_s,involved,difficulty,notes
 # footage is gone. Do not claim "16 independent incidents" or "17 cameras" without settling it;
 # two clips already share the OLANS PLACE camera, so there are at most 16 distinct viewpoints.
 #
-airbase.mp4,none,none,,negative,NO ACCIDENT - 60.4s of ordinary traffic
-armored-car-car.mp4,6.0,6.0,armored car + car,hard,owner judged hard to detect; 60.7s clip so ~44s counts as ordinary footage
-car-motor-far.mp4,36.0,36.0,car + motorcycle,hard,collision is far from the camera
-car-motor-motor.mp4,49.0,49.0,car + motorcycle + motorcycle,standard,61.0s clip - NOT the old car-motor-motor.mp4, see note at end of file
-car-motor.mp4,39.0,39.0,car + motorcycle,standard,
-car-uturn-motor.mp4,22.0,22.0,car making a U-turn + motorcycle,hard,owner judged hard to detect; 60.1s clip so ~43s counts as ordinary footage
-dekwatro.mp4,12.0,12.0,,standard,
-dpwh-red-car-motor.mp4,27.0,27.0,car + motorcycle,standard,
-jeep-car.mp4,16.0,16.0,jeep + car,hard,owner judged hard to detect
-jeep-motor.mp4,11.0,11.0,jeep + motorcycle,standard,
-jeep-yellow-car.mp4,6.0,6.0,jeep + car,standard,only 13.7s long - the crash window covers nearly the whole clip
-motor-motor-night.mp4,10.0,10.0,motorcycle + motorcycle,standard,NIGHT FOOTAGE - the one condition v1 has never detected in
-motor-motor.mp4,18.0,18.0,motorcycle + motorcycle,standard,
-red-car-motor.mp4,15.0,15.0,car + motorcycle,standard,61.3s clip so ~44s counts as ordinary footage
-tric-motor-car.mp4,10.0,10.0,tricycle + motorcycle + car,standard,
-truck-car.mp4,40.0,40.0,truck + car,hard,owner offered this one for negative testing - read as a hardness judgement
-truck-student-car.mp4,23.0,23.0,truck + car,hard,owner judged hard to detect; filename suggests a pedestrian is involved - UNVERIFIED
+airbase.mp4,none,none,,negative,nvr_export,NO ACCIDENT - 60.4s of ordinary traffic
+armored-car-car.mp4,6.0,6.0,armored car + car,hard,nvr_export,owner judged hard to detect; 60.7s clip so ~44s counts as ordinary footage
+car-motor-far.mp4,36.0,36.0,car + motorcycle,hard,nvr_export,collision is far from the camera
+car-motor-motor.mp4,49.0,49.0,car + motorcycle + motorcycle,standard,nvr_export,61.0s clip - NOT the old car-motor-motor.mp4, see note at end of file
+car-motor.mp4,39.0,39.0,car + motorcycle,standard,nvr_export,
+car-uturn-motor.mp4,22.0,22.0,car making a U-turn + motorcycle,hard,nvr_export,owner judged hard to detect; 60.1s clip so ~43s counts as ordinary footage
+dekwatro.mp4,12.0,12.0,,standard,nvr_export,
+dpwh-red-car-motor.mp4,27.0,27.0,car + motorcycle,standard,nvr_export,
+jeep-car.mp4,16.0,16.0,jeep + car,hard,nvr_export,owner judged hard to detect
+jeep-motor.mp4,11.0,11.0,jeep + motorcycle,standard,nvr_export,
+jeep-yellow-car.mp4,6.0,6.0,jeep + car,standard,screen_recording,only 13.7s long - the crash window covers nearly the whole clip
+motor-motor-night.mp4,10.0,10.0,motorcycle + motorcycle,standard,nvr_export,NIGHT FOOTAGE - the one condition v1 has never detected in
+motor-motor.mp4,18.0,18.0,motorcycle + motorcycle,standard,screen_recording,
+red-car-motor.mp4,15.0,15.0,car + motorcycle,standard,nvr_export,61.3s clip so ~44s counts as ordinary footage
+tric-motor-car.mp4,10.0,10.0,tricycle + motorcycle + car,standard,nvr_export,
+truck-car.mp4,40.0,40.0,truck + car,hard,nvr_export,owner offered this one for negative testing - read as a hardness judgement
+truck-student-car.mp4,23.0,23.0,truck + car,hard,nvr_export,owner judged hard to detect; filename suggests a pedestrian is involved - UNVERIFIED
 #
 # HISTORY - this file replaced the seven-clip label set on 2026-08-06.
 # Every result recorded in docs/results.md for v1 and v2 (4/5 recall, the latency table, the

@@ -59,8 +59,9 @@ class FakeThread:
 def _make_stream(monkeypatch, script, *, opens=True):
     captures = []
 
-    def fake_video_capture(url):
+    def fake_video_capture(url, *args):
         cap = FakeCapture(script, opens=opens)
+        cap.open_args = args
         captures.append(cap)
         return cap
 
@@ -195,6 +196,22 @@ def test_stream_buffer_is_limited_to_one_frame(monkeypatch):
     try:
         time.sleep(0.1)
         assert captures[0].buffersize == 1
+    finally:
+        stream.stop()
+
+
+def test_capture_opens_on_ffmpeg_with_bounded_timeouts(monkeypatch):
+    """Ten cameras opening at once contend, and a capture that loses the TCP
+    SETUP race proceeds over UDP instead, which corrupts H.264 on a busy
+    loopback. Name the backend and bound the handshake rather than leaving
+    both to the default."""
+    stream, captures = _make_stream(monkeypatch, [])
+    try:
+        time.sleep(0.1)
+        backend, params = captures[0].open_args
+        assert backend == camera.cv2.CAP_FFMPEG
+        assert params[params.index(camera.cv2.CAP_PROP_OPEN_TIMEOUT_MSEC) + 1] > 0
+        assert params[params.index(camera.cv2.CAP_PROP_READ_TIMEOUT_MSEC) + 1] > 0
     finally:
         stream.stop()
 

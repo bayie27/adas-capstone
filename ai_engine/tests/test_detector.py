@@ -121,7 +121,12 @@ def test_predict_batch_handles_a_frame_with_no_detections():
 
 
 def test_predict_batch_feeds_grayscale_to_the_model():
-    """Guards the single most consequential preprocessing decision."""
+    """Guards the single most consequential preprocessing decision.
+
+    Covers the path taken before `_gray_letterbox` is installed — and the
+    only path a stub model ever takes, since it has no Ultralytics predictor
+    to patch. The installed path is guarded by the parity test below.
+    """
     model = _StubModel([_StubResult(None)])
     det = _detector_with(model)
     frame = np.zeros((8, 8, 3), dtype="uint8")
@@ -131,6 +136,62 @@ def test_predict_batch_feeds_grayscale_to_the_model():
 
     sent = model.calls[0][0][0]
     assert sent[0, 0, 0] == sent[0, 0, 1] == sent[0, 0, 2]
+
+
+class _FakePredictorArgs:
+    rect = True
+
+
+class _FakePredictorModel:
+    format = "engine"
+    dynamic = True
+    stride = 32
+
+
+class _FakePredictor:
+    imgsz = 640
+    args = _FakePredictorArgs()
+    model = _FakePredictorModel()
+
+
+def test_gray_letterbox_is_byte_identical_to_the_full_resolution_path():
+    """The whole justification for moving grayscale inside the letterbox is
+    that it changes nothing. Detections on this clip set sit barely above the
+    accumulator's firing threshold, so a preprocessing change that shifted a
+    single pixel could silently cost a crash. Assert equality, not closeness.
+    """
+    pytest.importorskip("ultralytics")
+    from ultralytics.data.augment import LetterBox
+
+    rng = np.random.default_rng(0)
+    frames = [
+        rng.integers(0, 255, (1296, 2304, 3), dtype=np.uint8),
+        rng.integers(0, 255, (1296, 2304, 3), dtype=np.uint8),
+    ]
+    predictor = _FakePredictor()
+
+    letterbox = LetterBox(predictor.imgsz, auto=True, stride=32)
+    baseline = [letterbox(image=to_gray(f)) for f in frames]
+    candidate = detector._gray_letterbox(predictor, frames)
+
+    assert len(candidate) == len(baseline)
+    for got, want in zip(candidate, baseline, strict=True):
+        assert got.shape == want.shape
+        assert np.array_equal(got, want)
+
+
+def test_gray_letterbox_output_is_still_three_channel_grayscale():
+    """Same contract as to_gray(): the COCO-pretrained stem expects three
+    channels, and they must carry no colour."""
+    pytest.importorskip("ultralytics")
+    frame = np.zeros((64, 64, 3), dtype="uint8")
+    frame[:, :, 2] = 255  # pure red in BGR
+
+    out = detector._gray_letterbox(_FakePredictor(), [frame])[0]
+
+    assert out.shape[2] == 3
+    assert np.array_equal(out[:, :, 0], out[:, :, 1])
+    assert np.array_equal(out[:, :, 1], out[:, :, 2])
 
 
 def test_predict_batch_of_nothing_does_not_call_the_model():

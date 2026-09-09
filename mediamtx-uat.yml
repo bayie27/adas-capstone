@@ -37,6 +37,21 @@
 # TCP publishing is required. UDP dropped RTP packets when five loopback feeds
 # were published concurrently during the project's live verification.
 
+# RTMP is unused by this project (AI engine and publishers are RTSP-only).
+# Disabled because Windows can reserve TCP port ranges (Hyper-V/WSL dynamic
+# port allocation) that happen to include 1935, causing a fatal bind failure
+# that brings down every other MediaMTX listener along with it.
+rtmp: no
+
+# Ten 1440p readers overflow the default write queue, and MediaMTX then drops
+# frames for whichever reader is behind. The AI engine decodes the gap as a
+# broken H.264 reference chain: visible blocky corruption, and — because a
+# corrupt frame can look like a collision — false alerts on the silent profile.
+# Measured on this footage: 854 decoder errors in 40 seconds at the default,
+# and 0 in 170 seconds at 8192, with no other change. Do not lower this while
+# the engine reads full-resolution streams.
+writeQueueSize: 8192
+
 # ---------------------------------------------------------------------------
 # ACTIVE BY DEFAULT: OP-J01 to OP-J03 — BASELINE / SILENT
 # To leave this phase, comment this entire block from `paths:` through channel5.
@@ -55,6 +70,21 @@ paths:
     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
   channel5:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel6:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel7:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel8:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel9:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel10:
     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
 

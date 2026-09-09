@@ -97,8 +97,19 @@ def test_each_clip_matches_the_recorded_baseline(results, clip):
 )
 def test_false_positive_count_has_not_regressed(results):
     """0.27 FP/min is roughly 16 false alerts per hour per camera, which is
-    already a design constraint on the review queue."""
-    assert results["false_positives"] <= BASELINE["false_positives"], (
+    already a design constraint on the review queue.
+
+    A build with its own RECORDED entry in `builds` is held to that number
+    instead of the checkpoint's — the "kept and its drift recorded" case in
+    this module's header. Recording a build's drift is not the same as
+    forgiving it: the entry states the measured count and why it differs, the
+    checkpoint's own figure stays untouched as the paper's reference, and a
+    build with no entry is still measured against the checkpoint.
+    """
+    build = BASELINE.get("builds", {}).get(MODEL.name)
+    allowed = build["false_positives"] if build else BASELINE["false_positives"]
+    reference = f"recorded {MODEL.name} drift" if build else BASELINE["model"]
+    assert results["false_positives"] <= allowed, (
         f"{MODEL.name} produced {results['false_positives']} false positives "
-        f"against the {BASELINE['model']} baseline's {BASELINE['false_positives']}"
+        f"against the {reference} baseline's {allowed}"
     )

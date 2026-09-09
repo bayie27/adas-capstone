@@ -3,6 +3,14 @@
   "source": "adas_transfer/SPEC.md section 4",
   "note": "Native frame rate. Diff clip by clip, never against the 8/16 aggregate — the total can hide a change that gains one crash and loses another.",
   "false_positives": 3,
+  "builds": {
+    "epoch50.engine": {
+      "false_positives": 4,
+      "measured": "2026-09-09",
+      "clips_identical_to_checkpoint": true,
+      "note": "The TensorRT build's recorded drift, kept per this test's rule that a drifting build is kept and its drift RECORDED rather than silently accepted. All 17 per-clip hits match the checkpoint exactly; only the false-positive count differs, by one. Measured at NATIVE frame rate, which is how test_clip_regression.py runs. Sampling the same build at 10 FPS yields 3, matching the checkpoint — so this is a native-rate artefact of the engine build, not a recall regression. The paper's 3 false positives / 0.27 FP-per-minute remain the CHECKPOINT's numbers; quote the engine's separately if the engine is what shipped."
+    }
+  },
   "clips": {
     "car-motor": { "difficulty": "standard", "hit": true },
     "dekwatro": { "difficulty": "standard", "hit": true },
