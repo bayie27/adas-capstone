@@ -128,6 +128,24 @@ class InferencePipeline:
 
     # -- inference --------------------------------------------------------
 
+    def _predict(self, batch):
+        """Dispatches to the detector method matching this deployment's
+        configured reader. AI_GPU_DECODE is a process-wide flag (config.py),
+        never per-camera, so every camera in `batch` is already using the
+        same reader class — there is no mixed-batch case to handle.
+
+        `batch` is a list of (camera, read) pairs, not just frames: the GPU
+        path additionally needs each camera's `full_range` colour metadata
+        (gpu_camera.GpuCameraStream.full_range), read from its own live
+        stream at connect time (AI_ENGINE_GPU_INTEGRATION_PLAN.md section
+        6.2) — a software CameraStream has no equivalent attribute.
+        """
+        frames = [read.frame for _, read in batch]
+        if config.GPU_DECODE:
+            full_ranges = [camera.full_range for camera, _ in batch]
+            return self.detector.predict_batch_gpu(frames, full_ranges)
+        return self.detector.predict_batch(frames)
+
     def _infer(self, collected):
         """Batched predict, falling back to per-frame isolation on failure.
 
@@ -137,10 +155,9 @@ class InferencePipeline:
         the culprit.
         """
         self.last_batch_latency_ms = None
-        frames = [read.frame for _, read in collected]
         started = time.perf_counter()
         try:
-            detections = self.detector.predict_batch(frames)
+            detections = self._predict(collected)
             self.last_batch_latency_ms = (time.perf_counter() - started) * 1000
             return list(zip(collected, detections, strict=True))
         except Exception:
@@ -149,7 +166,7 @@ class InferencePipeline:
         paired = []
         for camera, read in collected:
             try:
-                detections = self.detector.predict_batch([read.frame])
+                detections = self._predict([(camera, read)])
             except Exception:
                 logger.exception(
                     "Inference failed for camera %s; excluding it", camera.camera_id

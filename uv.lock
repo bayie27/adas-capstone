@@ -50,6 +50,10 @@ ai-cpu = [
     { name = "torchvision", version = "0.28.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-13-adas-capstone-ai-cpu') or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
     { name = "ultralytics" },
 ]
+ai-gpu = [
+    { name = "nvidia-cuda-runtime-cu12", marker = "sys_platform == 'linux' or sys_platform == 'win32' or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+    { name = "pynvvideocodec", marker = "sys_platform == 'linux' or sys_platform == 'win32' or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
+]
 ai-trt = [
     { name = "onnx" },
     { name = "onnxruntime-gpu", marker = "sys_platform == 'linux' or sys_platform == 'win32' or (extra == 'extra-13-adas-capstone-ai' and extra == 'extra-13-adas-capstone-ai-cpu')" },
@@ -76,6 +80,7 @@ requires-dist = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.136.1" },
     { name = "fpdf2", specifier = ">=2.8.8" },
+    { name = "nvidia-cuda-runtime-cu12", marker = "(sys_platform == 'linux' and extra == 'ai-gpu') or (sys_platform == 'win32' and extra == 'ai-gpu')" },
     { name = "nvidia-ml-py", specifier = ">=13.590.20" },
     { name = "onnx", marker = "extra == 'ai-trt'", specifier = ">=1.19.0" },
     { name = "onnxruntime-gpu", marker = "(sys_platform == 'linux' and extra == 'ai-trt') or (sys_platform == 'win32' and extra == 'ai-trt')", specifier = ">=1.28.0" },
@@ -86,6 +91,7 @@ requires-dist = [
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "pyjwt", specifier = ">=2.12.1" },
+    { name = "pynvvideocodec", marker = "(sys_platform == 'linux' and extra == 'ai-gpu') or (sys_platform == 'win32' and extra == 'ai-gpu')", specifier = "==2.2.2" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "python-multipart", specifier = ">=0.0.26" },
     { name = "requests", specifier = ">=2.33.1" },
@@ -101,7 +107,7 @@ requires-dist = [
     { name = "ultralytics", marker = "extra == 'ai'", specifier = ">=8.4.41" },
     { name = "ultralytics", marker = "extra == 'ai-cpu'", specifier = ">=8.4.41" },
 ]
-provides-extras = ["ai", "ai-cpu", "ai-trt"]
+provides-extras = ["ai", "ai-cpu", "ai-trt", "ai-gpu"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -887,6 +893,16 @@ wheels = [
 ]
 
 [[package]]
+name = "nvidia-cuda-runtime-cu12"
+version = "12.9.79"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bc/e0/0279bd94539fda525e0c8538db29b72a5a8495b0c12173113471d28bce78/nvidia_cuda_runtime_cu12-12.9.79-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:83469a846206f2a733db0c42e223589ab62fd2fabac4432d2f8802de4bded0a4", size = 3515012, upload-time = "2025-06-05T20:00:35.519Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/46/a92db19b8309581092a3add7e6fceb4c301a3fd233969856a8cbf042cd3c/nvidia_cuda_runtime_cu12-12.9.79-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:25bba2dfb01d48a9b59ca474a1ac43c6ebf7011f1b0b8cc44f54eb6ac48a96c3", size = 3493179, upload-time = "2025-06-05T20:00:53.735Z" },
+    { url = "https://files.pythonhosted.org/packages/59/df/e7c3a360be4f7b93cee39271b792669baeb3846c58a4df6dfcf187a7ffab/nvidia_cuda_runtime_cu12-12.9.79-py3-none-win_amd64.whl", hash = "sha256:8e018af8fa02363876860388bd10ccb89eb9ab8fb0aa749aaf58430a9f7c4891", size = 3591604, upload-time = "2025-06-05T20:11:17.036Z" },
+]
+
+[[package]]
 name = "nvidia-cudnn-cu13"
 version = "9.19.0.56"
 source = { registry = "https://pypi.org/simple" }
@@ -1298,6 +1314,17 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/c2/27/a3b6e5bf6ff856d2509292e95c8f57f0df7017cf5394921fc4e4ef40308a/pyjwt-2.12.1.tar.gz", hash = "sha256:c74a7a2adf861c04d002db713dd85f84beb242228e671280bf709d765b03672b", size = 102564, upload-time = "2026-03-13T19:27:37.25Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e5/7a/8dd906bd22e79e47397a61742927f6747fe93242ef86645ee9092e610244/pyjwt-2.12.1-py3-none-any.whl", hash = "sha256:28ca37c070cad8ba8cd9790cd940535d40274d22f80ab87f3ac6a713e6e8454c", size = 29726, upload-time = "2026-03-13T19:27:35.677Z" },
+]
+
+[[package]]
+name = "pynvvideocodec"
+version = "2.2.2"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7f/72/a4f67d23879887e7693fa6a63cf51f2d127e96fe3642d091cd464e9f5a1b/pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:c02ca70c1797cb02217c8366f2ebb28a35cf80c02a266ac640b68b189f4531d0", size = 26354675, upload-time = "2026-08-26T08:03:57.062Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/53/a1d91b359a5ddb44a2955dd6f6a0465f27223cd455821d9dabcac3847555/pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:b29dd4ac5aefbe909b8d3d3e57e5a1e84aeea5c4c862116f90c0cd0193972cbb", size = 26427190, upload-time = "2026-08-26T08:04:23.094Z" },
+    { url = "https://files.pythonhosted.org/packages/70/a6/273217a5deedd79933e7e9b1897f3ad3e33466449dfa8be31db6ffb14f80/pynvvideocodec-2.2.2-cp312-cp312-win_amd64.whl", hash = "sha256:ff4561f48d41ddd0e36e7da92b6f848da325ebf2960097bf62616633fbca6def", size = 20401817, upload-time = "2026-08-26T08:04:54.382Z" },
+    { url = "https://files.pythonhosted.org/packages/02/d8/62ece59fe176f3f2da57028b47657ac83cc7a31261c9c89f7d211ddd4cd0/pynvvideocodec-2.2.2-cp312-cp312-win_arm64.whl", hash = "sha256:e8f7d8d858f4d0382ab04a4f6605d8890184a48e3654e7206bdd69cbc6279db8", size = 19517891, upload-time = "2026-08-26T08:05:14.311Z" },
 ]
 
 [[package]]

@@ -41,6 +41,23 @@ def run_multi_camera_inference() -> None:
     detector = AccidentDetector(model_path)
     print(f"[SYSTEM] Detector ready on device '{detector.device}'.")
 
+    if config.GPU_DECODE:
+        from gpu_camera import validate_gpu_support
+
+        # Before any camera starts — the model is resolved first for the
+        # same reason (see the comment above). An unsupported device/driver
+        # must stop the process, not be discovered halfway through bringing
+        # cameras up. See AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.3.
+        validate_gpu_support()
+        # predictor.inference()/.postprocess() (predict_batch_gpu) never
+        # goes through predict(), which is what normally builds the
+        # predictor lazily — so nothing else would trigger it before the
+        # first live GPU frame.
+        detector.warm_up_gpu()
+        print("[SYSTEM] Camera reader: GPU-resident decode (AI_GPU_DECODE=1).")
+    else:
+        print("[SYSTEM] Camera reader: software (OpenCV/FFmpeg).")
+
     alert_manager = AccidentManager()
     cameras: dict = {}
 

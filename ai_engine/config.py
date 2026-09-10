@@ -153,3 +153,10 @@ MAX_FRAME_AGE_SECONDS = 2.0
 # both the evidence and the decay across it are unknown. Discarding is the
 # honest response, and it reuses the same seam segment_id already uses.
 MAX_FRAME_GAP_SECONDS = 0.5
+
+# Opt in to GPU-resident decoding and preprocessing (NVIDIA + NVDEC only).
+# Unset or "0" keeps the OpenCV software reader, which is the default and the
+# rollback. When set, an unsupported device, driver or stream format raises at
+# startup rather than silently running the slow path: an invisible fallback is
+# exactly the failure mode resolve_model_path() exists to prevent.
+GPU_DECODE = os.environ.get("AI_GPU_DECODE", "0") not in ("0", "", "false", "False")

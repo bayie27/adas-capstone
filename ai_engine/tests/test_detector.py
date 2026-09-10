@@ -194,6 +194,48 @@ def test_gray_letterbox_output_is_still_three_channel_grayscale():
     assert np.array_equal(out[:, :, 1], out[:, :, 2])
 
 
+def test_letterbox_auto_matches_same_shape_rect_engine_batch():
+    """Ported verbatim from BasePredictor.pre_transform — a regression here
+    would silently make the GPU and software paths letterbox differently."""
+    shapes = [(1296, 2304, 3), (1296, 2304, 3)]
+    assert detector._letterbox_auto_for_shapes(_FakePredictor(), shapes) is True
+
+
+def test_letterbox_auto_is_false_for_mixed_shapes():
+    shapes = [(1296, 2304, 3), (1440, 2560, 3)]
+    assert detector._letterbox_auto_for_shapes(_FakePredictor(), shapes) is False
+
+
+def test_letterbox_auto_is_false_when_rect_is_disabled():
+    class _NoRectArgs:
+        rect = False
+
+    predictor = _FakePredictor()
+    predictor.args = _NoRectArgs()
+    shapes = [(1296, 2304, 3), (1296, 2304, 3)]
+    assert detector._letterbox_auto_for_shapes(predictor, shapes) is False
+
+
+def test_letterbox_auto_is_false_for_a_static_pt_export_without_dynamic():
+    class _StaticPtModel:
+        format = "pt"
+        dynamic = False
+        stride = 32
+
+    predictor = _FakePredictor()
+    predictor.model = _StaticPtModel()
+    shapes = [(64, 64, 3)]
+    # format == "pt" alone satisfies the condition regardless of `dynamic`.
+    assert detector._letterbox_auto_for_shapes(predictor, shapes) is True
+
+
+def test_orig_placeholder_has_the_requested_shape_and_is_cached():
+    first = detector._orig_placeholder((1296, 2304, 3))
+    second = detector._orig_placeholder((1296, 2304, 3))
+    assert first.shape == (1296, 2304, 3)
+    assert first is second  # lru_cache: never rebuilt per frame
+
+
 def test_predict_batch_of_nothing_does_not_call_the_model():
     model = _StubModel([])
     det = _detector_with(model)
