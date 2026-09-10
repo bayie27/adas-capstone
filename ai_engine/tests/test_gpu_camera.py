@@ -30,7 +30,7 @@ def _make_stream():
     stream.channel_id = 1
     stream.camera_id = 1
     stream.url = "rtsp://fake/1"
-    stream._latest = None
+    stream._frames = gpu_camera.deque(maxlen=gpu_camera._FRAME_QUEUE_DEPTH)
     stream._latest_lock = threading.Lock()
     stream.segment_id = 0
     stream.running = True
@@ -54,7 +54,67 @@ def _make_stream():
     return stream
 
 
-def test_read_returns_the_newest_frame_and_is_destructive():
+def test_read_drains_a_clump_in_order_instead_of_discarding_it():
+    """Regression for the live-demo FPS defect.
+
+    NVDEC returns several frames from one decoder.Decode(packet) call, so
+    _ingest() fires several times back to back between two pipeline ticks. A
+    single slot kept only the last of each clump, which is why the reader
+    decoded at the source's full 25 fps while the pipeline's read() found a
+    new frame on only 40-52% of ticks.
+    """
+    stream = _make_stream()
+    clump = [FrameRead(frame=f"f{i}", t=float(i), segment_id=1) for i in range(3)]
+    for read in clump:
+        stream._publish_latest(read)
+
+    assert [stream.read() for _ in clump] == clump
+    assert stream.read() is None
+
+
+def test_queue_is_bounded_and_drops_the_oldest():
+    """The source outruns the tick, so the queue rides full. It must stay
+    bounded and shed the OLDEST frame, keeping the most recent window."""
+    depth = gpu_camera._FRAME_QUEUE_DEPTH
+    stream = _make_stream()
+    published = [
+        FrameRead(frame=f"f{i}", t=float(i), segment_id=1) for i in range(depth + 2)
+    ]
+    for read in published:
+        stream._publish_latest(read)
+
+    drained = []
+    while (read := stream.read()) is not None:
+        drained.append(read)
+
+    assert len(drained) == depth
+    assert drained == published[-depth:]
+
+
+def test_resume_discards_frames_from_the_previous_segment():
+    """resume() bumps segment_id to reset the accumulator (SPEC.md section 6).
+    Frames queued before that bump carry the OLD segment."""
+    stream = _make_stream()
+    stream._publish_latest(FrameRead(frame="stale", t=1.0, segment_id=0))
+    stream.is_paused = True
+
+    stream.resume()
+
+    assert stream.read() is None
+    assert stream.segment_id == 1
+
+
+def test_on_connected_discards_frames_from_before_the_reconnect():
+    """Same seam as resume(): dt across the outage is meaningless."""
+    stream = _make_stream()
+    stream._publish_latest(FrameRead(frame="pre-outage", t=1.0, segment_id=0))
+
+    stream._on_connected()
+
+    assert stream.read() is None
+
+
+def test_read_is_destructive():
     stream = _make_stream()
     first = FrameRead(frame="first", t=1.0, segment_id=1)
     second = FrameRead(frame="second", t=2.0, segment_id=1)

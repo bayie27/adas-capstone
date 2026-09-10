@@ -37,6 +37,27 @@ _OPEN_TIMEOUT_SECONDS = 10.0
 _READ_TIMEOUT_SECONDS = 5.0
 _WATCHDOG_POLL_SECONDS = 0.2
 
+# How many decoded frames this reader holds before the oldest is dropped.
+#
+# NOT a departure from the destructive-read contract: read() still returns
+# each FrameRead at most once, so a repeat frame can never corrupt the
+# accumulator's dt (camera.CameraStream.read()).
+#
+# It exists because NVDEC delivery is bursty in a way cv2.VideoCapture's is
+# not: decoder.Decode(packet) returns SEVERAL frames at once, and the reader
+# also stalls while the inference tick holds the CUDA device, so frames land
+# in clumps separated by gaps longer than the pipeline's 66.7 ms tick. A
+# single slot keeps only the LAST frame of each clump. Measured live on the
+# 10-camera demo: each camera decoded 25.1 fps at the source's native rate
+# while the pipeline's read() found a new frame on only 40-52% of ticks.
+#
+# Depth is a latency/throughput trade: the source runs 25-30 fps and the tick
+# consumes at most 15, so the queue rides full and the frame read is (depth-1)
+# frames behind the newest -- about 80 ms at depth 3 and 25 fps, well inside
+# config.MAX_FRAME_AGE_SECONDS. Set AI_GPU_FRAME_QUEUE_DEPTH=1 to restore the
+# exact single-slot behaviour this replaced.
+_FRAME_QUEUE_DEPTH = max(1, int(os.environ.get("AI_GPU_FRAME_QUEUE_DEPTH", "3")))
+
 
 class UnsupportedStreamError(RuntimeError):
     """A live camera's format, device or driver falls outside what the GPU
@@ -181,7 +202,7 @@ class GpuCameraStream:
         self.channel_id = channel_id
         self.camera_id = camera_id
         self.url = rtsp_url
-        self._latest: FrameRead | None = None
+        self._frames: deque = deque(maxlen=_FRAME_QUEUE_DEPTH)
         self._latest_lock = threading.Lock()
         self.segment_id = 0
         self.running = True
@@ -253,6 +274,8 @@ class GpuCameraStream:
         self.is_paused = False
         self.ai_status = "Active"
         self.segment_id += 1
+        # Everything queued was decoded under the PREVIOUS segment_id.
+        self._discard_queued()
         self.start_inference_measurement()
 
     # -- metrics: identical contract to CameraStream -----------------------
@@ -357,17 +380,35 @@ class GpuCameraStream:
     # -- frame exchange: identical contract to CameraStream ---------------
 
     def _publish_latest(self, read: FrameRead) -> None:
+        """Queues one decoded frame, dropping the oldest once the queue is
+        full (deque(maxlen=...)), so a slow consumer sees recent frames rather
+        than an unbounded backlog."""
         with self._latest_lock:
-            self._latest = read
+            self._frames.append(read)
+
+    def _discard_queued(self) -> None:
+        """Drops every queued frame. Called wherever segment_id is bumped —
+        those frames carry the PREVIOUS segment, and handing them over after a
+        resume or reconnect would reset the fresh accumulator a second time
+        and credit the new segment with pre-seam evidence."""
+        with self._latest_lock:
+            self._frames.clear()
 
     def read(self):
-        """Returns the newest unconsumed FrameRead, or None. Destructive,
-        same as CameraStream.read() — a repeat frame would corrupt the
-        accumulator's dt (plan section 6.2)."""
+        """Returns the oldest unconsumed FrameRead, or None.
+
+        Still destructive in the sense that matters: every FrameRead is
+        returned at most once, so a repeat frame can never corrupt the
+        accumulator's dt (plan section 6.2, camera.CameraStream.read()).
+
+        Oldest-first rather than newest-only because NVDEC delivers in clumps
+        and a single slot discarded all but the last frame of each — see
+        _FRAME_QUEUE_DEPTH. Staleness is bounded by the queue depth and stays
+        well inside config.MAX_FRAME_AGE_SECONDS, which pipeline._collect()
+        enforces on every frame anyway.
+        """
         with self._latest_lock:
-            latest = self._latest
-            self._latest = None
-            return latest
+            return self._frames.popleft() if self._frames else None
 
     # -- connection lifecycle -----------------------------------------------
 
@@ -525,6 +566,9 @@ class GpuCameraStream:
         if not self.is_paused:
             self.start_inference_measurement()
         self.segment_id += 1
+        # Same seam as resume(): anything still queued predates this
+        # reconnect, and dt across the outage is meaningless.
+        self._discard_queued()
 
     def _ingest(self, native) -> None:
         """Publishes one already-cloned decoded surface as the newest frame.
