@@ -5,9 +5,9 @@ Same public surface as camera.CameraStream (read(), pause(), resume(),
 stop(), observed_state(), record_inference(), segment_id, is_paused,
 connection_status, ai_status, applied_config_version, ...) — supervisor.py
 and pipeline.py hold whichever class config.GPU_DECODE selected without
-knowing which one it is. See AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.2.
+knowing which one it is. See ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.2.
 
-Ported from prototype_gpu_rtsp.py's `read_camera()` reader-thread shape —
+Ported from prototypes/prototype_gpu_rtsp.py's `read_camera()` reader-thread shape —
 NOT its tick loop, which lived in that prototype's own throwaway `main()`
 and has no production equivalent here. The metrics/observed_state bookkeeping
 below duplicates camera.py's rather than sharing it, so the existing,
@@ -66,7 +66,7 @@ class UnsupportedStreamError(RuntimeError):
 
 _handles: list = []  # process-local DLL search-directory handles; NEVER
 # closed — closing them removes the search path PyNvVideoCodec's native
-# extension needs for the rest of the process's life (prototype_gpu_decode.py
+# extension needs for the rest of the process's life (prototypes/prototype_gpu_decode.py
 # only closed them because that script's process was about to exit anyway).
 _nvc = None
 _nvc_lock = threading.Lock()
@@ -74,7 +74,7 @@ _nvc_lock = threading.Lock()
 
 def _load_nvc():
     """Windows/Linux-appropriate PyNvVideoCodec loading, from
-    prototype_gpu_decode.py's load_decoder(). Cached at module scope: the DLL
+    prototypes/prototype_gpu_decode.py's load_decoder(). Cached at module scope: the DLL
     search directories are process-global state, so there is nothing to
     repeat per camera.
     """

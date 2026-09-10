@@ -47,7 +47,7 @@ def run_multi_camera_inference() -> None:
         # Before any camera starts — the model is resolved first for the
         # same reason (see the comment above). An unsupported device/driver
         # must stop the process, not be discovered halfway through bringing
-        # cameras up. See AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.3.
+        # cameras up. See ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.3.
         validate_gpu_support()
         # predictor.inference()/.postprocess() (predict_batch_gpu) never
         # goes through predict(), which is what normally builds the

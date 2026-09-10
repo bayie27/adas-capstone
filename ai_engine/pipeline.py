@@ -137,7 +137,7 @@ class InferencePipeline:
         `batch` is a list of (camera, read) pairs, not just frames: the GPU
         path additionally needs each camera's `full_range` colour metadata
         (gpu_camera.GpuCameraStream.full_range), read from its own live
-        stream at connect time (AI_ENGINE_GPU_INTEGRATION_PLAN.md section
+        stream at connect time (ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section
         6.2) — a software CameraStream has no equivalent attribute.
         """
         frames = [read.frame for _, read in batch]

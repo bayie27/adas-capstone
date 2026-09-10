@@ -3,7 +3,7 @@
 Format/shape validation and the ffprobe-based colour-range read need no GPU
 and run in the default suite. Anything that actually launches the CUDA
 kernel (`kernel()`, `prepare_nv12()`) needs a real device and is marked
-`gpu` — see AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.4's "Unit, no GPU
+`gpu` — see ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.4's "Unit, no GPU
 required" list vs. its GPU-required parity gate.
 """
 

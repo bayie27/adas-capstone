@@ -51,7 +51,7 @@ def _letterbox_auto_for_shapes(predictor, shapes: list) -> bool:
     mixed-resolution cameras the destructive `CameraStream.read()` makes the
     live batch a different subset each tick, so `same_shapes` can flip tick
     to tick under completely normal operation (see
-    AI_ENGINE_GPU_INTEGRATION_PLAN.md section 4.1(b)).
+    ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 4.1(b)).
     """
     same_shapes = len(set(shapes)) == 1
     return (
@@ -241,7 +241,7 @@ class AccidentDetector:
         `_install_gray_letterbox` above), and `predict_batch_gpu()` never
         calls `predict()` — it calls `predictor.inference()` /
         `.postprocess()` directly, the way
-        AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.3 requires, so nothing
+        ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.3 requires, so nothing
         else would trigger that lazy build. Idempotent: safe to call once at
         startup, before any camera — and therefore any real resolution — is
         known.
@@ -249,7 +249,7 @@ class AccidentDetector:
         The warmup frame's size does not need to match any real camera: it
         only has to be a valid image so `predict()` can build the predictor
         and report a real `.dtype`. Eight calls, matching
-        `prototype_gpu_rtsp.py`'s warmup, so the installed `_gray_letterbox`
+        `prototypes/prototype_gpu_rtsp.py`'s warmup, so the installed `_gray_letterbox`
         optimisation and any CUDA/cuDNN autotuning are both settled before
         the first live tick.
         """
@@ -272,7 +272,7 @@ class AccidentDetector:
         on the GPU as NV12 device tensors (gpu_camera.GpuCameraStream's
         reader), so this skips Ultralytics' own preprocessing and any host
         round trip, calling `predictor.inference()` / `.postprocess()`
-        directly — the same shape as `prototype_gpu_rtsp.py`'s tick.
+        directly — the same shape as `prototypes/prototype_gpu_rtsp.py`'s tick.
 
         `native_frames` and `full_ranges` must be the same length, one entry
         per camera in this tick's batch, in the same order `_to_detection`'s

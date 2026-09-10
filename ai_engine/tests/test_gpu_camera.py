@@ -5,7 +5,7 @@ testing the reader's own bookkeeping directly.
 
 The demux/decode loop itself (_run_connection's `for packet in demux: for
 frame in decoder.Decode(packet)`) is exercised by the live RTSP throughput
-run in AI_ENGINE_GPU_INTEGRATION_PLAN.md section 9, not here — faking
+run in ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 9, not here — faking
 PyNvVideoCodec's C-extension iteration protocol faithfully would test the
 fake more than the code. What IS unit-tested here is everything
 _run_connection delegates to: the reconnect bookkeeping (_on_connected),

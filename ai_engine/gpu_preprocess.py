@@ -1,8 +1,8 @@
 """GPU-resident NV12 -> grayscale-letterbox preprocessing.
 
-Ported from the throwaway `prototype_exact_gpu.py`. The CUDA kernel below is
+Ported from the throwaway `prototypes/prototype_exact_gpu.py`. The CUDA kernel below is
 copied VERBATIM from that prototype — it is the arithmetic reference, and
-AI_ENGINE_GPU_INTEGRATION_PLAN.md section 5.1 is explicit that it must not be
+ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 5.1 is explicit that it must not be
 "improved": it deliberately reproduces, bit for bit, what the current
 software stack already does (FFmpeg 4.4's fixed-point BT.601 YUV->RGB,
 OpenCV's fixed-point grayscale weights, OpenCV 4.13's fixed-point bilinear
@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-# Verbatim from prototype_exact_gpu.py — do not edit this arithmetic without
+# Verbatim from prototypes/prototype_exact_gpu.py — do not edit this arithmetic without
 # new accuracy-gate evidence (see the module docstring above).
 SOURCE = r"""
 __device__ int gray_at(const unsigned char* p, int pitch, int h, int x, int y, int full) {
@@ -61,7 +61,7 @@ extern "C" __global__ void prep(const unsigned char* p, unsigned char* out,
 class UnsupportedFrameError(RuntimeError):
     """A live stream's format, device or driver falls outside what this
     kernel was built and validated for. Raised instead of guessing, per
-    AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.2: an unsupported format must
+    ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.2: an unsupported format must
     never silently feed an incorrect tensor.
     """
 
@@ -247,7 +247,7 @@ def prepare_nv12(
     be computed by the caller from the actual batch, every tick — see
     detector._letterbox_auto_for_shapes(). This module never caches it.
 
-    Verbatim arithmetic from prototype_exact_gpu.py's `prepare_nv12()`.
+    Verbatim arithmetic from prototypes/prototype_exact_gpu.py's `prepare_nv12()`.
     """
     if native.ndim != 2 or native.dtype != torch.uint8:
         raise UnsupportedFrameError("Expected two-dimensional NV12 uint8")

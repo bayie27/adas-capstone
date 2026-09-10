@@ -22,7 +22,7 @@ def _synthetic_nv12(h, w, y_value, u_value, v_value):
 
 def test_to_bgr_accepts_a_gpu_resident_nv12_tensor():
     """CPU-only: torch tensors work without CUDA, and the conversion itself
-    is pure numpy after .cpu() (AI_ENGINE_GPU_INTEGRATION_PLAN.md section
+    is pure numpy after .cpu() (ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section
     7.1) — no GPU needed to test the arithmetic."""
     native = _synthetic_nv12(4, 4, y_value=128, u_value=128, v_value=128)
     out = frames.to_bgr(native, full_range=False)
@@ -51,7 +51,7 @@ def test_to_bgr_full_range_and_limited_range_disagree():
 
 def test_to_bgr_upsamples_chroma_nearest_neighbour_like_the_kernel():
     """Matches the CUDA kernel's integer (x/2, y/2) chroma indexing exactly
-    (AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.2) -- a 2x2 luma block
+    (ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.2) -- a 2x2 luma block
     sharing one chroma sample must decode to a UNIFORM colour, not a
     bilinear blend across the block boundary."""
     h, w = 4, 4

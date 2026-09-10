@@ -1,8 +1,8 @@
-"""The Phase 1 acceptance gate: AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.4.
+"""The Phase 1 acceptance gate: ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.4.
 
 For every clip in ai_engine/eval/clips, decodes it TWICE — once with
 OpenCV (the software path's decoder) and once with PyNvVideoCodec (the GPU
-path's decoder, direct from the file, mirroring prototype_gpu_decode.py's
+path's decoder, direct from the file, mirroring prototypes/prototype_gpu_decode.py's
 file-based comparison rather than gpu_camera.py's RTSP plumbing, which is
 orthogonal to whether the preprocessing arithmetic matches) — and asserts,
 per frame:
@@ -47,7 +47,7 @@ CLIPS = sorted(CLIPS_DIR.glob("*.mp4")) if CLIPS_DIR.is_dir() else []
 
 def _gpu_frames(nvc, path: Path):
     """Direct file decode via PyNvVideoCodec, mirroring
-    prototype_gpu_decode.py — native NV12, cloned into owned memory."""
+    prototypes/prototype_gpu_decode.py — native NV12, cloned into owned memory."""
     demux = nvc.CreateDemuxer(filename=str(path))
     decoder = nvc.CreateDecoder(
         gpuid=0,
@@ -137,7 +137,7 @@ def test_gpu_path_matches_software_path_exactly(clip, nvc, detector):
         frame_count += 1
 
     # Frame-count agreement at EOF, same discipline as the investigation's
-    # own gate (AI_ENGINE_GPU_RESIDENT_PROTOTYPE_REPORT.md).
+    # own gate (ai_engine/docs/AI_ENGINE_GPU_RESIDENT_PROTOTYPE_REPORT.md).
     leftover_gpu = sum(1 for _ in gpu_gen)
     leftover_sw = sum(1 for _ in sw_gen)
     assert leftover_gpu == 0 and leftover_sw == 0, (

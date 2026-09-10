@@ -26,7 +26,7 @@ def annotate(frame, box, *, full_range: bool = False):
     through frames.to_bgr() so this is correct for either reader — identity,
     then .copy(), for the software path (byte-identical to the pre-GPU-path
     code), a full-resolution on-demand NV12->BGR conversion for the GPU path
-    (AI_ENGINE_GPU_INTEGRATION_PLAN.md section 7.1). `full_range` only
+    (ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 7.1). `full_range` only
     matters for the latter.
     """
     canvas = to_bgr(frame, full_range=full_range).copy()

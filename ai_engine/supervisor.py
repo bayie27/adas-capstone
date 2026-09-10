@@ -153,7 +153,7 @@ def _start_stream(camera_id: int, snap: dict):
     # exposes the same public surface as CameraStream (read(), pause(),
     # resume(), stop(), observed_state(), record_inference(), segment_id,
     # is_paused, connection_status, ai_status) — see
-    # AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.2 — so nothing below this
+    # ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.2 — so nothing below this
     # point, nor pipeline.py, needs to know which one it holds.
     if GPU_DECODE:
         from gpu_camera import GpuCameraStream as CameraStream

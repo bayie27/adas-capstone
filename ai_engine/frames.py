@@ -1,7 +1,7 @@
 """Shared frame-materialisation helper.
 
 Snapshot code must go through here so it never depends on which reader is
-running (AI_ENGINE_GPU_INTEGRATION_PLAN.md section 7.1). The software reader
+running (ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 7.1). The software reader
 already produces a BGR ndarray, so `to_bgr()` is identity for it — byte-
 identical to the pre-Phase-2 code path. The GPU reader produces a device-
 resident NV12 tensor with no BGR form; this module does that conversion,

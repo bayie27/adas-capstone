@@ -123,7 +123,7 @@ ai-trt = [
 # project's torch is a CUDA 13 build; without it the wheel fails to load with
 # an opaque DLL-not-found error. Pinned exactly — 2.2.2 is the version the
 # GPU preprocessing kernel was validated against, and its DLL story is
-# version-specific. See AI_ENGINE_GPU_RESIDENT_PROTOTYPE_REPORT.md.
+# version-specific. See ai_engine/docs/AI_ENGINE_GPU_RESIDENT_PROTOTYPE_REPORT.md.
 ai-gpu = [
     "pynvvideocodec==2.2.2; sys_platform == 'win32' or sys_platform == 'linux'",
     "nvidia-cuda-runtime-cu12; sys_platform == 'win32' or sys_platform == 'linux'",
