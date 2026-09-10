@@ -220,12 +220,30 @@ class GpuCameraStream:
         the fired region from the incident just handled is discarded so this
         location can alert again (SPEC.md section 6).
 
-        Unlike the software reader, this does NOT yet drain any decode
-        backlog the paused period may have built up — Phase 2 owns working
-        out the NVDEC equivalent of camera.py's grab-only pause bypass (plan
-        section 7.2). Phase 1's single-slot newest-frame buffer means a
-        stale frame is at most one tick old, never an unbounded backlog, but
-        the exact staleness bound is not yet measured.
+        The NVDEC equivalent of camera.py's grab-only pause bypass (plan
+        section 7.2), worked out: it is deliberately NOT to skip decoding
+        while paused. `_run_connection()`'s per-frame loop never checks
+        `is_paused` — it keeps demuxing, decoding and calling `_ingest()`
+        unconditionally the whole time a camera is paused.
+
+        This is a real difference from the software reader, which stops
+        decoding specifically to save CPU, and it is deliberate rather than
+        an oversight: unlike a synchronous `cap.grab()`, NVDEC's hardware
+        pipeline decodes B/P frames against a reference chain built from the
+        packets already fed to it. Selectively skipping `decoder.Decode()`
+        for some packets and not others, then resuming, risks a corrupted
+        or stale-DPB decode with no reliable way to validate that risk
+        without a much larger investigation. Decoding every frame is safe
+        by construction and does not compete with the CUDA cores the
+        inference path needs — NVDEC is separate fixed-function hardware.
+
+        The consequence for staleness: because the reader never stops
+        consuming, `_latest` is refreshed on every decoded frame regardless
+        of pause state, so its `t` never grows stale during a pause of any
+        length — bounded only by NVDEC's own small internal pipeline
+        latency (see test_ingesting_while_paused_keeps_the_latest_frame_
+        fresh). There is no backlog to drain here, unlike the software
+        reader's OS-level receive buffer.
         """
         print(f"[SYSTEM] Resuming GPU AI ingestion for Channel {self.channel_id}...")
         self.is_paused = False
@@ -408,7 +426,16 @@ class GpuCameraStream:
 
         # Read colour range from the LIVE stream, not a file path (plan
         # section 6.2) — raises UnsupportedStreamError for any pixel format
-        # this kernel was not built for.
+        # this kernel was not built for. Re-derived on every reconnect, so
+        # a RESOLUTION change is handled for free (nothing caches shape —
+        # see _letterbox_auto_for_shapes/_orig_placeholder, both keyed off
+        # the actual batch). A COLOUR-RANGE change with no reconnect is a
+        # known, deliberately accepted gap: there is no cheap, reliable
+        # per-frame signal for it (the demuxer's own ColorRange() reports
+        # UDEF on this project's own footage — confirmed by direct testing,
+        # not assumed), and a physical camera's encoder range changing
+        # without dropping the RTSP session is not a case this engine's
+        # cameras are expected to hit in practice.
         self.full_range = gpu_preprocess.source_full_range(self.url)
 
         self._process = subprocess.Popen(
@@ -461,6 +488,11 @@ class GpuCameraStream:
         try:
             self._on_connected()
 
+            # Deliberately unconditional — does not check self.is_paused.
+            # See resume()'s docstring for why: skipping NVDEC decode work
+            # mid-stream risks the reference chain, so a paused camera keeps
+            # decoding and publishing to the single-slot buffer; only
+            # pipeline._collect() ever stops CONSUMING its frames.
             for packet in demux:
                 if not self.running:
                     return

@@ -12,18 +12,24 @@ import cv2
 import outbox
 from config import SNAPSHOT_ROOT
 from events import build_event_payload, build_snapshot_key, new_source_event_id
+from frames import to_bgr
 
 _BOX_COLOUR = (0, 0, 255)  # BGR red
 _BOX_THICKNESS = 3
 
 
-def annotate(frame, box):
+def annotate(frame, box, *, full_range: bool = False):
     """Draw the fired region on a COPY of the colour frame.
 
     Deliberately the colour frame, not the grayscale tensor the model sees:
-    the snapshot is operator-facing evidence and must be legible.
+    the snapshot is operator-facing evidence and must be legible. Goes
+    through frames.to_bgr() so this is correct for either reader — identity,
+    then .copy(), for the software path (byte-identical to the pre-GPU-path
+    code), a full-resolution on-demand NV12->BGR conversion for the GPU path
+    (AI_ENGINE_GPU_INTEGRATION_PLAN.md section 7.1). `full_range` only
+    matters for the latter.
     """
-    canvas = frame.copy()
+    canvas = to_bgr(frame, full_range=full_range).copy()
     x1, y1, x2, y2 = (int(v) for v in box)
     cv2.rectangle(canvas, (x1, y1), (x2, y2), _BOX_COLOUR, _BOX_THICKNESS)
     return canvas
@@ -62,7 +68,13 @@ class AccidentManager:
         # name must still end in .jpg.
         tmp_path = snapshot_path.with_name(snapshot_path.stem + ".tmp.jpg")
 
-        if not cv2.imwrite(str(tmp_path), annotate(frame, event.box)):
+        # getattr, not camera.full_range: only GpuCameraStream has this
+        # attribute (its own live-stream colour-range read, plan section
+        # 6.2). The software CameraStream has no equivalent concept.
+        full_range = getattr(camera, "full_range", False)
+        if not cv2.imwrite(
+            str(tmp_path), annotate(frame, event.box, full_range=full_range)
+        ):
             print(
                 f"[SYSTEM] Failed to encode snapshot for Channel "
                 f"{camera.channel_id}; event dropped."

@@ -12,6 +12,7 @@ torch = pytest.importorskip("torch")
 
 import config  # noqa: E402
 from detector import AccidentDetector  # noqa: E402
+from gpu_preprocess import UnsupportedFrameError  # noqa: E402
 
 pytestmark = pytest.mark.gpu
 
@@ -71,3 +72,32 @@ def test_warm_up_gpu_is_idempotent(warmed_detector):
     dtype_before = warmed_detector._gpu_input_dtype
     warmed_detector.warm_up_gpu()
     assert warmed_detector._gpu_input_dtype == dtype_before
+
+
+def test_predict_batch_gpu_raises_for_a_malformed_frame_in_a_mixed_batch(
+    warmed_detector,
+):
+    """Lifecycle case: 'one failing camera while nine continue' (plan
+    section 7.2). pipeline._infer()'s isolation re-run relies on a bad
+    camera's frame raising, not silently producing garbage or hanging — this
+    confirms predict_batch_gpu does that; the generic re-run mechanism
+    itself is already covered by test_pipeline.py's fake-detector tests,
+    which don't care which detector method underlies it.
+    """
+    good = _native(1296, 2304, seed=1)
+    bad = torch.zeros((3, 8, 8), dtype=torch.uint8, device="cuda")  # wrong ndim
+    with pytest.raises(UnsupportedFrameError):
+        warmed_detector.predict_batch_gpu([good, bad], [False, False])
+
+
+def test_predict_batch_gpu_handles_a_resolution_change_across_sequential_calls(
+    warmed_detector,
+):
+    """A stream whose resolution changes mid-run (plan section 7.2) is not
+    a special case: nothing caches the previous call's shape.
+    _letterbox_auto_for_shapes and _orig_placeholder are both keyed off the
+    ACTUAL batch/shape on every call."""
+    first = warmed_detector.predict_batch_gpu([_native(1296, 2304)], [False])
+    second = warmed_detector.predict_batch_gpu([_native(720, 1280)], [False])
+    third = warmed_detector.predict_batch_gpu([_native(1296, 2304)], [False])
+    assert len(first) == len(second) == len(third) == 1

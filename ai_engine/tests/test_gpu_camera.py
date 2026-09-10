@@ -105,6 +105,78 @@ def test_on_connected_respects_an_already_paused_camera():
     assert stream.ai_status == "Paused"
 
 
+def test_ingesting_while_paused_keeps_the_latest_frame_fresh(monkeypatch):
+    """The NVDEC equivalent of camera.py's grab-only pause bypass (plan
+    section 7.2) is to keep decoding through pause rather than skip frames
+    (see resume()'s docstring for why skipping is unsafe for NVDEC's
+    reference-chain decode). Prove there is no growing staleness: every
+    _ingest() call while paused still publishes a FRESH timestamp, so a
+    resumed camera never serves a stale frame."""
+    stream = _make_stream()
+    stream.is_paused = True
+    # _ingest() reads time.monotonic() more than once per call (FrameRead.t,
+    # then _record_frame_decoded()'s own window bookkeeping) — a fake clock
+    # that always reflects "now", not a fixed per-call schedule.
+    clock = [100.0]
+    monkeypatch.setattr(gpu_camera.time, "monotonic", lambda: clock[0])
+
+    stream._ingest(native="frame-a")
+    assert stream.read().t == 100.0
+
+    clock[0] = 105.0
+    stream._ingest(native="frame-b")
+    assert stream.read().t == 105.0
+
+    clock[0] = 110.0
+    stream._ingest(native="frame-c")
+    read = stream.read()
+    assert read.t == 110.0
+    assert read.frame == "frame-c"
+
+
+def test_update_retries_after_any_run_connection_exception(monkeypatch):
+    """Decode failure, connect failure and a dropped stream are all just
+    exceptions from _run_connection() to this loop — one retry path handles
+    every case generically, matching camera.py's Auto-Reconnect Loop shape.
+    """
+    stream = _make_stream()
+    stream.thread = None
+    attempts = []
+
+    def _fake_run_connection():
+        attempts.append(1)
+        if len(attempts) >= 3:
+            stream.running = False
+        raise RuntimeError("decode failure")
+
+    stream._run_connection = _fake_run_connection
+    monkeypatch.setattr(gpu_camera.time, "sleep", lambda *_: None)
+
+    stream._update()
+
+    assert len(attempts) == 3
+    assert stream.error_code == "STREAM_DROPPED"
+    assert stream.error_message == "decode failure"
+
+
+def test_repeated_start_stop_does_not_hang(monkeypatch):
+    """Lifecycle safety: stop() must reliably join the reader thread across
+    many reconnect cycles, not just once — a real leak/hang risk given the
+    ffmpeg subprocess + demux loop this thread owns."""
+    monkeypatch.setattr(gpu_camera.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(
+        GpuCameraStream,
+        "_run_connection",
+        lambda self: (_ for _ in ()).throw(RuntimeError("no real connection")),
+    )
+
+    for _ in range(5):
+        stream = GpuCameraStream(channel_id=1, camera_id=1, rtsp_url="rtsp://fake/1")
+        stream.stop()
+        assert stream.thread.is_alive() is False
+        assert stream.running is False
+
+
 def test_resume_bumps_segment_and_restarts_inference_window():
     stream = _make_stream()
     stream.is_paused = True
