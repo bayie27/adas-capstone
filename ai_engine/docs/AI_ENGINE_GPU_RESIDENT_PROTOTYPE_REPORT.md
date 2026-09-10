@@ -2,7 +2,7 @@
 
 ## Scope and current result
 
-Read the new Finding 19 in `AI_ENGINE_LIVE_SESSION_REPORT.md`; unrelated branch
+Read the new Finding 19 in `ai_engine/docs/AI_ENGINE_LIVE_SESSION_REPORT.md`; unrelated branch
 changes were not reviewed or modified. Production code, project dependencies,
 lockfiles, model artifacts, source media and requirements remain unchanged.
 
