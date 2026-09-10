@@ -259,12 +259,12 @@ def test_ffmpeg_remux_command_forces_tcp_transport():
 
 
 def test_gpu_index_defaults_to_zero(monkeypatch):
-    monkeypatch.setattr(gpu_camera, "CUDA_DEVICE", None)
+    monkeypatch.delenv("AI_CUDA_DEVICE", raising=False)
     assert gpu_camera._gpu_index() == 0
 
 
 def test_gpu_index_honours_configured_device(monkeypatch):
-    monkeypatch.setattr(gpu_camera, "CUDA_DEVICE", "1")
+    monkeypatch.setenv("AI_CUDA_DEVICE", "1")
     assert gpu_camera._gpu_index() == 1
 
 

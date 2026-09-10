@@ -15,6 +15,7 @@ already-validated software path (the rollback for this entire feature) is
 never at risk from a change made for the GPU path.
 """
 
+import os
 import platform
 import subprocess
 import threading
@@ -25,12 +26,7 @@ from pathlib import Path
 
 import torch
 from camera import FrameRead
-from config import (
-    CUDA_DEVICE,
-    FPS_BAND_MIN,
-    RECONNECT_INTERVAL_SECONDS,
-    UNRESPONSIVE_AFTER_FAILURES,
-)
+from config import FPS_BAND_MIN, RECONNECT_INTERVAL_SECONDS, UNRESPONSIVE_AFTER_FAILURES
 
 _FPS_WINDOW_SECONDS = 5.0
 
@@ -124,7 +120,15 @@ def validate_gpu_support() -> None:
 
 
 def _gpu_index() -> int:
-    return int(CUDA_DEVICE) if CUDA_DEVICE else 0
+    """Which CUDA device this reader decodes/publishes on. Reads
+    AI_CUDA_DEVICE directly (matching detector.py's own AI_CUDA_DEVICE-
+    sourced config.CUDA_DEVICE convention if that constant exists in this
+    checkout) rather than importing a config constant that Phase 1/2/3 did
+    not add and does not control. Unset means device 0, correct for a
+    single-GPU host — this project's demo target today.
+    """
+    value = os.environ.get("AI_CUDA_DEVICE")
+    return int(value) if value else 0
 
 
 def _ffmpeg_remux_command(url: str) -> list:
