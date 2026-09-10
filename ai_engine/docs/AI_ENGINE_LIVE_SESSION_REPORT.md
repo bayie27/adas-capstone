@@ -2,7 +2,7 @@
 
 Session of 2026-09-08 evening into 2026-09-09, run by Claude (Claude Code) on the live stack,
 in parallel with the ongoing Codex investigation recorded in
-[AI_ENGINE_PIPELINE_OPTIMIZATION_PLAN_REVIEW.md](AI_ENGINE_PIPELINE_OPTIMIZATION_PLAN_REVIEW.md).
+[ai_engine/docs/AI_ENGINE_PIPELINE_OPTIMIZATION_PLAN_REVIEW.md](ai_engine/docs/AI_ENGINE_PIPELINE_OPTIMIZATION_PLAN_REVIEW.md).
 
 This is a separate document by request. An earlier draft of the first half was briefly appended to
 the review doc and has since been removed from it, so that Codex's document stays Codex's and this
@@ -14,7 +14,7 @@ I want this explicit, because it bears on how much of what follows is independen
 
 **What I had:**
 
-1. The full text of `AI_ENGINE_PIPELINE_OPTIMIZATION_PLAN_REVIEW.md` as Codex left it.
+1. The full text of `ai_engine/docs/AI_ENGINE_PIPELINE_OPTIMIZATION_PLAN_REVIEW.md` as Codex left it.
 2. Only the **tail** of the user's Codex conversation — pasted by the user — covering the AC-power
    rerun on 2026-09-08 (roughly "I just plugged my laptop now" through the usage-limit cutoff).
    That excerpt contained the 6–8 ms TensorRT forward pass, the ~48–51 ms whole-detector call, the
@@ -256,7 +256,7 @@ packet loss corrupts the H.264 reference chain, which is a **plausible second an
 cause of the visual distortion originally reported** — separate from CPU starvation.
 
 Notably, both diagnostic scripts hardcode `rtspTransports: [tcp]` in their private configs
-(`diagnose_mixed_rtsp.py`, `diagnose_hardware_capacity.py`), so **the harness structurally cannot
+(`diagnostics/diagnose_mixed_rtsp.py`, `diagnostics/diagnose_hardware_capacity.py`), so **the harness structurally cannot
 reproduce this failure mode**. It exists only on the real UAT stack.
 
 **Caveat, important:** when TCP-only was enforced, camera 10 stopped connecting **entirely** (0 FPS,
@@ -654,7 +654,7 @@ aim.
    pipeline change that guarantees 15 FPS". The stronger and simpler statement available from its
    own batch-10 figure is that 15 FPS × 10 cameras is _unreachable_ without a ~1.5× cut in
    per-batch cost.
-3. **A specific technical flaw in the NVDEC prototype.** `diagnose_hardware_capacity.py` downloads
+3. **A specific technical flaw in the NVDEC prototype.** `diagnostics/diagnose_hardware_capacity.py` downloads
    frames with `hwdownload,format=nv12,format=bgr24` at **native resolution** — roughly 9 MB per
    frame over PCIe plus CPU colour conversion — which discards most of NVDEC's benefit. The review
    diagnosed the symptom ("full-resolution GPU readback and BGR transfers may limit scaling")

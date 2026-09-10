@@ -18,6 +18,23 @@
 #
 # NOTE: MediaMTX writes auto.crt / auto.key into whatever directory it starts
 # from, for its MoQ/WebRTC listeners. Both are gitignored — never commit the key.
+# RTMP is unused by this project (AI engine and publishers are RTSP-only).
+# Disabled because Windows can reserve TCP port ranges (Hyper-V/WSL dynamic
+# port allocation) that happen to include 1935, causing a fatal bind failure
+# that brings down every other MediaMTX listener along with it.
+rtmp: no
+
+# Ten 1440p readers overflow the default write queue, and MediaMTX then drops
+# frames for whichever reader is behind. The AI engine decodes the gap as a
+# broken H.264 reference chain: visible blocky corruption, and — because a
+# corrupt frame can look like a collision — false alerts on the silent profile.
+# Measured on this footage (74b66f6): 854 decoder errors in 40 seconds at the
+# default, and 0 in 170 seconds at 8192, with no other change. airbase.mp4,
+# which produces zero events in every offline evaluation, raised three accident
+# alerts live at native resolution before this was set. Do not lower it while
+# the engine reads full-resolution streams.
+writeQueueSize: 8192
+
 paths:
   channel1:
     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/dekwatro.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
@@ -33,4 +50,24 @@ paths:
     runOnInitRestart: yes
   channel5:
     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  # channel6-10 extend the original five-camera fixture to ten. Ten is the
+  # configuration writeQueueSize: 8192 above was measured against (74b66f6),
+  # and the load the GPU decode path is characterised at, so the two belong
+  # together — dropping back to five silently changes what the queue size is
+  # sized for. channel5 stays the crash-free negative either way.
+  channel6:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/car-motor-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel7:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/jeep-yellow-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel8:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/armored-car-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel9:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/jeep-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel10:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/truck-student-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes

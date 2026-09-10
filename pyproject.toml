@@ -113,6 +113,22 @@ ai-trt = [
     "onnxruntime-gpu>=1.28.0; sys_platform == 'win32' or sys_platform == 'linux'",
 ]
 
+# GPU-resident decoding and preprocessing (AI_GPU_DECODE=1). NVIDIA-only, and
+# additive to `ai` — the software reader remains the default path.
+#
+#     uv sync --extra ai --extra ai-gpu
+#
+# pynvvideocodec ships Windows and Linux wheels only. nvidia-cuda-runtime-cu12
+# is required because the 2.2.2 wheel links cudart64_12.dll while this
+# project's torch is a CUDA 13 build; without it the wheel fails to load with
+# an opaque DLL-not-found error. Pinned exactly — 2.2.2 is the version the
+# GPU preprocessing kernel was validated against, and its DLL story is
+# version-specific. See ai_engine/docs/AI_ENGINE_GPU_RESIDENT_PROTOTYPE_REPORT.md.
+ai-gpu = [
+    "pynvvideocodec==2.2.2; sys_platform == 'win32' or sys_platform == 'linux'",
+    "nvidia-cuda-runtime-cu12; sys_platform == 'win32' or sys_platform == 'linux'",
+]
+
 [dependency-groups]
 dev = [
     "pypdf>=6.15.0",
@@ -173,10 +189,13 @@ cache_dir = "backend/.pytest_cache"
 #               real 100,000-row database every session.
 #   not clips — needs a GPU and ai_engine/eval/clips populated, so CI cannot run
 #               them and most machines should not.
-addopts = "-q -m 'not slow and not clips'"
+#   not gpu   — needs a CUDA device but not eval/clips (e.g. compiling the
+#               AI_GPU_DECODE kernel); excluded for the same reason as clips.
+addopts = "-q -m 'not slow and not clips and not gpu'"
 markers = [
     "slow: marks tests as slow (excluded from the default run — see backend/tests/perf/)",
     "clips: needs a GPU and ai_engine/eval/clips populated; excluded from CI",
+    "gpu: needs a CUDA device; excluded from CI",
 ]
 
 [tool.ruff]

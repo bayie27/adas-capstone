@@ -17,7 +17,7 @@ from enum import Enum
 
 import outbox
 from backend_client import send_heartbeat
-from config import ENGINE_ID, HEARTBEAT_INTERVAL_SECONDS
+from config import ENGINE_ID, GPU_DECODE, HEARTBEAT_INTERVAL_SECONDS
 
 logger = logging.getLogger("ai_engine")
 
@@ -149,7 +149,16 @@ def _local_camera_states(cameras: dict) -> dict:
 
 
 def _start_stream(camera_id: int, snap: dict):
-    from camera import CameraStream
+    # AI_GPU_DECODE=1 swaps the reader implementation only. GpuCameraStream
+    # exposes the same public surface as CameraStream (read(), pause(),
+    # resume(), stop(), observed_state(), record_inference(), segment_id,
+    # is_paused, connection_status, ai_status) — see
+    # ai_engine/docs/AI_ENGINE_GPU_INTEGRATION_PLAN.md section 6.2 — so nothing below this
+    # point, nor pipeline.py, needs to know which one it holds.
+    if GPU_DECODE:
+        from gpu_camera import GpuCameraStream as CameraStream
+    else:
+        from camera import CameraStream
 
     new_cam = CameraStream(
         channel_id=snap["channel_id"], camera_id=camera_id, rtsp_url=snap["rtsp_url"]
