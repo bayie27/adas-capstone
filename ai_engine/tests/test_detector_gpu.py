@@ -5,9 +5,12 @@ The full cross-path parity gate (17 clips, tensors + detections + events)
 lives in test_gpu_parity.py, marked `clips`.
 """
 
-import numpy as np
 import pytest
 
+# numpy ships with the `ai` extra, which CI does not install -- guard it the
+# same way every sibling GPU test does, or collection fails on the import
+# before the `gpu` marker ever gets a chance to deselect this module.
+np = pytest.importorskip("numpy")
 torch = pytest.importorskip("torch")
 
 import config  # noqa: E402
