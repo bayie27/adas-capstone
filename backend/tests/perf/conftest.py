@@ -32,7 +32,7 @@ from sqlmodel import Session
 
 PERF_ROW_COUNT = 100_000
 
-# A6 (be_audit/A6_manual_evidence.md Part 2) — the real operating envelope
+# A6 (docs/archive/be_audit/A6_manual_evidence.md Part 2) — the real operating envelope
 # is ~10 incidents/day (Lipa CDRRMO estimate), not the NFR-08 100k-row
 # profile's ~182/day density. A 30-day export at that envelope is ~300
 # rows; this is a separate, deliberately lower-density dataset, not a

@@ -134,7 +134,7 @@ class Settings(BaseSettings):
     RESTORE_REQUEST_GRACE_SECONDS: int = 3
     RESTORE_REQUEST_MAX_AGE_SECONDS: int = 60
 
-    # Dev tools (dev_plan/02_PKG_dev_api.md, DT-3). Deliberately its own
+    # Dev tools (docs/archive/dev_plan/02_PKG_dev_api.md, DT-3). Deliberately its own
     # setting rather than a read of ENVIRONMENT: the demo box runs a
     # production build on the LAN and still needs the panel. `None` resolves
     # to ENVIRONMENT == "development" below, so production defaults to off

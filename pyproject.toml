@@ -1,7 +1,7 @@
 [project]
 name = "adas-capstone"
 version = "0.1.0"
-description = "Add your description here"
+description = "ADAS real-time road accident detection and human-reviewed alert system"
 readme = "README.md"
 requires-python = "==3.12.13"
 dependencies = [
@@ -184,7 +184,7 @@ tensorrt-cu13-libs = { index = "nvidia" }
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "ai_engine/tests"]
 cache_dir = "backend/.pytest_cache"
-# Two tiers are excluded from the default run; name either explicitly to opt in.
+# Three tiers are excluded from the default run; name one explicitly to opt in.
 #   not slow  — backend/tests/perf/ (10_PKG_migration_evidence.md Step 3) seeds a
 #               real 100,000-row database every session.
 #   not clips — needs a GPU and ai_engine/eval/clips populated, so CI cannot run

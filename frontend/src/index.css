@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 /* The ADAM-UI design tokens, transcribed from the Figma variable collections.
-   FE_Implementation.md §2 is the written spec, including the three places
-   where Figma contradicted itself and the value chosen was recorded rather
-   than decided silently.
+   frontend/README.md's "Design tokens" section explains how these are used
+   and what lint rejects; frontend/VISUAL_CHECKLIST.md records the places
+   where the implementation deliberately departs from the design source,
+   rather than letting those be decided silently.
 
    Tailwind v4 emits each of these as a real CSS custom property AND generates
    utilities from it: `--color-surface-1` gives both `var(--color-surface-1)`

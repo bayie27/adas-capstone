@@ -1,4 +1,4 @@
-"""In-process operational-data wipe (dev_plan/02_PKG_dev_api.md Step 3).
+"""In-process operational-data wipe (docs/archive/dev_plan/02_PKG_dev_api.md Step 3).
 
 `backend/scripts/reset_db.py` deletes the SQLite file and its -wal/-shm
 sidecars, which cannot happen while the backend holds it open — on Windows

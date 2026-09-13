@@ -13,7 +13,7 @@ const openOverlayStack: string[] = []
  * The behaviour shared by every overlay: focus on open, body scroll lock,
  * and Escape-to-close with listener cleanup.
  *
- * Extracted verbatim from Modal's single useEffect (dev_plan/03_PKG_dev_panel.md
+ * Extracted verbatim from Modal's single useEffect (docs/archive/dev_plan/03_PKG_dev_panel.md
  * Step 1) so SidePanel can reuse it instead of the codebase growing a second,
  * subtly different copy. Returns the ref to attach to the dialog element.
  */

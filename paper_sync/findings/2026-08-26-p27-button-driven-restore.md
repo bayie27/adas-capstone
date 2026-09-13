@@ -28,7 +28,7 @@ The live tracker was read immediately before this proposal from native range `�
 
 The live defense Doc already states that restoration is initiated through the administrator interface and executed offline by an external platform orchestrator (native paragraph range 184040–184785), supports Windows PowerShell and Linux systemd (184786–185232), creates a safety snapshot, replaces the database, verifies integrity, rolls back automatically, resumes services, and records the outcome (185233–186123). No defense-paper replacement is required for P27.
 
-The implementation evidence is recorded in `be_plan/MANUAL_TESTS.md`: the successful local Windows button-only restore and the post-swap AI-readiness-failure drill both completed with no terminal intervention after the dashboard click. The Linux service and runner syntax passed `bash -n`; `systemd-analyze` and WSL execution were unavailable on this Windows host and remain unverified.
+The implementation evidence is recorded in `docs/archive/be_plan/MANUAL_TESTS.md`: the successful local Windows button-only restore and the post-swap AI-readiness-failure drill both completed with no terminal intervention after the dashboard click. The Linux service and runner syntax passed `bash -n`; `systemd-analyze` and WSL execution were unavailable on this Windows host and remain unverified.
 
 #### Proposed comment (same gate as associated tracker update)
 

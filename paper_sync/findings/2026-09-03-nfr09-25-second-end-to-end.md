@@ -192,7 +192,7 @@ Decision: use one consistent framing. Approximately 3 s is the detector-accumula
 
 #### Evidence
 
-The live audit recommendation still records the superseded 15-second decision. The local implementation comment at `ai_engine/accident.py:47-52` supports approximately 3 seconds of detector accumulation, while `be_plan/EVIDENCE.md:182-194` measures the backend alert POST-to-WebSocket delivery path at 0.010–0.020 seconds against a 2-second budget. The full LAN numeric NFR-04 capture remains unconfirmed at `be_plan/EVIDENCE.md:196-210`; therefore the component figures are budgets/allocations and do not by themselves prove the complete 25-second target.
+The live audit recommendation still records the superseded 15-second decision. The local implementation comment at `ai_engine/accident.py:47-52` supports approximately 3 seconds of detector accumulation, while `docs/archive/be_plan/EVIDENCE.md:182-194` measures the backend alert POST-to-WebSocket delivery path at 0.010–0.020 seconds against a 2-second budget. The full LAN numeric NFR-04 capture remains unconfirmed at `docs/archive/be_plan/EVIDENCE.md:196-210`; therefore the component figures are budgets/allocations and do not by themselves prove the complete 25-second target.
 
 #### Proposed comment (same gate as associated replacement)
 
@@ -290,7 +290,7 @@ The live tracker currently reports all 33 participant-stage executions as Pass a
 
 ### 12. Local test-execution validation plan — operational efficiency criterion
 
-Page/s: `test-execution-validation-plan.md:118-120,473,502,639`
+Page/s: `docs/validation/test-execution-validation-plan.md:118-120,473,502,639`
 
 #### OLD
 
@@ -332,7 +332,7 @@ Done by Codex.
 
 ### 13. UAT dry-run handoff — OP-J05 metric
 
-Page/s: `UAT_READINESS_DRY_RUN_HANDOFF.md:548`
+Page/s: `docs/archive/validation/UAT_READINESS_DRY_RUN_HANDOFF.md:548`
 
 #### OLD
 
@@ -356,7 +356,7 @@ Done by Codex.
 
 ### 14. Local traceability — Evaluation Scope cross-reference
 
-Page/s: `be_plan/TRACEABILITY.md:290-292`
+Page/s: `docs/archive/be_plan/TRACEABILITY.md:290-292`
 
 #### OLD
 

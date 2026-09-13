@@ -230,10 +230,10 @@ generic accuracy claim.
 
 ## Source records
 
-- [Existing results record](../docs/results.md)
-- [Project state and caveats](../CLAUDE.md)
+- Existing results record (source research repository: `../docs/results.md`; not included here)
+- Project state and caveats (source research repository: `../CLAUDE.md`; not included here)
 - [Training run manifest](training-run-manifest.md)
 - [Evaluation harness](evaluation-harness.md)
-- [Accumulator sweep](../docs/accumulator-sweep.md)
-- [Original tracker postmortem](../docs/design/accident-detection.md)
+- Accumulator sweep (source research repository: `../docs/accumulator-sweep.md`; not included here)
+- Original tracker postmortem (source research repository: `../docs/design/accident-detection.md`; not included here)
 - [Drive run archive](https://drive.google.com/drive/folders/142WuVB8smOkILl-UMGLjUOrET8HCQQRK)

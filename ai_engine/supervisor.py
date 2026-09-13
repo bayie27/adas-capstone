@@ -59,7 +59,7 @@ def compute_actions(
         before the original event's outbox retry even fires; the newer
         detection would then win the open-incident race and the backend
         would discard the original as a "redundant" 409 CONFLICT — silently
-        losing a genuine, earlier detection (F20, be_audit/00_FINDINGS.md).
+        losing a genuine, earlier detection (F20, docs/archive/be_audit/00_FINDINGS.md).
         A camera in this set stays paused regardless of what the snapshot
         says, until its outbox entry has actually been delivered or given
         up on.

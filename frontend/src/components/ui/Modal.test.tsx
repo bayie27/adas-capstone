@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest"
 import { Modal } from "./Modal"
 
 /**
- * Modal had no test, and dev_plan/03_PKG_dev_panel.md Step 1 moved its
+ * Modal had no test, and docs/archive/dev_plan/03_PKG_dev_panel.md Step 1 moved its
  * overlay effect into a shared hook. It is used by ConfirmDeleteModal and
  * several pages, so this is the one place a regression from that extraction
  * would otherwise be invisible.

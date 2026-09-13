@@ -2,7 +2,7 @@ import api from "@/api/client"
 import type { ApiUserRole } from "@/api/auth"
 
 /**
- * Thin wrappers over the /api/dev/* routes (dev_plan/02_PKG_dev_api.md §5).
+ * Thin wrappers over the /api/dev/* routes (docs/archive/dev_plan/02_PKG_dev_api.md §5).
  *
  * These only exist when the backend resolved DEV_TOOLS_ENABLED true — the
  * router is not registered otherwise, so every call here 404s. Probe with

@@ -97,7 +97,7 @@ def pending() -> list[Path]:
 def pending_camera_ids() -> set[int]:
     """Camera IDs with at least one event still queued for delivery.
 
-    Read by supervisor.py's reconciliation (F20, be_audit/00_FINDINGS.md) to
+    Read by supervisor.py's reconciliation (F20, docs/archive/be_audit/00_FINDINGS.md) to
     withhold a resume the backend's heartbeat snapshot would otherwise
     grant: the backend has no way to know about an event that hasn't been
     delivered yet, since nothing is committed to its DB until then."""

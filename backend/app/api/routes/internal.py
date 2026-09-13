@@ -38,7 +38,7 @@ _HEARTBEAT_INTERVAL_SECONDS = 3
 
 _OPEN_STATUSES = (DetectionStatus.UNVERIFIED.value, DetectionStatus.ONGOING.value)
 
-# F9 (be_audit/A3_ai_seam.md) — a clock badly out of sync with the server
+# F9 (docs/archive/be_audit/A3_ai_seam.md) — a clock badly out of sync with the server
 # poisons detected_at/last_heartbeat_at math without ever erroring, so this
 # is a log-only tripwire, not a validation failure.
 _CLOCK_SKEW_WARNING_SECONDS = 10
@@ -99,7 +99,7 @@ def receive_ai_alert(
 ) -> DetectionLog:
     """01_CONTRACTS.md §6.3 — the v2 idempotent AI-engine payload. The v1
     legacy shape (bare `snapshot_path`, no `source_event_id`) was removed by
-    the A3 audit pack (be_audit/A3_ai_seam.md, F3): its only caller,
+    the A3 audit pack (docs/archive/be_audit/A3_ai_seam.md, F3): its only caller,
     ai_engine/sync.py, was already gone as of PR #67.
 
     The ingest itself lives in services/incidents.ingest_detection() so the

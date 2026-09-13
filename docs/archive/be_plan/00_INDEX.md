@@ -1,0 +1,198 @@
+# ADAS Backend Completion — Execution Index
+
+> Historical record — non-executable. Preserve dated findings and measurements; follow current [repository conventions](../../../CLAUDE.md) for new work. Recorded verdicts have not been revalidated by this cleanup.
+
+> **Audience:** an AI coding session (or a teammate) executing one work package at a time.
+> **Created:** August 9, 2026. **Baseline:** branch `dx/ci-tooling-foundation`, commit `543e7f7`.
+
+This directory turns `docs/archive/be_decisions_review.md` (D-001 … D-012, all Locked) and the paper's
+requirements into executable work packages plus companion handoff docs. P1–P10 were the original
+set; **P18 and P19 were added 2026-08-16** — P18 to finish the automation half of P7 that was
+specified but never built, P19 to close the backend gaps the frontend owner recorded across
+PRs #95–#101.
+
+---
+
+## Read this before touching any code
+
+### Source-of-truth hierarchy
+
+When two documents disagree, the higher one wins:
+
+1. **`docs/archive/be_decisions_review.md`** (repo root) — the only decision-locking document. D-001…D-012.
+2. **`docs/archive/be_plan/01_CONTRACTS.md`** — the frozen technical contract derived from those decisions.
+   If you find a contract detail that contradicts a locked decision, **stop and report it**; do not
+   silently pick one.
+3. **`final_paper_text.txt`** (repo root) — functional/non-functional requirements and the 82 test cases.
+4. **`CLAUDE.md`** (repo root) — conventions, commands, gotchas.
+5. `be_decisions.md`, `backend_assessment.md`, `be_masterplan_text.txt` — **superseded**. Read for
+   background only. Never implement from them.
+
+`ai_engine_detection_pipeline_handoff.md` and `backup_restore_explained.md` are companions to D-012
+and D-011 respectively and remain valid as explanatory material.
+
+**None of the repo-root working docs may be edited by an executing agent.** They are the team's notes.
+
+### Non-negotiable global rules
+
+1. **Run everything from the repo root.** `uv run …`, never bare `python` (PATH python is 3.14; the
+   project is pinned to 3.12.13).
+2. **Do not modify `ai_engine/`** — except in **P10**, which exists specifically to do so. Every
+   other package keeps the *existing* internal contract working and adds a v2 alongside it. See
+   `12_AI_ENGINE_CONTRACT.md` for the full picture and `15_PKG_ai_engine_integration.md` for the
+   scoped subset actually being built.
+3. **Do not modify `frontend/`** except where a package doc explicitly says so. Breaking contract
+   changes are collected in `11_FRONTEND_MIGRATION.md` for the frontend owner.
+4. **No Alembic until P9.** Per D-005 the dev database is disposable while the schema evolves. Break
+   the schema freely and reseed: `uv run python backend/scripts/reseed_dev.py`.
+5. **Every timestamp stored and returned is UTC-aware.** Use the `UtcDateTime` type from P1. Never
+   `datetime.now()` — always `datetime.now(UTC)`.
+6. **No network call, file I/O, PDF render, or WebSocket send inside an open DB transaction** (D-005).
+   Broadcasts are enqueued *after* commit, always.
+7. **Ask before adding a dependency** not listed in this doc set.
+8. **Conventional Commits.** commitlint runs on `commit-msg`. Commit per numbered step, not per package.
+9. **`pnpm check` must pass before you push.** It runs format check, lint, typecheck, and both test suites.
+10. **Testing policy.** `CLAUDE.md` says *test when it's needed, don't overdo it* — that means don't
+    write tests for happy-path permutations a single test already proves. It does **not** mean
+    skipping boundaries, races, failure paths, and hostile input, which is where production bugs
+    live. Each package doc names its core behaviours; [`14_EDGE_CASES.md`](14_EDGE_CASES.md) is the
+    cross-cutting register every package is checked against before it is called done. Coverage
+    percentage is still not a target.
+
+### Branching
+
+One branch per package, branched from the previous package's merge:
+
+```
+feat/be-p1-foundation → feat/be-p2-auth-audit → feat/be-p3-realtime → …
+```
+
+P7 (backup) and P8 (help center) only depend on P1+P2 and may branch off P2 directly.
+
+---
+
+## Dependency graph
+
+```
+P1 foundation ──┬─> P2 auth+audit ──┬─> P3 realtime ──> P4 incidents+cameras ──┬─> P5 health
+                │                   │                                          ├─> P6 reports
+                │                   ├─> P7 backup/ops   (parallel-safe)        │
+                │                   └─> P8 help center  (parallel-safe)        │
+                └───────────────────────────────────────────────────────────────┴─> P9 evidence
+```
+
+`12_AI_ENGINE_CONTRACT.md` is handed to the AI owner **immediately**, before P1 starts.
+`11_FRONTEND_MIGRATION.md` is handed to the frontend owner **before P2 merges** — P2 is the breaking
+auth change.
+
+---
+
+## Work packages
+
+| # | Doc | Covers | Size | Blocked by |
+|---|---|---|---|---|
+| **P1** | [`02_PKG_foundation.md`](02_PKG_foundation.md) | Config, SQLite policy, UTC type, logging, app factory, scheduler, probes, **full target schema**, test-harness fix, reseed | XL | — |
+| **P2** | [`03_PKG_auth_audit.md`](03_PKG_auth_audit.md) | D-006 revocable cookie sessions, Argon2id, rate limiting · D-007 append-only audit | XL | P1 |
+| **P3** | [`04_PKG_realtime.md`](04_PKG_realtime.md) | D-008 authenticated WebSocket, versioned envelope, per-client queues | M | P2 |
+| **P4** | [`05_PKG_incidents_cameras.md`](05_PKG_incidents_cameras.md) | D-002 atomic lifecycle · D-003 desired/observed camera model + heartbeat · D-004 snooze + alarm settings · snapshot auth | XL | P3 |
+| **P5** | [`06_PKG_system_health.md`](06_PKG_system_health.md) | D-009 telemetry collector, raw/hourly history, camera KPIs | L | P4 |
+| **P6** | [`07_PKG_reports.md`](07_PKG_reports.md) | D-010 shared filters, streaming CSV, fpdf2 PDF, export jobs, retraining ZIP | L | P4 |
+| **P7** | [`08_PKG_backup_ops.md`](08_PKG_backup_ops.md) | D-011 backup, verify, restore, rollback, daily restart, archive | L | P2 |
+| **P8** | [`09_PKG_help_center.md`](09_PKG_help_center.md) | FR-20 help articles, role filter, FTS5 search | S | P2 |
+| **P9** | [`10_PKG_migration_evidence.md`](10_PKG_migration_evidence.md) | Alembic initial migration, 100k-row perf evidence, 82-test-case traceability, docs, CI | L | all |
+| **P10** | [`15_PKG_ai_engine_integration.md`](15_PKG_ai_engine_integration.md) | AI engine → v2 heartbeat, `source_event_id`, durable outbox, `snapshot_key`. **The only package that modifies `ai_engine/`** | L | P4 |
+| **P18** | `18_PKG_scheduled_maintenance.md` (`18_PKG_scheduled_maintenance.md`; historical reference unavailable in this checkout) | NFR-16/NFR-18 **automation** — in-app daily backup job, Windows Scheduled Task for the restart, orchestrator logging (F22), maintenance status route. **Main checkout only** | L | P7 |
+| **P19** | `19_PKG_fe_backend_gaps.md` (`19_PKG_fe_backend_gaps.md`; historical reference unavailable in this checkout) | The five backend gaps the frontend owner raised in PRs #95–#101 — `Retry-After` exposure, presented-status camera filters, user reactivation, AI-performance pagination, dashboard deltas. **Worktree-safe** | M | — |
+| **P21** | `21_PKG_camera_telemetry_and_client_gaps.md` (`21_PKG_camera_telemetry_and_client_gaps.md`; historical reference unavailable in this checkout) | The four gaps raised in PRs #104–#112 — camera detail route with engine telemetry and a redacted RTSP URL, self-describing alarm settings, `snoozed_by` as a name, export-jobs list and audit filters on job create. **Worktree-safe** | M | — |
+| **P23** | `23_PKG_camera_restore.md` (`23_PKG_camera_restore.md`; historical reference unavailable in this checkout) | Camera soft-delete had no reactivation path (raised in PR #126) — `CAMERA_RESTORE` audit action + migration, `is_active` list filter and restore via PATCH, mirroring P19 §3's pattern for Users. **Worktree-safe** | S | P1–P10, P18, P19, P21 |
+| **P25** | [`25_PKG_audit_target_labels.md`](25_PKG_audit_target_labels.md) | Audit rows recorded bare numeric ids with no human-readable name — `camera_name`/`target_username` snapshotted into `detail` at write time (no schema change), plus PDF filter-summary headers. **Worktree-safe** | M | — |
+| **P26** | [`26_PKG_audit_backup_target.md`](26_PKG_audit_backup_target.md) | Corrects a P25 inventory verdict — `BACKUP_TRIGGER` rows had `target_ref` NULL even when a backup existed. Sets `target_ref` on the two sites where a manifest is available, humanises `target_type` for display, and shortens non-hyphenated backup ids in the Target column. **Worktree-safe** | S | P25 |
+| **P28** | [`28_PKG_cleared_incident.md`](28_PKG_cleared_incident.md) | Breaking cross-stack rename from Resolved/Resolve to Cleared, including stored rows, audit history, REST/events, analytics, frontend/help, and a reviewed migration. **Worktree-safe** | XL | — |
+| **P29** | [`29_PKG_admin_ai_performance.md`](29_PKG_admin_ai_performance.md) | Makes AI Performance Administrator-only across backend routes, sync/async exports, frontend routing/sidebar, help, UAT, and evidence. **Worktree-safe after P28 integration** | M | P28 |
+| **P30** | [`30_PKG_protected_backup_storage.md`](30_PKG_protected_backup_storage.md) | Prefers a separate physical device for backups/archives, with dual-root listing/restore, visible degraded fallback, safe local rollback, and Windows USB drills. **Main-checkout live lane** | XL | — |
+
+Companions (not work packages):
+
+| Doc | For | When |
+|---|---|---|
+| [`PROMPTS.md`](PROMPTS.md) | you, starting a session | copy-paste kickoff prompt per package |
+| [`01_CONTRACTS.md`](01_CONTRACTS.md) | every executing agent | read first, every package |
+| [`14_EDGE_CASES.md`](14_EDGE_CASES.md) | every executing agent | walk your package's rows before calling it done |
+| [`11_FRONTEND_MIGRATION.md`](11_FRONTEND_MIGRATION.md) | frontend owner | hand over before P2 merges |
+| `20_FRONTEND_HANDOFF.md` (`20_FRONTEND_HANDOFF.md`; historical reference unavailable in this checkout) | frontend owner | hand over when P19 merges — §4 is a breaking response change |
+| [`22_FRONTEND_HANDOFF_P21.md`](22_FRONTEND_HANDOFF_P21.md) | frontend owner | hand over when P21 merges — §3 is a breaking event-schema change |
+| `24_FRONTEND_HANDOFF_P23.md` (`24_FRONTEND_HANDOFF_P23.md`; historical reference unavailable in this checkout) | frontend owner | hand over when P23 merges — additive only, nothing breaking |
+| `12_AI_ENGINE_CONTRACT.md` (`12_AI_ENGINE_CONTRACT.md`; historical reference unavailable in this checkout) | AI engine owner | background — superseded in practice by P10 |
+| `16_HEARTBEAT_VS_POLLING.md` (`16_HEARTBEAT_VS_POLLING.md`; historical reference unavailable in this checkout) | AI engine owner | explains what P10 changed and why, with an honest assessment |
+| `17_AI_OWNER_OPEN_ITEMS.md` (`17_AI_OWNER_OPEN_ITEMS.md`; historical reference unavailable in this checkout) | AI engine owner | the D-012 evidence gate — threshold, qualification, hardware profile, TC-AI cases |
+| [`13_WSL2_LINUX_PATH.md`](13_WSL2_LINUX_PATH.md) | whoever validates Linux deployment | optional, after P7 |
+
+---
+
+## Status
+
+Update this table as packages land. Put the merge commit SHA in the last column.
+
+| Package | Status | Branch | Merged |
+|---|---|---|---|
+| P1 foundation | ✅ merged — [PR #56](https://github.com/bayie27/adas-capstone/pull/56), [PR #57](https://github.com/bayie27/adas-capstone/pull/57) | `feat/be-p1-foundation` | `88adb5c` |
+| P2 auth + audit | ✅ merged — [PR #58](https://github.com/bayie27/adas-capstone/pull/58) | `feat/be-p2-auth-audit` | `5f430a8` |
+| P3 realtime | ✅ merged — [PR #60](https://github.com/bayie27/adas-capstone/pull/60) | `feat/be-p3-realtime` | `2c7beb4` |
+| P4 incidents + cameras | ✅ merged — [PR #65](https://github.com/bayie27/adas-capstone/pull/65) | `feat/be-p4-incidents-cameras` | `882cfb1` |
+| P5 system health | ✅ merged — [PR #68](https://github.com/bayie27/adas-capstone/pull/68) | `feat/be-p5-system-health` | `bf9b26d` |
+| P6 reports | ✅ merged — [PR #69](https://github.com/bayie27/adas-capstone/pull/69) | `feat/be-p6-reports` | `4f10a0e` |
+| P7 backup + ops | ✅ merged — [PR #61](https://github.com/bayie27/adas-capstone/pull/61), follow-up [PR #62](https://github.com/bayie27/adas-capstone/pull/62) | `feat/be-p7-backup-ops`, `fix/p7-orchestrator-live-drill-fixes` | `5d572ac` |
+| P8 help center | ✅ merged — [PR #59](https://github.com/bayie27/adas-capstone/pull/59) | `feat/be-p8-help-center` | `9040ba4` |
+| P9 migration + evidence | 🔶 implemented, not pushed/PR'd — 7 commits, one per numbered step, on `feat/be-p9-migration-evidence` (branched from `main` with P1–P8 and P10 merged). `pnpm full:check` green (710 backend + 13 frontend tests, build, 1 e2e test). One hand-reviewed initial Alembic migration, diffed object-by-object against `SQLModel.metadata` with zero differences (`backend/scripts/verify_migration_schema.py`, also wired into a new CI `migration` job). `docs/archive/be_plan/EVIDENCE.md` records real NFR-04/06/08 numbers against a live 100,000-row database — including one flagged real finding, not silently rounded up: PDF export at the paper's literal "~10,000-row" target measures ~36-43s against a 5s budget (fpdf2's own table-rendering throughput, isolated and confirmed not a query/formatting bug). `docs/archive/be_plan/TRACEABILITY.md` covers all 82 paper test cases with no blank Owner cell. `docs/archive/be_plan/MANUAL_TESTS.md` has nine written procedures — **none executed yet**, that's separate work. All four verification-section checks that need a live server were live-drilled: admin login against a freshly migrated database, a real backup recording the actual Alembic revision in its manifest, and a deliberate stale/unrecognized-revision startup refusal in a simulated production mode. Edge-case sweep across all ten `14_EDGE_CASES.md` categories found ~28 partially- or un-covered rows out of ~150 (full list in the PR/session report) — mostly boundary values (limit/offset edges) and a few concurrency/timing races that need either a dedicated test or an explicit "acceptable gap" call. | `feat/be-p9-migration-evidence` | |
+| Frontend migration | ✅ merged — [PR #63](https://github.com/bayie27/adas-capstone/pull/63), [PR #66](https://github.com/bayie27/adas-capstone/pull/66) | `feat/fe-cookie-auth`, `feat/fe-authenticated-snapshots` | `48f2d03`, `c1497ec` |
+| AI engine cutover (P10) | ✅ merged — [PR #67](https://github.com/bayie27/adas-capstone/pull/67) | `feat/ai-p10-backend-integration` | `20fd987` |
+| P18 scheduled maintenance | ✅ merged — [PR #113](https://github.com/bayie27/adas-capstone/pull/113) — 2026-08-16, one commit per numbered step on `feat/be-p18-scheduled-maintenance` (branched from `main` with P1–P10 merged). All nine steps done: in-app daily backup cron job + hourly catch-up + startup due-check (NFR-18), the sidecar-leak and `best.pt`→`epoch50.pt` fixes, `scripts/register-maintenance-task.ps1` (Windows Scheduled Task `\ADAS\DailyRestart`, NFR-16), persistent orchestrator logs (closes F22), `GET /api/system/maintenance/status`, and full test coverage including the 5.10/5.11 DST/timezone replacement for the old blanket skip. `uv run pytest backend/tests/test_maintenance.py backend/tests/test_maintenance_schedule.py backend/tests/test_app_factory.py` green. **Step 8's five drills all executed against the real stack** (MediaMTX + 5 ffmpeg feeds, backend, AI engine) on this laptop — see `docs/archive/be_plan/MANUAL_TESTS.md` §1's 2026-08-16 Results block and `docs/archive/be_audit/00_FINDINGS.md`'s F22 resolution-log entry for full numbers. The unattended-trigger drill found and fixed two real bugs live: the AI engine's redirected stdout was block-buffered and never reached its log file (`PYTHONUNBUFFERED`), and the very first genuine Task-Scheduler-launched restart crashed the backend before readiness on a `UnicodeEncodeError` printing FastAPI's emoji startup banner under the scheduler's inherited cp1252 codepage (`PYTHONUTF8`) — both fixed and re-verified via a real `Start-ScheduledTask` run (`LastTaskResult: 0`). Also found and fixed, unrelated to the drill: `Write-Error` under `$ErrorActionPreference = "Stop"` was silently discarding the script's own intended exit codes (pre-existing since P7, only provable once Step 5 added a transcript to see it happen). Two of five restart timings exceeded the 10s NFR-16 budget under this session's own heavy concurrent load (MediaMTX + ffmpeg + live GPU inference + background drill monitors) — recorded honestly, consistent with the F21 precedent, not re-run quietly until a better number appeared. | `feat/be-p18-scheduled-maintenance` | `85e5a36` |
+| P21 camera telemetry + client gaps | 🔶 implemented, not pushed/PR'd — 2026-08-16, one commit per numbered step on `feat/be-p21-camera-telemetry` (branched from `main` with P1–P10, P18, P19 merged). All five steps done: `GET /api/cameras/{id}` (none existed) with the six engine-telemetry columns plus an admin-only, credential-redacted `rtsp_url_redacted` (`_build_rtsp_url` moved from `routes/internal.py` to `services/cameras.py`, with a parity test pinning the heartbeat's `rtsp_url` byte-identical across the move); `AlarmSettingsRead.options` sourced live from `settings`/`AlarmSettingsUpdate`'s own `Field` constraints via `annotated_types.Ge/Le` introspection, never a hardcoded second copy; `SnoozeActivatedData.snoozed_by` is now a formatted name (breaking, approved); `GET /api/exports/jobs` with own-jobs-by-default scoping and admin-only `?all_users=true`; `ExportJobCreate` gains `action`/`result`/`target_type`, validated end-to-end (job created → worker run → artifact read back → confirmed filtered). Narrow scopes (`test_cameras.py` + `test_settings.py` + `test_snoozes.py` + `test_exports.py` + `test_internal.py` + `test_alerts.py` + `test_audit.py`) and a full `uv run pytest -n auto` (1042 tests) all green. **One real pre-existing bug found and fixed in passing**, not part of the plan: `_apply_audit_filters`'s `target_type` becoming a list (to carry the async job's multi-valued filter) surfaced that `_audit_filters_summary` indexed every filter key unconditionally — any async `report_type="audit"` job already crashed during generation on a missing `target_ref` key before this package touched anything, since `ExportJobCreate` never had that key at all; switched to `.get()` throughout. **A second real gap found and fixed**, pre-existing since P6, independent of anything else this package changed: `POST /api/exports/jobs` with `report_type="audit"` had no admin gate, unlike the synchronous `/api/audit-logs/export` route (`get_current_admin`) — an Operator could create *and*, as the owner, download an audit-report export despite `/api/audit-logs` itself being Admin-only. Now a 403 for an Operator, matching the synchronous route; the frontend's Audit Log page is already Admin-gated in the UI, so this closes a side door rather than changing any client-visible flow — noted in [`22_FRONTEND_HANDOFF_P21.md`](22_FRONTEND_HANDOFF_P21.md) §4 for completeness. Frontend consequences otherwise confirmed to match that doc exactly. | `feat/be-p21-camera-telemetry` | |
+| P19 FE backend gaps | ✅ merged — [PR #110](https://github.com/bayie27/adas-capstone/pull/110) — 5 commits, one per numbered step. Narrow scopes green (`test_auth.py` + `test_cameras.py` + `test_users.py` + `test_analytics.py`) plus a full `uv run pytest -n auto` pass. Step 3's `is_active` filter shipped as a string query param (`"true"`/`"false"`/`"null"`), not the plan's literal `bool \| None` — that type can't express three states over a real HTTP query string (a non-`None` default makes "omitted" and "explicit null" indistinguishable, and axios drops `null`-valued params before the request is sent), so the literal snippet would have made "both" unreachable by any real caller. `update_user` also switched from `_get_active_user_or_404` to a fetch that allows a deactivated target — without that, reactivation 404'd before ever reaching its own `is_active` handling, so it was unreachable even by a direct API call, not only missing a screen. Both deviations, and the corrected wire contract, are written up in `20_FRONTEND_HANDOFF.md` (`20_FRONTEND_HANDOFF.md`; historical reference unavailable in this checkout) §3. Step 4 (AI-performance pagination) is the approved breaking response change. | `feat/be-p19-fe-backend-gaps` | `96e38e5` |
+| P23 camera restore | 🔶 implemented, not pushed/PR'd — 2026-08-20, one commit per numbered step on `feat/be-p23-camera-restore` (branched from `main` with P1–P10, P18, P19, P21 merged). Step 1: `CAMERA_RESTORE` added to the audit catalog, plus a hand-written `op.batch_alter_table` move-and-copy migration for `ck_audit_action_valid` (SQLite can't alter a CHECK constraint in place) — the two immutability triggers are dropped before the rebuild and recreated after, proven by a new migration test that replays the real Alembic chain (not the `create_all()` fixture) and asserts `UPDATE`/`DELETE` against `audit_log` still raise, plus all four indexes survive. Found in passing: batch mode's reflected rebuild always renders `CREATE TABLE "audit_log"` (quoted), while `create_all()` renders it unquoted — cosmetic, but it failed `verify_migration_schema.py`'s exact-text comparison, so its `_normalize()` now strips identifier quoting too. Step 2 mirrors P19 §3's pattern exactly, including the **same deviation P19 recorded**: `is_active` shipped as the `"true"`/`"false"`/`"null"` string tri-state (not the doc's literal `bool \| None`), for the identical reason. One addition beyond the doc's text: `PATCH` explicitly rejects `is_active: false` (400) rather than accepting it silently — `DELETE` is the only guarded path for the true→false transition (it checks for an open incident first; `PATCH` accepting the same transition would have silently duplicated that endpoint while bypassing its precondition). Narrow scopes (`test_cameras.py` + `test_audit.py` + `test_schema.py`, 129 tests) and a full `uv run pytest -n auto` both green. Deviations and the corrected wire contract are written up in `24_FRONTEND_HANDOFF_P23.md` (`24_FRONTEND_HANDOFF_P23.md`; historical reference unavailable in this checkout). | `feat/be-p23-camera-restore` | |
+| P25 audit target labels | ✅ merged — [PR #155](https://github.com/bayie27/adas-capstone/pull/155). Steps 1–6: `resolve_camera_names`/`format_camera_filter_line` helpers in `services/cameras.py`; `camera_name` added to all 4 alert-transition audit rows (including the previously bare `ALERT_SNOOZE`); `camera_name`/`previous_camera_name` added to the 4 camera-lifecycle rows, including the rename trap (`CAMERA_UPDATE`'s `before` snapshot predates the mutation loop, so the old name is captured separately from `snapshot_ai_relevant_fields`); `target_username` added to all 14 user-audit sites and `USER_CREATE`'s existing `"username"` key renamed to `"target_username"`; `record_export_attempt` gained an optional `camera_names` param so a camera-filtered export's `detail.filters` carries the resolved names as a sibling key; the four independent `"Camera IDs: "` PDF-header builders (sync incidents/dashboard/performance + the async job's inline performance copy) now call `format_camera_filter_line`, with `_performance_filters_summary` extracted in `analytics.py` so `jobs.py` imports it instead of carrying a second copy. Camera-name resolution is threaded through call sites so each camera-filtered export issues exactly one `resolve_camera_names` query, reused for both the audit row and the PDF header. **One deviation beyond the doc's text, confirmed with the user before proceeding:** the doc's "no rendering change needed" claim for the Web UI surface had gone stale — `main` gained a full `auditFormat.ts`/`AuditLog.tsx` detail-drawer formatter (73 commits, unrelated to this package) between the doc being written and this session starting, including an `isOpaqueIdKey` suffix that would have shown a redundant "(internal reference)" tag next to a `camera_id` that now has a `camera_name` alongside it. Fixed in Step 7's commit: `hasResolvedName()` suppresses that suffix when a sibling name key is present. **This package's inventory table wrongly marked the `backup` audit family ✅ already correct — see P26, which corrects that verdict.** | `feat/be-p25-audit-target-labels` | `3359c33` |
+| P26 audit backup target | 🔶 pushed, [PR #156](https://github.com/bayie27/adas-capstone/pull/156) open — 2026-08-24, one commit per numbered step on `feat/be-p26-audit-backup-target` (rebased onto `main` after P25 merged). Step 1: `target_ref=manifest.backup_id` set at the two `BACKUP_TRIGGER` sites where a manifest exists (manual and scheduled success/failure paths), plus `created_at`/`origin` added to `detail`; the manual-trigger route introduces a `backup_id: str \| None = None` local declared before the `try` to dodge the `UnboundLocalError` the failure branch would otherwise hit. The denied and crashed-before-manifest sites still write `target_ref=None`. Step 2: `formatTargetType`/`TARGET_TYPE_LABELS` added to `auditFormat.ts`, applied at the Target cell and the filter dropdown's label (not its value). Step 3: the drawer's inline long-hex regex extracted to a shared `isLongHexId`, used by both the drawer and `formatTargetRef` so the Target column now truncates non-hyphenated backup ids too. Step 4: pinned `target_ref`/`detail` on both success paths, `target_ref is None` on both no-manifest paths, and the `?target_ref=` correlation test asserting a bare ref (no `target_type`) returns both a `BACKUP_TRIGGER` and a `RESTORE_TRIGGER` row for the same id. Narrow scopes (129 passed, 1 skipped) and frontend (168 passed) both green; `pnpm check` green on push via the pre-push hook (1089 backend + 168 frontend, format/lint/typecheck clean). **Manual UI check not yet done** — do before merging. | `feat/be-p26-audit-backup-target` | |
+| P28 Cleared incident | ⬜ planned — breaking migration and cross-stack contract; merge before P29 final verification | `feat/be-p28-cleared-incident` | |
+| P29 Admin-only AI Performance | ⬜ planned — may start in parallel, must rebase onto P28 before completion | `feat/be-p29-admin-ai-performance` | |
+| P30 protected backup storage | ⬜ planned — implementation plus real Windows/USB restore drill | `feat/be-p30-protected-backup-storage` | |
+
+---
+
+## How to execute one package
+
+**Copy-paste kickoff prompts for every package live in [`PROMPTS.md`](PROMPTS.md).** Start a fresh
+session, paste the one for your package, and it covers the steps below.
+
+1. Read `01_CONTRACTS.md` in full. It is long; you need all of it.
+2. Read the package doc in full before writing anything.
+3. Confirm the prerequisite packages are merged (`git log --oneline`).
+4. Create the branch. Work through the numbered steps **in order** — later steps assume earlier ones.
+5. Commit after each numbered step with a Conventional Commit message.
+6. Run the package's own verification block, then `pnpm check`.
+7. Update the status table above and note anything you deviated from, and why.
+
+**When to stop and ask the user instead of guessing:**
+
+- A locked decision and the paper conflict, and the contract doc does not resolve it.
+- A step requires modifying `ai_engine/` or `frontend/` and the doc did not say to.
+- You need a dependency not listed.
+- A step turns out to be substantially larger than described.
+
+Report deviations plainly. A package that lands 90% complete with the remaining 10% named is far
+more useful than one that silently narrowed its scope.
+
+---
+
+## Context you will want and won't find in the code
+
+- **Deployment is a Windows laptop** (i5-12500H, RTX 3050 Ti 4 GB) for the demo. The paper's target is
+  a Linux edge server with 8× L4 GPUs. Everything must run on Windows; Linux artifacts ship as
+  reviewed-but-unverified and are labeled production-target. See `13_WSL2_LINUX_PATH.md`.
+- **`psutil` cannot read CPU temperature on Windows.** D-009 already requires `null` + an availability
+  flag for missing sensors. This is a designed-for gap, not a bug to work around.
+- **Only one alarm sound asset exists** (`frontend/public/detection_sound.mp3`), so the D-004 sound
+  enum starts as a one-entry config allowlist.
+- **Camera simulation:** `mediamtx mediamtx.yml` from the repo root serves
+  `rtsp://localhost:8554/channel{1..5}`. `ai_engine/sample_vids/` is gitignored — ask the team for it.
+- **The AI engine currently polls `GET /api/internal/cameras` every 3 seconds** and posts a flat
+  webhook payload. Both must keep working after every single package. This is verified manually.

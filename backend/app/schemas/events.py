@@ -98,7 +98,7 @@ class ReAlarmData(BaseModel):
 class MaintenanceNoticeData(BaseModel):
     message: str
     # Optional because a dev-tools reseed emits this event too and has no
-    # backup to name (dev_plan/02_PKG_dev_api.md Step 4). Widening rather
+    # backup to name (docs/archive/dev_plan/02_PKG_dev_api.md Step 4). Widening rather
     # than adding a second event type: this one had no producer and no
     # consumer anywhere in the codebase, so nothing can break on it, and a
     # required field the reseed would have to fill with a placeholder is

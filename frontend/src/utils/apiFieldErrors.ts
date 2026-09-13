@@ -4,7 +4,7 @@ import { getApiError } from "@/api/client"
  * Pulls one field's message out of a 422's `errors[]`.
  *
  * `errors[]` carries FastAPI's raw Pydantic shape (`{loc, msg, type}` — see
- * `be_plan/01_CONTRACTS.md` §"Errors"), not the `{field, message}` shape
+ * `docs/archive/be_plan/01_CONTRACTS.md` §"Errors"), not the `{field, message}` shape
  * `ApiValidationError` optimistically names; `loc` nests the field under a
  * location prefix (e.g. `["body", "new_password"]`), so this matches on its
  * last segment. Returns undefined for anything that isn't a 422 or doesn't

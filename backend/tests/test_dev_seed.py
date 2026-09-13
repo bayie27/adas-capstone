@@ -1,4 +1,4 @@
-"""dev_plan/01_PKG_seed_core.md Verification — the seed profiles in app.dev.
+"""docs/archive/dev_plan/01_PKG_seed_core.md Verification — the seed profiles in app.dev.
 
 Unlike most of this suite these tests need a real file-based database:
 seed_profile() calls init_db(), which runs `alembic upgrade head`, and the

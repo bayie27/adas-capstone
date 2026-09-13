@@ -43,13 +43,13 @@ evaluation set—not standalone YOLO box output.
 
 ## Primary source records
 
-- [Project state and caveats](../CLAUDE.md)
-- [Existing detection results](../docs/results.md)
-- [Training notebook source](../train/adas_train_colab.ipynb)
-- [Detector-first design](../docs/design/detector-first-accident-detection.md)
-- [Original tracker prototype postmortem](../docs/design/accident-detection.md)
-- [Accumulator sweep record](../docs/accumulator-sweep.md)
-- [Philippine vehicle-data investigation](../docs/philippine-vehicle-gap.md)
+- Project state and caveats (source research repository: `../CLAUDE.md`; not included here)
+- Existing detection results (source research repository: `../docs/results.md`; not included here)
+- Training notebook source (source research repository: `../train/adas_train_colab.ipynb`; not included here)
+- Detector-first design (source research repository: `../docs/design/detector-first-accident-detection.md`; not included here)
+- Original tracker prototype postmortem (source research repository: `../docs/design/accident-detection.md`; not included here)
+- Accumulator sweep record (source research repository: `../docs/accumulator-sweep.md`; not included here)
+- Philippine vehicle-data investigation (source research repository: `../docs/philippine-vehicle-gap.md`; not included here)
 - [Recovered Drive run folders](https://drive.google.com/drive/folders/142WuVB8smOkILl-UMGLjUOrET8HCQQRK)
 
 ## Reporting boundary

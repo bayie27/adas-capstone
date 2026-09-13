@@ -9,7 +9,7 @@ from app.models import AuthSession, User
 
 # Argon2id per 01_CONTRACTS.md §3.1 / D-005 password handling. No bcrypt->argon2
 # migration path is needed — the dev DB is disposable and gets reset with this
-# package's schema change (be_decisions_review.md, Password Handling).
+# package's schema change (docs/archive/be_decisions_review.md, Password Handling).
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # A fixed hash verified on the unknown-username login path (edge case 8.8, D-006

@@ -1,7 +1,7 @@
 """HTTP transport to the backend and response classification.
 
 Pure module: no cv2, no ultralytics. Safe to import and unit-test in CI
-without the `ai` extra (be_plan/15_PKG_ai_engine_integration.md, "The
+without the `ai` extra (docs/archive/be_plan/15_PKG_ai_engine_integration.md, "The
 testability constraint").
 """
 

@@ -33,12 +33,12 @@ recall, misses, false positives, FP/min, latency
 ```
 
 The AI detection core contains no vehicle tracker. The old tracker-first prototype is documented as
-a [superseded design](../docs/design/accident-detection.md), not as part of this measurement path.
+a superseded design (source research repository: `../docs/design/accident-detection.md`; not included here), not as part of this measurement path.
 
 ## 2. AI detection core/model harness: `detect/run.py` + accumulator
 
-[`detect/run.py`](../detect/run.py), together with
-[`detect/accumulate.py`](../detect/accumulate.py), is the single-video or live-stream AI detection
+`detect/run.py` (source research repository: `../detect/run.py`; not included here), together with
+`detect/accumulate.py` (source research repository: `../detect/accumulate.py`; not included here), is the single-video or live-stream AI detection
 core. Its important behavior is:
 
 1. Accept a video path through `--source` or the compatibility alias `--video`, or accept a live
@@ -89,7 +89,7 @@ derived from `frames / fps`; this is why both fields are load-bearing rather tha
 
 ## 3. Accumulator component: `detect/accumulate.py`
 
-[`detect/accumulate.py`](../detect/accumulate.py) is pure logic: it has no model, video, or file
+`detect/accumulate.py` (source research repository: `../detect/accumulate.py`; not included here) is pure logic: it has no model, video, or file
 I/O. It maps `(timestamp, boxes, confidences)` to zero or more events.
 
 ### Linking and evidence
@@ -118,7 +118,7 @@ the measured behavior.
 
 ## 4. Evaluation harness: clip runner `eval/run_clips.py`
 
-[`eval/run_clips.py`](../eval/run_clips.py) is the batch boundary for real-footage evaluation.
+`eval/run_clips.py` (source research repository: `../eval/run_clips.py`; not included here) is the batch boundary for real-footage evaluation.
 
 - The clip list comes from `eval/labels.csv`, not from a hardcoded tuple.
 - Every clip runs in its own subprocess so Ultralytics state cannot leak between videos.
@@ -132,7 +132,7 @@ clip. It writes one event JSON per clip and then invokes the scorer.
 
 ## 5. Evaluation harness: event-level scorer `eval/score.py`
 
-[`eval/score.py`](../eval/score.py) uses the label file as ground truth:
+`eval/score.py` (source research repository: `../eval/score.py`; not included here) uses the label file as ground truth:
 
 - A crash is a **hit** when at least one event timestamp is in
   `[onset_s − 2 seconds, end_s + 15 seconds]`.
@@ -147,7 +147,7 @@ number of clean minutes behind FP/min so the rate is not mistaken for a deployme
 
 ## 6. Evaluation harness: checkpoint sweep `eval/sweep.py`
 
-[`eval/sweep.py`](../eval/sweep.py) evaluates every `.pt` file in a model directory against the
+`eval/sweep.py` (source research repository: `../eval/sweep.py`; not included here) evaluates every `.pt` file in a model directory against the
 labeled clips. This is necessary because the `best.pt` name comes from validation mAP, and that mAP
 was produced by a frame-level split with near-duplicate frames. In the field, a checkpoint labeled
 `best.pt` can lose to an epoch checkpoint.
@@ -166,9 +166,9 @@ recall but produced fewer false positives.
 
 The accumulator can be tested independently of GPU inference:
 
-1. [`eval/cache_detections.py`](../eval/cache_detections.py) runs inference once per labeled clip
+1. `eval/cache_detections.py` (source research repository: `../eval/cache_detections.py`; not included here) runs inference once per labeled clip
    at a low confidence floor (`0.05`) and saves raw class-0 boxes.
-2. [`eval/sweep_accumulator.py`](../eval/sweep_accumulator.py) replays those boxes through the
+2. `eval/sweep_accumulator.py` (source research repository: `../eval/sweep_accumulator.py`; not included here) replays those boxes through the
    accumulator across parameter combinations.
 3. The pre-registered split uses eight tune clips plus one declared negative and eight verify clips,
    stratified by difficulty and lighting. The verify half is not used to re-select a configuration.
@@ -182,7 +182,7 @@ so the deployed accumulator settings were retained.
 ## 8. Reproduction commands
 
 The project uses the environment-specific interpreter documented in
-[`prototype/README.md`](../prototype/README.md).
+`prototype/README.md` (source research repository: `../prototype/README.md`; not included here).
 
 ### Run one clip
 
@@ -235,12 +235,12 @@ On Windows, replace `./prototype/.venv/bin/python` with
 The repository tests establish local logic and interface behavior; they do not prove that the model
 detects crashes:
 
-| Test                                                        | What it proves                                                                                         |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| [`detect/test_accumulate.py`](../detect/test_accumulate.py) | IoU linking, leaky persistence, decay, wandering-box rejection, and one-time region firing             |
-| [`detect/test_run.py`](../detect/test_run.py)               | Source/device forwarding and event-file boundary behavior with mocked model/source objects             |
-| [`detect/test_sources.py`](../detect/test_sources.py)       | File/stream classification, timestamps, reconnect signaling, and bounded reconnect behavior            |
-| [`dataset/test_pipeline.py`](../dataset/test_pipeline.py)   | Quota conservation, v1 regression guard, incident grouping, deterministic splitting, and disk scanning |
+| Test                                                                                                        | What it proves                                                                                         |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `detect/test_accumulate.py` (source research repository: `../detect/test_accumulate.py`; not included here) | IoU linking, leaky persistence, decay, wandering-box rejection, and one-time region firing             |
+| `detect/test_run.py` (source research repository: `../detect/test_run.py`; not included here)               | Source/device forwarding and event-file boundary behavior with mocked model/source objects             |
+| `detect/test_sources.py` (source research repository: `../detect/test_sources.py`; not included here)       | File/stream classification, timestamps, reconnect signaling, and bounded reconnect behavior            |
+| `dataset/test_pipeline.py` (source research repository: `../dataset/test_pipeline.py`; not included here)   | Quota conservation, v1 regression guard, incident grouping, deterministic splitting, and disk scanning |
 
 Only a real-footage run of the complete AI detection core through `eval/run_clips.py` and
 `eval/score.py` establishes the reported recall and false-positive measurements. The unit tests

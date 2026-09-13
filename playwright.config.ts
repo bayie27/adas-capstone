@@ -59,7 +59,7 @@ export default defineConfig({
       name: "chromium",
       // The visual project is deliberately outside the default run: `test:e2e`
       // feeds `full:check`, and a screenshot diff failing the pre-PR gate on a
-      // legitimate design change would be noise (FE_Implementation.md §6.5).
+      // legitimate design change would be noise (see e2e/README.md).
       testIgnore: /visual\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
@@ -69,7 +69,7 @@ export default defineConfig({
       // No retries here, unlike the default project. A retry re-runs the whole
       // serial block and passes a route whose baseline the failed attempt just
       // wrote, which hides both a missing baseline and a genuine flake — and a
-      // flaky baseline is worse than no baseline (§6.5).
+      // flaky baseline is worse than no baseline (see e2e/README.md).
       retries: 0,
       // One worker, in order: the tests share a single authenticated page.
       fullyParallel: false,

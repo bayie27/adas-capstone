@@ -4,7 +4,7 @@ plans and the paper's 100,000-incident performance test" — a `SCAN
 detection_log` in the plan means an index is missing or unusable.
 
 Every test prints its measured number; run with `-s` to see them, and
-transcribe into be_plan/EVIDENCE.md (10_PKG_migration_evidence.md Step 3
+transcribe into docs/archive/be_plan/EVIDENCE.md (10_PKG_migration_evidence.md Step 3
 explicitly wants a *recorded* number, not just a pass/fail).
 """
 

@@ -21,10 +21,11 @@ export default defineConfig([
       globals: globals.browser,
     },
     rules: {
-      // FE_Implementation.md §6.4 — keep raw colour out of the codebase now
-      // that the token layer exists. A one-time grep would have decayed by
-      // Phase 6; this feeds pnpm lint:frontend -> check:fe -> check, which the
-      // pre-push hook and CI both already run.
+      // Keep raw colour out of the codebase now that the token layer
+      // exists. A one-time grep would have decayed; this feeds
+      // pnpm lint:frontend -> check:fe -> check, which the pre-push hook and
+      // CI both already run. The rules, and what stays allowed, are written
+      // up in frontend/README.md's "Design tokens" section.
       //
       // Three selectors, because raw colour arrives three different ways:
       //   1. a Tailwind arbitrary value    bg-[#111]
@@ -34,14 +35,14 @@ export default defineConfig([
       // where the 39 chart-layer colours were hiding.
       //
       // Deliberately matched on Literal only, never TemplateLiteral: the
-      // Accident Frequency by Location ramp is a computed hsl() that §2.2
-      // keeps, and a computed ramp is not a hardcoded colour.
+      // Accident Frequency by Location ramp is a computed hsl() that the
+      // token spec keeps, and a computed ramp is not a hardcoded colour.
       "no-restricted-syntax": [
         "error",
         {
           selector: "Literal[value=/(^|\\s)[a-zA-Z-]*-\\[(#|rgb|hsl|color-mix)[^\\]]*\\]/]",
           message:
-            "Arbitrary colour value. Use a design token from index.css (FE_Implementation.md §2) — bg-surface-1, text-fg-muted, border-stroke, etc.",
+            "Arbitrary colour value. Use a design token from index.css — bg-surface-1, text-fg-muted, border-stroke, etc. See frontend/README.md#design-tokens.",
         },
         {
           selector:
@@ -53,7 +54,7 @@ export default defineConfig([
           selector:
             "Literal[value=/^\\s*(#[0-9a-fA-F]{3,8}|rgba?\\([^)]*\\)|hsla?\\([^)]*\\))\\s*$/]",
           message:
-            "Bare colour literal. Chart and inline-style colours go through var(--color-*) — see §2.2's chart tokens.",
+            "Bare colour literal. Chart and inline-style colours go through var(--color-*) — see the chart tokens in index.css.",
         },
       ],
     },

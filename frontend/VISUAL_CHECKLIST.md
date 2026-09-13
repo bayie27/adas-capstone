@@ -12,8 +12,8 @@ frame, comparing the specific properties listed. It documents the target state,
 which is why it lands with the token layer rather than after it.
 
 **Design source:** [ADAM-UI](https://www.figma.com/design/PEf6KSUiVgTbSS6dEDLiX5/ADAM-UI),
-page `Web Design`. Token definitions and every resolved Figma inconsistency are
-in `FE_Implementation.md` §2.
+page `Web Design`. Token definitions live in `src/index.css`; how they are used
+and what lint rejects is in [the frontend README](README.md#design-tokens).
 
 ## How to use it
 
@@ -54,19 +54,20 @@ Check these once, on any route:
 - **Focus is visible.** `focus-visible` only, `--color-stroke-strong`, offset 2px.
 - **Disabled is `opacity-60`,** with no colour change.
 
-## Deviations from §2, and why
+## Deviations from the token spec, and why
 
 Recorded here rather than applied silently.
 
-- **GPU Temperature series stays `--color-danger`.** §2.2 says Figma renders
+- **GPU Temperature series stays `--color-danger`.** Figma renders
   every chart series in white, which would drop the red that distinguishes a
   temperature chart from the three utilisation charts beside it. The value now
   comes from a token instead of a raw `#ef4444`, so the lint rule still holds.
-- **`text-white` / `bg-white` / `text-black` were tokenised** even though §1's
-  count covers only hex literals and palette classes. §2 defines `--color-fg`,
-  `--color-primary` and `--color-fg-on-primary` for exactly those jobs; leaving
+- **`text-white` / `bg-white` / `text-black` were tokenised** even though the
+  lint rules cover only hex literals and palette classes. The token layer defines
+  `--color-fg`, `--color-primary` and `--color-fg-on-primary` for exactly those
+  jobs; leaving
   them would have left every page title and primary button off the palette.
-- **`Cleared` is now `--color-primary`, not green.** §2.2 lists it
+- **`Cleared` is now `--color-primary`, not green.** The design source lists it
   under the primary action alongside `Confirm Accident`. Worth a second look on
   the alert modal: it removes a green/red colour distinction between the two
   buttons, leaving position and label to carry it.

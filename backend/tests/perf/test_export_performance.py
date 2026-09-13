@@ -8,7 +8,7 @@ CSV finishes in well under a second for the same window. Isolating the
 three phases (query fetch, row formatting, `fpdf2` table rendering)
 places 100% of the overrun in `fpdf2`'s `Table` context manager itself
 (~200 rows/sec; the query is 1.2s and row-formatting is 0.06s for 8,685
-rows — see be_plan/EVIDENCE.md). That is a genuine NFR-06/D-010 gap the
+rows — see docs/archive/be_plan/EVIDENCE.md). That is a genuine NFR-06/D-010 gap the
 current PDF implementation has at that row count, not a bug this package
 introduced or is scoped to fix. `test_pdf_export_at_10k_row_scale_is_slow`
 below is `xfail(strict=False)` so it keeps recording the real number on
@@ -45,7 +45,7 @@ def _export_window(perf_seeded: dict, *, days: int) -> tuple[str, str]:
     return start.isoformat(), now.isoformat()
 
 
-# A6 (be_audit/A6_manual_evidence.md Part 2) — the owner-decided real
+# A6 (docs/archive/be_audit/A6_manual_evidence.md Part 2) — the owner-decided real
 # operating envelope: ~10 incidents/day, so a 30-day export is ~300 rows,
 # not the paper's literal ~10,000. This is the primary NFR-06 evidence;
 # the 10k-row cases above stay as a documented ceiling, not deleted.

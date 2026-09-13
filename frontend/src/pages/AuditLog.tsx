@@ -326,20 +326,7 @@ export default function AuditLog() {
           />
           {hasFilters ? <ClearFiltersButton onClick={clearFilters} /> : null}
         </div>
-        {/*
-          total_filtered is already on this query, so the pre-flight count
-          is free. Both formats stay enabled here — confirmed directly
-          against routes/audit.py that GET /api/audit-logs/export's
-          synchronous route genuinely returns a real PDF today, not a stub
-          waiting on Phase 17's job queue.
-
-          ExportJobCreate gained action/result/target_type in P21 Step 5 --
-          the async job path can now carry the same three filters the
-          synchronous export always could, so the job no longer needs to be
-          withheld while any of them is active (previously disabled here,
-          since a job submitted without them would silently export a
-          different set than what the screen showed).
-        */}
+        {/* Both synchronous and job exports carry the active audit filters. */}
         <ExportButton
           rowCount={totalFiltered}
           isExporting={exportMutation.isPending}

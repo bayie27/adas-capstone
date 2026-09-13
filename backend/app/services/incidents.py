@@ -136,8 +136,8 @@ def ingest_detection(
     forbids announcing a row a later rollback could undo, and the ordering
     (commit, then broadcast) is what makes the self-blindfold correct.
     Nothing here changes ordering, status mapping or error codes — this
-    seam carries the F20 fix (be_audit/A3_ai_seam.md) and the F23 race fix
-    (be_audit/00_FINDINGS.md).
+    seam carries the F20 fix (docs/archive/be_audit/A3_ai_seam.md) and the F23 race fix
+    (docs/archive/be_audit/00_FINDINGS.md).
     """
     camera = session.get(Camera, payload.camera_id)
     if not camera or not camera.is_active or not camera.is_enabled:
@@ -171,14 +171,14 @@ def ingest_detection(
     # Written as a conditional UPDATE against the row's *live* is_active/
     # is_enabled, not apply_desired_state() on the `camera` object read
     # above — that read can go stale before this commits. A concurrent
-    # operator disable (edge case 1.7, be_audit/A5_edge_cases.md) only
+    # operator disable (edge case 1.7, docs/archive/be_audit/A5_edge_cases.md) only
     # touches the is_enabled column, so a plain read-then-write here would
     # silently clobber a disabled camera's correct Inactive/disabled state
     # with Paused/incident, using a since-invalidated "is_enabled was true"
     # assumption. The CASE is evaluated by the DB against the row's current
     # value at write time, so whichever request commits last always leaves
     # the row internally consistent, regardless of interleaving (F23,
-    # be_audit/00_FINDINGS.md).
+    # docs/archive/be_audit/00_FINDINGS.md).
     camera_disabled = or_(~Camera.is_active, ~Camera.is_enabled)
 
     try:

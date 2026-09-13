@@ -46,14 +46,7 @@ export interface IncidentDetailModalProps {
   onDismiss: (logId: number) => void
   onConfirm: (logId: number) => void
   onClear: (logId: number) => void
-  /**
-   * D-2 — the third action slot on the Unverified variant.
-   *
-   * Snooze is Phase 13's feature, but the *shape* of this row is Phase 7's
-   * decision: the row is built three-up now so adding the control later is a
-   * prop, not a rebuild of the product's most important dialog. Until Phase 13
-   * passes something, this renders nothing and the row reads as two buttons.
-   */
+  /** Optional snooze control in the Unverified variant's third action slot. */
   snoozeAction?: ReactNode
   overlayClassName?: string
 }

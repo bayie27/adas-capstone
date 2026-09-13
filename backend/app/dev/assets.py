@@ -1,6 +1,6 @@
 """Placeholder snapshot images for seeded detections.
 
-dev_plan/01_PKG_seed_core.md Step 6. The seeder has always built
+docs/archive/dev_plan/01_PKG_seed_core.md Step 6. The seeder has always built
 `snapshot_key` strings in 01_CONTRACTS.md §7.1's nested format but never
 written a file at them, so `GET /api/alerts/{log_id}/snapshot` 404s for
 every row in a seeded database — the alert detail view has no evidence

@@ -1,7 +1,7 @@
 """Seed-profile definitions: the spec dataclasses and the per-profile
 builders that turn a `now` into a list of rows to write.
 
-Moved here from `backend/scripts/seed_dev_data.py` (dev_plan/01_PKG_seed_core.md
+Moved here from `backend/scripts/seed_dev_data.py` (docs/archive/dev_plan/01_PKG_seed_core.md
 Step 1) so the app can import them — `backend/scripts/` is not a package and
 is only reachable through `_bootstrap.py`'s sys.path injection, which works
 for a CLI entrypoint and nothing else.

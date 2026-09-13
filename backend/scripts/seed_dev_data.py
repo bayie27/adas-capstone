@@ -1,6 +1,6 @@
 """CLI entrypoint for the dev seed profiles.
 
-The seeding logic lives in `app.dev` (dev_plan/01_PKG_seed_core.md) so the
+The seeding logic lives in `app.dev` (docs/archive/dev_plan/01_PKG_seed_core.md) so the
 FastAPI app can import it; this module is only the argparse front-end.
 """
 

@@ -3,8 +3,8 @@ import type { ButtonHTMLAttributes, ReactNode } from "react"
 import { cn } from "@/utils/cn"
 
 /**
- * FE_Implementation.md §2.8 — the focus treatment for every interactive
- * primitive. Figma draws focus nowhere, so this is specified rather than
+ * The focus treatment for every interactive primitive
+ * (frontend/README.md#design-tokens). Figma draws focus nowhere, so this is specified rather than
  * copied: an operator console is keyboard-driven under load, `focus-visible`
  * avoids the ring on a mouse click, and --color-stroke-strong is the only
  * neutral with enough contrast against both --color-surface-1 and
@@ -13,7 +13,7 @@ import { cn } from "@/utils/cn"
 export const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stroke-strong focus-visible:outline-solid focus:outline-none"
 
-/** §2.8 — opacity only, no colour change, consistent across the app. */
+/** Disabled: opacity only, no colour change, consistent across the app. */
 export const disabledTreatment = "disabled:cursor-not-allowed disabled:opacity-60"
 
 export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost"

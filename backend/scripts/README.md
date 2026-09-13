@@ -1,7 +1,7 @@
 # Backend Scripts
 
 These scripts are for local development and manual testing with the SQLite
-database in `backend/adas.db`.
+database selected by `DATABASE_URL` (by default `adas.db` at the repository root). Run every command below from the repository root.
 
 ## Quick Start
 
@@ -12,17 +12,10 @@ uv run python backend\scripts\reseed_dev.py
 uv run python backend\scripts\reseed_dev.py --profile analytics
 ```
 
-From the `backend` directory:
-
-```powershell
-uv run python scripts\reseed_dev.py
-uv run python scripts\reseed_dev.py --profile edge
-```
-
 That will:
 
 1. delete the current local SQLite files
-2. recreate the schema
+2. provision the schema through Alembic
 3. seed a predictable set of users, cameras, and alerts
 
 ## Script List
@@ -35,13 +28,13 @@ Deletes the local SQLite files:
 - `adas.db-wal`
 - `adas.db-shm`
 
-Then recreates tables and the default admin account.
+Then applies Alembic migrations and initializes the default admin account.
 
 Usage:
 
 ```powershell
-uv run python scripts\reset_db.py
-uv run python scripts\reset_db.py --no-init
+uv run python backend\scripts\reset_db.py
+uv run python backend\scripts\reset_db.py --no-init
 ```
 
 Notes:
@@ -78,11 +71,11 @@ Includes:
 Usage:
 
 ```powershell
-uv run python scripts\seed_dev_data.py
-uv run python scripts\seed_dev_data.py --profile analytics
-uv run python scripts\seed_dev_data.py --profile edge
-uv run python scripts\seed_dev_data.py --profile perf
-uv run python scripts\seed_dev_data.py --profile perf --count 20000
+uv run python backend\scripts\seed_dev_data.py
+uv run python backend\scripts\seed_dev_data.py --profile analytics
+uv run python backend\scripts\seed_dev_data.py --profile edge
+uv run python backend\scripts\seed_dev_data.py --profile perf
+uv run python backend\scripts\seed_dev_data.py --profile perf --count 20000
 ```
 
 Profiles:
@@ -99,7 +92,7 @@ Profiles:
   cannot be shown without hand-deleting rows
 - `perf`: **100,000** `detection_log` rows (NFR-08), bulk-inserted via batched
   SQLAlchemy Core `insert()` calls rather than 100,000 ORM objects — measured
-  at ~33s on the demo laptop (see `be_plan/EVIDENCE.md`). Spread over ~18
+  at ~33s on the demo laptop (see `docs/archive/be_plan/EVIDENCE.md`). Spread over ~18
   months across the six seeded cameras, with a realistic
   Cleared/Dismissed/Ongoing/Unverified mix that still respects
   `ux_detection_open_camera` (at most one open incident per camera survives;
@@ -129,10 +122,10 @@ Convenience command for a fully fresh local DB.
 Usage:
 
 ```powershell
-uv run python scripts\reseed_dev.py
-uv run python scripts\reseed_dev.py --profile analytics
-uv run python scripts\reseed_dev.py --profile empty
-uv run python scripts\reseed_dev.py --profile perf --count 20000
+uv run python backend\scripts\reseed_dev.py
+uv run python backend\scripts\reseed_dev.py --profile analytics
+uv run python backend\scripts\reseed_dev.py --profile empty
+uv run python backend\scripts\reseed_dev.py --profile perf --count 20000
 ```
 
 Use this when you want to reset everything and start from a known state.
@@ -163,13 +156,13 @@ placeholder. That directory is gitignored, and its absence is not an error.
 ### Fresh local DB for frontend/manual testing
 
 ```powershell
-uv run python scripts\reseed_dev.py
+uv run python backend\scripts\reseed_dev.py
 ```
 
 ### Wipe the DB completely
 
 ```powershell
-uv run python scripts\reset_db.py --no-init
+uv run python backend\scripts\reset_db.py --no-init
 ```
 
 ## Why `_bootstrap.py` Exists

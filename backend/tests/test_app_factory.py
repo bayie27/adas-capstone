@@ -39,7 +39,7 @@ def _dev_tools_settings(tmp_path, **overrides) -> Settings:
 
 
 class TestDevToolsGate:
-    """dev_plan/02_PKG_dev_api.md Step 1 (DT-3/DT-5). The flag is resolved
+    """docs/archive/dev_plan/02_PKG_dev_api.md Step 1 (DT-3/DT-5). The flag is resolved
     from ENVIRONMENT only when it is left unset, so a production deployment
     is off by default while the LAN demo box can still turn it on."""
 
@@ -235,7 +235,7 @@ class TestConcurrentWriteLockHandling:
 
 
 class TestSnapshotRootStartupCheck:
-    """Edge case 6.9 / be_audit/00_FINDINGS.md F25 — SNAPSHOT_ROOT is
+    """Edge case 6.9 / docs/archive/be_audit/00_FINDINGS.md F25 — SNAPSHOT_ROOT is
     validated at boot (F2's "fail loud, not per-request" precedent), not
     left to degrade into every snapshot request quietly 404ing."""
 

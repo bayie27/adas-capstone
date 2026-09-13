@@ -124,7 +124,7 @@ def test_zero_cameras_registered_yields_no_actions():
     assert supervisor.compute_actions([], {}) == []
 
 
-# F20 (be_audit/00_FINDINGS.md) — a camera with an outbox-queued-but-
+# F20 (docs/archive/be_audit/00_FINDINGS.md) — a camera with an outbox-queued-but-
 # undelivered event must not be resumed on a stale "Active" snapshot the
 # backend reported because it doesn't know about that pending event yet.
 

@@ -121,7 +121,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
     origin = ORIGIN_SCHEDULED if args.origin == "scheduled" else ORIGIN_MANUAL
     started = time.perf_counter()
 
-    # be_plan/18_PKG_scheduled_maintenance.md Step 9 — both restart
+    # docs/archive/be_plan/18_PKG_scheduled_maintenance.md Step 9 — both restart
     # orchestrators (scripts/adas-maintenance.ps1's Restart action,
     # backend/scripts/daily_restart.sh) call this exact command with
     # --origin scheduled as their own backup phase, on top of the in-app
