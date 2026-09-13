@@ -1,4 +1,4 @@
-"""Reseed orchestration for the dev panel (dev_plan/02_PKG_dev_api.md Step 4).
+"""Reseed orchestration for the dev panel (docs/archive/dev_plan/02_PKG_dev_api.md Step 4).
 
 **This module deliberately writes no audit rows**, and that is the one
 sanctioned exception to CLAUDE.md's "every audited state change is one
@@ -109,7 +109,7 @@ async def reseed(
 
     `target_settings` must be the Settings `engine` was built from: seeding
     calls init_db(), whose schema check reopens target_settings.DATABASE_URL
-    itself and ignores the engine (F18 in be_audit/00_FINDINGS.md).
+    itself and ignores the engine (F18 in docs/archive/be_audit/00_FINDINGS.md).
 
     `scheduler` may be None — get_scheduler() returns None whenever
     SCHEDULER_ENABLED is false, which is the whole test suite.

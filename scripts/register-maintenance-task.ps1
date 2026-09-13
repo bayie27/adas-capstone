@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     Registers, verifies, or removes the Windows Scheduled Task that fires
-    the daily restart (NFR-16, be_plan/18_PKG_scheduled_maintenance.md
+    the daily restart (NFR-16, docs/archive/be_plan/18_PKG_scheduled_maintenance.md
     Step 4).
 
 .DESCRIPTION

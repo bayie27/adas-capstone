@@ -4,11 +4,12 @@
 
 .DESCRIPTION
     Replaces the four-terminal-plus-a-seed-script manual bring-up documented
-    in README.md with one command. No switches at all starts the everyday
-    case, -Backend -Frontend. Preflights the things that fail unhelpfully
-    (.env, uv, pnpm/node_modules) before spawning anything, then follows the
-    real demo-day bring-up order from be_audit/DEMO_TOPOLOGY.md §5: MediaMTX
-    -> backend -> frontend -> AI engine. The engine discovers cameras from
+    in docs/operations/README.md with one command. No switches at all
+    starts the everyday case, -Backend -Frontend. Preflights the things
+    that fail unhelpfully (.env, uv, pnpm/node_modules) before spawning
+    anything, then follows the real demo-day bring-up order from
+    docs/archive/be_audit/DEMO_TOPOLOGY.md §5: MediaMTX -> backend ->
+    frontend -> AI engine. The engine discovers cameras from
     the backend's heartbeat response, so if it starts before the backend is
     up it just logs failures until the backend appears.
 
@@ -19,10 +20,10 @@
     the current terminal instead.
 
     -Lan swaps every launch command for its TLS equivalent so a second
-    machine can reach the dashboard over HTTPS/WSS (LAN_SETUP.md step 6).
+    machine can reach the dashboard over HTTPS/WSS (docs/operations/LAN_SETUP.md step 6).
     It covers only the process side; the OS-level work around it — static
     IPs, the Private connection profile, firewall rules, the client's hosts
-    entry and certificate trust — is manual and stays in LAN_SETUP.md,
+    entry and certificate trust — is manual and stays in docs/operations/LAN_SETUP.md,
     because none of it is safe to do implicitly on someone's machine.
 
 .PARAMETER Backend
@@ -48,7 +49,7 @@
 .PARAMETER Lan
     LAN demo profile: start every component over real TLS, bound to all
     interfaces, so a second machine on the network can reach the dashboard
-    at https://<host>:5173. This is the profile LAN_SETUP.md step 6
+    at https://<host>:5173. This is the profile docs/operations/LAN_SETUP.md step 6
     documents; the manual four-window equivalent is still written out there
     for reference.
 
@@ -104,7 +105,7 @@
 
 .EXAMPLE
     scripts\start-dev.ps1 -Lan
-    # The whole stack over HTTPS/WSS for a two-machine demo. See LAN_SETUP.md
+    # The whole stack over HTTPS/WSS for a two-machine demo. See docs/operations/LAN_SETUP.md
     # -- the OS-level steps (static IP, Private profile, firewall rules,
     # client hosts entry, certificate trust) are NOT done by this script.
 #>
@@ -234,7 +235,7 @@ function Test-LanProfile {
             # formatter reflows a multi-line message into one wrapped
             # paragraph, which would destroy a command meant to be copied.
             Write-Host ""
-            Write-Host "Generate one from Git Bash at the repo root (LAN_SETUP.md step 3b):" -ForegroundColor Yellow
+            Write-Host "Generate one from Git Bash at the repo root (docs/operations/LAN_SETUP.md step 3b):" -ForegroundColor Yellow
             Write-Host ""
             Write-Host '  mkdir -p certs && MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \' -ForegroundColor Yellow
             Write-Host '    -keyout certs/adas-key.pem -out certs/adas-cert.pem -subj "/CN=adas.local" \' -ForegroundColor Yellow
@@ -255,7 +256,7 @@ function Test-LanProfile {
         $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPem((Get-Content $script:CertPath -Raw))
         $daysLeft = [int]($cert.NotAfter - (Get-Date)).TotalDays
         if ($daysLeft -lt 0) {
-            Write-Warning "Certificate EXPIRED $([Math]::Abs($daysLeft)) days ago ($($cert.NotAfter.ToString('yyyy-MM-dd'))). Every client will refuse it. Regenerate -- see LAN_SETUP.md step 3b."
+            Write-Warning "Certificate EXPIRED $([Math]::Abs($daysLeft)) days ago ($($cert.NotAfter.ToString('yyyy-MM-dd'))). Every client will refuse it. Regenerate -- see docs/operations/LAN_SETUP.md step 3b."
         }
         elseif ($daysLeft -lt 30) {
             Write-Warning "Certificate expires in $daysLeft days ($($cert.NotAfter.ToString('yyyy-MM-dd')))."
@@ -265,11 +266,11 @@ function Test-LanProfile {
             $names = ($san.Format($false) -replace 'DNS Name=', 'DNS:' -replace 'IP Address=', 'IP:')
             Write-Step "Certificate: expires $($cert.NotAfter.ToString('yyyy-MM-dd')), SANs $names"
             if ($names -notmatch 'DNS:') {
-                Write-Warning "This certificate has no DNS name in its SAN list, only IPs. It will work, but an IP-pinned certificate breaks the moment the address changes -- see LAN_SETUP.md section 2."
+                Write-Warning "This certificate has no DNS name in its SAN list, only IPs. It will work, but an IP-pinned certificate breaks the moment the address changes -- see docs/operations/LAN_SETUP.md section 2."
             }
         }
         else {
-            Write-Warning "Certificate has no Subject Alternative Name extension. Every current browser rejects CN-only certificates outright. Regenerate -- see LAN_SETUP.md step 3b."
+            Write-Warning "Certificate has no Subject Alternative Name extension. Every current browser rejects CN-only certificates outright. Regenerate -- see docs/operations/LAN_SETUP.md step 3b."
         }
     }
     catch {
@@ -302,7 +303,7 @@ function Test-LanProfile {
         Write-Host "middleware (403 ORIGIN_REJECTED on every write), and the WebSocket handshake -- so a" -ForegroundColor DarkGray
         Write-Host "mismatch breaks all three at once. Origins are matched exactly: scheme, host and port." -ForegroundColor DarkGray
         Write-Host ""
-        Write-Host "Add to .env at the repo root (LAN_SETUP.md step 5), adjusting the address to yours:" -ForegroundColor Yellow
+        Write-Host "Add to .env at the repo root (docs/operations/LAN_SETUP.md step 5), adjusting the address to yours:" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "  SESSION_COOKIE_SECURE=true" -ForegroundColor Yellow
         Write-Host "  CORS_ORIGINS=https://adas.local:5173,https://192.168.50.1:5173,https://localhost:5173" -ForegroundColor Yellow
@@ -312,13 +313,13 @@ function Test-LanProfile {
     }
 }
 
-# Advisory only -- never blocks. These are OS-level steps LAN_SETUP.md step 2
+# Advisory only -- never blocks. These are OS-level steps docs/operations/LAN_SETUP.md step 2
 # owns, but they are the single most common cause of a demo that looks broken
 # for no reason, and they are invisible from inside the application.
 function Show-LanReachability {
     $rules = @(Get-NetFirewallRule -DisplayName "ADAS*" -ErrorAction SilentlyContinue | Where-Object { $_.Enabled -eq $true -and $_.Direction -eq "Inbound" })
     if ($rules.Count -eq 0) {
-        Write-Warning "No enabled inbound 'ADAS*' firewall rules found. Unless something else opens 8000 and 5173, a client will hang with no error at either end. See LAN_SETUP.md step 2."
+        Write-Warning "No enabled inbound 'ADAS*' firewall rules found. Unless something else opens 8000 and 5173, a client will hang with no error at either end. See docs/operations/LAN_SETUP.md step 2."
     }
 
     $profiles = @(Get-NetConnectionProfile -ErrorAction SilentlyContinue)
@@ -367,7 +368,7 @@ if ($Reseed) {
 }
 
 # ---------------------------------------------------------------------------
-# Spawn, in be_audit/DEMO_TOPOLOGY.md §5's bring-up order: MediaMTX -> backend
+# Spawn, in docs/archive/be_audit/DEMO_TOPOLOGY.md §5's bring-up order: MediaMTX -> backend
 # -> frontend -> AI engine.
 # ---------------------------------------------------------------------------
 
@@ -431,7 +432,7 @@ if ($Backend) {
         # uvicorn directly. --app-dir backend replaces what the CLI normally
         # does for sys.path. The two --ws-ping-* flags pin a keepalive that
         # is otherwise an unstated library default; this is the only launch
-        # path in the repo that can pin it (be_audit/00_FINDINGS.md F6).
+        # path in the repo that can pin it (docs/archive/be_audit/00_FINDINGS.md F6).
         $cmd = "`$env:PYTHONUTF8 = '1'; uv run uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000 --ssl-keyfile `"$script:KeyPath`" --ssl-certfile `"$script:CertPath`" --ws-ping-interval 20 --ws-ping-timeout 20"
     }
     else {
@@ -482,5 +483,5 @@ Write-Step "Requested: $($requested -join ', '). Use scripts\stop-dev.ps1 to tea
 if ($Lan) {
     Write-Step "LAN profile: TLS on, bound to all interfaces. Reachable dashboard origins --"
     Show-LanReachability
-    Write-Step "Whichever origin a client browses MUST also be in CORS_ORIGINS, and the client must trust certs\adas-cert.pem (Trusted Root). See LAN_SETUP.md steps 3c-5 and 7."
+    Write-Step "Whichever origin a client browses MUST also be in CORS_ORIGINS, and the client must trust certs\adas-cert.pem (Trusted Root). See docs/operations/LAN_SETUP.md steps 3c-5 and 7."
 }

@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     Windows demo orchestrator for backup, restore, and the daily restart
-    (be_plan/08_PKG_backup_ops.md, D-011).
+    (docs/archive/be_plan/08_PKG_backup_ops.md, D-011).
 
 .DESCRIPTION
     Explicit and manual, as the deployment note requires — there is no
@@ -23,7 +23,7 @@
     backend/AI-engine child processes are launched with
     -RedirectStandardOutput/-RedirectStandardError instead of the old
     -WindowStyle Minimized console that vanished with nothing recoverable
-    once closed (be_audit/00_FINDINGS.md F22 — this is what blocked the
+    once closed (docs/archive/be_audit/00_FINDINGS.md F22 — this is what blocked the
     2026-08-11 restart drill's model-load-time measurement). A -Action
     Restart run also appends one JSON line to
     var\log\maintenance-runs.jsonl, which GET /api/system/maintenance/status

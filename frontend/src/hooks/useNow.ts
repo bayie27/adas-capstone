@@ -32,7 +32,7 @@ export function useNow(active: boolean, intervalMs = 1000) {
     [active, intervalMs],
   )
 
-  // Phase 20: corrected by the last known server-clock offset (0 until a
+  // Corrected by the last known server-clock offset (0 until a
   // CONNECTION_READY has landed), so every consumer of this hook — the
   // dismiss cooldown, the snooze countdown, the stale-detection age line —
   // agrees with the backend's clock, not just the browser's own.

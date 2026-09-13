@@ -19,7 +19,7 @@ Everything live is in Google Drive. **Nothing in this repo is authoritative for 
 
 First perform the local claim-bearing triage in Step 2. If no relevant surface changed, report that result without fetching Drive artifacts. Otherwise read both during analysis. Findings always go to `paper_sync/findings/`. Codex may apply approved updates to the relevant Doc and Sheet in a separate gated phase; Claude remains read-only and leaves the Drive write to a human.
 
-`paper-audit.md` and `ADAS_Paper_Revisions_Tracker.pdf` in this repo are **superseded snapshots**. Useful history, never current state. Do not read them to decide what the paper says today.
+`docs/archive/paper-audit.md` and `ADAS_Paper_Revisions_Tracker.pdf` in this repo are **superseded snapshots**. Useful history, never current state. Do not read them to decide what the paper says today.
 
 ---
 

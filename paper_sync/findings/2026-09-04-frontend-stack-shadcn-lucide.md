@@ -34,7 +34,7 @@ Tailwind CSS, hand-rolled house-style components, and Remix Icon were employed t
 
 - `frontend/package.json` has no `shadcn`, no `@radix-ui/*`, no `class-variance-authority`; `frontend/components.json` (the shadcn CLI's own config file) does not exist.
 - `frontend/src/components/ui/SidePanel.tsx:16-20` — explicit code comment: "Deliberately not shadcn/Radix (DT-6): this frontend has no components.json, no Radix and no CVA, so adding one would import a whole second component convention alongside the existing one for a single drawer."
-- Locked decision `DT-6` — `dev_plan/00_OVERVIEW.md:54` ("The drawer is a house-style `ui/SidePanel.tsx`, **not** shadcn — The frontend has no Radix/CVA/`components.json`") and `dev_plan/03_PKG_dev_panel.md:56`.
+- Locked decision `DT-6` — `docs/archive/dev_plan/00_OVERVIEW.md:54` ("The drawer is a house-style `ui/SidePanel.tsx`, **not** shadcn — The frontend has no Radix/CVA/`components.json`") and `docs/archive/dev_plan/03_PKG_dev_panel.md:56`.
 - `lucide-react` is a `package.json` dependency but is imported by zero files (`grep -rl 'from "lucide-react"' frontend/src` → 0 matches, checked 2026-09-04).
 - `@remixicon/react` is imported by 46 files across `frontend/src` (checked 2026-09-04), including every icon used in the accident-modal surfaces (`RiCloseLine`, `RiZoomInLine`, `RiAddLine`, `RiSubtractLine`, etc.).
 - Single site: `shadcn`, `Lucide`, and `Radix` each appear exactly once in the live paper Doc — this sentence is the only place any of the three is mentioned, so no propagation elsewhere is required.

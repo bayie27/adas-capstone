@@ -10,7 +10,6 @@ whose live systemd behavior still needs Linux verification.
 
 - `adas-maintenance.service` — restricted oneshot unit that runs
   `backend/scripts/daily_restart.sh`. Its `ExecStart` can invoke **only**
-  that one approved script — this is the "restricted systemd service ...
   that can invoke only the approved ADAS maintenance workflow" the package
   doc calls for, not a general-purpose shell.
 - `adas-maintenance.timer` — fires the unit above daily at a **local**-time

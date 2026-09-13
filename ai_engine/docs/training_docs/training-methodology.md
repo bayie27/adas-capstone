@@ -92,8 +92,8 @@ were intended to reduce false alarms on vehicle appearance, not to increase acci
 Source-specific labels were mapped into the two training classes. Accident-related labels became
 `accident`; ordinary vehicle labels became `vehicle`; negation labels such as `no-accident` were
 excluded rather than matched by a naive substring rule. The shared helpers are implemented in
-[`dataset/collapse_classes.py`](../dataset/collapse_classes.py) and
-[`dataset/pipeline.py`](../dataset/pipeline.py).
+`dataset/collapse_classes.py` (source research repository: `../dataset/collapse_classes.py`; not included here) and
+`dataset/pipeline.py` (source research repository: `../dataset/pipeline.py`; not included here).
 
 ### 4.2 Geometry filtering
 
@@ -115,7 +115,7 @@ the BMD-45 step, so BMD-45 contributed zero images. The v2 pipeline added a rese
 v3 pipeline added a separate Philippine share that displaced part of the same assignable vehicle
 budget rather than silently increasing the ratio.
 
-The tested arithmetic is in [`dataset/pipeline.py`](../dataset/pipeline.py):
+The tested arithmetic is in `dataset/pipeline.py` (source research repository: `../dataset/pipeline.py`; not included here):
 
 - `reserve_quota(...)` splits the assignable vehicle allowance between Nyanko and BMD-45.
 - `reserve_quota_ph(...)` splits it between Nyanko, the Philippine sources, and BMD-45.
@@ -125,7 +125,7 @@ The tested arithmetic is in [`dataset/pipeline.py`](../dataset/pipeline.py):
 ### 4.4 Grayscale preprocessing
 
 Every training image was converted to grayscale and replicated back to three channels for the
-COCO-pretrained network. Inference applies the same conversion in [`detect/run.py`](../detect/run.py).
+COCO-pretrained network. Inference applies the same conversion in `detect/run.py` (source research repository: `../detect/run.py`; not included here).
 
 This was a domain-control decision, not a visual-style choice. Nyanko is essentially grayscale
 while BMD-45 is mostly color. Leaving the sources unchanged would make color a cheap class shortcut:
@@ -205,9 +205,9 @@ checkpoint sweep to select `epoch50.pt` rather than trusting `best.pt`.
 ## 7. Provenance and limitations to carry into the paper
 
 - The source and licensing details should be copied from the audited records in
-  [`docs/accident-data-survey.md`](../docs/accident-data-survey.md),
-  [`docs/philippine-vehicle-gap.md`](../docs/philippine-vehicle-gap.md), and
-  [`dataset/audit_report.md`](../dataset/audit_report.md). If a source's exact license is not in
+  `docs/accident-data-survey.md` (source research repository: `../docs/accident-data-survey.md`; not included here),
+  `docs/philippine-vehicle-gap.md` (source research repository: `../docs/philippine-vehicle-gap.md`; not included here), and
+  `dataset/audit_report.md` (source research repository: `../dataset/audit_report.md`; not included here). If a source's exact license is not in
   those records, mark it as unrecovered rather than assume it.
 - Nyanko was found to contain AI-generated accident images identifiable by
   `Gemini_Generated_Image_*` filenames. This is a limitation of the accident source and should be

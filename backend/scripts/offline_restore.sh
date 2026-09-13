@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Linux production-target offline restore + automatic rollback
-# (be_plan/08_PKG_backup_ops.md Step 6, D-011). Run manually by an
+# (docs/archive/be_plan/08_PKG_backup_ops.md Step 6, D-011). Run manually by an
 # administrator (or via a restricted `adas-restore@.service` instance unit,
 # not shipped here) — never on a timer.
 #

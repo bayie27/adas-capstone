@@ -2,7 +2,7 @@
 
 Session of 2026-09-08 evening into 2026-09-09, run by Claude (Claude Code) on the live stack,
 in parallel with the ongoing Codex investigation recorded in
-[ai_engine/docs/AI_ENGINE_PIPELINE_OPTIMIZATION_PLAN_REVIEW.md](ai_engine/docs/AI_ENGINE_PIPELINE_OPTIMIZATION_PLAN_REVIEW.md).
+[ai_engine/docs/AI_ENGINE_PIPELINE_OPTIMIZATION_PLAN_REVIEW.md](AI_ENGINE_PIPELINE_OPTIMIZATION_PLAN_REVIEW.md).
 
 This is a separate document by request. An earlier draft of the first half was briefly appended to
 the review doc and has since been removed from it, so that Codex's document stays Codex's and this
@@ -132,11 +132,11 @@ The live engine logged `Heartbeat request failed: Connection aborted` continuous
 successful cycle observed.
 
 Root cause: the backend was running under `uvicorn --ssl-keyfile/--ssl-certfile` (the
-`LAN_SETUP.md` TLS setup), while `ai_engine/config.py` defaults to
+`docs/operations/LAN_SETUP.md` TLS setup), while `ai_engine/config.py` defaults to
 `BACKEND_BASE_URL = os.environ.get("AI_BACKEND_BASE_URL", "http://127.0.0.1:8000")`. Plaintext HTTP
 into a TLS socket is reset by the server, which is exactly the logged symptom.
 
-This is the gotcha `LAN_SETUP.md` already documents, in its own troubleshooting table ("AI engine
+This is the gotcha `docs/operations/LAN_SETUP.md` already documents, in its own troubleshooting table ("AI engine
 logs TLS/certificate verification errors on every heartbeat → `REQUESTS_CA_BUNDLE` unset", step
 6.4), and `scripts/start-dev.ps1` sets both variables when it launches the engine in LAN mode. The
 engine in this session had been started without them.

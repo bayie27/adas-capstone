@@ -748,7 +748,7 @@ class TestArtifactExpiry:
     def test_cleanup_backs_off_when_artifact_is_open_for_reading(
         self, client: TestClient, session: Session, monkeypatch: pytest.MonkeyPatch
     ):
-        """Edge case 1.14 (be_audit/A5_edge_cases.md) — cleanup racing a
+        """Edge case 1.14 (docs/archive/be_audit/A5_edge_cases.md) — cleanup racing a
         streaming download. On Windows, unlinking a file that another
         handle still has open for reading (exactly what `FileResponse` does
         while it streams a download) raises `PermissionError`, not a

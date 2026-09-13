@@ -8,9 +8,7 @@ import { useState } from "react"
  */
 export function usePagination(totalFiltered: number, initialPageSize: number) {
   const [rawPage, setRawPage] = useState(1)
-  // Page size is state, not a constant, so `PaginationFooter`'s items-per-page
-  // selector has something to drive. It was built in Phase 4 and passed by no
-  // page until now.
+  // PaginationFooter controls the page size independently of the current page.
   const [pageSize, setRawPageSize] = useState(initialPageSize)
 
   const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize))

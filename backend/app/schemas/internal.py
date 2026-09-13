@@ -31,7 +31,7 @@ class HeartbeatCameraReport(SQLModel):
 
 
 class HeartbeatRequest(SQLModel):
-    # F9 (be_audit/A3_ai_seam.md) — bounded to match the care already taken
+    # F9 (docs/archive/be_audit/A3_ai_seam.md) — bounded to match the care already taken
     # one class above: engine_id was accepted with no length limit and no
     # null-byte check even though nothing else on this payload gets that
     # pass. cameras is bounded generously above the paper's 418-camera

@@ -59,7 +59,7 @@ For local streams during development, from the repo root:
 mediamtx mediamtx.yml
 ```
 
-or the preflighted wrapper `.\scripts\start-sim.ps1`, which checks that `ffmpeg` and `mediamtx` are on PATH and that the five clips it needs are present. Both need those prerequisites — see **Simulate camera streams** in the [root README](../README.md#running-the-system).
+or the preflighted wrapper `.\scripts\start-sim.ps1`, which checks that `ffmpeg` and `mediamtx` are on PATH and that the five clips it needs are present. Both need those prerequisites — see **Simulate camera streams** in the [root README](../docs/operations/README.md#running-the-system).
 
 ### Choosing which build runs
 
@@ -131,6 +131,9 @@ The important structural line is **which modules import `cv2`**. Everything that
 | `backend_client.py` | HTTP transport to the backend, and response classification                | No  |
 | `events.py`         | Event construction: UUIDs, snapshot keys, the v2 payload                  | No  |
 | `config.py`         | Constants, fixed target and health threshold, paths, model resolution     | No  |
+| `frames.py`         | Frame representations and CPU/GPU ownership                               | No  |
+| `gpu_camera.py`     | Optional NVDEC stream reader and reconnect lifecycle                      | No  |
+| `gpu_preprocess.py` | GPU frame conversion and preprocessing                                    | No  |
 | `capacity.py`       | Optional batched-inference diagnostic; prints a rough estimate            | Yes |
 
 `eval/` holds evaluation assets and capacity-diagnostic notes — see
@@ -167,7 +170,7 @@ uv run pytest              # CI tier — no GPU, no clips needed
 uv run pytest -m clips     # needs a GPU and eval/clips populated
 ```
 
-`clips`-marked tests are excluded by default so CI stays fast and GPU-free. They are the ones that re-measure detection quality; everything else is pure logic with fakes standing in for cameras and the model.
+The default suite excludes `slow`, `clips` and `gpu` tests. Clip tests re-measure detection quality; GPU tests need CUDA. Some other tests require optional AI packages and skip when they are unavailable.
 
 `-m clips` follows `AI_MODEL_PATH`, so it tests the build you actually run. The one exception is the parity gate, pinned to the checkpoint on purpose: it proves that _porting the code_ changed no behaviour, and swapping the build would stop a failure from distinguishing a broken port from shifted numerics.
 
@@ -175,10 +178,10 @@ uv run pytest -m clips     # needs a GPU and eval/clips populated
 
 ## Where to look next
 
-| Question                                  | Read                                            |
-| ----------------------------------------- | ----------------------------------------------- |
-| Why is it shaped this way?                | `docs/2026-08-10-detection-core-port-design.md` |
-| What measurement closed this constant?    | `adas_transfer/SPEC.md`                         |
-| How do I re-measure detection quality?    | `eval/README.md`                                |
-| How many cameras will this machine carry? | `eval/README.md` → "Calibrating a new machine"  |
-| What are the licensing obligations?       | `adas_transfer/NOTICE.md`                       |
+| Question                               | Read                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------- |
+| Why is it shaped this way?             | `docs/2026-08-10-detection-core-port-design.md`                                 |
+| What measurement closed this constant? | `adas_transfer/SPEC.md`                                                         |
+| How do I re-measure detection quality? | `eval/README.md`                                                                |
+| How do I estimate inference capacity?  | `capacity.py` — optional inference-only diagnostic; never configures production |
+| What are the licensing obligations?    | `adas_transfer/NOTICE.md`                                                       |

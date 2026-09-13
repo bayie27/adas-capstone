@@ -370,7 +370,7 @@ def update_camera(
     recompute_desired_state(db_camera, has_open_incident=has_open_incident, now=now)
     ai_relevant_changed = bump_if_ai_relevant_changed(db_camera, before)
 
-    # Edge case 1.7 (be_audit/A5_edge_cases.md): recompute_desired_state()'s
+    # Edge case 1.7 (docs/archive/be_audit/A5_edge_cases.md): recompute_desired_state()'s
     # result can coincidentally equal *this session's own original read* of
     # these columns (e.g. a fresh camera's Inactive default) even though a
     # concurrent AI alert has, in between, committed a different value to

@@ -1,4 +1,4 @@
-"""Development-only routes (dev_plan/02_PKG_dev_api.md).
+"""Development-only routes (docs/archive/dev_plan/02_PKG_dev_api.md).
 
 This router is registered by create_app() **only** when the resolved
 DEV_TOOLS_ENABLED is true. When it is off the routes do not exist at all —

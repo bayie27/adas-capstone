@@ -1,7 +1,5 @@
 # ADAS Backend
 
-> Last updated: August 10, 2026
-
 FastAPI backend for the ADAS real-time road accident detection system. Handles authentication, the HITL alert workflow, camera management, user management, system health telemetry, reports/exports, backup/restore, the Help Center, and WebSocket broadcasting to the React dashboard.
 
 For the full system overview, see the [root README](../README.md).
@@ -32,7 +30,7 @@ For the full system overview, see the [root README](../README.md).
 uv sync
 ```
 
-**Configure environment** — copy `.env.example` to `.env` in the repo root and fill in all values. The backend reads from `backend/../.env` (i.e., the repo root `.env`). See the root README for the full variable list.
+**Configure environment** — copy `.env.example` to `.env` in the repo root and fill in all values. The backend reads from `backend/../.env` (i.e., the repo root `.env`). See [environment setup](../docs/operations/README.md#environment-setup) and `.env.example` for configuration.
 
 **Initialize the database:**
 
@@ -129,7 +127,7 @@ backend/
 
 ### Internal — AI Engine Bridge (`/api/internal`)
 
-Protected by `x-api-key` (the `INTERNAL_API_KEY` from `.env`, compared with `secrets.compare_digest`), never by the session cookie. The v1 poll/PATCH routes were removed by the A3 audit pack (`be_audit/A3_ai_seam.md`, F3) — no caller since PR #67; `be_plan/01_CONTRACTS.md` §6 has the full v2 payload shapes.
+Protected by `x-api-key` (the `INTERNAL_API_KEY` from `.env`, compared with `secrets.compare_digest`), never by the session cookie. The v1 poll/PATCH routes were removed by the A3 audit pack (`docs/archive/be_audit/A3_ai_seam.md`, F3) — no caller since PR #67; `docs/archive/be_plan/01_CONTRACTS.md` §6 has the full v2 payload shapes.
 
 | Method | Path                      | Description                                                                                              |
 | ------ | ------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -219,7 +217,7 @@ Accidents = `Ongoing` + `Cleared`; false positives = `Dismissed`; `Unverified` i
 | Backup/restore | `GET`/`POST /api/system/backups`, `POST /api/system/restores`, `GET /api/system/restores/latest`, `GET /api/system/maintenance/status` | A                                                                  |
 | Probes         | `GET /healthz/live`, `GET /healthz/ready`                                                                                              | —                                                                  |
 
-Full request/response schemas for all of the above are in `app/schemas/` and documented interactively at `/docs`; `be_plan/01_CONTRACTS.md` is the frozen source of truth this backend was built against.
+Full request/response schemas for all of the above are in `app/schemas/` and documented interactively at `/docs`; the [current architecture guide](../docs/architecture/README.md) explains the boundaries. Archived contracts preserve historical rationale.
 
 ### WebSocket
 
@@ -276,7 +274,7 @@ Enforced at the API layer (Pydantic validators), not just the frontend:
 
 ## Security
 
-- **Session cookie, not a bearer token.** `HttpOnly`, `Secure` in production, `SameSite=Strict`. Backed by a revocable `auth_session` database row — a correctly signed JWT with a missing/expired/revoked session row is rejected. See `be_decisions_review.md` D-006.
+- **Session cookie, not a bearer token.** `HttpOnly`, `Secure` in production, `SameSite=Strict`. Backed by a revocable `auth_session` database row — a correctly signed JWT with a missing/expired/revoked session row is rejected. See `docs/archive/be_decisions_review.md` D-006.
 - **Argon2id** — salted password hashing via passlib. Plain-text passwords are never stored, logged, or audited.
 - **`INTERNAL_API_KEY`** — static key for AI engine routes, compared with `secrets.compare_digest`. A missing header is `401`, not `422`.
 - **RBAC** — injected via FastAPI dependency (`get_current_user`, admin-only routes add a role check). A `403` is returned before any business logic executes, and the denial is audited.
@@ -288,6 +286,9 @@ Enforced at the API layer (Pydantic validators), not just the frontend:
 ---
 
 ## Testing
+
+Fixtures, seed helpers and the perf suite are documented in
+[`tests/README.md`](tests/README.md).
 
 ```bash
 # From repo root
@@ -305,9 +306,9 @@ uv run pytest -m slow backend/tests/perf/ -s
 
 The default suite uses an in-memory SQLite database via the `session` fixture in `conftest.py` — fresh per test, `SQLModel.metadata.create_all` on setup (the one place that's still appropriate; see `CONTRIBUTING.md`), `drop_all` on teardown. The FastAPI dependency override replaces `get_session`/`get_engine` so routes hit the in-memory DB.
 
-`backend/tests/perf/` is different by design: it seeds a real 100,000-row file-backed database once per session and measures actual latency against it (NFR-04/06/08, D-008) — see `be_plan/EVIDENCE.md` for the numbers this produced.
+`backend/tests/perf/` is different by design: it seeds a real 100,000-row file-backed database once per session and measures actual latency against it (NFR-04/06/08, D-008) — see `docs/archive/be_plan/EVIDENCE.md` for the numbers this produced.
 
-**Current coverage** (representative, not exhaustive — every route/service module has a corresponding test file):
+**Representative tests:**
 
 | File                                                       | What it tests                                                                                             |
 | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -316,7 +317,7 @@ The default suite uses an in-memory SQLite database via the `session` fixture in
 | `test_alerts.py`                                           | Filtering, pagination, export, every HITL transition and its rejection/race cases                         |
 | `test_cameras.py`                                          | Camera CRUD, KPI/breakdown invariants, desired-state effects                                              |
 | `test_camera_reconciliation.py`                            | Desired-state derivation from incidents/cooldowns, restart durability                                     |
-| `test_internal.py`                                         | AI engine webhook (v1/v2), idempotent ingestion, heartbeat contract                                       |
+| `test_internal.py`                                         | AI engine webhook contract and legacy-payload rejection, idempotent ingestion, heartbeat contract         |
 | `test_snoozes.py`                                          | Snooze scheduling, expiry, re-snooze, restart recovery                                                    |
 | `test_audit.py`                                            | Append-only enforcement, transaction coupling, redaction, RBAC, filtering, export                         |
 | `test_analytics.py`                                        | Dashboard KPIs, AI performance, precision calibration, export parity                                      |
@@ -330,7 +331,3 @@ The default suite uses an in-memory SQLite database via the `session` fixture in
 | `perf/`                                                    | NFR-04/06/08 and D-008, measured against a real 100,000-row database                                      |
 
 ---
-
-## Recently completed (previously listed here as planned)
-
-`routes/analytics.py`, `routes/system.py` + `routes/system_health.py`, and `core/monitor.py` are all fully implemented with full pytest coverage — this file used to list them as "(planned)", which had gone stale by several months. So is `app/maintenance/` (backup/restore/restart, not present at all when this file last described the layout) and the Help Center (`routes/help.py`).

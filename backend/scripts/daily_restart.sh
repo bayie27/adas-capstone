@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Linux production-target daily restart shim (be_plan/08_PKG_backup_ops.md
+# Linux production-target daily restart shim (docs/archive/be_plan/08_PKG_backup_ops.md
 # Step 7, D-011). Invoked by adas-maintenance.timer -> adas-maintenance.service
 # (see deploy/systemd/), never run directly by an operator on the demo laptop.
 #
@@ -13,7 +13,7 @@
 # Sequence, matching D-011 Step 7 exactly:
 #   1. online backup (services stay up) -- `backup --origin scheduled`
 #      itself now skips writing a redundant backup when the in-app
-#      APScheduler cron job (app.main, be_plan/18_PKG_scheduled_
+#      APScheduler cron job (app.main, docs/archive/be_plan/18_PKG_scheduled_
 #      maintenance.md Step 1) already covered today's obligation, so this
 #      script needs no dedup logic of its own.
 #   2. systemd restarts the backend + AI engine services natively

@@ -1,6 +1,6 @@
 """Seed writers and orchestration.
 
-Moved here from `backend/scripts/seed_dev_data.py` (dev_plan/01_PKG_seed_core.md
+Moved here from `backend/scripts/seed_dev_data.py` (docs/archive/dev_plan/01_PKG_seed_core.md
 Step 1). The CLI entrypoints in `backend/scripts/` are now thin wrappers over
 this module, and Package B calls the same functions from a live request.
 
@@ -521,7 +521,7 @@ def seed_profile(
     check_schema_revision() reopens `target_settings.DATABASE_URL` itself
     through backend/alembic/env.py and ignores the engine argument
     entirely, so passing an isolated engine without its Settings migrates
-    the wrong database — the trap recorded as F18 in be_audit/00_FINDINGS.md.
+    the wrong database — the trap recorded as F18 in docs/archive/be_audit/00_FINDINGS.md.
     Defaults to the process-global, which is what the CLI wants.
 
     `now` is injectable so tests get determinism instead of whatever

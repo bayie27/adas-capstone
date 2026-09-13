@@ -575,7 +575,7 @@ class TestRowLimitBoundary:
 
 
 class TestCsvStreamClientDisconnect:
-    """Edge case 6.13 (be_audit/00_FINDINGS.md F28) — a client
+    """Edge case 6.13 (docs/archive/be_audit/00_FINDINGS.md F28) — a client
     disconnecting mid-CSV-stream must not 500 the (already-gone) client
     and must not leak the request's DB session. The shared-session
     `client` fixture used everywhere else in this file can't exercise

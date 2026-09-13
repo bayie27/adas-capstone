@@ -1,6 +1,6 @@
 # Contributing
 
-This documents development setup, verification, and the contribution workflow. Testing scope and completion rules live in [CLAUDE.md](CLAUDE.md#verification-policy). **To get the system actually running, follow the [Quickstart](README.md#quickstart--clone-to-first-detection) in the README** — it is the full ordered path from clone to first detection, including the database seed and the camera streams, which the three commands below do not cover.
+This documents development setup, verification, and the contribution workflow. Testing scope and completion rules live in [CLAUDE.md](CLAUDE.md#verification-policy). **To get the system actually running, follow the [Quickstart](docs/operations/README.md#quickstart--clone-to-first-detection) in the README** — it is the full ordered path from clone to first detection, including the database seed and the camera streams, which the three commands below do not cover.
 
 ## First-time setup (development tooling)
 
@@ -165,7 +165,7 @@ It builds two disposable databases (one via your migration, one via `create_all(
 
 ## Performance evidence suite
 
-`backend/tests/perf/` measures NFR-04 (alert delivery), NFR-06 (export speed), NFR-08 (100,000-row query performance), and D-008 (slow-client isolation) against a real file-backed 100,000-row database — see `be_plan/EVIDENCE.md` for the current recorded numbers and machine spec. It's marked `@pytest.mark.slow` and excluded from the default `pytest` run (`pyproject.toml`'s `addopts = "-q -m \"not slow\""`), since seeding alone takes ~30s.
+`backend/tests/perf/` measures NFR-04 (alert delivery), NFR-06 (export speed), NFR-08 (100,000-row query performance), and D-008 (slow-client isolation) against a real file-backed 100,000-row database — see `docs/archive/be_plan/EVIDENCE.md` for the current recorded numbers and machine spec. It's marked `@pytest.mark.slow` and excluded from the default `pytest` run (`pyproject.toml`'s `addopts = "-q -m \"not slow\""`), since seeding alone takes ~30s.
 
 ```bash
 uv run pytest -m slow backend/tests/perf/ -s

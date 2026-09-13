@@ -52,7 +52,7 @@ jobs:
   # workflow_dispatch only — seeds the real 100,000-row NFR-08 dataset and
   # times query/export/alert-delivery performance against it. Too slow for
   # every PR. Uploads the numbers as an artifact rather than gating on them
-  # (be_plan/EVIDENCE.md already documents one known-slow case — 10k-row
+  # (docs/archive/be_plan/EVIDENCE.md already documents one known-slow case — 10k-row
   # PDF export — as a recorded finding, not a pass/fail).
   perf:
     if: github.event_name == 'workflow_dispatch'

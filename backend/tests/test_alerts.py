@@ -324,7 +324,7 @@ class TestGetAlerts:
     def test_pagination_boundary_rejections(
         self, client: TestClient, session: Session, query: str
     ):
-        """Edge case 2.1/2.2 (be_audit/00_FINDINGS.md F29)."""
+        """Edge case 2.1/2.2 (docs/archive/be_audit/00_FINDINGS.md F29)."""
         _, headers = operator_with_headers(client, session)
         resp = client.get(f"/api/alerts/?{query}", headers=headers)
         assert resp.status_code == 422
@@ -907,7 +907,7 @@ class TestAlertTransitions:
 
 
 class TestTransitionSideEffects:
-    """Edge case 7 (be_audit/00_FINDINGS.md F30) — three side-effects of
+    """Edge case 7 (docs/archive/be_audit/00_FINDINGS.md F30) — three side-effects of
     the four legal transitions, verified directly rather than inferred
     from a plausible-sounding assertion elsewhere: the audit_log row's
     `action` (previously only checked via the WS broadcast payload, and
@@ -1093,7 +1093,7 @@ class TestStateMachineExhaustiveness:
                 lowered = method.lower()
                 if lowered not in {"get", "head", "options"}:
                     # Edge case 7 (terminal-no-reopen-no-edit-delete,
-                    # be_audit/00_FINDINGS.md) — a future PUT/PATCH/DELETE
+                    # docs/archive/be_audit/00_FINDINGS.md) — a future PUT/PATCH/DELETE
                     # edit-or-delete route on an incident must fail this
                     # assertion, not just an unexpected POST subroute; the
                     # original version of this test only inspected POST

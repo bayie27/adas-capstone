@@ -5,10 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import App from "./App"
 import { useAuthStore } from "@/store/useAuthStore"
 
-vi.mock("@/hooks/useDeliveryBacklog", () => ({
-  useDeliveryBacklog: () => null,
-}))
-
 vi.mock("@/components/RealtimeAlertsBridge", () => ({
   RealtimeAlertsBridge: () => null,
 }))
@@ -19,10 +15,6 @@ vi.mock("@/components/GlobalAlerts", () => ({
 
 vi.mock("@/components/MaintenanceNotice", () => ({
   MaintenanceNotice: () => null,
-}))
-
-vi.mock("@/components/DeliveryBacklogNotice", () => ({
-  DeliveryBacklogNotice: () => null,
 }))
 
 vi.mock("@/components/dev/DevPanelTrigger", () => ({

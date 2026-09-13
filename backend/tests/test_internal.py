@@ -2,7 +2,7 @@
 Tests for /api/internal.
 Covers AI-engine v2 idempotent alert ingestion, the v2 heartbeat, and
 internal auth. The v1 poll/PATCH routes were removed by the A3 audit pack
-(be_audit/A3_ai_seam.md, F3) — no caller since PR #67.
+(docs/archive/be_audit/A3_ai_seam.md, F3) — no caller since PR #67.
 """
 
 import json
@@ -519,7 +519,7 @@ class TestHeartbeat:
         v2 has no such per-report rejection — a disabled camera's observed
         state is still recorded, and the reconciliation snapshot tells the
         engine to stop it (is_enabled: false), matching P10's documented
-        divergence from the legacy poll (be_plan/15_PKG_ai_engine_integration.md
+        divergence from the legacy poll (docs/archive/be_plan/15_PKG_ai_engine_integration.md
         Step 4)."""
         camera = make_camera(
             session,
@@ -670,7 +670,7 @@ class TestHeartbeat:
         heartbeating within the staleness window must be logged, not
         rejected: rejecting could take down a legitimate failover, and
         arbitrating a lease is deliberately out of scope for the backend
-        (be_audit/A3_ai_seam.md F9)."""
+        (docs/archive/be_audit/A3_ai_seam.md F9)."""
         with caplog.at_level(logging.WARNING, logger="uvicorn.error"):
             first = client.post(
                 "/api/internal/heartbeat",
@@ -732,7 +732,7 @@ class TestHeartbeat:
 
 
 class TestConcurrentDisableRace:
-    """Edge case 1.7 (be_audit/A5_edge_cases.md) — an AI event arriving
+    """Edge case 1.7 (docs/archive/be_audit/A5_edge_cases.md) — an AI event arriving
     while an operator disables that camera. Needs genuinely parallel
     requests, which the shared-session `client` fixture used everywhere
     else in this file cannot provide (every request would serialize
@@ -912,7 +912,7 @@ class TestConcurrentDisableRace:
                         )
                         assert confirm_resp.status_code == 200
 
-            # Documented per be_audit/A5_edge_cases.md: both outcomes are
+            # Documented per docs/archive/be_audit/A5_edge_cases.md: both outcomes are
             # acceptable, and this assertion is the record of which one(s)
             # this suite actually observes. If this ever starts failing
             # because a third status pair shows up, that is new information
@@ -928,12 +928,12 @@ class TestConcurrentDisableRace:
 
 
 class TestConcurrentHeartbeatRace:
-    """Edge case 1.18 (be_audit/00_FINDINGS.md F26) — two engine instances
+    """Edge case 1.18 (docs/archive/be_audit/00_FINDINGS.md F26) — two engine instances
     heartbeating the same camera concurrently. The same real-file-DB,
     real-thread harness as TestConcurrentDisableRace, because F23's bug
     hunt for edge case 1.7 showed sequential/deterministic simulation
     misses real SQLAlchemy dirty-tracking races — deterministic
-    reproduction (be_audit/00_FINDINGS.md F26 writeup) found the identical
+    reproduction (docs/archive/be_audit/00_FINDINGS.md F26 writeup) found the identical
     mechanism here before it was fixed in apply_observed(): whichever
     heartbeat commits last must leave the row matching its own report in
     full, never a mixed-provenance row with some fields surviving from the
@@ -1047,7 +1047,7 @@ class TestConcurrentHeartbeatRace:
 
 
 class TestConcurrentDuplicateSourceEventId:
-    """Edge case 1.6 (be_audit/00_FINDINGS.md F26) — the same
+    """Edge case 1.6 (docs/archive/be_audit/00_FINDINGS.md F26) — the same
     source_event_id posted twice genuinely concurrently must hit the
     ux_detection_source_event unique-index IntegrityError backstop
     (internal.py's except IntegrityError branch), not just the pre-commit

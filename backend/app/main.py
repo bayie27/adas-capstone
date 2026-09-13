@@ -88,7 +88,7 @@ async def lifespan(app: FastAPI):
     app_settings: Settings = app.state.settings
     engine = app.state.engine
 
-    # Edge case 6.9 / be_audit/00_FINDINGS.md F25 — the same "fail at boot,
+    # Edge case 6.9 / docs/archive/be_audit/00_FINDINGS.md F25 — the same "fail at boot,
     # not on first use" philosophy as F2's RTSP_URL_TEMPLATE validation.
     # The backend only ever *reads* from SNAPSHOT_ROOT (app/services/
     # snapshots.py) — the AI engine is the writer — but ensuring the
@@ -110,7 +110,6 @@ async def lifespan(app: FastAPI):
     app.state.db_initialized = True
 
     # On every server start, reset all enabled cameras to Disconnected/Inactive.
-    # This is a single bulk UPDATE — not taxing even for 400 cameras.
     # The AI engine is responsible for updating statuses as it connects to each feed.
     logger.info("Resetting camera statuses to Disconnected/Inactive...")
     with Session(engine) as session:

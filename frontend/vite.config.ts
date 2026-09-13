@@ -13,7 +13,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Only active when ADAS_TLS_CERT_DIR is set (LAN demo profile, be_audit/A1_lan_tls_drill.md).
+  // Only active when ADAS_TLS_CERT_DIR is set (LAN demo profile, docs/archive/be_audit/A1_lan_tls_drill.md).
   // Unset in plain `pnpm dev`, `pnpm build`, and the Playwright webServer config, so those
   // paths are untouched.
   server: process.env.ADAS_TLS_CERT_DIR

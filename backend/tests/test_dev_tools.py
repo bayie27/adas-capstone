@@ -1,4 +1,4 @@
-"""dev_plan/02_PKG_dev_api.md Verification — the /api/dev/* routes.
+"""docs/archive/dev_plan/02_PKG_dev_api.md Verification — the /api/dev/* routes.
 
 These need a real file-based database with a real schema: the reseed runs
 `alembic upgrade head` through init_db(), and the wipe drops and restores
