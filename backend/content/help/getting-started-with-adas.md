@@ -34,7 +34,9 @@ alerts for the same event while someone is already looking at it.
 Your account type is assigned when it's created and shown in the sidebar under your
 name. If something in this Help Center is missing from your view, it's most likely
 restricted to Administrators. See [Who Can See the Audit
-Trail?](faq-who-can-see-the-audit-trail) for an example.
+Trail?](faq-who-can-see-the-audit-trail) for an example, or [Operator vs.
+Administrator: What Each Role Can Do](operator-vs-administrator-roles) for the full
+breakdown.
 
 ## Where things live
 
@@ -63,7 +65,9 @@ options are.
 
 ## Before your first shift
 
-A few things worth doing before you're relying on this system for real:
+Follow [Your First 15 Minutes: An Onboarding Checklist](your-first-15-minutes-checklist)
+for a short, in-order walkthrough. In brief, a few things worth doing before you're
+relying on this system for real:
 
 1. Open your **Profile** page and set an alarm sound and volume you'll actually notice.
    See [Choosing Your Alarm Sound and Volume](choosing-your-alarm-sound-and-volume).
