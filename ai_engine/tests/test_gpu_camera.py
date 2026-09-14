@@ -296,7 +296,9 @@ def test_observed_state_matches_the_software_reader_contract():
     }
 
 
-def test_low_inference_rate_reports_the_same_error_code_as_the_software_reader():
+def test_low_inference_rate_reports_the_same_error_code_as_the_software_reader(
+    monkeypatch,
+):
     stream = _make_stream()
     stream.connection_status = "Connected"
     stream.ai_status = "Active"
@@ -304,8 +306,14 @@ def test_low_inference_rate_reports_the_same_error_code_as_the_software_reader()
     stream.start_inference_measurement(now=100.0)
     stream.record_inference(now=100.0)
 
-    fps = stream.current_inference_fps(now=105.0)
-    assert fps == 0.2
+    monkeypatch.setattr(gpu_camera.time, "monotonic", lambda: 105.0)
+
+    report = stream.observed_state()
+
+    assert report["measured_fps"] == 0.2
+    assert report["error_code"] == "INFERENCE_FPS_BELOW_MIN"
+    assert "0.2 FPS" in report["error_message"]
+    assert "5 FPS" in report["error_message"]
 
 
 def test_gpu_reader_treats_five_fps_as_healthy(monkeypatch):
