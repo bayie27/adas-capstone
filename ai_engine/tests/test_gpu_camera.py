@@ -308,6 +308,22 @@ def test_low_inference_rate_reports_the_same_error_code_as_the_software_reader()
     assert fps == 0.2
 
 
+def test_gpu_reader_treats_five_fps_as_healthy(monkeypatch):
+    stream = _make_stream()
+    stream.connection_status = "Connected"
+    stream.ai_status = "Active"
+    stream.start_inference_measurement(now=100.0)
+    for index in range(25):
+        stream.record_inference(now=100.0 + index / 5)
+    monkeypatch.setattr(gpu_camera.time, "monotonic", lambda: 105.0)
+
+    report = stream.observed_state()
+
+    assert report["measured_fps"] == 5.0
+    assert report["error_code"] is None
+    assert report["error_message"] is None
+
+
 def test_ffmpeg_remux_command_forces_tcp_transport():
     """Matches camera.py's own rationale (module docstring, lines 12-19):
     UDP drops packets and corrupts the H.264 reference chain on a busy

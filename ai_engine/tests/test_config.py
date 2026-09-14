@@ -23,7 +23,7 @@ def test_accumulator_parameters_match_the_swept_configuration():
 
 
 def test_frame_rate_band_matches_the_paper():
-    assert config.FPS_BAND_MIN == 10.0
+    assert config.FPS_BAND_MIN == 5.0
     assert config.FPS_BAND_MAX == 15.0
 
 

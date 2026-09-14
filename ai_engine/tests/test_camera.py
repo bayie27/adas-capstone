@@ -271,7 +271,24 @@ def test_low_inference_rate_uses_existing_heartbeat_error_fields(
     assert report["measured_fps"] == 0.2
     assert report["error_code"] == "INFERENCE_FPS_BELOW_MIN"
     assert "0.2 FPS" in report["error_message"]
-    assert "10 FPS" in report["error_message"]
+    assert "5 FPS" in report["error_message"]
+
+
+def test_five_fps_does_not_report_a_low_inference_rate(
+    stream_without_thread, monkeypatch
+):
+    stream_without_thread.connection_status = "Connected"
+    stream_without_thread.ai_status = "Active"
+    stream_without_thread.start_inference_measurement(now=100.0)
+    for index in range(25):
+        stream_without_thread.record_inference(now=100.0 + index / 5)
+    monkeypatch.setattr(camera.time, "monotonic", lambda: 105.0)
+
+    report = stream_without_thread.observed_state()
+
+    assert report["measured_fps"] == 5.0
+    assert report["error_code"] is None
+    assert report["error_message"] is None
 
 
 def test_specific_processing_error_wins_over_low_fps(
