@@ -1,0 +1,37 @@
+# Remote VMS simulator: run on the Linux laptop that owns MediaMTX and FFmpeg.
+# The ADAS server reads rtsp://<vms-ip>:8554/channel{channel_id}; publishers
+# remain local to this machine through the MediaMTX-provided variables below.
+
+# TCP avoids RTP loss seen when the five replay publishers run concurrently.
+rtspTransports: [tcp]
+rtspAddress: :8554
+
+# The AI engine and its publishers use RTSP only. Keeping the other public
+# listeners off reduces the VMS laptop's LAN exposure.
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+api: no
+metrics: no
+pprof: no
+
+# Full-resolution readers need the measured queue size used by the UAT profile.
+writeQueueSize: 8192
+
+paths:
+  channel1:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel2:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel3:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel4:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel5:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes

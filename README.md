@@ -76,17 +76,18 @@ Use `--extra ai-cpu` instead on a machine without an NVIDIA GPU; it supports int
 
 ## Explore the repository
 
-| Area                                                      | Start here                                |
-| --------------------------------------------------------- | ----------------------------------------- |
-| Setup, camera simulation, troubleshooting and maintenance | [Operations](docs/operations/README.md)   |
-| Two-machine LAN/TLS setup                                 | [LAN guide](docs/operations/LAN_SETUP.md) |
-| Detection, GPU paths and evaluation                       | [AI engine](ai_engine/README.md)          |
-| API, persistence and backend tooling                      | [Backend](backend/README.md)              |
-| Dashboard structure and frontend development              | [Frontend](frontend/README.md)            |
-| Tests and validation references                           | [Validation](docs/validation/README.md)   |
-| Commands, migrations and contribution checks              | [Contributing](CONTRIBUTING.md)           |
-| Historical decisions and implementation evidence          | [Archive](docs/archive/README.md)         |
-| Keeping the defense document aligned                      | [Paper sync](paper_sync/PROCEDURE.md)     |
+| Area                                                      | Start here                                                    |
+| --------------------------------------------------------- | ------------------------------------------------------------- |
+| Setup, camera simulation, troubleshooting and maintenance | [Operations](docs/operations/README.md)                       |
+| Two-machine LAN/TLS setup                                 | [LAN guide](docs/operations/LAN_SETUP.md)                     |
+| Three-device remote VMS simulation                        | [VMS simulator guide](docs/operations/VMS_SIMULATOR_SETUP.md) |
+| Detection, GPU paths and evaluation                       | [AI engine](ai_engine/README.md)                              |
+| API, persistence and backend tooling                      | [Backend](backend/README.md)                                  |
+| Dashboard structure and frontend development              | [Frontend](frontend/README.md)                                |
+| Tests and validation references                           | [Validation](docs/validation/README.md)                       |
+| Commands, migrations and contribution checks              | [Contributing](CONTRIBUTING.md)                               |
+| Historical decisions and implementation evidence          | [Archive](docs/archive/README.md)                             |
+| Keeping the defense document aligned                      | [Paper sync](paper_sync/PROCEDURE.md)                         |
 
 ## Project team
 
