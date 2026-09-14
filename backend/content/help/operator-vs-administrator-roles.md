@@ -13,7 +13,7 @@ is_faq: false
 An Administrator can do everything an Operator can, plus a set of account- and
 system-level tasks that Operators don't need for day-to-day monitoring. There is no
 partial or custom role — every account is exactly one or the other, chosen when it's
-created. See [Creating a User and Assigning a Role](creating-a-user-and-assigning-a-role).
+created.
 
 ## What every account can do
 
@@ -34,16 +34,17 @@ created. See [Creating a User and Assigning a Role](creating-a-user-and-assignin
 
 ## What only an Administrator can do
 
-- Create user accounts and assign roles, or edit an existing account. See [Creating a
-  User and Assigning a Role](creating-a-user-and-assigning-a-role).
-- Reset another user's password. See [Resetting a User's Password](resetting-a-users-password).
+- Create user accounts and assign roles, or edit an existing account.
+- Reset another user's password.
 - Read the audit trail: a record of every recorded action in the system, by whom. See
-  [Reading the Audit Trail](reading-the-audit-trail) and [Who Can See the Audit
-  Trail?](faq-who-can-see-the-audit-trail).
-- Review AI performance metrics: precision, accuracy, and per-camera trends. See
-  [Understanding AI Performance Metrics](understanding-ai-performance-metrics).
-- Back up or restore the system's database. See [Backing Up and Restoring the
-  Database](backing-up-and-restoring-the-database).
+  [Who Can See the Audit Trail?](faq-who-can-see-the-audit-trail).
+- Review AI performance metrics: precision, accuracy, and per-camera trends.
+- Back up or restore the system's database.
+
+Each of these has its own Administrator-only Help Center guide. They're intentionally
+not linked from here: an Operator account can't open them, so a link would just be a
+dead end. Signing in as an Administrator surfaces those guides directly in the Help
+Center's Administration category.
 
 ## Why the split exists
 
@@ -51,12 +52,11 @@ Most of what's Administrator-only is either irreversible (restoring a database),
 identity-sensitive (creating accounts, resetting passwords), or accountability-related
 (the audit trail). Keeping those separate from day-to-day monitoring means an
 Operator's account can't be used, by mistake or otherwise, to quietly change who has
-access to what. See [The Last Admin Guard](the-last-admin-guard) for one specific
-protection built on top of this split: the system refuses to leave itself with zero
-Administrators.
+access to what. The system also refuses to leave itself with zero Administrators — one
+specific protection built on top of this split, covered in the Administrator-only
+guides.
 
 ## Changing someone's role
 
 A role isn't permanent. An Administrator can change any account between Operator and
-Administrator from the Users page at any time — see [Creating a User and Assigning a
-Role](creating-a-user-and-assigning-a-role) for how that takes effect.
+Administrator from the Users page at any time.
