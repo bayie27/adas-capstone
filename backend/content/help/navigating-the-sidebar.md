@@ -34,13 +34,15 @@ breakdown.
 ## Sections only Administrators see
 
 - **AI Performance** — detection-model accuracy, precision, and per-camera performance
-  over time. See [Understanding AI Performance Metrics](understanding-ai-performance-metrics).
-- **Users** — creating accounts and assigning roles. See [Creating a User and Assigning
-  a Role](creating-a-user-and-assigning-a-role).
+  over time.
+- **Users** — creating accounts and assigning roles.
 - **Audit Log** — a record of every recorded action taken in the system, by whom. See
-  [Reading the Audit Trail](reading-the-audit-trail).
-- **Maintenance** — backing up and restoring the system's database. See [Backing Up and
-  Restoring the Database](backing-up-and-restoring-the-database).
+  [Who Can See the Audit Trail?](faq-who-can-see-the-audit-trail) for who has access.
+- **Maintenance** — backing up and restoring the system's database.
+
+These four have their own Administrator-only Help Center guides. If you're signed in as
+an Operator, those guides won't open — that's the role boundary working as intended,
+not a broken link.
 
 ## Where the ONGOING tray fits in
 
