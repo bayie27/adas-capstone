@@ -233,6 +233,20 @@ describe("SystemHealth page refactored view", () => {
     expect(container.querySelectorAll(".bg-warning.rounded-full")).toHaveLength(0)
   })
 
+  it("explains the 5.0 fps Processing Speed warning threshold", async () => {
+    vi.mocked(getSystemHealthLive).mockResolvedValue(mockLive)
+    vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
+
+    renderSystemHealth()
+
+    const infoButton = screen.getByRole("button", { name: "About Processing Speed" })
+    fireEvent.mouseEnter(infoButton.parentElement!)
+
+    const tooltip = await screen.findByRole("tooltip")
+    expect(tooltip).toHaveTextContent("5.0–15.0 fps")
+    expect(tooltip).toHaveTextContent("Below 5.0 fps")
+  })
+
   it("opens performance metrics reference modal when clicking Learn more inside tooltip", async () => {
     vi.mocked(getSystemHealthLive).mockResolvedValue(mockLive)
     vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
