@@ -19,7 +19,10 @@ Precision formula (Use Case 7 / paper §Precision Calibration):
 """
 
 from collections.abc import Mapping
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from threading import Lock
+from time import monotonic
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import selectinload
@@ -60,6 +63,12 @@ router = APIRouter(
 
 _ACCIDENT_STATUSES = (DetectionStatus.ONGOING, DetectionStatus.CLEARED)
 _DISMISSED_STATUSES = (DetectionStatus.DISMISSED,)
+# Dashboard data is refreshed by the frontend on its five-second cadence. A
+# slightly longer coalescing window prevents a burst of identical requests
+# from repeating the same aggregate work while keeping the view near-live.
+_DASHBOARD_CACHE_TTL_SECONDS = 10.0
+_DASHBOARD_CACHE: dict[tuple, tuple[float, dict]] = {}
+_DASHBOARD_CACHE_LOCK = Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -300,9 +309,25 @@ def get_dashboard_analytics(
         end_date=end_date,
         camera_ids=camera_id,
     )
-    return _compute_dashboard_data(
-        session, start_date=start_date, end_date=end_date, camera_id=camera_id
+    cache_key = (
+        start_date.isoformat() if start_date else None,
+        end_date.isoformat() if end_date else None,
+        tuple(camera_id or ()),
     )
+    with _DASHBOARD_CACHE_LOCK:
+        cached = _DASHBOARD_CACHE.get(cache_key)
+        now = monotonic()
+        if cached is not None and now - cached[0] < _DASHBOARD_CACHE_TTL_SECONDS:
+            return deepcopy(cached[1])
+
+        data = _compute_dashboard_data(
+            session, start_date=start_date, end_date=end_date, camera_id=camera_id
+        )
+        _DASHBOARD_CACHE[cache_key] = (monotonic(), data)
+        if len(_DASHBOARD_CACHE) > 32:
+            oldest_key = min(_DASHBOARD_CACHE, key=lambda key: _DASHBOARD_CACHE[key][0])
+            _DASHBOARD_CACHE.pop(oldest_key, None)
+        return deepcopy(data)
 
 
 def _dashboard_filters_summary(

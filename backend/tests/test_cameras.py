@@ -683,9 +683,7 @@ class TestCreateCamera:
 
 
 class TestUpdateCamera:
-    def test_rename_does_not_bump_config_version(
-        self, client: TestClient, session: Session
-    ):
+    def test_rename_bumps_config_version(self, client: TestClient, session: Session):
         headers = _headers(client, session)
         # desired_ai_state="Active" matches what the real create route
         # would have already derived — otherwise recompute-everywhere
@@ -701,7 +699,7 @@ class TestUpdateCamera:
             json={"camera_name": "Renamed"},
         )
         assert resp.status_code == 200
-        assert resp.json()["config_version"] == old_version
+        assert resp.json()["config_version"] > old_version
 
     def test_disable_sets_inactive_and_bumps_version(
         self, client: TestClient, session: Session

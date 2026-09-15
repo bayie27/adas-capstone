@@ -207,9 +207,10 @@ def compute_kpis_and_breakdowns(
 
 
 # 05_PKG_incidents_cameras.md Step 2 — fields that matter to the AI engine.
-# Renaming a camera does not bump config_version; the engine does not care
-# about names.
+# Every persisted camera configuration change gets a monotonic version so the
+# engine and audit trail can identify the exact configuration generation.
 _AI_RELEVANT_FIELDS = (
+    "camera_name",
     "channel_id",
     "is_enabled",
     "is_active",
