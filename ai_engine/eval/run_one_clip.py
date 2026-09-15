@@ -19,6 +19,11 @@ import argparse
 import json
 import os
 import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from accumulate import Accumulator
+    from pipeline import AccumulatorRegistry
 
 # ai_engine/ is not a package: detector.py and accumulate.py use flat
 # `from config import ...`-style imports that assume ai_engine/ is on
@@ -27,11 +32,6 @@ import sys
 AI_ENGINE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if AI_ENGINE_DIR not in sys.path:
     sys.path.insert(0, AI_ENGINE_DIR)
-
-import cv2  # noqa: E402
-from accumulate import Accumulator  # noqa: E402
-from detector import AccidentDetector  # noqa: E402
-from pipeline import AccumulatorRegistry  # noqa: E402
 
 
 def accumulator_for_sample(
@@ -72,6 +72,10 @@ def main() -> None:
         ),
     )
     args = ap.parse_args()
+
+    import cv2
+    from detector import AccidentDetector
+    from pipeline import AccumulatorRegistry
 
     detector = AccidentDetector(
         args.weights, device=args.device, conf=args.conf, imgsz=args.imgsz
