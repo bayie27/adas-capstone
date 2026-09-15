@@ -5,6 +5,9 @@ from app.core.config import settings
 # A URL with embedded credentials: scheme://user:pass@host/... . Matches the
 # resolved RTSP URL (01_CONTRACTS.md §1.6) generically, not just rtsp://.
 CREDENTIAL_URL_PATTERN = re.compile(r"://[^/@\s:]+:[^/@\s]+@")
+SENSITIVE_ASSIGNMENT_PATTERN = re.compile(
+    r"(?i)\b(password|passphrase|token|api[_-]?key|secret)\s*=\s*([^\s,]+)"
+)
 
 
 def collect_secret_values() -> list[str]:
@@ -48,6 +51,7 @@ def redact_text(
         else collect_path_replacements()
     )
     message = CREDENTIAL_URL_PATTERN.sub("://***:***@", message)
+    message = SENSITIVE_ASSIGNMENT_PATTERN.sub(r"\1=***REDACTED***", message)
     for secret in secrets:
         message = message.replace(secret, "***REDACTED***")
     for path, placeholder in path_replacements.items():

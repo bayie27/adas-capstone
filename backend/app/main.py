@@ -370,6 +370,10 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = json.loads(json.dumps(exc.errors(), default=str))
+    for error in errors:
+        locations = [str(part).lower() for part in error.get("loc", [])]
+        if any("password" in part for part in locations):
+            error.pop("input", None)
     return JSONResponse(
         status_code=422,
         content=ApiError(
