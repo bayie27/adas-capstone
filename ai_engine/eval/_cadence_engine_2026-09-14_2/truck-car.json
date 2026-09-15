@@ -1,0 +1,18 @@
+{
+  "video": "truck-car.mp4",
+  "fps": 29.916943521594686,
+  "frames": 1801,
+  "gray": true,
+  "conf": 0.15,
+  "imgsz": 640,
+  "sample_fps": 2.0,
+  "events": [
+    {
+      "t": 27.58,
+      "box": [2059.6, 765.0, 2515.8, 1319.4],
+      "score": 1.083,
+      "peak_conf": 0.768,
+      "age_s": 2.01
+    }
+  ]
+}

@@ -106,7 +106,7 @@ sweep.
 Production schedules batched inference at a fixed 15 FPS target. For each
 active camera, `measured_fps` in the existing heartbeat is the rolling
 five-second cadence of successful inference, not the RTSP decoder rate. After
-that rolling window is established, a value below 10 FPS carries the existing
+that rolling window is established, a value below 5 FPS carries the existing
 `INFERENCE_FPS_BELOW_MIN` diagnostic in the heartbeat. This keeps the AI engine
 independent of the frontend while allowing the current operator UI to surface a
 warning. Decoded FPS remains an internal reader metric and is not reported as

@@ -26,8 +26,8 @@ describe("HealthMetricsReferenceModal", () => {
 
     // Processing Speed section & ranges
     expect(screen.getByText("Processing Speed")).toBeInTheDocument()
-    expect(screen.getByText("10.0–15.0 fps")).toBeInTheDocument()
-    expect(screen.getByText("Below 10.0 fps")).toBeInTheDocument()
+    expect(screen.getByText("5.0–15.0 fps")).toBeInTheDocument()
+    expect(screen.getByText("Below 5.0 fps")).toBeInTheDocument()
     expect(
       screen.getByText(
         "Matches the system's calibrated target band for accurate accident detection",

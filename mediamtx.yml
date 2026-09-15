@@ -3,16 +3,15 @@
 #
 # Requires ai_engine/eval/clips/ to be populated (gitignored — see
 # ai_engine/eval/README.md). MediaMTX auto-creates any path on publish, so this
-# file isn't strictly required, but runOnInit collapses the 5-terminal ffmpeg
-# dance into a single command.
+# file isn't strictly required, but runOnInit collapses the multi-terminal
+# ffmpeg dance into a single command.
 #
-# Why these five: the first four are clips ai_engine/eval/baseline_epoch50.json
-# records as DETECTED, so the engine alerts on each within a loop or two.
-# channel5 is airbase.mp4, the crash-free negative — it must stay silent for the
-# whole run. A camera that never alerts is as much a result as one that does.
+# All ten channels use airbase.mp4, the crash-free negative, so a ten-camera
+# soak measures clean-feed throughput and false positives without collision
+# alerts competing for attention.
 #
 # -rtsp_transport tcp on publish is required, not cosmetic: with the default UDP
-# transport, publishing all 5 channels at once over loopback drops RTP packets
+# transport, publishing all 10 channels at once over loopback drops RTP packets
 # constantly ("RTP packets lost" / "invalid FU-A packet") — verified by running
 # this file against real MediaMTX + ffmpeg. TCP publish is clean.
 #
@@ -51,23 +50,22 @@ paths:
   channel5:
     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
-  # channel6-10 extend the original five-camera fixture to ten. Ten is the
-  # configuration writeQueueSize: 8192 above was measured against (74b66f6),
-  # and the load the GPU decode path is characterised at, so the two belong
-  # together — dropping back to five silently changes what the queue size is
-  # sized for. channel5 stays the crash-free negative either way.
+  # The current ten-reader fixture is paired with writeQueueSize: 8192 above,
+  # measured against (74b66f6) and the load the GPU decode path is
+  # characterised at. If you change the number of paths, re-measure the queue
+  # size for that topology rather than assuming this value still fits.
   channel6:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/car-motor-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
   channel7:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/jeep-yellow-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
   channel8:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/armored-car-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
   channel9:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/jeep-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
   channel10:
-    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/truck-student-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes

@@ -121,18 +121,18 @@ pwsh -File scripts/start-dev.ps1
 
 No switches starts the everyday case — backend + frontend, each in its own titled window (`ADAS - Backend`, `ADAS - Frontend`, ...). `pnpm dev` at the repo root runs the identical command.
 
-| Flag                 | What it does                                                                                                                                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `-Backend`           | `uv run fastapi dev backend/app/main.py`                                                                                                                                                                                 |
-| `-Frontend`          | `cd frontend && pnpm dev`                                                                                                                                                                                                |
-| `-Sim`               | MediaMTX + one ffmpeg per channel, by delegating to `scripts/start-sim.ps1` (see [Simulate camera streams](#3-simulate-camera-streams-development))                                                                      |
-| `-Ai`                | The AI engine (`uv run python ai_engine/main.py`) — needs `uv sync --extra ai` and ideally a GPU (see [Start the AI engine](#4-start-the-ai-engine))                                                                     |
-| `-All`               | Shorthand for all four                                                                                                                                                                                                   |
-| `-Lan`               | Starts every component over **real TLS**, bound to all interfaces, so a second machine can reach the dashboard at `https://<host>:5173` — see [`docs/operations/LAN_SETUP.md`](LAN_SETUP.md). Bare `-Lan` means all four |
-| `-CertDir <dir>`     | Certificate directory for `-Lan` (default `certs`)                                                                                                                                                                       |
-| `-MediaMtxDir <dir>` | Prepended to `PATH` for the `-Sim` window only, since MediaMTX ships as a bare binary and `start-sim.ps1` hard-fails without it. Defaults to the `ADAS_MEDIAMTX_DIR` environment variable                                |
-| `-Reseed <profile>`  | Reseeds the dev DB **before** anything starts, via `backend/scripts/reseed_dev.py --profile <value>`. Fails the whole script (nothing starts) on a bad profile name — see [Seed profiles](#seed-profiles)                |
-| `-NoNewWindow`       | Runs a single requested component in the current terminal instead of a new window; errors if combined with more than one component                                                                                       |
+| Flag                 | What it does                                                                                                                                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-Backend`           | `uv run fastapi dev backend/app/main.py`                                                                                                                                                                                             |
+| `-Frontend`          | `cd frontend && pnpm dev`                                                                                                                                                                                                            |
+| `-Sim`               | MediaMTX + one ffmpeg per channel, by delegating to `scripts/start-sim.ps1` (see [Simulate camera streams](#3-simulate-camera-streams-development))                                                                                  |
+| `-Ai`                | The AI engine (`uv run python ai_engine/main.py`) — needs `uv sync --extra ai` and ideally a GPU (see [Start the AI engine](#4-start-the-ai-engine))                                                                                 |
+| `-All`               | Shorthand for all four                                                                                                                                                                                                               |
+| `-Lan`               | Starts every component over **real TLS**, bound to all interfaces, so a second machine can reach the dashboard at `https://<host>:5173` — see [`docs/operations/LAN_SETUP.md`](LAN_SETUP.md). Bare `-Lan` means all four             |
+| `-CertDir <dir>`     | Certificate directory for `-Lan` (default `certs`)                                                                                                                                                                                   |
+| `-MediaMtxDir <dir>` | Prepended to `PATH` for the `-Sim` window only, since MediaMTX ships as a bare binary. Defaults to `ADAS_MEDIAMTX_DIR`; if neither is set, the launcher also checks the repo and its parent for an extracted `mediamtx*.exe` release |
+| `-Reseed <profile>`  | Reseeds the dev DB **before** anything starts, via `backend/scripts/reseed_dev.py --profile <value>`. Fails the whole script (nothing starts) on a bad profile name — see [Seed profiles](#seed-profiles)                            |
+| `-NoNewWindow`       | Runs a single requested component in the current terminal instead of a new window; errors if combined with more than one component                                                                                                   |
 
 Preflights fail fast with an actionable message rather than a cryptic crash three steps later: missing `.env` (offers to copy `.env.example`), `uv`/`pnpm` not on PATH, missing `frontend/node_modules`, and — for `-Ai` — a reminder about `--extra ai`/GPU and that `ai_engine/epoch50.pt` has no fallback and is a hard failure if missing. Capacity measurement is optional and never read at startup. `-Lan` adds two more, both for failures that are otherwise completely silent at runtime: a missing certificate pair, and a `.env` without the LAN keys (which produces a 403 on every write and a WebSocket that closes the instant it opens, with nothing in either log naming the cause). It then prints the certificate's SANs and expiry plus every address a client could reach the dashboard on, flagging any interface whose firewall profile would block it.
 
@@ -235,25 +235,25 @@ Dashboard available at `http://localhost:5173`.
 
 #### 3. Simulate camera streams (development)
 
-The AI engine expects RTSP feeds at `rtsp://localhost:8554/channel1` through `channel5`. There are three ways to produce them; pick whichever fits what you're doing. All three need `ai_engine/eval/clips/` populated first — see [Obtaining the clips](#obtaining-the-clips) below.
+The AI engine expects the RTSP feeds configured in `mediamtx.yml`. The YAML
+is the source of truth for channel names, channel count, and the media file
+each path publishes. You can swap clips or add/remove paths there without
+editing the launcher scripts. All methods need the referenced local media
+files to be present first — see [Obtaining the clips](#obtaining-the-clips)
+below.
 
-Channel → clip mapping. The first four are clips `ai_engine/eval/baseline_epoch50.json` records as **detected**, so the engine alerts on each within a loop or two. Channel 5 is the crash-free negative and **must stay silent** — a camera that never alerts is as much a result as one that does:
-
-| Path       | Clip                    | Expected              |
-| ---------- | ----------------------- | --------------------- |
-| `channel1` | `dekwatro.mp4`          | detects               |
-| `channel2` | `tric-motor-car.mp4`    | detects               |
-| `channel3` | `red-car-motor.mp4`     | detects               |
-| `channel4` | `motor-motor-night.mp4` | detects               |
-| `channel5` | `airbase.mp4`           | **silent** (no crash) |
-
-**Method 1 — `mediamtx.yml` (default, recommended).** One command, all 5 channels, run from the repo root:
+**Method 1 — `mediamtx.yml` (default, recommended).** One command, all configured paths, run from the repo root:
 
 ```bash
 mediamtx mediamtx.yml
 ```
 
-`runOnInit` starts an `ffmpeg` per channel automatically and restarts it if it dies. One Ctrl+C in the MediaMTX terminal cleans up MediaMTX and every child `ffmpeg` process. `scripts/start-sim.ps1` wraps this with preflight checks (ffmpeg and mediamtx on PATH, and the five clips present by name) and clearer errors if something's missing:
+Each `runOnInit` starts an `ffmpeg` publisher automatically and restarts it if
+it dies. One Ctrl+C in the MediaMTX terminal cleans up MediaMTX and every
+child `ffmpeg` process. `scripts/start-sim.ps1` wraps this with preflight
+checks (ffmpeg, MediaMTX from PATH/override/auto-discovery, plus every local
+`-i` input named by the active YAML) and warns clearly if a configured file is
+missing:
 
 ```powershell
 .\scripts\start-sim.ps1
@@ -261,14 +261,15 @@ mediamtx mediamtx.yml
 
 MediaMTX writes `auto.crt` and `auto.key` into whatever directory it starts from. Both are gitignored — never commit the key.
 
-**Method 2 — manual ffmpeg per channel.** One terminal per channel, blocking. Useful if you only need one or two streams up. Run from the repo root (the paths below are root-relative). `-rtsp_transport tcp` matters, not just style — with the default UDP transport, publishing several channels at once over loopback drops RTP packets constantly:
+**Method 2 — manual ffmpeg for one custom path.** One terminal per path,
+blocking. Useful if you only need one stream up or want interactive control.
+Replace `<clip>` and `<path>` with the values you want; run from the repo root.
+`-rtsp_transport tcp` matters, not just style — with the default UDP
+transport, publishing several paths at once over loopback drops RTP packets
+constantly:
 
 ```powershell
-ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\dekwatro.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel1
-ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\tric-motor-car.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel2
-ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\red-car-motor.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel3
-ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\motor-motor-night.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel4
-ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/channel5
+ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\<clip>.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/<path>
 ```
 
 **Method 3 — OBS Studio via RTMP (interactive playback control).** Use this when you want to scrub/pause/restart a clip live during a demo — Methods 1 and 2 just loop blindly.
@@ -277,7 +278,10 @@ ffmpeg -re -stream_loop -1 -i ai_engine\eval\clips\airbase.mp4 -c copy -rtsp_tra
 2. Add a **Media Source** pointing at a clip in `ai_engine/eval/clips/`, tick **Loop**. The Media Source exposes Restart/Pause/Play hotkeys for interactive control.
 3. Click **Start Streaming**. MediaMTX auto-creates the path and republishes it as `rtsp://localhost:8554/channel1` — no AI engine changes needed.
 
-**Limitation:** one OBS instance publishes exactly one stream. Simulating all 5 channels via OBS needs 5 OBS instances/profiles or the `obs-multi-rtmp` plugin — use OBS for an interactive demo of one or two channels, and Method 1 for bulk background simulation.
+**Limitation:** one OBS instance publishes exactly one stream. Simulating
+every configured path via OBS needs one OBS instance/profile per path or the
+`obs-multi-rtmp` plugin — use OBS for an interactive demo of one or two paths,
+and Method 1 for bulk background simulation.
 
 MediaMTX's default ports: RTSP `8554`, RTMP `1935`, HLS `8888`, WebRTC `8889`, SRT `8890`.
 
@@ -327,9 +331,13 @@ This runs an inference-only batch sweep and prints rough 15/10 FPS estimates. It
 
 **A camera's connection/AI status is computed at read time, not stored.** `presented_statuses()` overrides whatever's in the database based on how long it's been since the camera last heartbeated: no heartbeat ever → `Reconnecting`; a heartbeat older than `HEARTBEAT_STALE_SECONDS` (10s by default) → `Unresponsive` for both dimensions, regardless of the stored value; a disabled camera is exempt and always shows its raw stored value. Heartbeats come from the AI engine while it's actively watching a stream — with `-Backend -Frontend` only (no `-Ai`), every seeded camera will drift to `Unresponsive` within about 10 seconds of being seeded, and that's the system correctly reporting "nothing is watching this camera," not a bug.
 
-**Only 5 RTSP channels exist** in both simulation configs (`mediamtx.yml` and `start-sim.ps1`), but the `demo`/`analytics` camera roster has 8 entries. `channel1`–`channel5` map to the 5 cameras in the [clip table](#3-simulate-camera-streams-development) above; the other 3 — Dagatan Entry Cam, Silang Junction Cam, and the disabled/soft-deleted Retired Depot Cam — have no channel at all and will sit `Unresponsive`/`Disconnected` forever no matter how correctly everything else is configured. This isn't a bug to fix; it's a 5-clip simulation intentionally covering a larger camera roster so the UI has something realistic to show for a camera that's actually down.
+The number and mapping of RTSP channels comes from `mediamtx.yml`, while the
+seed profile controls the database camera roster. These are independent: a
+profile may contain more cameras than configured feeds, and unmatched cameras
+will remain `Unresponsive`/`Disconnected` until a matching RTSP path exists.
+This is intentional and lets each simulation profile choose its own topology.
 
-**Self-blindfold: any camera with an open (`Unverified` or `Ongoing`) incident pauses itself.** This is deliberate — an uncleared incident means the camera shouldn't be re-alerting on the same scene, and it puts the operator in control of when a camera goes back online rather than the engine flooding them the moment it starts. `demo` and `analytics` seed a realistic mix of open and closed incidents (not every camera), so expect some — not necessarily all — of the 5 real-feed cameras to start paused. Clear or dismiss the open incident in the dashboard (or via the dev panel) and that camera resumes within seconds. To force every seeded camera active at once for a demo:
+**Self-blindfold: any camera with an open (`Unverified` or `Ongoing`) incident pauses itself.** This is deliberate — an uncleared incident means the camera shouldn't be re-alerting on the same scene, and it puts the operator in control of when a camera goes back online rather than the engine flooding them the moment it starts. `demo` and `analytics` seed a realistic mix of open and closed incidents (not every camera), so expect some — not necessarily all — configured real-feed cameras to start paused. Clear or dismiss the open incident in the dashboard (or via the dev panel) and that camera resumes within seconds. To force every seeded camera active at once for a demo:
 
 ```bash
 uv run python -c "import sqlite3; d=sqlite3.connect('adas.db'); d.execute(\"UPDATE detection_log SET detection_status='Cleared' WHERE detection_status IN ('Unverified','Ongoing')\"); d.execute(\"UPDATE camera SET desired_ai_state='Active', desired_state_reason=NULL WHERE is_active=1\"); d.commit()"

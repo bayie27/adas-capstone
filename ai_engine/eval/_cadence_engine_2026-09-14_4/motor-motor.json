@@ -1,0 +1,18 @@
+{
+  "video": "motor-motor.mp4",
+  "fps": 30.0,
+  "frames": 869,
+  "gray": true,
+  "conf": 0.15,
+  "imgsz": 640,
+  "sample_fps": 4.0,
+  "events": [
+    {
+      "t": 13.07,
+      "box": [202.8, 35.3, 497.5, 172.3],
+      "score": 1.103,
+      "peak_conf": 0.536,
+      "age_s": 2.93
+    }
+  ]
+}

@@ -121,9 +121,9 @@ ACC_DECAY = 0.30  # evidence lost per second with no supporting detection
 ACC_IOU_LINK = 0.30
 ACC_EMA = 0.5  # box smoothing
 
-# Paper p.74 and TC-AI-402. Whether the lower bound is also a detection floor is
-# unknown until the cadence sweep runs — see the design doc section 9.
-FPS_BAND_MIN = 10.0
+# Paper p.74 and TC-AI-402. The fixed production target is 15 FPS; this lower
+# bound is the warning floor for per-camera inference cadence.
+FPS_BAND_MIN = 5.0
 FPS_BAND_MAX = 15.0
 
 # A stream can stay connected while delivering frames far too slowly. Past this

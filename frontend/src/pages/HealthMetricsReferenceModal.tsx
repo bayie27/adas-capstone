@@ -38,13 +38,13 @@ const PROCESSING_SPEED_THRESHOLDS = [
   {
     tone: "success" as const,
     state: "Optimal",
-    range: "10.0–15.0 fps",
+    range: "5.0–15.0 fps",
     meaning: "Matches the system's calibrated target band for accurate accident detection",
   },
   {
     tone: "warning" as const,
     state: "Low FPS",
-    range: "Below 10.0 fps",
+    range: "Below 5.0 fps",
     meaning: "Stream lagging or camera/hardware constrained",
   },
   {

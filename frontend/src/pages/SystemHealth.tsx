@@ -130,8 +130,8 @@ function renderInferenceLatencyValue(live: SystemHealthLiveResponse | undefined)
  * Four-state indicator for Processing Speed:
  * - 0 cameras reporting -> neutral grey dot + N/A (idle)
  * - cameras reporting, fps is null -> danger red dot + "Stream error" (fault)
- * - fps < 10.0 -> warning amber dot (sub-optimal / low fps)
- * - fps >= 10.0 (10.0–15.0 fps) -> success green dot (optimal)
+ * - fps < 5.0 -> warning amber dot (sub-optimal / low fps)
+ * - fps >= 5.0 (5.0–15.0 fps) -> success green dot (optimal)
  */
 function renderProcessingSpeedValue(live: SystemHealthLiveResponse | undefined): ReactNode {
   if (!live) return formatFps(undefined)
@@ -154,7 +154,7 @@ function renderProcessingSpeedValue(live: SystemHealthLiveResponse | undefined):
     )
   }
 
-  const tone = live.avg_fps < 10.0 ? "warning" : "success"
+  const tone = live.avg_fps < 5.0 ? "warning" : "success"
 
   return (
     <span className="inline-flex items-center gap-[14px]">
@@ -618,9 +618,9 @@ export default function SystemHealth() {
             <div>
               <p>
                 How many video frames per second the system captures and processes from live
-                cameras. Optimal: 10.0–15.0 fps (
+                cameras. Optimal: 5.0–15.0 fps (
                 <BadgeDot tone="success" className="mx-0.5 inline-block align-middle" />
-                ), matching the system's calibrated target band. Below 10.0 fps (
+                ), matching the system's calibrated target band. Below 5.0 fps (
                 <BadgeDot tone="warning" className="mx-0.5 inline-block align-middle" />) may mean
                 the stream is lagging or hardware-constrained. Shows grey when no streams are
                 active, red if a connected camera's stream stalls.

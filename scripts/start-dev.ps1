@@ -69,9 +69,9 @@
 
 .PARAMETER MediaMtxDir
     Prepended to PATH for the -Sim window only. MediaMTX ships as a bare
-    binary that most people never add to PATH permanently, and
-    start-sim.ps1 hard-fails without it. Defaults to the ADAS_MEDIAMTX_DIR
-    environment variable, so you can set that once instead of passing it.
+    binary that most people never add to PATH permanently. Defaults to the
+    ADAS_MEDIAMTX_DIR environment variable; when neither is set, the launcher
+    also searches the repository and its parent for an extracted release.
 
 .PARAMETER Reseed
     Seed profile name, passed straight through to
@@ -410,10 +410,16 @@ function Start-Component([string]$Title, [string]$Command, [bool]$Foreground) {
 $foreground = $NoNewWindow.IsPresent
 
 if ($Sim) {
+    if (-not $MediaMtxDir -and -not (Get-Command mediamtx -ErrorAction SilentlyContinue)) {
+        $MediaMtxDir = Find-AdasMediaMtxDirectory -RepoRoot $RepoRoot
+        if ($MediaMtxDir) {
+            Write-Step "MediaMTX found at '$MediaMtxDir'; using it for the simulator window."
+        }
+    }
     $cmd = "& `"$RepoRoot\scripts\start-sim.ps1`""
     if ($MediaMtxDir) {
-        # start-sim.ps1 hard-fails unless mediamtx is on PATH, and MediaMTX
-        # ships as a bare binary most people never install permanently.
+        # Pass the resolved directory into the simulator's child environment;
+        # MediaMTX ships as a bare binary most people never install globally.
         $cmd = "`$env:PATH = `"$MediaMtxDir;`$env:PATH`"; $cmd"
     }
     Start-Component -Title "ADAS - Sim (MediaMTX)" -Command $cmd -Foreground $foreground
@@ -438,7 +444,9 @@ if ($Backend) {
     else {
         $cmd = "`$env:PYTHONUTF8 = '1'; uv run fastapi dev backend/app/main.py"
     }
-    Start-Component -Title "ADAS - Backend" -Command $cmd -Foreground $foreground
+    if (-not $managedBackendAi) {
+        Start-Component -Title "ADAS - Backend" -Command $cmd -Foreground $foreground
+    }
 }
 
 if ($Frontend) {
@@ -468,7 +476,9 @@ if ($Ai) {
     else {
         $cmd = "uv run python ai_engine/main.py"
     }
-    Start-Component -Title "ADAS - AI Engine" -Command $cmd -Foreground $foreground
+    if (-not $managedBackendAi) {
+        Start-Component -Title "ADAS - AI Engine" -Command $cmd -Foreground $foreground
+    }
 }
 
 if ($managedBackendAi) {
