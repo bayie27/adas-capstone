@@ -88,6 +88,104 @@ function Resolve-AdasConfiguredPath {
     return Join-Path $RepoRoot $PathValue
 }
 
+function Find-AdasMediaMtxDirectory {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot
+    )
+
+    # MediaMTX is distributed as a standalone executable rather than a
+    # package, so it is common for a downloaded release to sit beside the
+    # repository without being added to the parent terminal's PATH. Prefer a
+    # repo-local executable, then look one directory above the repo for the
+    # usual extracted release folder. Callers still take an explicit
+    # directory or an existing PATH entry first.
+    $searchRoots = New-Object System.Collections.Generic.List[string]
+    foreach ($root in @($RepoRoot, (Split-Path -Parent $RepoRoot))) {
+        if ([string]::IsNullOrWhiteSpace($root) -or -not (Test-Path -LiteralPath $root -PathType Container)) {
+            continue
+        }
+        $fullRoot = [System.IO.Path]::GetFullPath($root)
+        if (-not ($searchRoots -contains $fullRoot)) {
+            $searchRoots.Add($fullRoot)
+        }
+    }
+
+    foreach ($root in $searchRoots) {
+        $direct = Join-Path $root "mediamtx.exe"
+        if (Test-Path -LiteralPath $direct -PathType Leaf) {
+            return $root
+        }
+
+        $releaseDirectories = @(
+            Get-ChildItem -LiteralPath $root -Directory -Filter "mediamtx*" -ErrorAction SilentlyContinue |
+                Sort-Object Name -Descending
+        )
+        foreach ($directory in $releaseDirectories) {
+            $executable = Join-Path $directory.FullName "mediamtx.exe"
+            if (Test-Path -LiteralPath $executable -PathType Leaf) {
+                return $directory.FullName
+            }
+        }
+    }
+
+    return $null
+}
+
+function Get-AdasMediaMtxInputPaths {
+    param(
+        [Parameter(Mandatory = $true)][string]$ConfigPath,
+        [Parameter(Mandatory = $true)][string]$RepoRoot
+    )
+    if (-not (Test-Path -LiteralPath $ConfigPath)) {
+        return @()
+    }
+
+    $seen = @{}
+    $paths = New-Object System.Collections.Generic.List[string]
+    foreach ($line in Get-Content -LiteralPath $ConfigPath) {
+        # Only inspect MediaMTX's runOnInit command values.  Comments and
+        # unrelated YAML fields may contain arbitrary `-i` text.
+        if ($line -notmatch '^\s*runOnInit\s*:') {
+            continue
+        }
+        $inputs = [regex]::Matches(
+            $line,
+            '(?<!\S)-i\s+(?:"([^"]+)"|''([^'']+)''|(\S+))'
+        )
+        foreach ($input in $inputs) {
+            $value = if ($input.Groups[1].Success) {
+                $input.Groups[1].Value
+            }
+            elseif ($input.Groups[2].Success) {
+                $input.Groups[2].Value
+            }
+            else {
+                $input.Groups[3].Value
+            }
+
+            # Remote URLs and shell-variable inputs cannot be validated as
+            # repository files. Local relative/absolute paths are resolved
+            # with the same repo-root rule as the rest of the launcher.
+            if (
+                [string]::IsNullOrWhiteSpace($value) -or
+                $value -match '^(?i)(rtsp|rtmp|http|https|udp|tcp)://' -or
+                $value -match '\$[A-Za-z_]'
+            ) {
+                continue
+            }
+            $fullPath = [System.IO.Path]::GetFullPath(
+                (Resolve-AdasConfiguredPath -RepoRoot $RepoRoot -PathValue $value)
+            )
+            $key = $fullPath.ToLowerInvariant()
+            if (-not $seen.ContainsKey($key)) {
+                $seen[$key] = $true
+                $paths.Add($fullPath)
+            }
+        }
+    }
+    return @($paths)
+}
+
 function Get-AdasBackupDirectory([string]$RepoRoot) {
     $value = Get-AdasEnvValue -RepoRoot $RepoRoot -Name "BACKUP_DIR" -DefaultValue "var\backups"
     return Resolve-AdasConfiguredPath -RepoRoot $RepoRoot -PathValue $value

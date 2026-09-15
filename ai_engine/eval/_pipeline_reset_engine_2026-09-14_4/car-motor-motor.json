@@ -1,0 +1,18 @@
+{
+  "video": "car-motor-motor.mp4",
+  "fps": 29.91508116987219,
+  "frames": 1825,
+  "gray": true,
+  "conf": 0.15,
+  "imgsz": 640,
+  "sample_fps": 4.0,
+  "events": [
+    {
+      "t": 21.53,
+      "box": [1.0, 727.6, 733.7, 1393.1],
+      "score": 1.165,
+      "peak_conf": 0.869,
+      "age_s": 1.64
+    }
+  ]
+}

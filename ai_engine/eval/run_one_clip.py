@@ -19,6 +19,11 @@ import argparse
 import json
 import os
 import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from accumulate import Accumulator
+    from pipeline import AccumulatorRegistry
 
 # ai_engine/ is not a package: detector.py and accumulate.py use flat
 # `from config import ...`-style imports that assume ai_engine/ is on
@@ -28,9 +33,17 @@ AI_ENGINE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if AI_ENGINE_DIR not in sys.path:
     sys.path.insert(0, AI_ENGINE_DIR)
 
-import cv2  # noqa: E402
-from accumulate import Accumulator  # noqa: E402
-from detector import AccidentDetector  # noqa: E402
+
+def accumulator_for_sample(
+    registry: AccumulatorRegistry,
+    *,
+    camera_id: int,
+    stream: object,
+    segment_id: int,
+    timestamp: float,
+) -> Accumulator:
+    """Resolve evaluation evidence through the live pipeline's reset seams."""
+    return registry.resolve(camera_id, stream, segment_id, timestamp)
 
 
 def main() -> None:
@@ -60,12 +73,15 @@ def main() -> None:
     )
     args = ap.parse_args()
 
+    import cv2
+    from detector import AccidentDetector
+    from pipeline import AccumulatorRegistry
+
     detector = AccidentDetector(
         args.weights, device=args.device, conf=args.conf, imgsz=args.imgsz
     )
-    accumulator = Accumulator(
-        iou_link=args.iou_link, threshold=args.threshold, decay=args.decay
-    )
+    registry = AccumulatorRegistry()
+    stream = object()
 
     cap = cv2.VideoCapture(args.video)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -92,7 +108,15 @@ def main() -> None:
             # rescaling is exactly the bug SPEC.md §3 documents: the
             # accumulator integrates conf * dt in conf-seconds, so a rescaled
             # clock silently produces wrong scores with no exception.
-            for ev in accumulator.update(idx / fps, detection.boxes, detection.confs):
+            timestamp = idx / fps
+            accumulator = accumulator_for_sample(
+                registry,
+                camera_id=0,
+                stream=stream,
+                segment_id=0,
+                timestamp=timestamp,
+            )
+            for ev in accumulator.update(timestamp, detection.boxes, detection.confs):
                 events.append(
                     {
                         "t": round(ev.t, 2),

@@ -1,0 +1,25 @@
+{
+  "video": "jeep-yellow-car.mp4",
+  "fps": 30.0,
+  "frames": 411,
+  "gray": true,
+  "conf": 0.15,
+  "imgsz": 640,
+  "sample_fps": 2.0,
+  "events": [
+    {
+      "t": 6.0,
+      "box": [408.0, 162.4, 590.5, 276.4],
+      "score": 1.038,
+      "peak_conf": 0.862,
+      "age_s": 1.0
+    },
+    {
+      "t": 11.0,
+      "box": [175.8, 141.8, 528.2, 297.3],
+      "score": 1.23,
+      "peak_conf": 0.791,
+      "age_s": 1.5
+    }
+  ]
+}

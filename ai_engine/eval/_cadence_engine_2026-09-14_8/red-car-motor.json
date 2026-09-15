@@ -1,0 +1,18 @@
+{
+  "video": "red-car-motor.mp4",
+  "fps": 24.974653786748345,
+  "frames": 1528,
+  "gray": true,
+  "conf": 0.15,
+  "imgsz": 640,
+  "sample_fps": 8.0,
+  "events": [
+    {
+      "t": 19.58,
+      "box": [1507.0, 344.8, 1821.3, 530.6],
+      "score": 1.018,
+      "peak_conf": 0.883,
+      "age_s": 5.05
+    }
+  ]
+}

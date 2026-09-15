@@ -201,21 +201,50 @@ describe("SystemHealth page refactored view", () => {
     expect(warningDots.length).toBeGreaterThanOrEqual(1)
   })
 
-  it("renders warning amber dot for Processing Speed when frame rate is below 10.0 fps", async () => {
+  it("renders warning amber dot for Processing Speed when frame rate is below 5.0 fps", async () => {
     const lowFpsLive: SystemHealthLiveResponse = {
       ...mockLive,
       sample_camera_count: 2,
       avg_inference_latency_ms: 25.0,
-      avg_fps: 8.5,
+      avg_fps: 4.9,
     }
     vi.mocked(getSystemHealthLive).mockResolvedValue(lowFpsLive)
     vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
 
     const { container } = renderSystemHealth()
 
-    expect(await screen.findByText("8.5 fps")).toBeInTheDocument()
+    expect(await screen.findByText("4.9 fps")).toBeInTheDocument()
     const warningDots = container.querySelectorAll(".bg-warning.rounded-full")
     expect(warningDots.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("renders a green Processing Speed dot at exactly 5.0 fps", async () => {
+    vi.mocked(getSystemHealthLive).mockResolvedValue({
+      ...mockLive,
+      sample_camera_count: 2,
+      avg_inference_latency_ms: 25.0,
+      avg_fps: 5.0,
+    })
+    vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
+
+    const { container } = renderSystemHealth()
+
+    expect(await screen.findByText("5.0 fps")).toBeInTheDocument()
+    expect(container.querySelectorAll(".bg-warning.rounded-full")).toHaveLength(0)
+  })
+
+  it("explains the 5.0 fps Processing Speed warning threshold", async () => {
+    vi.mocked(getSystemHealthLive).mockResolvedValue(mockLive)
+    vi.mocked(getSystemHealthHistory).mockResolvedValue(mockHistory)
+
+    renderSystemHealth()
+
+    const infoButton = screen.getByRole("button", { name: "About Processing Speed" })
+    fireEvent.mouseEnter(infoButton.parentElement!)
+
+    const tooltip = await screen.findByRole("tooltip")
+    expect(tooltip).toHaveTextContent("5.0–15.0 fps")
+    expect(tooltip).toHaveTextContent("Below 5.0 fps")
   })
 
   it("opens performance metrics reference modal when clicking Learn more inside tooltip", async () => {

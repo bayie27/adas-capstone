@@ -1,0 +1,10 @@
+{
+  "video": "jeep-car.mp4",
+  "fps": 25.005814541073466,
+  "frames": 1505,
+  "gray": true,
+  "conf": 0.15,
+  "imgsz": 640,
+  "sample_fps": 3.0,
+  "events": []
+}

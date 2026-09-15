@@ -1,0 +1,10 @@
+{
+  "video": "truck-student-car.mp4",
+  "fps": 30.030066813911294,
+  "frames": 1807,
+  "gray": true,
+  "conf": 0.15,
+  "imgsz": 640,
+  "sample_fps": 4.0,
+  "events": []
+}
