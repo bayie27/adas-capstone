@@ -31,6 +31,19 @@ if AI_ENGINE_DIR not in sys.path:
 import cv2  # noqa: E402
 from accumulate import Accumulator  # noqa: E402
 from detector import AccidentDetector  # noqa: E402
+from pipeline import AccumulatorRegistry  # noqa: E402
+
+
+def accumulator_for_sample(
+    registry: AccumulatorRegistry,
+    *,
+    camera_id: int,
+    stream: object,
+    segment_id: int,
+    timestamp: float,
+) -> Accumulator:
+    """Resolve evaluation evidence through the live pipeline's reset seams."""
+    return registry.resolve(camera_id, stream, segment_id, timestamp)
 
 
 def main() -> None:
@@ -63,9 +76,8 @@ def main() -> None:
     detector = AccidentDetector(
         args.weights, device=args.device, conf=args.conf, imgsz=args.imgsz
     )
-    accumulator = Accumulator(
-        iou_link=args.iou_link, threshold=args.threshold, decay=args.decay
-    )
+    registry = AccumulatorRegistry()
+    stream = object()
 
     cap = cv2.VideoCapture(args.video)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -92,7 +104,15 @@ def main() -> None:
             # rescaling is exactly the bug SPEC.md §3 documents: the
             # accumulator integrates conf * dt in conf-seconds, so a rescaled
             # clock silently produces wrong scores with no exception.
-            for ev in accumulator.update(idx / fps, detection.boxes, detection.confs):
+            timestamp = idx / fps
+            accumulator = accumulator_for_sample(
+                registry,
+                camera_id=0,
+                stream=stream,
+                segment_id=0,
+                timestamp=timestamp,
+            )
+            for ev in accumulator.update(timestamp, detection.boxes, detection.confs):
                 events.append(
                     {
                         "t": round(ev.t, 2),
