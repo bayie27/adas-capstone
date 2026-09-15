@@ -115,8 +115,8 @@ Color every newly inserted character in A86:G86 orange (`#E67E22`) using rich-te
 Package ID: PS-20260914-GPU-RESIDENT-DECODE
 Approval source: User instruction “apply this finding” on 2026-09-14; blocks 1–3 and their attached comments/formatting authorized.
 
-| Target | Approved scope | Applied/read back | Skipped/pending | Blocked |
-| --- | --- | --- | --- | --- |
-| Defense paper | blocks 1–2 and their attached comments | Applied; both exact replacement spans and both anchored comments read back. Rendered PDF pages: 50 and 170. | — | — |
-| Tracker Sheet | block 3 and its orange text-format fallback | Applied; A86:G86 values and `#E67E22` text color read back. | — | — |
-| Standalone comments | Not applicable | — | — | — |
+| Target              | Approved scope                              | Applied/read back                                                                                           | Skipped/pending | Blocked |
+| ------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------- | ------- |
+| Defense paper       | blocks 1–2 and their attached comments      | Applied; both exact replacement spans and both anchored comments read back. Rendered PDF pages: 50 and 170. | —               | —       |
+| Tracker Sheet       | block 3 and its orange text-format fallback | Applied; A86:G86 values and `#E67E22` text color read back.                                                 | —               | —       |
+| Standalone comments | Not applicable                              | —                                                                                                           | —               | —       |

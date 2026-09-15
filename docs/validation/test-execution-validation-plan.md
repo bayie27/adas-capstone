@@ -285,15 +285,15 @@ running Linux, ingesting from the agency's video management system across a segm
 network. The test environment is a single laptop. Every difference is listed here so that
 no result in this plan is read as a production-scale claim.
 
-| Production target                   | Test environment                             | Verdict                                                                                                                                 |
-| ----------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Rack edge server, Ubuntu Server LTS | Laptop, Windows 11                           | Different scale and operating system; **identical application code**                                                                    |
-| 8 datacentre-class GPUs             | 1 laptop GPU, 4 GB VRAM                      | Different capacity; same inference path. Capacity figures are demo-validated only.                                                      |
-| Dahua DSS Pro, authorized main RTSP feed | MediaMTX rebroadcasting prerecorded clips | **Same protocol and URL shape**, different source                                                                                   |
-| Operator PC on a routed VLAN, wired | Second laptop, wired, direct                 | Same reachability, fewer hops                                                                                                           |
-| HTTPS and WSS with agency PKI       | HTTPS and WSS with a self-signed certificate | **Same protocols**; demonstration-grade trust anchor                                                                                    |
-| No internet egress                  | No internet egress                           | **Identical**                                                                                                                           |
-| Full citywide camera network        | 10 simulated streams                         | Different scale; the citywide figure is a VRAM calculation, not something this hardware demonstrates and not something this plan claims |
+| Production target                        | Test environment                             | Verdict                                                                                                                                 |
+| ---------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Rack edge server, Ubuntu Server LTS      | Laptop, Windows 11                           | Different scale and operating system; **identical application code**                                                                    |
+| 8 datacentre-class GPUs                  | 1 laptop GPU, 4 GB VRAM                      | Different capacity; same inference path. Capacity figures are demo-validated only.                                                      |
+| Dahua DSS Pro, authorized main RTSP feed | MediaMTX rebroadcasting prerecorded clips    | **Same protocol and URL shape**, different source                                                                                       |
+| Operator PC on a routed VLAN, wired      | Second laptop, wired, direct                 | Same reachability, fewer hops                                                                                                           |
+| HTTPS and WSS with agency PKI            | HTTPS and WSS with a self-signed certificate | **Same protocols**; demonstration-grade trust anchor                                                                                    |
+| No internet egress                       | No internet egress                           | **Identical**                                                                                                                           |
+| Full citywide camera network             | 10 simulated streams                         | Different scale; the citywide figure is a VRAM calculation, not something this hardware demonstrates and not something this plan claims |
 
 ---
 

@@ -242,9 +242,9 @@ Do not apply the 2026-09-09 finding's Block 1 as written: its continued assertio
 Package ID: PS-20260914-STREAM-PROFILE-TARGET-REFRAME
 Approval source: User message on 2026-09-15, “alright then I approve these chanegs,” following the scoped reply that authorized Defense paper blocks 1–5 and repository validation-plan block 6; legacy test-case tab blocks remain out of scope.
 
-| Target | Approved scope | Applied/read back | Skipped/pending | Blocked |
-| --- | --- | --- | --- | --- |
-| Defense paper | blocks 1–5, including their attached replacement comments | blocks 1–5 + comment threads `AAACHJx-ysE`, `AAACHJx-ysM`, `AAACHJ11Qao`, `AAACHJ11Qaw`, `AAACHJ11Qa4` applied/read back 2026-09-15 | — | — |
-| Repository validation plan | block 6 | block 6 applied/read back 2026-09-15 | — | — |
-| Tracker Sheet | Not applicable; no tracker row was proposed | — | — | — |
-| Standalone comments | Not applicable; comments are bundled with blocks 1–5 | — | — | — |
+| Target                     | Approved scope                                            | Applied/read back                                                                                                                   | Skipped/pending | Blocked |
+| -------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------- | ------- |
+| Defense paper              | blocks 1–5, including their attached replacement comments | blocks 1–5 + comment threads `AAACHJx-ysE`, `AAACHJx-ysM`, `AAACHJ11Qao`, `AAACHJ11Qaw`, `AAACHJ11Qa4` applied/read back 2026-09-15 | —               | —       |
+| Repository validation plan | block 6                                                   | block 6 applied/read back 2026-09-15                                                                                                | —               | —       |
+| Tracker Sheet              | Not applicable; no tracker row was proposed               | —                                                                                                                                   | —               | —       |
+| Standalone comments        | Not applicable; comments are bundled with blocks 1–5      | —                                                                                                                                   | —               | —       |
