@@ -1,0 +1,18 @@
+{
+  "video": "dpwh-red-car-motor.mp4",
+  "fps": 30.006285549874953,
+  "frames": 1808,
+  "gray": true,
+  "conf": 0.15,
+  "imgsz": 640,
+  "sample_fps": 2.0,
+  "events": [
+    {
+      "t": 29.49,
+      "box": [1470.9, 472.8, 2138.4, 764.1],
+      "score": 1.147,
+      "peak_conf": 0.586,
+      "age_s": 8.0
+    }
+  ]
+}

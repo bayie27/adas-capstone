@@ -1,0 +1,18 @@
+{
+  "video": "motor-motor-night.mp4",
+  "fps": 29.91616020535276,
+  "frames": 1802,
+  "gray": true,
+  "conf": 0.15,
+  "imgsz": 640,
+  "sample_fps": 6.0,
+  "events": [
+    {
+      "t": 14.04,
+      "box": [127.5, 210.4, 227.5, 280.3],
+      "score": 1.015,
+      "peak_conf": 0.746,
+      "age_s": 2.34
+    }
+  ]
+}

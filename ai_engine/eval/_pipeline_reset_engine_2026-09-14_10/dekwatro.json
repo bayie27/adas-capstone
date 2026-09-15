@@ -1,0 +1,18 @@
+{
+  "video": "dekwatro.mp4",
+  "fps": 29.919888540578196,
+  "frames": 859,
+  "gray": true,
+  "conf": 0.15,
+  "imgsz": 640,
+  "sample_fps": 10.0,
+  "events": [
+    {
+      "t": 13.74,
+      "box": [256.2, 287.2, 1501.2, 758.8],
+      "score": 1.019,
+      "peak_conf": 0.841,
+      "age_s": 2.21
+    }
+  ]
+}

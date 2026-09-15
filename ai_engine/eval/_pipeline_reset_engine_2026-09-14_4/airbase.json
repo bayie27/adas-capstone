@@ -1,0 +1,10 @@
+{
+  "video": "airbase.mp4",
+  "fps": 25.010351966873706,
+  "frames": 1510,
+  "gray": true,
+  "conf": 0.15,
+  "imgsz": 640,
+  "sample_fps": 4.0,
+  "events": []
+}
