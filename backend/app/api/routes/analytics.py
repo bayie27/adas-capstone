@@ -309,7 +309,10 @@ def get_dashboard_analytics(
         end_date=end_date,
         camera_ids=camera_id,
     )
+    # Include the bound engine so disposable databases cannot reuse a result
+    # cached by another app instance with the same request filters.
     cache_key = (
+        id(session.get_bind()),
         start_date.isoformat() if start_date else None,
         end_date.isoformat() if end_date else None,
         tuple(camera_id or ()),
