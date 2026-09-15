@@ -4,12 +4,36 @@
 
 .DESCRIPTION
     Preflights the two external binaries this depends on (ffmpeg, mediamtx)
-    and the eval/clips/ directory, then execs `mediamtx mediamtx.yml`. Ctrl+C
-    stops MediaMTX and its child ffmpeg processes together.
+    and every local media input referenced by mediamtx.yml, then execs
+    `mediamtx mediamtx.yml`. Ctrl+C stops MediaMTX and its child ffmpeg
+    processes together. The YAML is the source of truth: change its runOnInit
+    commands to swap clips or change the number of channels without editing
+    this script.
+
+.PARAMETER MediaMtxDir
+    Optional directory containing mediamtx.exe. If omitted, an existing PATH
+    entry is used; otherwise the repository and its parent are searched for a
+    repo-local or extracted MediaMTX release.
 #>
+
+param(
+    [string]$MediaMtxDir = $env:ADAS_MEDIAMTX_DIR
+)
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
+Import-Module (Join-Path $RepoRoot "scripts\lib\adas-lifecycle.psm1") -Force
+
+if ($MediaMtxDir) {
+    $env:PATH = "$MediaMtxDir;$env:PATH"
+}
+if (-not (Get-Command mediamtx -ErrorAction SilentlyContinue)) {
+    $discoveredMediaMtxDir = Find-AdasMediaMtxDirectory -RepoRoot $RepoRoot
+    if ($discoveredMediaMtxDir) {
+        $env:PATH = "$discoveredMediaMtxDir;$env:PATH"
+        Write-Host "Found MediaMTX at '$discoveredMediaMtxDir'."
+    }
+}
 
 $ffmpeg = Get-Command ffmpeg -ErrorAction SilentlyContinue
 if (-not $ffmpeg) {
@@ -29,23 +53,32 @@ add that directory to PATH. Then retry this script.
     exit 1
 }
 
-# mediamtx.yml sources the five channels from here. The clips are gitignored,
-# so a fresh clone has none and MediaMTX would start with every path failing to
-# publish — a confusing symptom for a missing-files cause. Name the five it
-# actually needs rather than just checking the directory is non-empty.
-$clipsDir = Join-Path $RepoRoot "ai_engine\eval\clips"
-$required = @("dekwatro", "tric-motor-car", "red-car-motor", "motor-motor-night", "airbase")
-$missing = $required | Where-Object { -not (Test-Path (Join-Path $clipsDir "$_.mp4")) }
-if ($missing) {
+# The YAML is intentionally user-editable: discover every local `-i` input
+# from its active runOnInit commands instead of assuming clip names or a fixed
+# channel count. Remote and shell-variable inputs are ignored by the helper.
+$configPath = Join-Path $RepoRoot "mediamtx.yml"
+if (-not (Test-Path -LiteralPath $configPath)) {
+    Write-Error "MediaMTX config not found at $configPath."
+    exit 1
+}
+$configuredInputs = @(Get-AdasMediaMtxInputPaths -ConfigPath $configPath -RepoRoot $RepoRoot)
+$missing = @($configuredInputs | Where-Object { -not (Test-Path -LiteralPath $_) })
+if ($missing.Count -gt 0) {
+    $missingDisplay = $missing | ForEach-Object { $_ }
     Write-Warning @"
-ai_engine\eval\clips\ is missing $($missing.Count) of the 5 clips mediamtx.yml needs:
-  $($missing -join ', ')
+mediamtx.yml references $($missing.Count) local media input(s) that are missing:
+  $($missingDisplay -join "`n  ")
 
-Populate it from the frozen research package:
-  cp ai_engine/adas_transfer/clips/*.mp4 ai_engine/eval/clips/
+Add the configured files or edit mediamtx.yml to point at different local media.
 
-See ai_engine/eval/README.md.
+See docs/operations/README.md.
 "@
+}
+elseif ($configuredInputs.Count -eq 0) {
+    Write-Warning "No local -i media inputs were found in mediamtx.yml; verify any remote or variable-based inputs manually."
+}
+else {
+    Write-Host "Validated $($configuredInputs.Count) unique local media input(s) from mediamtx.yml."
 }
 
 Write-Host "Starting MediaMTX (mediamtx.yml) from $RepoRoot ..."
