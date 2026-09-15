@@ -53,8 +53,15 @@ Tracker-bound selectors are grouped by component:
 
 ```powershell
 uv run pytest backend/tests/test_tc_unit_users.py backend/tests/test_tc_unit_incidents.py backend/tests/test_tc_unit_settings.py backend/tests/test_tc_unit_platform.py -ra
-uv run pytest ai_engine/tests/test_tc_unit_accumulator.py -ra
 pnpm --filter frontend test:run -- --pool=forks --maxWorkers=1 src/components/layouts/Sidebar.tracker.test.tsx src/utils/dateRange.test.ts src/pages/Detections.test.tsx src/pages/SystemHealth.test.tsx --reporter=default
+```
+
+The AI accumulator selector requires NumPy. Install the optional AI dependency
+set when it is not already available, then run the selector separately:
+
+```powershell
+uv sync --extra ai-cpu
+uv run pytest ai_engine/tests/test_tc_unit_accumulator.py -ra
 ```
 
 The binding comments at the top of each tracker-bound test module map selectors to case IDs. The current code-backed fixes covered password validation response redaction, case-insensitive usernames, camera configuration versioning, audit free-text redaction, date-range validation, and System Health recovery polling.

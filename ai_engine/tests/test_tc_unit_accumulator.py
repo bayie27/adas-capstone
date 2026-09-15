@@ -19,10 +19,13 @@ its behaviour and do not touch adas_transfer/.
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 from accumulate import Accumulator
 from config import DETECTOR_CONF
+
+np = pytest.importorskip(
+    "numpy", reason="The AI unit suite requires the optional AI dependency set"
+)
 
 BOX = (100.0, 100.0, 200.0, 200.0)
 
