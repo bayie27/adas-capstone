@@ -10,7 +10,7 @@ rows reviewable and diffable in the repo.
 The live tracker row may already exist; check the finding ledger and live Sheet
 before appending.
 
-25 finding(s), 17 unsynced.
+27 finding(s), 17 unsynced.
 
 | Section / Chapter | Page Number | Required Revision | Notes | Status | Assigned to | Synced | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -39,3 +39,5 @@ before appending.
 | Technical Scope; Frameworks and Libraries | 50, 170 (rendered PDF verified 2026-09-14) | Document the optional GPU-resident RTSP input path | Default OpenCV path remains; do not treat PR #226 throughput as deployment evidence | Not started | Daniboy | 2026-09-14 | [2026-09-14-gpu-resident-decode.md](findings/2026-09-14-gpu-resident-decode.md) |
 | NFR-03 Frame Rate Maintenance | 70 and 165 | Change the NFR-03 operating band to 5 to 15 FPS. | User-selected requirement wording; 5 FPS is the lowest tested cadence retaining the native per-clip hit/miss pattern in the reset-aware TensorRT evaluation. | Not started | Daniboy | 2026-09-14 | [2026-09-14-nfr03-five-to-fifteen-fps.md](findings/2026-09-14-nfr03-five-to-fifteen-fps.md) |
 | Target Deployment Architecture; Testing and Validation | pp. 27, 60, 63, 166, 196 (live PDF rendered 2026-09-15); local validation-plan row | Replace current substream and subtype=1/720p wording with the authorized main RTSP feed deployment target | The VMS-fed edge architecture remains viable. The current defense paper should present authorized main RTSP feed ingestion as the target and omit prior candidate-profile language. Fresh 704x480 testing remains internal evidence for why the target was selected. This supersedes the fixed-target wording in the 2026-09-09 finding; its separate capacity and cadence evidence remains separately reviewable. | Applied and verified | Daniboy | 2026-09-15 | [2026-09-14-stream-profile-target-reframe.md](findings/2026-09-14-stream-profile-target-reframe.md) |
+| Chapter 4 — AI Detection Results | pp. 197–205; rendered PDF verified 2026-09-16 | Use strengths-first discussion while preserving event-level results and qualifications. | Applied to the live ITCAPROJ2 Doc after structural read; Figure 35 was preserved and the affected pages were visually verified. | Applied and verified | Daniboy | 2026-09-16 | [2026-09-16-ai-detection-results-review.md](findings/2026-09-16-ai-detection-results-review.md) |
+| Deployment and Implementation | pp. 187–191 (live PDF mapping observed 2026-09-16) | Replace completed-deployment claims with the current proof-of-concept state and a conditional adoption-and-procurement plan. | The current three-device demonstration is separate from the unexecuted CDRRMO production target. Existing live tracker row 87 covers the three-device testing-environment correction; no new tracker row is proposed. | Applied and verified | Enjey | 2026-09-16 | [2026-09-16-deployment-implementation-plan.md](findings/2026-09-16-deployment-implementation-plan.md) |
