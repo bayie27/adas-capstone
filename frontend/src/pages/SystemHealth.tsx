@@ -526,9 +526,7 @@ export default function SystemHealth() {
   const liveQuery = useQuery({
     queryKey: ["system-health-live"],
     queryFn: getSystemHealthLive,
-    refetchInterval: (query) =>
-      // Stop polling if the endpoint doesn't exist yet (404/500)
-      query.state.error ? false : 5_000,
+    refetchInterval: 5_000,
     retry: 1,
   })
 

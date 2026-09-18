@@ -6,13 +6,19 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VMS_CONFIG = REPO_ROOT / "mediamtx-vms.yml"
 VMS_LAUNCHER = REPO_ROOT / "scripts" / "start-vms-sim.sh"
 REPLAY_CHANNELS = range(1, 6)
 DISABLED_LISTENERS = ("rtmp", "hls", "webrtc", "srt", "api", "metrics", "pprof")
+LINUX_ONLY = pytest.mark.skipif(
+    sys.platform == "win32", reason="The VMS simulator launcher requires a POSIX shell"
+)
 
 
 def _make_executable(path: Path, content: str) -> None:
@@ -35,6 +41,7 @@ def test_remote_vms_profile_is_tcp_only_and_exposes_five_replay_paths() -> None:
     )
 
 
+@LINUX_ONLY
 def test_vms_launcher_runs_mediamtx_with_dedicated_profile_after_preflight(
     tmp_path: Path,
 ) -> None:
@@ -73,6 +80,7 @@ def test_vms_launcher_runs_mediamtx_with_dedicated_profile_after_preflight(
     assert launch_log.read_text() == str(sandbox_repo / VMS_CONFIG.name)
 
 
+@LINUX_ONLY
 def test_vms_launcher_does_not_require_specific_clip_filenames(
     tmp_path: Path,
 ) -> None:
@@ -111,6 +119,7 @@ def test_vms_launcher_does_not_require_specific_clip_filenames(
     assert launch_log.read_text() == str(sandbox_repo / VMS_CONFIG.name)
 
 
+@LINUX_ONLY
 def test_vms_launcher_stops_before_startup_when_mediamtx_is_missing(
     tmp_path: Path,
 ) -> None:

@@ -258,6 +258,15 @@ def create_user(
     current_admin: User = Depends(_require_admin_for_create),
 ) -> UserRead:
     """Admin: create a new user account."""
+    existing = session.exec(
+        select(User).where(func.lower(User.username) == user_in.username.lower())
+    ).first()
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already taken.",
+        )
+
     new_user = User(
         username=user_in.username,
         first_name=user_in.first_name,

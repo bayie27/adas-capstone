@@ -30,5 +30,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    // The Windows validation host runs backend xdist workers in parallel with
+    // Vitest. Serializing jsdom workers there avoids resource-sensitive timeouts.
+    maxWorkers: process.platform === "win32" ? 1 : undefined,
   },
 })
