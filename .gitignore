@@ -189,3 +189,5 @@ backend/app/dev/assets/snapshots/
 .claude/*
 !.claude/skills/
 .logs/
+# Codex desktop configuration is machine-local and must not be committed.
+/.codex/config.toml
