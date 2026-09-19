@@ -8,6 +8,8 @@ routes are only registered when DEV_TOOLS_ENABLED resolves true.
 from app.dev.assets import write_snapshot
 from app.dev.profiles import (
     DEFAULT_SEED_PROFILE,
+    DEFENSE_CAMERA_NAMES,
+    DEFENSE_PROFILE,
     PERF_PROFILE,
     PERF_TARGET_INCIDENT_COUNT,
     PROFILES,
@@ -23,6 +25,8 @@ from app.dev.seed import SeedResult, seed_perf_data, seed_profile, seed_source_e
 
 __all__ = [
     "DEFAULT_SEED_PROFILE",
+    "DEFENSE_CAMERA_NAMES",
+    "DEFENSE_PROFILE",
     "PERF_PROFILE",
     "PERF_TARGET_INCIDENT_COUNT",
     "PROFILES",

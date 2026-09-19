@@ -1,0 +1,89 @@
+# Three-device defense profile for the Linux VMS simulator.
+#
+# Run from the repository root on the Linux VMS laptop:
+#   ./scripts/start-vms-sim.sh --config mediamtx-defense-vms.yml
+#
+# The ADAS Windows server reads rtsp://<vms-ip>:8554/channel{channel_id}.
+# The operator laptop never connects to RTSP.
+#
+# Hot-swap procedure:
+# 1. Stop MediaMTX with Ctrl+C.
+# 2. Comment the active `paths:` group in full.
+# 3. Uncomment the other complete `paths:` group in full.
+# 4. Restart the launcher with this same profile.
+#
+# Group A is the clean eight-camera baseline. Group B makes channel 8 publish
+# the known positive `dekwatro.mp4` accident clip while channels 1-7 remain
+# on the airbase negative-control feed.
+
+rtspTransports: [tcp]
+rtspAddress: :8554
+
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+api: no
+metrics: no
+pprof: no
+
+writeQueueSize: 8192
+
+# ---------------------------------------------------------------------------
+# DEFENSE GROUP A: EIGHT AIRBASE STREAMS
+# ---------------------------------------------------------------------------
+paths:
+  channel1:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel2:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel3:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel4:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel5:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel6:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel7:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  channel8:
+    runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+
+# ---------------------------------------------------------------------------
+# DEFENSE GROUP B: SEVEN AIRBASE PLUS ONE ACCIDENT
+# Comment Group A above and uncomment this entire group before restarting.
+# ---------------------------------------------------------------------------
+# paths:
+#   channel1:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel2:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel3:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel4:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel5:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel6:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel7:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/airbase.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes
+#   channel8:
+#     runOnInit: ffmpeg -re -stream_loop -1 -i ./ai_engine/eval/clips/dekwatro.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+#     runOnInitRestart: yes

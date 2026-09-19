@@ -168,6 +168,7 @@ Both `-Reseed <profile>` and the dev panel's Data section take one of these (als
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `demo`      | **Default.** A balanced dataset for manual testing and demos — 8 cameras, 7 users, 18 alerts across every detection status, 7 days of health history, 5 export jobs.                                         |
 | `analytics` | Denser, chart-friendly data across 14 days — same camera/user roster as `demo`, 62 alerts, 30 days of health history.                                                                                        |
+| `defense`   | Eight-camera defense baseline based on UAT accounts and locations — 48 closed historical alerts, 30 days of health history, rich audit/export data, and no open incidents at startup.                        |
 | `edge`      | Unusual workflow combinations and boundary values — confidence scores at 0.0/1.0, cameras mid-cooldown, disabled/soft-deleted accounts, every audit action at least once.                                    |
 | `empty`     | Schema and the default admin account only. Nothing else — the first-run/empty-states case.                                                                                                                   |
 | `perf`      | 100,000 incidents over ~18 months (NFR-08), for measuring query/export performance against a realistic dataset size. Slow (~30s) — both the launcher and the dev panel ask you to confirm before running it. |
@@ -338,6 +339,8 @@ will remain `Unresponsive`/`Disconnected` until a matching RTSP path exists.
 This is intentional and lets each simulation profile choose its own topology.
 
 **Self-blindfold: any camera with an open (`Unverified` or `Ongoing`) incident pauses itself.** This is deliberate — an uncleared incident means the camera shouldn't be re-alerting on the same scene, and it puts the operator in control of when a camera goes back online rather than the engine flooding them the moment it starts. `demo` and `analytics` seed a realistic mix of open and closed incidents (not every camera), so expect some — not necessarily all — configured real-feed cameras to start paused. Clear or dismiss the open incident in the dashboard (or via the dev panel) and that camera resumes within seconds. To force every seeded camera active at once for a demo:
+
+For the defense walkthrough, use the `defense` profile instead: it starts with all eight cameras enabled and active, while its richer incident history remains available for the Dashboard, Detections, AI Performance, exports, and restore verification.
 
 ```bash
 uv run python -c "import sqlite3; d=sqlite3.connect('adas.db'); d.execute(\"UPDATE detection_log SET detection_status='Cleared' WHERE detection_status IN ('Unverified','Ongoing')\"); d.execute(\"UPDATE camera SET desired_ai_state='Active', desired_state_reason=NULL WHERE is_active=1\"); d.commit()"

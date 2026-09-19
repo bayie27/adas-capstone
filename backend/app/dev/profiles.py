@@ -32,6 +32,7 @@ DISMISS_COOLDOWN_MINUTES = max(1, settings.DISMISS_COOLDOWN_SECONDS // 60)
 DEFAULT_SEED_PROFILE = "demo"
 PERF_PROFILE = "perf"
 UAT_PROFILE = "uat"
+DEFENSE_PROFILE = "defense"
 UAT_CAMERA_NAMES: dict[int, str] = {
     1: "Crossing-Banaybanay",
     2: "Air Base Intersection",
@@ -39,6 +40,11 @@ UAT_CAMERA_NAMES: dict[int, str] = {
     4: "Petron Banaybanay",
     5: "Unitop",
     6: "STAR Tollway",
+}
+DEFENSE_CAMERA_NAMES: dict[int, str] = {
+    **UAT_CAMERA_NAMES,
+    7: "Ayala Highway Cam",
+    8: "Inosluban Intersection",
 }
 
 UAT_OPERATOR_PASSWORD = "UATOperator2026!"
@@ -806,6 +812,89 @@ def build_uat_alert_specs(now: datetime) -> list[SeedAlertSpec]:
     return specs
 
 
+def build_defense_cameras() -> list[SeedCameraSpec]:
+    """Eight healthy cameras for the defense/demo topology.
+
+    Unlike the frozen UAT profile, this baseline deliberately has no disabled
+    readiness camera or open tray incident. Every channel can therefore be
+    used by the live three-device demonstration immediately after the AI
+    heartbeat converges.
+    """
+    healthy = {
+        "connection_status": ConnectionStatus.CONNECTED,
+        "ai_status": AIStatus.ACTIVE,
+        "last_heartbeat_minutes_ago": 0,
+        "measured_fps": 15.0,
+        "inference_latency_ms": 54.0,
+    }
+    return [
+        SeedCameraSpec(
+            key=f"defense_channel_{channel}",
+            camera_name=name,
+            channel_id=channel,
+            **healthy,
+        )
+        for channel, name in DEFENSE_CAMERA_NAMES.items()
+    ]
+
+
+def build_defense_users() -> list[SeedUserSpec]:
+    """Reuse the coded UAT participants for the defense baseline."""
+    return build_uat_users()
+
+
+def build_defense_alert_specs(now: datetime) -> list[SeedAlertSpec]:
+    """Rich, closed history for the eight-camera defense dashboard.
+
+    The generated rows are intentionally all Cleared or Dismissed: the live
+    demonstration should begin with every camera available for a fresh RTSP
+    detection, while the historical records still make Detections, Dashboard,
+    AI Performance, exports, and the restore anchor useful.
+    """
+    camera_keys = tuple(
+        f"defense_channel_{channel}" for channel in DEFENSE_CAMERA_NAMES
+    )
+    status_cycle = (
+        DetectionStatus.CLEARED,
+        DetectionStatus.DISMISSED,
+        DetectionStatus.CLEARED,
+        DetectionStatus.CLEARED,
+    )
+    operators = tuple(f"uat_op{number:02d}" for number in range(1, 7))
+    specs: list[SeedAlertSpec] = []
+
+    for index in range(48):
+        status = status_cycle[index % len(status_cycle)]
+        verifier = operators[index % len(operators)]
+        closer = operators[(index + 1) % len(operators)]
+        label = (
+            "defense_restore_anchor_cleared"
+            if index == 0
+            else f"defense_history_{index + 1:02d}"
+        )
+        specs.append(
+            SeedAlertSpec(
+                label=label,
+                camera_key=camera_keys[index % len(camera_keys)],
+                detected_at=seeded_timestamp(
+                    now,
+                    days_ago=1 + (index // 2),
+                    hour=6 + ((index * 3) % 14),
+                    minute=(index * 11) % 60,
+                ),
+                confidence_score=round(0.48 + (index % 8) * 0.055, 3),
+                detection_status=status,
+                verified_by_key=verifier if status is DetectionStatus.CLEARED else None,
+                verified_after_minutes=(
+                    2 + (index % 4) if status is DetectionStatus.CLEARED else None
+                ),
+                closed_by_key=closer,
+                closed_after_minutes=12 + (index % 9),
+            )
+        )
+    return specs
+
+
 def build_default_audit_specs(now: datetime) -> list[SeedAuditSpec]:
     """Representative audit_log rows so the audit viewer has something to
     page through. `now` is accepted for signature parity with the other
@@ -1037,6 +1126,61 @@ def build_demo_audit_specs(now: datetime) -> list[SeedAuditSpec]:
     return specs
 
 
+def build_defense_audit_specs(now: datetime) -> list[SeedAuditSpec]:
+    """Audit history adapted to the UAT accounts for the defense profile."""
+    del now  # timestamps are relative and supplied through minutes_ago below
+    actor_cycle = (
+        "admin",
+        "uat_adm01",
+        "uat_adm02",
+        "uat_op01",
+        "uat_op02",
+        "uat_op03",
+        "uat_op04",
+        "uat_op05",
+        "uat_op06",
+    )
+    specs = [
+        SeedAuditSpec(
+            actor_key="admin",
+            action="LOGIN_SUCCESS",
+            target_type="session",
+            result="success",
+            minutes_ago=180,
+        ),
+        SeedAuditSpec(
+            username="ghost",
+            action="LOGIN_FAILURE",
+            target_type="session",
+            result="denied",
+            detail='{"reason": "invalid_credentials"}',
+            minutes_ago=42,
+        ),
+    ]
+
+    for index, action in enumerate(AUDIT_ACTIONS):
+        is_system = action in _AUDIT_SYSTEM_ACTIONS
+        if action in _AUDIT_FAILURE_ACTIONS:
+            result = "failure"
+        elif action in _AUDIT_DENIED_ACTIONS:
+            result = "denied"
+        else:
+            result = "success"
+
+        specs.append(
+            SeedAuditSpec(
+                actor_type="system" if is_system else "user",
+                actor_key=None if is_system else actor_cycle[index % len(actor_cycle)],
+                action=action,
+                target_type=_AUDIT_TARGET_TYPES.get(action.split("_", 1)[0]),
+                target_ref=str(index + 1),
+                result=result,
+                minutes_ago=240 + index * 7,
+            )
+        )
+    return specs
+
+
 def build_demo_alert_specs_enriched(now: datetime) -> list[SeedAlertSpec]:
     """demo's 18 alerts, with a snooze on the one open incident that always
     survives the enforcer: tambo_recent_unverified is at now-5min and the
@@ -1142,6 +1286,16 @@ PROFILES: dict[str, SeedProfile] = {
         alerts=build_uat_alert_specs,
         audit=_no_audit,
         health_days=30,
+    ),
+    DEFENSE_PROFILE: SeedProfile(
+        name=DEFENSE_PROFILE,
+        description="Eight-camera defense demo with rich history and a clean live baseline.",
+        cameras=build_defense_cameras,
+        users=build_defense_users,
+        alerts=build_defense_alert_specs,
+        audit=build_defense_audit_specs,
+        health_days=30,
+        exports=True,
     ),
     "demo": SeedProfile(
         name="demo",

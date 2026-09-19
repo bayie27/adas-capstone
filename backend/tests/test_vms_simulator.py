@@ -13,8 +13,10 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VMS_CONFIG = REPO_ROOT / "mediamtx-vms.yml"
+DEFENSE_VMS_CONFIG = REPO_ROOT / "mediamtx-defense-vms.yml"
 VMS_LAUNCHER = REPO_ROOT / "scripts" / "start-vms-sim.sh"
 REPLAY_CHANNELS = range(1, 6)
+DEFENSE_REPLAY_CHANNELS = range(1, 9)
 DISABLED_LISTENERS = ("rtmp", "hls", "webrtc", "srt", "api", "metrics", "pprof")
 LINUX_ONLY = pytest.mark.skipif(
     sys.platform == "win32", reason="The VMS simulator launcher requires a POSIX shell"
@@ -39,6 +41,22 @@ def test_remote_vms_profile_is_tcp_only_and_exposes_five_replay_paths() -> None:
     assert profile.count("rtsp://localhost:$RTSP_PORT/$MTX_PATH") == len(
         REPLAY_CHANNELS
     )
+
+
+def test_defense_vms_profile_has_two_eight_channel_clip_groups() -> None:
+    profile = DEFENSE_VMS_CONFIG.read_text()
+
+    assert "# DEFENSE GROUP A: EIGHT AIRBASE STREAMS" in profile
+    assert "# DEFENSE GROUP B: SEVEN AIRBASE PLUS ONE ACCIDENT" in profile
+    assert "rtspTransports: [tcp]" in profile
+    assert "rtspAddress: :8554" in profile
+    for listener in DISABLED_LISTENERS:
+        assert f"{listener}: no" in profile
+    for channel in DEFENSE_REPLAY_CHANNELS:
+        assert f"  channel{channel}:" in profile
+    assert profile.count("./ai_engine/eval/clips/airbase.mp4") == 15
+    assert profile.count("./ai_engine/eval/clips/dekwatro.mp4") == 1
+    assert profile.count("rtsp://localhost:$RTSP_PORT/$MTX_PATH") == 16
 
 
 @LINUX_ONLY
@@ -117,6 +135,48 @@ def test_vms_launcher_does_not_require_specific_clip_filenames(
 
     assert completed.returncode == 0, completed.stderr
     assert launch_log.read_text() == str(sandbox_repo / VMS_CONFIG.name)
+
+
+@LINUX_ONLY
+def test_vms_launcher_accepts_a_selected_config_profile(tmp_path: Path) -> None:
+    sandbox_repo = tmp_path / "repo"
+    sandbox_scripts = sandbox_repo / "scripts"
+    sandbox_scripts.mkdir(parents=True)
+
+    shutil.copy2(VMS_LAUNCHER, sandbox_scripts / VMS_LAUNCHER.name)
+    selected_config = sandbox_repo / DEFENSE_VMS_CONFIG.name
+    selected_config.write_text("selected defense config")
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    launch_log = tmp_path / "mediamtx-argument.txt"
+    _make_executable(fake_bin / "ffmpeg", "#!/usr/bin/env bash\nexit 0\n")
+    _make_executable(
+        fake_bin / "mediamtx",
+        '#!/usr/bin/env bash\nprintf \'%s\' "$1" > "$MEDIAMTX_ARGUMENT_LOG"\n',
+    )
+
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "MEDIAMTX_ARGUMENT_LOG": str(launch_log),
+    }
+    completed = subprocess.run(
+        [
+            "bash",
+            str(sandbox_scripts / VMS_LAUNCHER.name),
+            "--config",
+            selected_config.name,
+        ],
+        cwd=sandbox_repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert launch_log.read_text() == str(selected_config)
 
 
 @LINUX_ONLY
