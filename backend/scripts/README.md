@@ -84,6 +84,9 @@ Profiles:
   one export job in each of the five statuses, and all 26 `AUDIT_ACTIONS`
 - `analytics`: denser, chart-friendly dataset with many more alerts across
   14 days, and 30 days of health history
+- `defense`: eight-camera defense baseline using the UAT accounts and location
+  names, 48 closed historical alerts, 30 days of health history, rich audit
+  and export data, and no open incidents at startup
 - `edge`: smaller dataset focused on unusual workflow combinations, plus
   column boundaries (`confidence_score` at exactly 0.0 and 1.0) and a
   camera holding a `cooldown_until`

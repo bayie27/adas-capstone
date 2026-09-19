@@ -306,6 +306,41 @@ def test_uat_profile_matches_the_journey_baseline(seeded):
     assert result.health_samples > 0
 
 
+def test_defense_profile_is_eight_camera_rich_demo_baseline(seeded):
+    engine, _, result = seeded["defense"]
+    with Session(engine) as session:
+        users = session.exec(select(User)).all()
+        cameras = session.exec(select(Camera)).all()
+        detections = session.exec(select(DetectionLog)).all()
+        audit = session.exec(select(AuditLog)).all()
+        exports = session.exec(select(ExportJob)).all()
+
+    assert result.profile == "defense"
+    assert result.cameras == 8
+    assert result.detections == 48
+    assert result.audit_rows > 0
+    assert result.health_samples > 0
+    assert result.export_jobs == 5
+    assert result.snapshots == result.detections
+
+    assert {camera.channel_id for camera in cameras} == set(range(1, 9))
+    assert all(camera.is_active and camera.is_enabled for camera in cameras)
+    assert all(camera.connection_status == "Connected" for camera in cameras)
+    assert all(camera.ai_status == "Active" for camera in cameras)
+
+    assert {row.detection_status for row in detections} == {"Cleared", "Dismissed"}
+    assert not [row for row in detections if row.detection_status in OPEN_STATUSES]
+    assert {user.username for user in users} >= {"uat_op01", "uat_adm01"}
+    assert len(audit) > 20
+    assert {job.status for job in exports} == {
+        "queued",
+        "processing",
+        "completed",
+        "failed",
+        "expired",
+    }
+
+
 # ---------------------------------------------------------------------------
 # 4. Snapshots resolve
 # ---------------------------------------------------------------------------

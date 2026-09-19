@@ -73,7 +73,7 @@ Complete this checklist before starting applications:
   and client isolation is disabled.
 - The VMS and ADAS reservations appear in the router's static-DHCP list.
 - The Linux VMS has `ffmpeg`, `mediamtx`, this repository checkout,
-  `mediamtx-vms.yml`, and `scripts/start-vms-sim.sh`.
+  `mediamtx-defense-vms.yml`, and `scripts/start-vms-sim.sh`.
 - The Windows ADAS server has the repository, dependencies, model weights,
   `certs/adas-cert.pem`, `certs/adas-key.pem`, and its configured `.env`.
 - The operator has only a supported browser, the public certificate
@@ -201,9 +201,10 @@ Add `$HOME/.local/bin` to the shell startup file you actually use if
 
 ### 5.3 Select clips in the profile
 
-`mediamtx-vms.yml` is the source of truth. It defines the five published paths
-(`channel1` through `channel5`) and each path's `runOnInit` FFmpeg command.
-The launcher is deliberately clip-agnostic.
+`mediamtx-defense-vms.yml` is the source of truth for the eight-camera defense
+profile. It defines `channel1` through `channel8` and contains two complete
+switchable publisher groups: an eight-camera silent baseline and a seven-
+silent-plus-one-positive group. The launcher is deliberately clip-agnostic.
 
 To use a different clip, edit only the source after `-i` for the chosen
 channel, keeping the looping, TCP, output, and `$RTSP_PORT/$MTX_PATH` portions
@@ -246,10 +247,10 @@ sudo ufw allow from <NEW_ADAS_SERVER_IP> to any port 8554 proto tcp comment 'ADA
 From the VMS repository root:
 
 ```bash
-./scripts/start-vms-sim.sh
+./scripts/start-vms-sim.sh --config mediamtx-defense-vms.yml
 ```
 
-Leave this terminal running. It starts MediaMTX and its five FFmpeg publishers;
+Leave this terminal running. It starts MediaMTX and its eight FFmpeg publishers;
 `Ctrl+C` stops them together. A successful log opens `:8554` and reports each
 configured channel online.
 
@@ -433,19 +434,19 @@ for the secure login cookie and WebSocket alerts to work reliably.
 
 Run the checks in this order. Each successful layer narrows the next failure.
 
-| Layer        | Command/action                             | Expected result                                            |
-| ------------ | ------------------------------------------ | ---------------------------------------------------------- |
-| Router       | Static DHCP list                           | All three MAC-to-IP bindings appear                        |
-| Linux VMS    | `ip link`                                  | Wired interface is `LOWER_UP`                              |
-| Linux VMS    | `./scripts/start-vms-sim.sh`               | Listener opens on TCP `:8554`; configured channels publish |
-| Windows ADAS | `Test-NetConnection <VMS_IP> -Port 8554`   | `TcpTestSucceeded : True`                                  |
-| Windows ADAS | `ffplay ...channel1` when available        | Selected replay appears                                    |
-| Windows ADAS | `https://localhost:8000/healthz/ready`     | HTTP 200                                                   |
-| Windows ADAS | Camera status after AI heartbeat           | Fed cameras are `Connected / Active`                       |
-| Operator     | `Test-NetConnection adas.local -Port 8000` | `TcpTestSucceeded : True`                                  |
-| Operator     | `Test-NetConnection adas.local -Port 5173` | `TcpTestSucceeded : True`                                  |
-| Operator     | `https://adas.local:5173`                  | Login persists after navigation; alerts arrive             |
-| Operator     | `Test-NetConnection <VMS_IP> -Port 8554`   | Fails after UFW restriction                                |
+| Layer        | Command/action                                                 | Expected result                                                  |
+| ------------ | -------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Router       | Static DHCP list                                               | All three MAC-to-IP bindings appear                              |
+| Linux VMS    | `ip link`                                                      | Wired interface is `LOWER_UP`                                    |
+| Linux VMS    | `./scripts/start-vms-sim.sh --config mediamtx-defense-vms.yml` | Listener opens on TCP `:8554`; eight configured channels publish |
+| Windows ADAS | `Test-NetConnection <VMS_IP> -Port 8554`                       | `TcpTestSucceeded : True`                                        |
+| Windows ADAS | `ffplay ...channel1` when available                            | Selected replay appears                                          |
+| Windows ADAS | `https://localhost:8000/healthz/ready`                         | HTTP 200                                                         |
+| Windows ADAS | Camera status after AI heartbeat                               | Fed cameras are `Connected / Active`                             |
+| Operator     | `Test-NetConnection adas.local -Port 8000`                     | `TcpTestSucceeded : True`                                        |
+| Operator     | `Test-NetConnection adas.local -Port 5173`                     | `TcpTestSucceeded : True`                                        |
+| Operator     | `https://adas.local:5173`                                      | Login persists after navigation; alerts arrive                   |
+| Operator     | `Test-NetConnection <VMS_IP> -Port 8554`                       | Fails after UFW restriction                                      |
 
 ## 10. Troubleshooting
 
