@@ -199,7 +199,7 @@ def envelope_seeded(envelope_engine, envelope_settings) -> dict:
 
     reconcile_camera_desired_states(envelope_engine)
 
-    return {"now": now, "operators": operators}
+    return {"now": now, "operators": operators, "row_count": len(rows)}
 
 
 @pytest.fixture(scope="session")

@@ -134,26 +134,32 @@ function Stop-AiEngine {
 
 # Reverse of the start-up order: coordinator -> AI engine -> frontend -> backend -> sim.
 if ($managedFullStop) {
+    Write-Step "Stopping restore coordinator..."
     $backupDirectory = Get-AdasBackupDirectory -RepoRoot $RepoRoot
     if (-not (Stop-AdasRestoreCoordinator -RepoRoot $RepoRoot -BackupDirectory $backupDirectory)) {
         Write-Error "The controlled restore coordinator could not be stopped safely. No managed service was terminated."
         exit 1
     }
+    Write-Step "Restore coordinator stopped."
+    Write-Step "Stopping AI engine..."
     if (-not (Stop-AdasManagedComponent -RepoRoot $RepoRoot -Component ai_engine -AllowMissing)) {
         Write-Error "The controlled AI process could not be stopped safely. The backend was left running."
         exit 1
     }
+    Write-Step "AI engine stopped."
 }
 elseif ($Ai) {
     Stop-AiEngine
 }
 if ($Frontend) { Stop-ByPort -Port 5173 -Label "Frontend" }
 if ($managedFullStop) {
+    Write-Step "Stopping backend..."
     if (-not (Stop-AdasManagedComponent -RepoRoot $RepoRoot -Component backend -AllowMissing)) {
         Write-Error "The controlled backend process could not be stopped safely."
         exit 1
     }
     Clear-AdasRuntimeMetadata -RepoRoot $RepoRoot
+    Write-Step "Backend stopped."
 }
 elseif ($Backend) { Stop-ByPort -Port 8000 -Label "Backend" }
 if ($Sim) { Stop-ByPort -Port 8554 -Label "Sim (MediaMTX)" }

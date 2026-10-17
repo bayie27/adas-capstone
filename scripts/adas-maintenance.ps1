@@ -199,6 +199,16 @@ function Start-AiEngine {
 function Wait-Ready([switch]$RequireHeartbeat) {
     Write-Step "Waiting for /healthz/ready and a fresh AI heartbeat (timeout ${ReadyTimeoutSeconds}s)..."
     $args = @("restart", "--phase", "wait", "--timeout", $ReadyTimeoutSeconds)
+    if ($script:LaunchProfile -and [bool]$script:LaunchProfile.lan) {
+        $healthCaCert = Join-Path ([string]$script:LaunchProfile.cert_dir) "adas-cert.pem"
+        if (-not (Test-Path -LiteralPath $healthCaCert)) {
+            throw "LAN maintenance readiness needs the certificate at $healthCaCert."
+        }
+        $args += @(
+            "--health-url", "https://127.0.0.1:8000/healthz/ready",
+            "--health-ca-cert", $healthCaCert
+        )
+    }
     if ($RequireHeartbeat) { $args += "--require-heartbeat" }
     $result = Invoke-Maintenance $args
     $heartbeatConfirmed = $false

@@ -1,0 +1,10 @@
+{
+  "video": "car-motor-far.mp4",
+  "fps": 30.010003334444814,
+  "frames": 1800,
+  "gray": true,
+  "conf": 0.15,
+  "imgsz": 640,
+  "sample_fps": null,
+  "events": []
+}
