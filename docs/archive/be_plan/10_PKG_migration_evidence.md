@@ -98,7 +98,7 @@ Each of these produces a **recorded number**, not just a pass/fail:
 
 | Target | Test |
 |---|---|
-| NFR-08 / TC-R-202 — dashboard query < 3s on 100,000 rows | time `GET /api/alerts/` with realistic filters, and `GET /api/analytics/dashboard` |
+| NFR-08 / TC-R-202 — single-request dashboard query < 3s; TC-PERF-012 concurrent p95 ≤ 10s on 100,000 rows | time `GET /api/alerts/` and `GET /api/analytics/dashboard`, then run the defined 20-request authenticated concurrent profile |
 | NFR-06 / TC-R-203 — export < 5s for a 30-day / ~10,000-row dataset | time both CSV and PDF, time-to-first-byte and total |
 | NFR-04 / TC-R-201 — alert delivery < 2s | time from `POST /api/internal/alert` to the event arriving at a connected WebSocket client |
 | D-008 — slow-client isolation | with one stalled client, a healthy client still receives an alert within 2s |
