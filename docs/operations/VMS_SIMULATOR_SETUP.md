@@ -474,6 +474,13 @@ Windows stack:
 pwsh -File scripts/stop-dev.ps1
 ```
 
+The explicit all-components form is equivalent and is the recommended paired
+shutdown command for the LAN launcher:
+
+```powershell
+pwsh -File scripts\stop-dev.ps1 -All
+```
+
 Keep the router reservations, Windows firewall rules, certificate, hostname
 mapping, and Linux UFW allow rule for the next remote-VMS session. Before the
 next run, repeat the checks in [Before each session](#3-before-each-session)

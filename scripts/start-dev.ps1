@@ -313,6 +313,189 @@ function Test-LanProfile {
     }
 }
 
+function Test-AdasTcpReachability {
+    param(
+        [Parameter(Mandatory = $true)][string]$HostName,
+        [Parameter(Mandatory = $true)][int]$Port,
+        [int]$TimeoutMilliseconds = 1500
+    )
+
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $async = $client.BeginConnect($HostName, $Port, $null, $null)
+        return [bool]($async.AsyncWaitHandle.WaitOne($TimeoutMilliseconds) -and $client.Connected)
+    }
+    catch {
+        return $false
+    }
+    finally {
+        $client.Dispose()
+    }
+}
+
+function Get-AdasRtspEndpoint {
+    param([Parameter(Mandatory = $true)][string]$RepoRoot)
+
+    $envPath = Join-Path $RepoRoot ".env"
+    $line = Get-Content $envPath -ErrorAction SilentlyContinue |
+        Where-Object { $_ -match '^\s*RTSP_URL_TEMPLATE\s*=' } |
+        Select-Object -Last 1
+    if (-not $line) {
+        return $null
+    }
+
+    $template = ($line -split "=", 2)[1].Trim().Trim("'").Trim('"')
+    if ($template -notmatch '^rtsp://(?<host>[^/:]+)(?::(?<port>\d+))?/') {
+        return $null
+    }
+
+    $port = if ($Matches.port) { [int]$Matches.port } else { 8554 }
+    return [PSCustomObject]@{
+        Template = $template
+        Host     = [string]$Matches.host
+        Port     = $port
+    }
+}
+
+function Show-AdasRemoteVmsReachability {
+    param([Parameter(Mandatory = $true)][string]$RepoRoot)
+
+    $endpoint = Get-AdasRtspEndpoint -RepoRoot $RepoRoot
+    if ($null -eq $endpoint) {
+        Write-Warning "Remote-VMS mode could not parse RTSP_URL_TEMPLATE from .env. Expected rtsp://<VMS_IP>:8554/channel{channel_id}."
+        return
+    }
+
+    if ($endpoint.Host -in @("localhost", "127.0.0.1", "::1")) {
+        Write-Warning "Remote-VMS mode is selected, but RTSP_URL_TEMPLATE points to $($endpoint.Host). Set it to the Linux VMS address, e.g. rtsp://192.168.254.195:8554/channel{channel_id}."
+        return
+    }
+
+    if (Test-AdasTcpReachability -HostName $endpoint.Host -Port $endpoint.Port) {
+        Write-Step "Remote VMS reachable at $($endpoint.Host):$($endpoint.Port)."
+    }
+    else {
+        Write-Warning "Remote VMS $($endpoint.Host):$($endpoint.Port) is not reachable. The ADAS services will still start, but cameras will remain Reconnecting until the Linux VMS listener and firewall rule are available."
+    }
+}
+
+function Test-AdasLocalPortListening {
+    param([Parameter(Mandatory = $true)][int]$Port)
+
+    if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
+        $connections = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+        if ($connections.Count -gt 0) {
+            return $true
+        }
+    }
+
+    return [bool](netstat -ano | Select-String -Pattern ":$Port\s+.*LISTENING")
+}
+
+function Wait-AdasManagedStartup {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][ValidateSet("backend", "ai_engine")][string]$Component,
+        [Parameter(Mandatory = $true)][string]$Label,
+        [int]$TimeoutSeconds = 30
+    )
+
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        if (Test-AdasManagedProcess -RepoRoot $RepoRoot -Component $Component) {
+            Write-Step "$Label process is running under the managed launcher."
+            return $true
+        }
+        Start-Sleep -Milliseconds 500
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    Write-Warning "$Label did not remain running. Check var\log\$Component-*.log and var\log\$Component-*.err.log."
+    return $false
+}
+
+function Wait-AdasLocalPort {
+    param(
+        [Parameter(Mandatory = $true)][int]$Port,
+        [Parameter(Mandatory = $true)][string]$Label,
+        [int]$TimeoutSeconds = 30
+    )
+
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        if (Test-AdasLocalPortListening -Port $Port) {
+            Write-Step "$Label is listening on port $Port."
+            return $true
+        }
+        Start-Sleep -Milliseconds 500
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    Write-Warning "$Label did not listen on port $Port. Check the latest launcher log under var\log."
+    return $false
+}
+
+function Wait-AdasApplicationReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)]$Profile,
+        [int]$TimeoutSeconds = 30
+    )
+
+    $maintenanceArgs = @("restart", "--phase", "wait", "--timeout", [string]$TimeoutSeconds)
+    if ([bool]$Profile.lan) {
+        $healthCaCert = Join-Path ([string]$Profile.cert_dir) "adas-cert.pem"
+        if (-not (Test-Path -LiteralPath $healthCaCert)) {
+            Write-Warning "LAN readiness verification needs the certificate at $healthCaCert."
+            return [PSCustomObject]@{ Ready = $false; HeartbeatConfirmed = $false }
+        }
+        $maintenanceArgs += @(
+            "--health-url", "https://127.0.0.1:8000/healthz/ready",
+            "--health-ca-cert", $healthCaCert
+        )
+    }
+
+    Push-Location (Join-Path $RepoRoot "backend")
+    try {
+        $output = & uv run --no-sync python -m app.maintenance @maintenanceArgs
+        $exitCode = $LASTEXITCODE
+        $output | ForEach-Object { Write-Host $_ }
+
+        $data = $null
+        $jsonText = ($output -join "`n").Trim()
+        if ($jsonText) {
+            try {
+                $data = $jsonText | ConvertFrom-Json
+            }
+            catch {
+                $data = $null
+            }
+        }
+
+        $ready = ($exitCode -eq 0 -and $null -ne $data -and [bool]$data.ready)
+        $heartbeatConfirmed = $false
+        if ($null -ne $data -and $null -ne $data.heartbeat_confirmed) {
+            $heartbeatConfirmed = [bool]$data.heartbeat_confirmed
+        }
+        if (-not $ready) {
+            Write-Warning "Backend application readiness was not confirmed. Check the latest backend logs under var\log."
+        }
+        elseif (-not $heartbeatConfirmed) {
+            Write-Warning "Backend is ready, but a fresh AI heartbeat was not confirmed within ${TimeoutSeconds}s. Check camera and AI-engine logs."
+        }
+
+        return [PSCustomObject]@{
+            Ready              = $ready
+            HeartbeatConfirmed = $heartbeatConfirmed
+        }
+    }
+    catch {
+        Write-Warning "Backend application readiness check failed: $($_.Exception.Message)"
+        return [PSCustomObject]@{ Ready = $false; HeartbeatConfirmed = $false }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 # Advisory only -- never blocks. These are OS-level steps docs/operations/LAN_SETUP.md step 2
 # owns, but they are the single most common cause of a demo that looks broken
 # for no reason, and they are invisible from inside the application.
@@ -337,6 +520,9 @@ if ($Lan) {
     Test-EnvFile
     Test-Uv
     Test-LanProfile
+    if ($Backend -and $Ai -and -not $Sim) {
+        Show-AdasRemoteVmsReachability -RepoRoot $RepoRoot
+    }
 }
 
 if ($Backend -or $Ai -or $Reseed) {
@@ -431,7 +617,8 @@ if ($Backend) {
     # unconditionally rather than reactively, since there's no reliable way
     # to detect the parent shell's encoding before the crash happens.
     if ($managedBackendAi) {
-        Start-AdasManagedComponent -RepoRoot $RepoRoot -Component backend -Profile $launchProfile -LogDirectory (Join-Path $RepoRoot "var\log") -ShellExecutable $script:ShellExe | Out-Null
+        $backendProcess = Start-AdasManagedComponent -RepoRoot $RepoRoot -Component backend -Profile $launchProfile -LogDirectory (Join-Path $RepoRoot "var\log") -ShellExecutable $script:ShellExe
+        Write-Step "Backend launch requested (managed PID $($backendProcess.Id)); logs are under var\log."
     }
     elseif ($Lan) {
         # The FastAPI CLI exposes no SSL flags at all, so TLS means driving
@@ -463,7 +650,8 @@ if ($Frontend) {
 
 if ($Ai) {
     if ($managedBackendAi) {
-        Start-AdasManagedComponent -RepoRoot $RepoRoot -Component ai_engine -Profile $launchProfile -LogDirectory (Join-Path $RepoRoot "var\log") -ShellExecutable $script:ShellExe | Out-Null
+        $aiProcess = Start-AdasManagedComponent -RepoRoot $RepoRoot -Component ai_engine -Profile $launchProfile -LogDirectory (Join-Path $RepoRoot "var\log") -ShellExecutable $script:ShellExe
+        Write-Step "AI engine launch requested (managed PID $($aiProcess.Id)); logs are under var\log."
     }
     elseif ($Lan) {
         # ai_engine/backend_client.py uses `requests`, which validates against
@@ -486,6 +674,29 @@ if ($managedBackendAi) {
     $backupDirectory = Get-AdasBackupDirectory -RepoRoot $RepoRoot
     Start-AdasRestoreCoordinator -RepoRoot $RepoRoot -BackupDirectory $backupDirectory -LogDirectory (Join-Path $RepoRoot "var\log") | Out-Null
     Write-Step "Restore coordinator started for the full managed backend + AI profile."
+
+    $backendReady = Wait-AdasManagedStartup -RepoRoot $RepoRoot -Component backend -Label "Backend"
+    $aiReady = Wait-AdasManagedStartup -RepoRoot $RepoRoot -Component ai_engine -Label "AI engine"
+    $backendListening = Wait-AdasLocalPort -Port 8000 -Label "Backend TLS"
+    $frontendListening = if ($Frontend) { Wait-AdasLocalPort -Port 5173 -Label "Frontend TLS" } else { $true }
+    $applicationReadiness = if ($backendReady -and $backendListening) {
+        Wait-AdasApplicationReadiness -RepoRoot $RepoRoot -Profile $launchProfile
+    }
+    else {
+        [PSCustomObject]@{ Ready = $false; HeartbeatConfirmed = $false }
+    }
+    $startupVerified = Test-AdasManagedStartupVerified `
+        -RepoRoot $RepoRoot `
+        -BackendApiReady ([bool]$applicationReadiness.Ready) `
+        -AiHeartbeatConfirmed ([bool]$applicationReadiness.HeartbeatConfirmed) `
+        -BackendListening ([bool]$backendListening) `
+        -FrontendListening ([bool]$frontendListening)
+    if ($backendReady -and $aiReady -and $startupVerified) {
+        Write-Step "Backend API readiness, fresh AI heartbeat, local listeners, and managed processes verified."
+    }
+    else {
+        Write-Warning "Startup is not fully verified. Check backend readiness, camera heartbeat, listeners, and managed-process logs before relying on the stack."
+    }
 }
 
 Write-Step "Requested: $($requested -join ', '). Use scripts\stop-dev.ps1 to tear down."
