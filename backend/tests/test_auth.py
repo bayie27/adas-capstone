@@ -684,10 +684,17 @@ class TestOriginValidation:
         resp = client.post("/api/auth/logout", headers=headers)
         assert resp.status_code == 204
 
-    def test_listed_origin_allowed(self, client: TestClient, session: Session):
+    def test_listed_origin_allowed(
+        self, client: TestClient, session: Session, monkeypatch
+    ):
         make_admin(session)
+        # The process-global Settings object may have loaded a developer .env,
+        # while this fixture's app deliberately uses an isolated Settings.
+        monkeypatch.setattr(
+            settings, "CORS_ORIGINS", ["http://global-settings.invalid"]
+        )
         headers = auth_headers(client, "admin", "Admin123")
-        headers["Origin"] = settings.CORS_ORIGINS[0]
+        headers["Origin"] = client.app.state.settings.CORS_ORIGINS[0]
         resp = client.post("/api/auth/logout", headers=headers)
         assert resp.status_code == 204
 

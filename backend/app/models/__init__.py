@@ -28,6 +28,7 @@ from app.models.health import (
     SysHealthRawBase,
 )
 from app.models.help import HelpArticle
+from app.models.mfa import MfaChallenge, MfaCredential, MfaRecoveryCode
 from app.models.user import AlarmSettings, AuthSession, User, UserBase
 
 __all__ = [
@@ -51,6 +52,9 @@ __all__ = [
     "ExportJob",
     "HealthState",
     "HelpArticle",
+    "MfaChallenge",
+    "MfaCredential",
+    "MfaRecoveryCode",
     "SysHealthHourly",
     "SysHealthHourlyBase",
     "SysHealthRaw",

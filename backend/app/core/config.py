@@ -4,6 +4,8 @@ from typing import Annotated, Literal
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from app.core.mfa import validate_encryption_key
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROOT_ENV_FILE = REPO_ROOT / ".env"
 
@@ -31,6 +33,9 @@ class Settings(BaseSettings):
     SESSION_LIFETIME_MINUTES: int = 480
     SESSION_COOKIE_NAME: str = "adas_session"
     SESSION_COOKIE_SECURE: bool = True
+    # Staged setting: construction remains valid without it until P4 activates
+    # MFA at startup. Every cryptographic helper requires a valid key directly.
+    MFA_ENCRYPTION_KEY: SecretStr | None = None
 
     # CORS
     # NoDecode: without it, pydantic-settings tries to JSON-decode the raw
@@ -234,6 +239,23 @@ class Settings(BaseSettings):
             raise ValueError(
                 "SECRET_KEY must be at least 32 characters long when ENVIRONMENT=production."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_mfa_encryption_key(self) -> "Settings":
+        if self.MFA_ENCRYPTION_KEY is None:
+            return self
+        key = self.MFA_ENCRYPTION_KEY.get_secret_value()
+        if not key.strip():
+            self.MFA_ENCRYPTION_KEY = None
+            return self
+        try:
+            validate_encryption_key(key)
+        except ValueError:
+            # A model-level error displays the already-masked SecretStr field,
+            # unlike a field validator that exposes its raw input in Pydantic's
+            # ValidationError.
+            raise ValueError("MFA_ENCRYPTION_KEY must be a valid Fernet key.") from None
         return self
 
 

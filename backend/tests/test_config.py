@@ -3,6 +3,7 @@
 import pytest
 from app.api.routes.internal import _build_rtsp_url
 from app.core.config import Settings
+from cryptography.fernet import Fernet
 from pydantic import ValidationError
 
 
@@ -52,3 +53,23 @@ class TestRtspUrlTemplateValidation:
             "rtsp://localhost:8554/channel{channel_id}",
         )
         assert _build_rtsp_url(3) == "rtsp://localhost:8554/channel3"
+
+
+class TestMfaEncryptionKeyConfiguration:
+    def test_missing_key_remains_valid_before_cutover(self):
+        settings = _build_settings()
+        assert settings.MFA_ENCRYPTION_KEY is None
+
+    def test_well_formed_fernet_key_is_stored_as_secret(self):
+        key = Fernet.generate_key().decode("ascii")
+        settings = _build_settings(MFA_ENCRYPTION_KEY=key)
+
+        assert settings.MFA_ENCRYPTION_KEY.get_secret_value() == key
+        assert key not in repr(settings)
+
+    @pytest.mark.parametrize("key", ["bad-key-material", "not-a-base64-key", "☃"])
+    def test_malformed_key_is_rejected_without_echoing_the_value(self, key: str):
+        with pytest.raises(ValidationError) as exc_info:
+            _build_settings(MFA_ENCRYPTION_KEY=key)
+
+        assert key not in str(exc_info.value)

@@ -87,8 +87,22 @@ class AuthSession(SQLModel, table=True):
         CheckConstraint(
             "revocation_reason IS NULL OR revocation_reason IN "
             "('logout', 'password_change', 'password_reset', 'role_change', "
-            "'account_disabled', 'admin_revoke', 'expired_cleanup')",
+            "'account_disabled', 'admin_revoke', 'expired_cleanup', "
+            "'mfa_rollout', 'mfa_recovery', 'mfa_replacement', "
+            "'mfa_enrollment', 'mfa_restore')",
             name="ck_auth_session_revocation_reason_valid",
+        ),
+        CheckConstraint(
+            "auth_method IN ('password', 'totp', 'demo_impersonation')",
+            name="ck_auth_session_auth_method_valid",
+        ),
+        CheckConstraint(
+            "mfa_credential_version IS NULL OR mfa_credential_version >= 0",
+            name="ck_auth_session_mfa_credential_version_nonnegative",
+        ),
+        CheckConstraint(
+            "auth_method <> 'totp' OR mfa_credential_version IS NOT NULL",
+            name="ck_auth_session_totp_requires_mfa_version",
         ),
         Index("ix_auth_session_user_revoked", "user_id", "revoked_at"),
     )
@@ -101,6 +115,11 @@ class AuthSession(SQLModel, table=True):
     expires_at: datetime = Field(sa_type=UtcDateTime, index=True)
     revoked_at: datetime | None = Field(default=None, sa_type=UtcDateTime)
     revocation_reason: str | None = Field(default=None)
+    auth_method: str = Field(
+        default="password",
+        sa_column=Column(String, nullable=False, server_default="password"),
+    )
+    mfa_credential_version: int | None = Field(default=None)
     user_agent: str | None = Field(default=None, max_length=256)
     source_ip: str | None = Field(default=None)
 

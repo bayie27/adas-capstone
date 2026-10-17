@@ -1,4 +1,9 @@
 import { defineConfig, devices } from "@playwright/test"
+import {
+  createIsolatedE2EEnvironment,
+  E2E_BACKEND_ORIGIN,
+  E2E_FRONTEND_ORIGIN,
+} from "./e2e/isolated-env.mjs"
 
 // E2E spans both the backend and the frontend, so this lives at the repo
 // root rather than inside frontend/. Runs locally before PRs and in CI;
@@ -7,8 +12,29 @@ const isLiveDeployment = process.env.E2E_LIVE_DEPLOYMENT === "1"
 if (isLiveDeployment && !process.env.E2E_BASE_URL) {
   throw new Error("E2E_BASE_URL must be set when E2E_LIVE_DEPLOYMENT=1")
 }
+const isDisposableDemo = process.env.E2E_DISPOSABLE_DEMO === "1"
+if (isLiveDeployment && isDisposableDemo) {
+  throw new Error("E2E_DISPOSABLE_DEMO=1 cannot be combined with E2E_LIVE_DEPLOYMENT=1")
+}
 
-const baseURL = isLiveDeployment ? process.env.E2E_BASE_URL : "http://127.0.0.1:5173"
+const inheritedContextId = process.env.MFA_E2E_CONTEXT_ID
+const inheritedRoot = process.env.MFA_E2E_ROOT
+const inheritedIsolatedRun =
+  process.env.MFA_E2E_MODE === "isolated" &&
+  inheritedContextId !== undefined &&
+  inheritedRoot?.endsWith(`mfa-e2e-${inheritedContextId}`)
+    ? { root: inheritedRoot, environment: { ...process.env } }
+    : undefined
+const isolatedRun = isLiveDeployment
+  ? undefined
+  : (inheritedIsolatedRun ?? createIsolatedE2EEnvironment({ disposableDemo: isDisposableDemo }))
+const e2eEnvironment = isolatedRun?.environment ?? { ...process.env }
+if (isolatedRun) {
+  // Playwright workers inherit these disposable credentials; the same mapping
+  // is passed to both managed server processes below.
+  Object.assign(process.env, e2eEnvironment)
+}
+const baseURL = isLiveDeployment ? process.env.E2E_BASE_URL : E2E_FRONTEND_ORIGIN
 
 export default defineConfig({
   testDir: "./e2e",
@@ -86,23 +112,23 @@ export default defineConfig({
     ? []
     : [
         {
-          command: "uv run fastapi run backend/app/main.py --port 8000",
-          url: "http://127.0.0.1:8000/docs",
+          command: "uv run python backend/scripts/run_e2e_backend.py",
+          url: `${E2E_BACKEND_ORIGIN}/docs`,
           // FastAPI's Rich startup banner contains an emoji.  The Playwright
           // web server is a detached Windows process, so pin UTF-8 here just
-          // as the controlled maintenance/startup launchers do.
-          env: { ...process.env, PYTHONUTF8: "1" },
-          reuseExistingServer: !process.env.CI,
-          timeout: 60_000,
+          // as the controlled maintenance/startup launchers do. All DB paths
+          // and credentials stay in this environment mapping, never argv.
+          env: { ...e2eEnvironment, PYTHONUTF8: "1" },
+          reuseExistingServer: false,
+          timeout: 90_000,
         },
         {
-          // --host 127.0.0.1 is required: Vite's default `localhost` host resolves
-          // to the IPv6 loopback here, which 127.0.0.1 (used below and by the
-          // backend's hardcoded CORS allowlist) can't reach.
-          command: "pnpm --filter frontend dev --port 5173 --host 127.0.0.1",
-          url: "http://127.0.0.1:5173",
-          reuseExistingServer: !process.env.CI,
-          timeout: 60_000,
+          // --host 127.0.0.1 keeps frontend, API, and CORS on loopback IPv4.
+          command: "pnpm --filter frontend dev --port 15173 --host 127.0.0.1 --strictPort",
+          url: E2E_FRONTEND_ORIGIN,
+          env: e2eEnvironment,
+          reuseExistingServer: false,
+          timeout: 90_000,
         },
       ],
 })

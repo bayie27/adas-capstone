@@ -1,6 +1,6 @@
 # MFA implementation — Luna Max execution overview
 
-**Status:** Handoff pack authored; MFA application implementation has not started.  
+**Status:** P1 implementation and verification are complete; P2–P5 have not started.
 **Approved scope:** Mandatory TOTP for normal local ADAS authentication.  
 **Execution:** Five sequential, manually started Luna Max conversations; one PR per package.  
 **Planning baseline:** 2026-10-17, main at `9bc7a29`. Reinspect the repository before execution.
@@ -77,15 +77,15 @@ Review these seams explicitly rather than accepting happy-path completion: inter
 
 ## Completion ledger
 
-All implementation rows deliberately start unexecuted. The planning tests below do not complete these packages.
+The completion ledger reflects current execution state. The planning tests below are not implementation evidence.
 
-| Package | Status      | Branch/PR | Merge commit | Evidence |
-| ------- | ----------- | --------- | ------------ | -------- |
-| P1      | Not started | —         | —            | —        |
-| P2      | Not started | —         | —            | —        |
-| P3      | Not started | —         | —            | —        |
-| P4      | Not started | —         | —            | —        |
-| P5      | Not started | —         | —            | —        |
+| Package | Status         | Branch/PR             | Merge commit | Evidence                                                                                   |
+| ------- | -------------- | --------------------- | ------------ | ------------------------------------------------------------------------------------------ |
+| P1      | PR preparation | `feat/mfa-foundation` | —            | P1 completion notes record migration, matrix, isolated E2E, and `pnpm full:check` results. |
+| P2      | Not started    | —                     | —            | —                                                                                          |
+| P3      | Not started    | —                     | —            | —                                                                                          |
+| P4      | Not started    | —                     | —            | —                                                                                          |
+| P5      | Not started    | —                     | —            | —                                                                                          |
 
 Each executor fills its package's Completion notes and its row here with actual commands, exit results, deviations, unresolved blockers, and PR URL. Do not invent a merge SHA; the next conversation verifies the merge and can record it. P5 assembles final evidence from those notes rather than repeating passing checks without cause.
 

@@ -1,15 +1,7 @@
-import path from "node:path"
 import { expect, test, type Locator, type Page } from "@playwright/test"
 
-// Same .env read as login.spec.ts — the admin password is not hardcoded here.
-try {
-  process.loadEnvFile(path.resolve(import.meta.dirname, "..", ".env"))
-} catch {
-  // Ignore: e.g. .env already loaded into the environment by CI.
-}
-
-const ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD
-const API = "http://127.0.0.1:8000/api"
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD
+const API = process.env.E2E_API_BASE_URL ?? ""
 
 // Recharts animates path geometry from JS, not CSS, so killing transitions is
 // not enough — the charts need long enough to land on their final frame.
@@ -27,7 +19,11 @@ const NO_MOTION = `*, *::before, *::after {
 // changes, would report one diff and hide the rest. A single test walking the
 // list with soft assertions compares all nine and reports all nine, every run.
 test("visual baselines for the nine routes", async ({ browser }) => {
-  test.skip(!ADMIN_PASSWORD, "DEFAULT_ADMIN_PASSWORD is not set — copy .env.example to .env")
+  test.skip(
+    process.env.E2E_DISPOSABLE_DEMO !== "1",
+    "Set E2E_DISPOSABLE_DEMO=1 to run visuals against the isolated disposable demo server",
+  )
+  test.skip(!ADMIN_PASSWORD || !API, "Disposable E2E credentials/API origin are not configured")
   test.setTimeout(240_000)
 
   // Seed from a throwaway context that is discarded before any page opens.
