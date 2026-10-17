@@ -1,8 +1,8 @@
 ---
 section: Testing and Validation
 page/s: "pp. 187–191 (live TOC; fresh PDF export unavailable)"
-required_revision: Update the testing environment from two-node local simulation to the established three-device LAN setup
-notes: Linux VMS simulator feeds the Windows ADAS server; a separate browser-only operator laptop exercises HTTPS/WSS. Cached rendered pages were inspected, but the current PDF export endpoint returned 403.
+required_revision: Distinguish three-device technical/system network testing from single-laptop participant-facing UAT
+notes: Technical/system testing used a Linux VMS simulator, Windows ADAS server, and separate browser-only operator laptop over HTTPS/WSS. Participant-facing UAT used a single-laptop evaluation environment. Cached rendered pages were inspected, but the current PDF export endpoint returned 403.
 status: In progress
 assigned_to: Daniboy
 synced: false
@@ -28,13 +28,15 @@ Comment target: the complete new logical paragraph; resolve native indexes after
 
 #### NEW
 
-The testing strategy employed a phased, hybrid evaluation approach to validate both standard web application stability and computationally intensive machine learning operations. To eliminate any risk of impacting the Lipa CDRRMO’s live production servers or disrupting active emergency dispatch processes, all testing was conducted exclusively within a controlled, isolated three-device LAN staging environment. The setup separated video-source simulation, ADAS processing, and operator access: a Linux VMS laptop ran MediaMTX and FFmpeg to publish prerecorded RTSP feeds; a Windows ADAS server ran the AI engine, FastAPI backend, SQLite database, and React frontend; and a browser-only operator laptop accessed the dashboard over HTTPS/WSS. Instead of evaluating the computer vision model with static, local video files, the Linux VMS laptop rebroadcast benchmark traffic footage through MediaMTX, requiring the Windows ADAS server to ingest, decode, and process live network streams while the operator laptop exercised the browser path. This approach ensured that the system’s network protocols, hardware limitations, and AI ingestion buffers were validated within the physical constraints of the intended deployment environment, without jeopardizing the city’s live operations.
+The testing strategy employed a phased, hybrid evaluation approach to validate both standard web application stability and computationally intensive machine learning operations. To eliminate any risk of impacting the Lipa CDRRMO’s live production servers or disrupting active emergency dispatch processes, technical and system-level network testing used a controlled, isolated three-device LAN staging environment. The setup separated video-source simulation, ADAS processing, and operator access: a Linux VMS laptop ran MediaMTX and FFmpeg to publish prerecorded RTSP feeds; a Windows ADAS server ran the AI engine, FastAPI backend, SQLite database, and React frontend; and a browser-only operator laptop accessed the dashboard over HTTPS/WSS. Instead of evaluating the computer vision model with static, local video files, the Linux VMS laptop rebroadcast benchmark traffic footage through MediaMTX, requiring the Windows ADAS server to ingest, decode, and process live network streams while the operator laptop exercised the browser path. This approach ensured that the system’s network protocols, hardware limitations, and AI ingestion buffers were validated within the physical constraints of the intended deployment environment, without jeopardizing the city’s live operations. Participant-facing UAT was conducted separately in a single-laptop evaluation environment; offline and archival evaluation methods remain qualified separately in the applicable results.
 
 #### Evidence
 
 The live defense paper is `Group7_Capstone Project Defense Document - ITCAPROJ2`, read on 2026-09-16 at revision `ANLCKQnYZzduyxFf4ed_c5ymsMgs7EtwqcpUSxjGjPUN9HCc__l2Nkci1qpTtrFdVAk2mU2XYBD_JDHK0z8nIRQ0vp8hn3ugoc9MumU1mbM`. The current paper paragraph is in the main tab `t.y7ms6bhlk4qn` at native range `225457–226567`.
 
 `docs/operations/VMS_SIMULATOR_SETUP.md:1-8, 26-45` establishes the three-device topology: a Linux VMS laptop runs MediaMTX and FFmpeg, the Windows ADAS server reads RTSP from Linux, and the operator browser reads HTTPS/WSS from Windows. The same runbook states that the operator laptop never connects to RTSP. `mediamtx-vms.yml:1-5` and `scripts/start-vms-sim.sh:1-24` establish the dedicated Linux-side simulator entry point. This is a documentation drift correction; it does not claim a live CDRRMO deployment.
+
+`paper_sync/findings/2026-09-16-chapter4-results-framing.md:318-320` records the user-confirmed single-laptop participant-facing UAT setup and distinguishes it from tri-device technical tests. This finding therefore limits the three-device claim to technical/system network testing rather than applying it to all evaluation activity.
 
 #### Proposed comment (same gate as replacement)
 
@@ -200,11 +202,11 @@ Comment target: the complete revised logical paragraph
 
 #### NEW
 
-To maintain safety protocols, UAT was not conducted on the CDRRMO’s live production servers. Testing was performed within an isolated three-device LAN staging environment: a Linux laptop running MediaMTX and FFmpeg simulated the command center’s Dahua DSS Pro media gateway, the Windows ADAS server ran the application and AI components, and a separate browser-only operator laptop exercised the dashboard.
+To maintain safety protocols, UAT was not conducted on the CDRRMO’s live production servers. Participant-facing UAT used a single-laptop evaluation environment, with separate browser profiles for participant and administrator sessions. This usability evaluation was distinct from technical system testing, which used an isolated three-device LAN staging environment: a Linux laptop running MediaMTX and FFmpeg simulated the command center’s Dahua DSS Pro media gateway, the Windows ADAS server ran the application and AI components, and a separate browser-only operator laptop exercised the dashboard.
 
 #### Evidence
 
-The live paragraph is `t.y7ms6bhlk4qn:233104–233332`. `docs/operations/VMS_SIMULATOR_SETUP.md:1-8, 154-260, 262-367, 368-430` establishes the Linux VMS preparation, Windows ADAS-server start-up, and separate browser-only operator procedure. The CDRRMO production-system exclusion remains unchanged.
+The live paragraph is `t.y7ms6bhlk4qn:233104–233332`. `paper_sync/findings/2026-09-16-chapter4-results-framing.md:318-320` records the user-confirmed single-laptop UAT setup, including the distinction from tri-device technical tests. `docs/operations/VMS_SIMULATOR_SETUP.md:1-8, 154-260, 262-367, 368-430` establishes the separate three-device technical network procedure. The CDRRMO production-system exclusion remains unchanged.
 
 #### Proposed comment (same gate as replacement)
 
@@ -235,7 +237,7 @@ Comment target: exact newly inserted text colored orange (`#E67E22`); no Sheet c
 A87: Major  
 B87: Testing and Validation  
 C87: 187–191  
-D87: Update the testing environment from two-node local simulation to the established three-device LAN setup  
+D87: Distinguish three-device technical/system network testing from single-laptop participant-facing UAT
 E87: Linux VMS simulator feeds the Windows ADAS server; a separate browser-only operator laptop exercises HTTPS/WSS.  
 F87: Not started  
 G87: Daniboy  

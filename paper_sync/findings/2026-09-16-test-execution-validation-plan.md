@@ -1,7 +1,7 @@
 ---
 section: Testing and Validation
 page/s: "pending fresh PDF mapping; native ranges recorded below from the live document read on 2026-09-16"
-required_revision: Convert the stale pre-execution plan into an evidence-qualified record aligned with the current tracker, adopted model profile, three-device topology, revised performance criteria, and UAT evidence
+required_revision: Convert the stale pre-execution plan into an evidence-qualified record aligned with the current tracker, adopted model profile, three-device technical topology, single-laptop UAT environment, revised performance criteria, and UAT evidence
 notes: "The live Doc is Capstone Test Execution and Validation, one tab, 283 paragraphs, 10 tables. Native ranges are verified; PDF export succeeded but the signed connector file could not be materialized in this environment, so rendered page mapping remains pending."
 status: Not started
 assigned_to: Daniboy
@@ -34,11 +34,11 @@ Comment target: the complete revised paragraph
 
 #### NEW
 
-This document records the testing and validation activities completed for ADAS and the evidence used to assess readiness for final evaluation and organizational acceptance. It identifies the tested scope, environments, participants, schedule, evaluation methods, success criteria, and documentary evidence used to assess functional correctness, detection behavior, latency, performance, fault recovery, backup and restore safety, access control, auditability, usability, and organizational acceptance. Results are qualified where they use demonstration hardware, simulated fault injection, accelerated endurance windows, archival model evidence, or reconstructed timing. The application and AI components ran on one Windows ADAS host within a private three-device LAN; the record does not establish production-scale capacity or a completed live CDRRMO deployment.
+This document records the testing and validation activities completed for ADAS and the evidence used to assess readiness for final evaluation and organizational acceptance. It identifies the tested scope, environments, participants, schedule, evaluation methods, success criteria, and documentary evidence used to assess functional correctness, detection behavior, latency, performance, fault recovery, backup and restore safety, access control, auditability, usability, and organizational acceptance. Results are qualified where they use demonstration hardware, simulated fault injection, accelerated endurance windows, archival model evidence, or reconstructed timing. For technical/system network testing, the application and AI components ran on one Windows ADAS host within a private three-device LAN. Participant-facing UAT used a single-laptop evaluation environment. The record does not establish production-scale capacity or a completed live CDRRMO deployment.
 
 #### Evidence
 
-The live Doc still uses pre-execution language even though the current tracker contains dated results through 2026-09-16. docs/operations/VMS_SIMULATOR_SETUP.md:1-45 establishes the three-device topology. The current tracker Summary records the completed technical and participant-stage counts, while its detailed rows retain explicit qualifications.
+The live Doc still uses pre-execution language even though the current tracker contains dated results through 2026-09-16. `docs/operations/VMS_SIMULATOR_SETUP.md:1-45` establishes the three-device technical topology. `paper_sync/findings/2026-09-16-chapter4-results-framing.md:318-320` records the user-confirmed single-laptop participant-facing UAT environment. The current tracker Summary records the completed technical and participant-stage counts, while its detailed rows retain explicit qualifications.
 
 #### Proposed comment
 
@@ -102,11 +102,11 @@ Comment target: the complete new cell value
 
 #### NEW
 
-For the remote-VMS LAN run, a Linux VMS laptop running MediaMTX and FFmpeg rebroadcast the selected prerecorded traffic and collision clips as RTSP streams to the Windows ADAS server. Stream count varied by test case and UAT phase; local performance runs exercised the configured 8-, 9-, and 10-stream profiles, while the operator laptop remained browser-only and never accessed RTSP. The setup does not claim that fifteen videos or fifteen cameras were active simultaneously.
+For technical remote-VMS LAN tests, a Linux VMS laptop running MediaMTX and FFmpeg rebroadcast the selected prerecorded traffic and collision clips as RTSP streams to the Windows ADAS server. Stream count varied by technical test case; local performance runs exercised the configured 8-, 9-, and 10-stream profiles, while the separate browser-only operator laptop never accessed RTSP. Participant-facing UAT used a single-laptop evaluation environment. The setup does not claim that fifteen videos or fifteen cameras were active simultaneously.
 
 #### Evidence
 
-docs/operations/VMS_SIMULATOR_SETUP.md:1-45,154-260 places MediaMTX and FFmpeg on Linux and restricts RTSP to the Windows server. mediamtx-vms.yml:1-37 defines five remote VMS channels. The current tracker records an 8-stream performance run, a 9-stream degradation run, and 10-channel backup-overlap sampling; it does not support the old all-fifteen-streams wording.
+`docs/operations/VMS_SIMULATOR_SETUP.md:1-45,154-260` places MediaMTX and FFmpeg on Linux and restricts RTSP to the Windows server. `paper_sync/findings/2026-09-16-chapter4-results-framing.md:318-320` records single-laptop participant-facing UAT, distinct from tri-device technical tests. `mediamtx-vms.yml:1-37` defines five remote VMS channels. The current tracker records an 8-stream performance run, a 9-stream degradation run, and 10-channel backup-overlap sampling; it does not support the old all-fifteen-streams wording.
 
 #### Proposed comment
 
@@ -739,7 +739,7 @@ Comment target: exact newly inserted text colored orange (#E67E22); no Sheet com
 A89: Major
 B89: Testing and Validation
 C89: pending PDF mapping
-D89: Reconcile the live Test Execution and Validation Plan with the completed tracker, adopted batch-10 profile, three-device topology, revised performance criteria, qualified endurance evidence, and formal UAT-sign-off state
+D89: Reconcile the live Test Execution and Validation Plan with the completed tracker, adopted batch-10 profile, three-device technical topology, single-laptop UAT environment, revised performance criteria, qualified endurance evidence, and formal UAT-sign-off state
 E89: Current tracker reports 194/194 technical cases and 33/33 participant stages, but the live plan still carries two-node, batch-15/batch-32, 10–15 FPS, 15-second, multi-hour, template-placeholder, and incomplete-deliverable wording; formal sign-off record remains unsigned.
 F89: Not started
 G89: Daniboy
