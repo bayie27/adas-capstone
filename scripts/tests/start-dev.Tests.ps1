@@ -20,4 +20,14 @@ Describe "start-dev managed component launches" {
 
         $aiBlock | Should Match '(?s)if \(\$managedBackendAi\).*?Start-AdasManagedComponent.*?if \(-not \$managedBackendAi\)\s*\{\s*Start-Component -Title "ADAS - AI Engine"'
     }
+
+    It "checks the remote VMS and verifies managed startup readiness" {
+        $scriptPath = Join-Path $PSScriptRoot "..\start-dev.ps1"
+        $source = Get-Content -LiteralPath $scriptPath -Raw
+
+        $source | Should Match "Show-AdasRemoteVmsReachability"
+        $source | Should Match "Wait-AdasManagedStartup"
+        $source | Should Match "Wait-AdasLocalPort -Port 8000"
+        $source | Should Match "Wait-AdasLocalPort -Port 5173"
+    }
 }
