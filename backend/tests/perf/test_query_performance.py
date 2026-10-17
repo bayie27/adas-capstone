@@ -1,5 +1,5 @@
-"""10_PKG_migration_evidence.md Step 3 — NFR-08 / TC-R-202: dashboard query
-< 3s on 100,000 rows. Also D-005's "confirm index use with SQLite query
+"""10_PKG_migration_evidence.md Step 3 — NFR-08 / TC-R-202: single-request dashboard query
+< 3s on 100,000 rows. TC-PERF-012 separately covers the defined concurrent profile. Also D-005's "confirm index use with SQLite query
 plans and the paper's 100,000-incident performance test" — a `SCAN
 detection_log` in the plan means an index is missing or unusable.
 
