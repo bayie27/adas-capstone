@@ -29,5 +29,8 @@ Describe "start-dev managed component launches" {
         $source | Should Match "Wait-AdasManagedStartup"
         $source | Should Match "Wait-AdasLocalPort -Port 8000"
         $source | Should Match "Wait-AdasLocalPort -Port 5173"
+        $source | Should Match "Wait-AdasApplicationReadiness"
+        $source | Should Match "Test-AdasManagedStartupVerified"
+        $source | Should Match "AiHeartbeatConfirmed"
     }
 }

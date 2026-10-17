@@ -433,6 +433,69 @@ function Wait-AdasLocalPort {
     return $false
 }
 
+function Wait-AdasApplicationReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)]$Profile,
+        [int]$TimeoutSeconds = 30
+    )
+
+    $maintenanceArgs = @("restart", "--phase", "wait", "--timeout", [string]$TimeoutSeconds)
+    if ([bool]$Profile.lan) {
+        $healthCaCert = Join-Path ([string]$Profile.cert_dir) "adas-cert.pem"
+        if (-not (Test-Path -LiteralPath $healthCaCert)) {
+            Write-Warning "LAN readiness verification needs the certificate at $healthCaCert."
+            return [PSCustomObject]@{ Ready = $false; HeartbeatConfirmed = $false }
+        }
+        $maintenanceArgs += @(
+            "--health-url", "https://127.0.0.1:8000/healthz/ready",
+            "--health-ca-cert", $healthCaCert
+        )
+    }
+
+    Push-Location (Join-Path $RepoRoot "backend")
+    try {
+        $output = & uv run --no-sync python -m app.maintenance @maintenanceArgs
+        $exitCode = $LASTEXITCODE
+        $output | ForEach-Object { Write-Host $_ }
+
+        $data = $null
+        $jsonText = ($output -join "`n").Trim()
+        if ($jsonText) {
+            try {
+                $data = $jsonText | ConvertFrom-Json
+            }
+            catch {
+                $data = $null
+            }
+        }
+
+        $ready = ($exitCode -eq 0 -and $null -ne $data -and [bool]$data.ready)
+        $heartbeatConfirmed = $false
+        if ($null -ne $data -and $null -ne $data.heartbeat_confirmed) {
+            $heartbeatConfirmed = [bool]$data.heartbeat_confirmed
+        }
+        if (-not $ready) {
+            Write-Warning "Backend application readiness was not confirmed. Check the latest backend logs under var\log."
+        }
+        elseif (-not $heartbeatConfirmed) {
+            Write-Warning "Backend is ready, but a fresh AI heartbeat was not confirmed within ${TimeoutSeconds}s. Check camera and AI-engine logs."
+        }
+
+        return [PSCustomObject]@{
+            Ready              = $ready
+            HeartbeatConfirmed = $heartbeatConfirmed
+        }
+    }
+    catch {
+        Write-Warning "Backend application readiness check failed: $($_.Exception.Message)"
+        return [PSCustomObject]@{ Ready = $false; HeartbeatConfirmed = $false }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 # Advisory only -- never blocks. These are OS-level steps docs/operations/LAN_SETUP.md step 2
 # owns, but they are the single most common cause of a demo that looks broken
 # for no reason, and they are invisible from inside the application.
@@ -616,11 +679,23 @@ if ($managedBackendAi) {
     $aiReady = Wait-AdasManagedStartup -RepoRoot $RepoRoot -Component ai_engine -Label "AI engine"
     $backendListening = Wait-AdasLocalPort -Port 8000 -Label "Backend TLS"
     $frontendListening = if ($Frontend) { Wait-AdasLocalPort -Port 5173 -Label "Frontend TLS" } else { $true }
-    if ($backendReady -and $aiReady -and $backendListening -and $frontendListening) {
-        Write-Step "Managed backend, frontend, and AI startup verified."
+    $applicationReadiness = if ($backendReady -and $backendListening) {
+        Wait-AdasApplicationReadiness -RepoRoot $RepoRoot -Profile $launchProfile
     }
     else {
-        Write-Warning "The launcher returned with one or more services not ready. Use the log paths above before retrying."
+        [PSCustomObject]@{ Ready = $false; HeartbeatConfirmed = $false }
+    }
+    $startupVerified = Test-AdasManagedStartupVerified `
+        -RepoRoot $RepoRoot `
+        -BackendApiReady ([bool]$applicationReadiness.Ready) `
+        -AiHeartbeatConfirmed ([bool]$applicationReadiness.HeartbeatConfirmed) `
+        -BackendListening ([bool]$backendListening) `
+        -FrontendListening ([bool]$frontendListening)
+    if ($backendReady -and $aiReady -and $startupVerified) {
+        Write-Step "Backend API readiness, fresh AI heartbeat, local listeners, and managed processes verified."
+    }
+    else {
+        Write-Warning "Startup is not fully verified. Check backend readiness, camera heartbeat, listeners, and managed-process logs before relying on the stack."
     }
 }
 

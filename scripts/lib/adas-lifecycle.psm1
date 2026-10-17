@@ -520,6 +520,28 @@ function Test-AdasManagedProcess {
     return [bool]($lines | Where-Object { $_ -match "ai_engine[\\/]main\.py" })
 }
 
+function Test-AdasManagedStartupVerified {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][bool]$BackendApiReady,
+        [Parameter(Mandatory = $true)][bool]$AiHeartbeatConfirmed,
+        [Parameter(Mandatory = $true)][bool]$BackendListening,
+        [Parameter(Mandatory = $true)][bool]$FrontendListening
+    )
+
+    $backendStillManaged = Test-AdasManagedProcess -RepoRoot $RepoRoot -Component backend
+    $aiStillManaged = Test-AdasManagedProcess -RepoRoot $RepoRoot -Component ai_engine
+
+    return [bool](
+        $BackendApiReady -and
+        $AiHeartbeatConfirmed -and
+        $BackendListening -and
+        $FrontendListening -and
+        $backendStillManaged -and
+        $aiStillManaged
+    )
+}
+
 function Stop-AdasManagedComponent {
     param(
         [Parameter(Mandatory = $true)][string]$RepoRoot,

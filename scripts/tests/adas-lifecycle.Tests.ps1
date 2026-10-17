@@ -31,3 +31,26 @@ Describe "managed component shutdown" {
         (Test-Path -LiteralPath $identityPath) | Should Be $false
     }
 }
+
+Describe "managed startup verification" {
+    BeforeAll {
+        Import-Module (Join-Path $PSScriptRoot "..\lib\adas-lifecycle.psm1") -Force
+    }
+
+    It "rejects a process that exited during later readiness checks" {
+        $repoRoot = Join-Path $TestDrive "startup"
+        $runDir = Get-AdasRunDirectory -RepoRoot $repoRoot
+
+        Set-Content -LiteralPath (Join-Path $runDir "backend.pid") -Value 2147483647
+        Set-Content -LiteralPath (Join-Path $runDir "ai_engine.pid") -Value 2147483646
+
+        $verified = Test-AdasManagedStartupVerified `
+            -RepoRoot $repoRoot `
+            -BackendApiReady $true `
+            -AiHeartbeatConfirmed $true `
+            -BackendListening $true `
+            -FrontendListening $true
+
+        $verified | Should Be $false
+    }
+}
