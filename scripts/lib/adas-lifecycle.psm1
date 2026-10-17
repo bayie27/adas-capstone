@@ -346,7 +346,10 @@ function Test-AdasTrackedProcessIdentity {
         if ([int]$identity.pid -ne $ProcessId) {
             return $false
         }
-        $process = Get-Process -Id $ProcessId -ErrorAction Stop
+        $process = Get-Process -Id $ProcessId -ErrorAction Ignore
+        if ($null -eq $process) {
+            return $false
+        }
         # ConvertFrom-Json materializes ISO UTC timestamps as DateTime values
         # on PowerShell 7. Parsing their locale-formatted string representation
         # breaks on machines whose culture is not month-first. Preserve the
@@ -517,6 +520,28 @@ function Test-AdasManagedProcess {
     return [bool]($lines | Where-Object { $_ -match "ai_engine[\\/]main\.py" })
 }
 
+function Test-AdasManagedStartupVerified {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][bool]$BackendApiReady,
+        [Parameter(Mandatory = $true)][bool]$AiHeartbeatConfirmed,
+        [Parameter(Mandatory = $true)][bool]$BackendListening,
+        [Parameter(Mandatory = $true)][bool]$FrontendListening
+    )
+
+    $backendStillManaged = Test-AdasManagedProcess -RepoRoot $RepoRoot -Component backend
+    $aiStillManaged = Test-AdasManagedProcess -RepoRoot $RepoRoot -Component ai_engine
+
+    return [bool](
+        $BackendApiReady -and
+        $AiHeartbeatConfirmed -and
+        $BackendListening -and
+        $FrontendListening -and
+        $backendStillManaged -and
+        $aiStillManaged
+    )
+}
+
 function Stop-AdasManagedComponent {
     param(
         [Parameter(Mandatory = $true)][string]$RepoRoot,
@@ -545,7 +570,7 @@ function Stop-AdasManagedComponent {
     $managedComponent = Test-AdasManagedProcess -RepoRoot $RepoRoot -Component $Component
     $trackedIdentity = Test-AdasTrackedProcessIdentity -RepoRoot $RepoRoot -Component $Component -ProcessId $processId
     if (-not $managedComponent -and -not $trackedIdentity) {
-        if (Get-Process -Id $processId -ErrorAction SilentlyContinue) {
+        if (Get-Process -Id $processId -ErrorAction Ignore) {
             Write-Warning "$Component PID $processId is not the recorded ADAS process; refusing to kill a reused PID."
             return $false
         }
@@ -565,14 +590,14 @@ function Stop-AdasManagedComponent {
     # to finish before classifying a still-matching process as an uncontrolled
     # orphan; the guard remains fail-closed after the deadline.
     for ($attempt = 0; $attempt -lt 20; $attempt++) {
-        $rootAlive = $null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)
+        $rootAlive = $null -ne (Get-Process -Id $processId -ErrorAction Ignore)
         $matching = @(Get-AdasMatchingComponentProcesses -Component $Component)
         if (-not $rootAlive -and $matching.Count -eq 0) {
             break
         }
         Start-Sleep -Milliseconds 250
     }
-    if (Get-Process -Id $processId -ErrorAction SilentlyContinue) {
+    if (Get-Process -Id $processId -ErrorAction Ignore) {
         Write-Warning "$Component PID $processId remains alive after tree termination."
         return $false
     }

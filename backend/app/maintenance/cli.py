@@ -52,6 +52,9 @@ def _settings():
     return settings
 
 
+_DEFAULT_HEALTH_URL = "http://127.0.0.1:8000/healthz/ready"
+
+
 def _retention_from_settings(settings) -> RetentionConfig:
     return RetentionConfig(
         daily=settings.BACKUP_DAILY_RETENTION,
@@ -422,6 +425,8 @@ def cmd_restart(args: argparse.Namespace) -> int:
             settings,
             timeout=args.timeout,
             require_heartbeat=getattr(args, "require_heartbeat", False),
+            health_url=args.health_url,
+            health_ca_cert=args.health_ca_cert,
         )
 
     db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
@@ -473,8 +478,14 @@ def cmd_restart(args: argparse.Namespace) -> int:
 
 
 def _wait_for_restart_readiness(
-    settings, *, timeout: float, require_heartbeat: bool = False
+    settings,
+    *,
+    timeout: float,
+    require_heartbeat: bool = False,
+    health_url: str = _DEFAULT_HEALTH_URL,
+    health_ca_cert: str | None = None,
 ) -> int:
+    import ssl
     import urllib.error
     import urllib.request
 
@@ -484,15 +495,33 @@ def _wait_for_restart_readiness(
     from app.models import Camera
 
     # Loopback only — the demo backend always binds localhost, and this
-    # helper is invoked on the same machine right after a restart.
-    ready_url = "http://127.0.0.1:8000/healthz/ready"
+    # helper is invoked on the same machine right after a restart. LAN mode
+    # serves this probe over HTTPS, so the orchestrator supplies the public
+    # certificate as a local CA rather than silently downgrading the probe.
+    ready_url = health_url
+    health_context = None
+    if ready_url.lower().startswith("https://"):
+        try:
+            health_context = ssl.create_default_context(cafile=health_ca_cert)
+        except (OSError, ssl.SSLError):
+            print(
+                json.dumps(
+                    {"ready": False, "reason": "healthz TLS setup failed"},
+                    indent=2,
+                )
+            )
+            return 1
+
     deadline = time.monotonic() + timeout
     ready_at: float | None = None
     started = time.monotonic()
 
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(ready_url, timeout=2) as resp:  # noqa: S310 - loopback only
+            request_kwargs = {"timeout": 2}
+            if health_context is not None:
+                request_kwargs["context"] = health_context
+            with urllib.request.urlopen(ready_url, **request_kwargs) as resp:  # noqa: S310 - loopback only
                 if resp.status == 200:
                     ready_at = time.monotonic() - started
                     break
@@ -619,6 +648,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_restart.add_argument("--phase", choices=["backup", "wait"], default="backup")
     p_restart.add_argument("--timeout", type=float, default=60.0)
     p_restart.add_argument("--require-heartbeat", action="store_true")
+    p_restart.add_argument("--health-url", default=_DEFAULT_HEALTH_URL)
+    p_restart.add_argument("--health-ca-cert", default=None)
     p_restart.set_defaults(func=cmd_restart)
 
     p_watch = sub.add_parser(
