@@ -63,7 +63,7 @@ Run scoped lint/Prettier checks, walk matrix U01–U08, and run `pnpm full:check
 
 ## Completion notes — executor fills
 
-- Status: Implementation and pre-PR verification complete on `feat/mfa-frontend`; commit/PR preparation is pending.
+- Status: PR #243 is open from `feat/mfa-frontend`; implementation and pre-PR verification are complete.
 - P1/P2 prerequisites: Verified in updated `main`; P1 PR #241 and P2 PR #242 are merged. Branch HEAD is P2 merge commit `796ea436266d69d34d4d0f2c5521dbb7a54d6d7a`.
 - Resolved QR dependency: `qrcode.react@^4.2.0`; React 19-compatible `QRCodeSVG` API typechecks and emits local SVG markup. Provisioning URI secret matches the displayed manual key in the component test.
 - Focused MFA results: `pnpm --filter frontend test:run src/api/mfa.test.ts src/api/client.test.ts src/pages/auth/mfaUi.test.ts src/pages/auth/MfaChallengePanel.test.tsx src/pages/auth/MfaEnrollmentPanel.test.tsx src/pages/auth/RecoveryCodesPanel.test.tsx src/pages/auth/MfaLoginFlow.test.tsx src/pages/profile/MfaSettingsCard.test.tsx src/components/auth/MfaSensitiveFlowProvider.test.tsx --reporter=dot` exited 0; 9 files and 45 tests passed.
@@ -73,6 +73,7 @@ Run scoped lint/Prettier checks, walk matrix U01–U08, and run `pnpm full:check
 - Required pre-PR gate: first `pnpm full:check` inherited machine RTSP/protected-backup settings and produced two unrelated backend failures. The rerun with `RTSP_URL_TEMPLATE=rtsp://localhost:8554/channel{channel_id}`, `PROTECTED_BACKUP_DIR=` (unset equivalent), and `PYTEST_XDIST_AUTO_NUM_WORKERS=2` exited 0. Ruff: 238 Python files formatted and all checks passed; backend: 1,359 passed, 5 skipped; frontend: 62 files and 395 tests passed; TypeScript, ESLint, Prettier, production build, and Chromium E2E login: 1 passed.
 - Existing notices: Vite's `configLoader: 'native'` warning, jsdom media-method notices, Passlib/SQLAlchemy/Starlette deprecations, and Node color-setting warning. No new gate failures remain.
 - Paper sync: Local proposal `paper_sync/findings/2026-10-18-mfa-frontend.md` records the qrcode.react claim and pending tracker row 90. The paper and Sheet were read-only; no Drive writes were made.
-- Branch/commit/PR, deviations, limitations: Commit and PR are pending. P3 components/provider remain unwired and unmounted until P4. Component mocks do not establish physical authenticator, browser camera, or production TLS behavior.
+- Branch/commit/PR: Implementation commit `b12176aa6145990204f1a23d168ce717a6b9dfdb`; [PR #243](https://github.com/bayie27/adas-capstone/pull/243) is open and unmerged. Push used `HUSKY=0` at the user's direction after the required full gate passed; the automatic pre-push `pnpm check` was skipped. The unrelated untracked defense note was preserved.
+- Deviations/limitations: P3 components/provider remain unwired and unmounted until P4. Component mocks do not establish physical authenticator, browser camera, or production TLS behavior. No merge or P4 work was performed.
 
 Update this section and the overview row. Leave production wiring to P4; do not start it or merge automatically.
