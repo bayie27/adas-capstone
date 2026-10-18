@@ -8,7 +8,7 @@ from app.models import AIStatus, Camera, ConnectionStatus
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from .conftest import make_camera
+from .conftest import _TEST_MFA_ENCRYPTION_KEY, make_camera
 
 
 def test_lifespan_resets_only_enabled_active_cameras(tmp_path):
@@ -32,6 +32,7 @@ def test_lifespan_resets_only_enabled_active_cameras(tmp_path):
         SECRET_KEY="test-secret-key-not-for-production-use",
         INTERNAL_API_KEY="test-internal-api-key-not-for-production",
         DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+        MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
         DATABASE_URL=f"sqlite:///{tmp_path / 'lifespan.db'}",
         SCHEDULER_ENABLED=False,
         EXPORT_JOB_WORKERS=0,

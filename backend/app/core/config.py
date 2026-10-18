@@ -33,8 +33,9 @@ class Settings(BaseSettings):
     SESSION_LIFETIME_MINUTES: int = 480
     SESSION_COOKIE_NAME: str = "adas_session"
     SESSION_COOKIE_SECURE: bool = True
-    # Staged setting: construction remains valid without it until P4 activates
-    # MFA at startup. Every cryptographic helper requires a valid key directly.
+    # Config-only and migration callers may construct Settings without this;
+    # the application lifespan requires and validates it before startup writes.
+    # Every cryptographic helper still requires a valid key directly.
     MFA_ENCRYPTION_KEY: SecretStr | None = None
 
     # CORS

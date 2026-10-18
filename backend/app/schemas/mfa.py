@@ -1,4 +1,4 @@
-"""Request and response contracts for the staged MFA adapter."""
+"""Request and response contracts for the integrated MFA API."""
 
 from datetime import datetime
 from typing import Literal
@@ -98,7 +98,7 @@ class MfaStatusResponse(BaseModel):
     state: Literal["unenrolled", "enrolled", "recovery_pending"]
     recovery_codes_remaining: int
     enrolled_at: datetime | None
-    auth_method: Literal["password", "totp", "demo_impersonation"]
+    auth_method: Literal["totp", "demo_impersonation"]
 
 
 class RecoveryCodesResponse(BaseModel):

@@ -118,10 +118,13 @@ backend/
 
 ### Authentication — `/api/auth`
 
-| Method | Path               | Auth | Description                                                                                                                                                   |
-| ------ | ------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST` | `/api/auth/login`  | —    | `application/x-www-form-urlencoded` `username`/`password`. Sets an `HttpOnly` session cookie, returns `{"user": {...}}` — no token in the body. Rate-limited. |
-| `POST` | `/api/auth/logout` | S    | Revokes the session, closes its WebSockets, clears the cookie. `204`.                                                                                         |
+| Method | Path                   | Auth      | Description                                                                                                                                                                                          |
+| ------ | ---------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/api/auth/login`      | —         | `application/x-www-form-urlencoded` `username`/`password`. Returns an enrollment or MFA challenge in an `HttpOnly` challenge cookie; password validation never creates a full session. Rate-limited. |
+| `POST` | `/api/auth/mfa/verify` | challenge | Completes TOTP login or consumes a recovery code and begins recovery enrollment.                                                                                                                     |
+| `POST` | `/api/auth/logout`     | —         | Cancels the matching challenge, revokes any full session, closes its WebSockets, and clears both cookies. `204`.                                                                                     |
+
+The MFA API also provides challenge status/cancellation, enrollment start/confirmation, status, recovery-code rotation, and authenticator replacement. Only completed MFA verification creates a normal full session; demo sessions are separate and visibly labeled.
 
 `GET /api/users/me` (below) is the authenticated profile endpoint the frontend uses to render role-aware UI, since the cookie is `HttpOnly` and JS can't decode it.
 

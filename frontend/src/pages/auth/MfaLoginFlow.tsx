@@ -39,13 +39,15 @@ function stateForChallenge(challenge: ChallengeState): FlowState {
 
 export function MfaLoginFlow({
   onAuthenticated,
+  initialMessage,
 }: {
   onAuthenticated: (user: CurrentUserResponse) => void
+  initialMessage?: string
 }) {
   const [flow, setFlow] = useState<FlowState>({ kind: "checking" })
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
-  const [message, setMessage] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(initialMessage ?? null)
   const [rateLimitDeadline, setRateLimitDeadline] = useState<string | null>(null)
   const secondsLeft = useMfaRateLimit(rateLimitDeadline, setRateLimitDeadline)
   const rateLimited = secondsLeft !== null && secondsLeft > 0

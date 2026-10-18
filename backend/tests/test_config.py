@@ -31,7 +31,8 @@ class TestRtspUrlTemplateValidation:
         with pytest.raises(ValidationError):
             _build_settings(RTSP_URL_TEMPLATE="rtsp://localhost:8554/{channel_id")
 
-    def test_default_template_constructs_fine(self):
+    def test_default_template_constructs_fine(self, monkeypatch):
+        monkeypatch.delenv("RTSP_URL_TEMPLATE", raising=False)
         s = _build_settings()
         assert s.RTSP_URL_TEMPLATE == "rtsp://localhost:8554/channel{channel_id}"
 

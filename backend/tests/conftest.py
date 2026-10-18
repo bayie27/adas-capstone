@@ -7,10 +7,19 @@ and never touch the real adas.db.
 import uuid
 from datetime import UTC, datetime
 
+import pyotp
 import pytest
 from app.core import security as _security
 from app.core.config import Settings, settings
 from app.core.db import get_engine, get_session, install_sqlite_pragmas
+from app.core.mfa import (
+    decrypt_totp_secret,
+    encrypt_totp_secret,
+    generate_recovery_codes,
+    generate_totp_secret,
+    hash_recovery_code,
+    matching_totp_step,
+)
 from app.core.security import get_password_hash
 from app.main import create_app
 from app.models import (
@@ -20,12 +29,16 @@ from app.models import (
     ConnectionStatus,
     DetectionLog,
     DetectionStatus,
+    MfaCredential,
+    MfaRecoveryCode,
     User,
     UserRole,
 )
+from app.services import mfa as _mfa_service
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from passlib.context import CryptContext
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 from sqlmodel.pool import StaticPool
 
 # ---------------------------------------------------------------------------
@@ -37,6 +50,7 @@ from sqlmodel.pool import StaticPool
 # time, not the cheap one installed below. test_security_params.py asserts
 # against it; see cheap_password_hashing() for why that matters.
 PRODUCTION_PWD_CONTEXT = _security.pwd_context
+_TEST_MFA_ENCRYPTION_KEY = Fernet.generate_key().decode("ascii")
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -130,6 +144,7 @@ def _build_test_settings(lifespan_dir) -> Settings:
         SECRET_KEY="test-secret-key-not-for-production-use",
         INTERNAL_API_KEY="test-internal-api-key-not-for-production",
         DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+        MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
         DATABASE_URL=f"sqlite:///{lifespan_dir / 'lifespan-only.db'}",
         SCHEDULER_ENABLED=False,
         # F7 — tests drive export jobs directly via process_export_job(),
@@ -145,8 +160,23 @@ def _build_test_settings(lifespan_dir) -> Settings:
 
 
 @pytest.fixture(name="client")
-def client_fixture(session: Session, lifespan_db_dir):
-    app = create_app(_build_test_settings(lifespan_db_dir))
+def client_fixture(session: Session, lifespan_db_dir, monkeypatch):
+    app_settings = _build_test_settings(lifespan_db_dir)
+    app = create_app(app_settings)
+
+    # Session validation intentionally reads the process-global settings
+    # singleton. Keep it aligned with this isolated application instance.
+    for field in (
+        "SECRET_KEY",
+        "ALGORITHM",
+        "JWT_ISSUER",
+        "JWT_AUDIENCE",
+        "SESSION_COOKIE_NAME",
+        "SESSION_LIFETIME_MINUTES",
+        "SESSION_COOKIE_SECURE",
+        "DEV_TOOLS_ENABLED",
+    ):
+        monkeypatch.setattr(settings, field, getattr(app_settings, field))
 
     def get_session_override():
         yield session
@@ -156,7 +186,7 @@ def client_fixture(session: Session, lifespan_db_dir):
 
     app.dependency_overrides[get_session] = get_session_override
     app.dependency_overrides[get_engine] = get_engine_override
-    with TestClient(app) as client:
+    with TestClient(app, base_url="https://testserver") as client:
         yield client
     app.dependency_overrides.clear()
 
@@ -166,7 +196,39 @@ def client_fixture(session: Session, lifespan_db_dir):
 # ---------------------------------------------------------------------------
 
 
-def make_admin(session: Session, username="admin", password="Admin123") -> User:
+def _seed_test_factor(session: Session, user: User) -> str:
+    assert user.user_id is not None
+    secret = generate_totp_secret()
+    now = datetime.now(UTC)
+    credential = MfaCredential(
+        user_id=user.user_id,
+        state="enrolled",
+        active_secret_ciphertext=encrypt_totp_secret(secret, _TEST_MFA_ENCRYPTION_KEY),
+        credential_version=1,
+        last_accepted_step=int(now.timestamp() // 30),
+        enrolled_at=now,
+        recovery_generation=1,
+    )
+    session.add(credential)
+    session.add_all(
+        MfaRecoveryCode(
+            user_id=user.user_id,
+            generation=1,
+            code_hash=hash_recovery_code(user.user_id, 1, code),
+        )
+        for code in generate_recovery_codes()
+    )
+    session.commit()
+    return secret
+
+
+def make_admin(
+    session: Session,
+    username="admin",
+    password="Admin123",
+    *,
+    enrolled: bool = True,
+) -> User:
     user = User(
         username=username,
         first_name="System",
@@ -180,11 +242,17 @@ def make_admin(session: Session, username="admin", password="Admin123") -> User:
     session.refresh(user)
     session.add(AlarmSettings(user_id=user.user_id))
     session.commit()
+    if enrolled:
+        _seed_test_factor(session, user)
     return user
 
 
 def make_operator(
-    session: Session, username="operator", password="Operator123"
+    session: Session,
+    username="operator",
+    password="Operator123",
+    *,
+    enrolled: bool = True,
 ) -> User:
     user = User(
         username=username,
@@ -199,6 +267,8 @@ def make_operator(
     session.refresh(user)
     session.add(AlarmSettings(user_id=user.user_id))
     session.commit()
+    if enrolled:
+        _seed_test_factor(session, user)
     return user
 
 
@@ -259,32 +329,103 @@ def make_detection(
 
 
 # ---------------------------------------------------------------------------
-# Auth helper — logs in and returns the session cookie for a given user
+# Auth helper — completes the same password, challenge, and TOTP endpoints
 # ---------------------------------------------------------------------------
 
 
+def _test_factor(client: TestClient, username: str) -> tuple[str, int | None]:
+    session_override = client.app.dependency_overrides.get(get_session)
+    if session_override is None:
+        session = Session(client.app.state.engine)
+        close_session = True
+    else:
+        generator = session_override()
+        session = next(generator)
+        close_session = False
+    try:
+        session.expire_all()
+        user = session.exec(select(User).where(User.username == username)).first()
+        assert user is not None and user.user_id is not None
+        credential = session.get(MfaCredential, user.user_id)
+        assert credential is not None and credential.active_secret_ciphertext
+        secret = decrypt_totp_secret(
+            credential.active_secret_ciphertext,
+            client.app.state.settings.MFA_ENCRYPTION_KEY.get_secret_value(),
+        )
+        return secret, credential.last_accepted_step
+    finally:
+        if close_session:
+            session.close()
+        elif session_override is not None:
+            generator.close()
+
+
+def _complete_mfa_login(client: TestClient, username: str, password: str) -> dict:
+    now = datetime.now(UTC)
+    target_step = int(now.timestamp() // 30) + 1
+    if client.app.dependency_overrides.get(get_session) is not None:
+        try:
+            _secret, last_accepted_step = _test_factor(client, username)
+        except AssertionError:
+            last_accepted_step = None
+        if last_accepted_step is not None:
+            target_step = max(target_step, last_accepted_step + 1)
+    service_time = datetime.fromtimestamp(target_step * 30 + 5, UTC)
+    original_clock = _mfa_service._now
+    _mfa_service._now = lambda: service_time
+    try:
+        response = client.post(
+            "/api/auth/login",
+            data={"username": username, "password": password},
+        )
+        assert response.status_code == 200, "Password stage did not return a challenge."
+        challenge = response.json()
+        if challenge.get("status") == "enrollment_required":
+            enrollment = client.post("/api/auth/mfa/enrollment/start", json={})
+            assert enrollment.status_code == 200, "Enrollment setup was not available."
+            secret = enrollment.json()["manual_key"]
+            code = pyotp.TOTP(secret).at(service_time)
+            assert matching_totp_step(secret, code, service_time) is not None
+            completed = client.post(
+                "/api/auth/mfa/enrollment/confirm", json={"code": code}
+            )
+        elif challenge.get("status") == "mfa_required":
+            secret, _last_step = _test_factor(client, username)
+            code = pyotp.TOTP(secret).at(service_time)
+            assert matching_totp_step(secret, code, service_time) is not None
+            completed = client.post(
+                "/api/auth/mfa/verify",
+                json={"method": "totp", "code": code},
+            )
+        else:
+            raise AssertionError("Password stage returned no MFA challenge.")
+        assert completed.status_code == 200, (
+            "MFA proof did not complete authentication: "
+            f"{completed.status_code} {completed.json().get('code')}"
+        )
+        body = completed.json()
+        assert body.get("status") == "authenticated", (
+            "MFA proof did not return a session."
+        )
+        session_cookie = completed.cookies.get(
+            client.app.state.settings.SESSION_COOKIE_NAME
+        )
+        assert session_cookie, "Completed MFA did not set the session cookie."
+        return {"body": body, "session_cookie": session_cookie}
+    finally:
+        _mfa_service._now = original_clock
+
+
 def login(client: TestClient, username: str, password: str) -> dict:
-    """Logs in and returns the response body's `user` dict."""
-    resp = client.post(
-        "/api/auth/login",
-        data={"username": username, "password": password},
-    )
-    assert resp.status_code == 200, f"Login failed: {resp.text}"
-    return resp.json()["user"]
+    """Completes the real login endpoints and returns the user response."""
+    return _complete_mfa_login(client, username, password)["body"]["user"]
 
 
 def auth_headers(client: TestClient, username: str, password: str) -> dict:
-    """Logs in and returns a `Cookie` header carrying the session — kept as
-    an explicit header (rather than relying on the client's cookie jar) so
-    call sites across the suite don't need to change shape for the P2
-    cookie-based auth flow."""
-    resp = client.post(
-        "/api/auth/login",
-        data={"username": username, "password": password},
-    )
-    assert resp.status_code == 200, f"Login failed: {resp.text}"
-    cookie_value = resp.cookies.get(settings.SESSION_COOKIE_NAME)
-    return {"Cookie": f"{settings.SESSION_COOKIE_NAME}={cookie_value}"}
+    """Returns a session cookie after completing the live TOTP flow."""
+    result = _complete_mfa_login(client, username, password)
+    cookie_name = client.app.state.settings.SESSION_COOKIE_NAME
+    return {"Cookie": f"{cookie_name}={result['session_cookie']}"}
 
 
 def internal_headers() -> dict:

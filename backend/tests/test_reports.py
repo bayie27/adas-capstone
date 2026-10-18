@@ -15,14 +15,21 @@ from datetime import UTC, datetime, timedelta
 from io import StringIO
 
 import pytest
-from app.core.config import Settings
+from app.core.config import Settings, settings
 from app.main import create_app
 from app.models import Camera, DetectionLog, DetectionStatus
 from fastapi.testclient import TestClient
 from pypdf import PdfReader
 from sqlmodel import Session, select
 
-from .conftest import auth_headers, make_admin, make_camera, make_operator
+from .conftest import (
+    _TEST_MFA_ENCRYPTION_KEY,
+    _complete_mfa_login,
+    auth_headers,
+    make_admin,
+    make_camera,
+    make_operator,
+)
 
 
 def _seed_incident_matrix(session: Session):
@@ -589,9 +596,11 @@ class TestCsvStreamClientDisconnect:
     def _make_client(self, tmp_path) -> TestClient:
         app_settings = Settings(
             _env_file=None,
-            SECRET_KEY="test-secret-key-not-for-production-use",
-            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            SECRET_KEY=settings.SECRET_KEY.get_secret_value(),
+            INTERNAL_API_KEY=settings.INTERNAL_API_KEY.get_secret_value(),
             DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
+            SESSION_COOKIE_SECURE=False,
             DATABASE_URL=f"sqlite:///{tmp_path / 'streamdisconnect.db'}",
             SCHEDULER_ENABLED=False,
             SNAPSHOT_ROOT=tmp_path / "snapshots",
@@ -620,12 +629,8 @@ class TestCsvStreamClientDisconnect:
                 session.commit()
 
             cookie_name = client.app.state.settings.SESSION_COOKIE_NAME
-            login = client.post(
-                "/api/auth/login",
-                data={"username": "streamdc", "password": "Operator123"},
-            )
-            assert login.status_code == 200
-            headers = {"Cookie": f"{cookie_name}={login.cookies.get(cookie_name)}"}
+            login = _complete_mfa_login(client, "streamdc", "Operator123")
+            headers = {"Cookie": f"{cookie_name}={login['session_cookie']}"}
 
             close_calls = []
             real_close = Session.close

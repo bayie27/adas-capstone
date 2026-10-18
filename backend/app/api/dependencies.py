@@ -15,7 +15,7 @@ from app.core.db import get_session
 from app.core.errors import AppHTTPException
 from app.core.monitor import HealthStore
 from app.core.security import decode_session_token
-from app.models import AuditResult, AuthSession, User, UserRole
+from app.models import AuditResult, AuthSession, MfaCredential, User, UserRole
 from app.services.audit import record_out_of_band
 from app.services.realtime import RealtimeManager
 from app.services.sessions import get_active_session
@@ -98,6 +98,23 @@ def authenticate_session_token(
     if user is None or not user.is_active:
         raise _auth_revoked()
 
+    resolved_settings = app_settings if app_settings is not None else settings
+    if auth_session.auth_method == "totp":
+        credential = session.get(MfaCredential, sub_user_id)
+        if (
+            credential is None
+            or credential.state != "enrolled"
+            or credential.active_secret_ciphertext is None
+            or auth_session.mfa_credential_version != credential.credential_version
+        ):
+            raise _auth_revoked()
+    elif auth_session.auth_method == "demo_impersonation":
+        if not resolved_settings.DEV_TOOLS_ENABLED:
+            raise _auth_revoked()
+    else:
+        # Password-only and unknown methods are never full sessions after P4.
+        raise _auth_revoked()
+
     return user, auth_session
 
 
@@ -111,7 +128,9 @@ def get_current_user(
     if not token:
         raise _auth_required()
 
-    user, _auth_session = authenticate_session_token(token, session)
+    user, _auth_session = authenticate_session_token(
+        token, session, request.app.state.settings
+    )
     return user
 
 

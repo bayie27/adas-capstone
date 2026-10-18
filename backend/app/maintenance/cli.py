@@ -52,6 +52,23 @@ def _settings():
     return settings
 
 
+def _restore_mfa_config(settings) -> tuple[str, str]:
+    """Resolve the stable key and exact running schema head in process memory."""
+    from app.core.migrations import get_code_head_revision
+
+    key_setting = settings.MFA_ENCRYPTION_KEY
+    if key_setting is None:
+        raise restore_mod.RestoreCandidateInvalidError(
+            "MFA_ENCRYPTION_KEY is required for restore and rollback."
+        )
+    revision = get_code_head_revision(settings)
+    if revision is None:
+        raise restore_mod.RestoreCandidateInvalidError(
+            "The current MFA-enabled schema revision is unavailable."
+        )
+    return key_setting.get_secret_value(), revision
+
+
 _DEFAULT_HEALTH_URL = "http://127.0.0.1:8000/healthz/ready"
 
 
@@ -281,10 +298,13 @@ def cmd_restore(args: argparse.Namespace) -> int:
         return 2
 
     try:
+        mfa_key, schema_revision = _restore_mfa_config(settings)
         state = restore_mod.perform_offline_restore(
             backup_dir=settings.BACKUP_DIR,
             db_path=db_path,
             backup_id=args.backup_id,
+            mfa_encryption_key=mfa_key,
+            expected_schema_revision=schema_revision,
             storage_tier=args.storage_tier,
             protected_backup_dir=settings.PROTECTED_BACKUP_DIR,
         )
@@ -321,12 +341,17 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     settings = _settings()
     db_path = resolve_sqlite_db_path(settings.DATABASE_URL)
     try:
+        mfa_key, schema_revision = _restore_mfa_config(settings)
         state = restore_mod.perform_rollback(
-            backup_dir=settings.BACKUP_DIR, db_path=db_path
+            backup_dir=settings.BACKUP_DIR,
+            db_path=db_path,
+            mfa_encryption_key=mfa_key,
+            expected_schema_revision=schema_revision,
         )
     except (
         MaintenanceBusyError,
         InvalidBackupIdError,
+        restore_mod.RestoreCandidateInvalidError,
         restore_mod.RestoreError,
         OSError,
     ) as exc:

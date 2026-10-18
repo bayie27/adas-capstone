@@ -326,7 +326,12 @@ def _seed_audit_log_rows(
     carries BEFORE UPDATE/DELETE triggers, so a partial re-seed could not be
     corrected afterwards.
     """
-    if not specs or session.exec(select(AuditLog).limit(1)).first():
+    if (
+        not specs
+        or session.exec(
+            select(AuditLog).where(AuditLog.action != "MFA_ROLLOUT").limit(1)
+        ).first()
+    ):
         return 0
 
     rows: list[AuditLog] = []

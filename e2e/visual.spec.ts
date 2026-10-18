@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test"
+import { enrollFromLogin } from "./support/mfa"
 
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD
 const API = process.env.E2E_API_BASE_URL ?? ""
@@ -37,13 +38,16 @@ test("visual baselines for the nine routes", async ({ browser }) => {
   const seeder = await browser.newContext()
   let openIds: number[]
   try {
-    const login = await seeder.request.post(`${API}/auth/login`, {
-      form: { username: "admin", password: ADMIN_PASSWORD as string },
+    const seederPage = await seeder.newPage()
+    await enrollFromLogin(seederPage, {
+      username: "admin",
+      password: ADMIN_PASSWORD as string,
     })
-    expect(login.ok(), `login failed: ${login.status()} ${await login.text()}`).toBe(true)
 
+    // This demo-only reseed is data preparation after a completed normal MFA
+    // login. Its returned impersonation session is not authentication proof.
     const reseed = await seeder.request.post(`${API}/dev/reseed`, { data: { profile: "demo" } })
-    expect(reseed.ok(), `dev reseed failed: ${reseed.status()} ${await reseed.text()}`).toBe(true)
+    expect(reseed.ok()).toBe(true)
 
     // The demo profile seeds an Unverified incident, so GlobalAlerts opens its
     // accident dialog over every route (and starts the alarm). Pre-seed the
@@ -100,9 +104,10 @@ test("visual baselines for the nine routes", async ({ browser }) => {
     // on the Zustand auth store — the localStorage display cache of role and
     // username — so a valid session cookie alone still redirects to /login.
     // The soft assertion above cannot abort this.
-    await page.getByPlaceholder("username").fill("admin")
-    await page.getByPlaceholder("password").fill(ADMIN_PASSWORD as string)
-    await page.getByRole("button", { name: "Login" }).click()
+    await enrollFromLogin(page, {
+      username: "admin",
+      password: ADMIN_PASSWORD as string,
+    })
     await expect(page).toHaveURL(/\/admin$/)
 
     // --- the eight authenticated routes -------------------------------------

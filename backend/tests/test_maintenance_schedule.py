@@ -34,6 +34,8 @@ from app.services.maintenance_schedule import (
 from fastapi.testclient import TestClient
 from sqlmodel import select
 
+from tests.conftest import _TEST_MFA_ENCRYPTION_KEY
+
 
 def _make_db(path):
     conn = sqlite3.connect(path)
@@ -319,6 +321,7 @@ class TestDailyBackupCronTimezone:
             SECRET_KEY="test-secret-key-not-for-production-use",
             INTERNAL_API_KEY="test-internal-api-key-not-for-production",
             DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
             DATABASE_URL=f"sqlite:///{tmp_path / 'scheduler.db'}",
             SCHEDULER_ENABLED=True,
             SNAPSHOT_ROOT=tmp_path / "snapshots",

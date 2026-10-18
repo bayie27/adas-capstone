@@ -20,7 +20,12 @@ class TestCreateSession:
     def test_creates_a_row_with_expected_fields(self, session: Session):
         user = make_admin(session)
         auth_session = create_session(
-            session, user, user_agent="pytest-agent", source_ip="127.0.0.1"
+            session,
+            user,
+            user_agent="pytest-agent",
+            source_ip="127.0.0.1",
+            auth_method="totp",
+            mfa_credential_version=1,
         )
         session.commit()
 
@@ -33,7 +38,12 @@ class TestCreateSession:
     def test_truncates_long_user_agent(self, session: Session):
         user = make_admin(session)
         auth_session = create_session(
-            session, user, user_agent="x" * 500, source_ip=None
+            session,
+            user,
+            auth_method="totp",
+            mfa_credential_version=1,
+            user_agent="x" * 500,
+            source_ip=None,
         )
         session.commit()
         assert len(auth_session.user_agent) == 256
@@ -45,7 +55,14 @@ class TestGetActiveSession:
 
     def test_returns_none_for_revoked_session(self, session: Session):
         user = make_admin(session)
-        auth_session = create_session(session, user, user_agent=None, source_ip=None)
+        auth_session = create_session(
+            session,
+            user,
+            user_agent=None,
+            source_ip=None,
+            auth_method="totp",
+            mfa_credential_version=1,
+        )
         session.commit()
         revoke_session(session, auth_session.session_id, "logout")
         session.commit()
@@ -59,6 +76,7 @@ class TestGetActiveSession:
             user_id=user.user_id,
             created_at=now - timedelta(hours=9),
             expires_at=now - timedelta(minutes=1),
+            auth_method="password",
         )
         session.add(auth_session)
         session.commit()
@@ -66,7 +84,14 @@ class TestGetActiveSession:
 
     def test_returns_the_session_when_active(self, session: Session):
         user = make_admin(session)
-        auth_session = create_session(session, user, user_agent=None, source_ip=None)
+        auth_session = create_session(
+            session,
+            user,
+            user_agent=None,
+            source_ip=None,
+            auth_method="totp",
+            mfa_credential_version=1,
+        )
         session.commit()
         result = get_active_session(session, auth_session.session_id)
         assert result is not None
@@ -76,7 +101,14 @@ class TestGetActiveSession:
 class TestRevokeSession:
     def test_sets_revoked_at_and_reason(self, session: Session):
         user = make_admin(session)
-        auth_session = create_session(session, user, user_agent=None, source_ip=None)
+        auth_session = create_session(
+            session,
+            user,
+            user_agent=None,
+            source_ip=None,
+            auth_method="totp",
+            mfa_credential_version=1,
+        )
         session.commit()
 
         revoke_session(session, auth_session.session_id, "password_change")
@@ -88,7 +120,14 @@ class TestRevokeSession:
 
     def test_idempotent_on_already_revoked_session(self, session: Session):
         user = make_admin(session)
-        auth_session = create_session(session, user, user_agent=None, source_ip=None)
+        auth_session = create_session(
+            session,
+            user,
+            user_agent=None,
+            source_ip=None,
+            auth_method="totp",
+            mfa_credential_version=1,
+        )
         session.commit()
         revoke_session(session, auth_session.session_id, "logout")
         session.commit()
@@ -109,8 +148,22 @@ class TestRevokeSession:
 class TestRevokeAllForUser:
     def test_revokes_every_active_session_for_that_user(self, session: Session):
         user = make_admin(session)
-        s1 = create_session(session, user, user_agent=None, source_ip=None)
-        s2 = create_session(session, user, user_agent=None, source_ip=None)
+        s1 = create_session(
+            session,
+            user,
+            user_agent=None,
+            source_ip=None,
+            auth_method="totp",
+            mfa_credential_version=1,
+        )
+        s2 = create_session(
+            session,
+            user,
+            user_agent=None,
+            source_ip=None,
+            auth_method="totp",
+            mfa_credential_version=1,
+        )
         session.commit()
 
         revoked_ids = revoke_all_for_user(session, user.user_id, "role_change")
@@ -126,8 +179,22 @@ class TestRevokeAllForUser:
     def test_does_not_touch_a_different_users_sessions(self, session: Session):
         user_a = make_admin(session, username="a")
         user_b = make_operator(session, username="b")
-        session_a = create_session(session, user_a, user_agent=None, source_ip=None)
-        session_b = create_session(session, user_b, user_agent=None, source_ip=None)
+        session_a = create_session(
+            session,
+            user_a,
+            user_agent=None,
+            source_ip=None,
+            auth_method="totp",
+            mfa_credential_version=1,
+        )
+        session_b = create_session(
+            session,
+            user_b,
+            user_agent=None,
+            source_ip=None,
+            auth_method="totp",
+            mfa_credential_version=1,
+        )
         session.commit()
 
         revoke_all_for_user(session, user_a.user_id, "account_disabled")

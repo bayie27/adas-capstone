@@ -115,10 +115,7 @@ class AuthSession(SQLModel, table=True):
     expires_at: datetime = Field(sa_type=UtcDateTime, index=True)
     revoked_at: datetime | None = Field(default=None, sa_type=UtcDateTime)
     revocation_reason: str | None = Field(default=None)
-    auth_method: str = Field(
-        default="password",
-        sa_column=Column(String, nullable=False, server_default="password"),
-    )
+    auth_method: str = Field(sa_column=Column(String, nullable=False))
     mfa_credential_version: int | None = Field(default=None)
     user_agent: str | None = Field(default=None, max_length=256)
     source_ip: str | None = Field(default=None)

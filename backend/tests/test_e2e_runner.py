@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 from app.main import create_app
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 _SCRIPT_DIR = Path(__file__).parents[1] / "scripts"
@@ -33,7 +35,10 @@ def _isolated_environment(repo_root: Path) -> dict[str, str]:
         "INTERNAL_API_KEY": "test-only-internal-secret",
         "DEFAULT_ADMIN_PASSWORD": "test-only-admin-password",
         "E2E_ADMIN_PASSWORD": "test-only-admin-password",
-        "MFA_ENCRYPTION_KEY": "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "MFA_ENCRYPTION_KEY": Fernet.generate_key().decode("ascii"),
+        "E2E_MFA_ACCOUNTS": json.dumps(
+            {username: secrets.token_hex(24) for username in runner._MFA_ACCOUNT_NAMES}
+        ),
         "SESSION_COOKIE_NAME": "adas_session",
         "SESSION_COOKIE_SECURE": "false",
         "SQLITE_BUSY_TIMEOUT_MS": "5000",
@@ -73,6 +78,9 @@ const summary = (run) => ({
   storageInside: pathKeys.every((key) => inside(run.root, run.environment[key])),
   sameAdminCredential: run.environment.DEFAULT_ADMIN_PASSWORD === run.environment.E2E_ADMIN_PASSWORD,
   keyProvided: Boolean(run.environment.MFA_ENCRYPTION_KEY),
+      mfaAccountsUnique:
+        new Set(Object.keys(JSON.parse(run.environment.E2E_MFA_ACCOUNTS))).size === 5 &&
+        new Set(Object.values(JSON.parse(run.environment.E2E_MFA_ACCOUNTS))).size === 5,
 })
 console.log(JSON.stringify({
   first: summary(first),
@@ -101,6 +109,7 @@ console.log(JSON.stringify({
         assert run["storageInside"]
         assert run["sameAdminCredential"]
         assert run["keyProvided"]
+        assert run["mfaAccountsUnique"]
     assert result["rootsUnique"]
     assert result["credentialsUnique"]
     assert result["signingKeysUnique"]
@@ -130,6 +139,7 @@ def test_runner_passes_credentials_and_paths_through_environment(monkeypatch, tm
     captured = {}
 
     monkeypatch.setattr(runner.command, "upgrade", lambda config, revision: None)
+    monkeypatch.setattr(runner, "_seed_isolated_login_accounts", lambda *_args: None)
 
     def fake_run(args, *, cwd, env, check):
         captured.update(args=args, cwd=cwd, env=env, check=check)
@@ -159,6 +169,7 @@ def test_runner_passes_credentials_and_paths_through_environment(monkeypatch, tm
 def test_runner_propagates_fastapi_startup_failure(monkeypatch, tmp_path):
     env = _isolated_environment(tmp_path)
     monkeypatch.setattr(runner.command, "upgrade", lambda config, revision: None)
+    monkeypatch.setattr(runner, "_seed_isolated_login_accounts", lambda *_args: None)
     monkeypatch.setattr(
         runner.subprocess,
         "run",
@@ -168,9 +179,12 @@ def test_runner_propagates_fastapi_startup_failure(monkeypatch, tmp_path):
     assert runner.main(env, repo_root=tmp_path) == 23
 
 
-def test_disposable_password_login_uses_the_runner_credentials(tmp_path):
+def test_disposable_password_login_stages_mfa_without_issuing_a_session(tmp_path):
     env = _isolated_environment(tmp_path)
-    app = create_app(runner._settings_from_environment(env))
+    isolated_settings = runner._settings_from_environment(env)
+    runner.command.upgrade(runner.get_alembic_config(isolated_settings), "head")
+    runner._seed_isolated_login_accounts(isolated_settings, env)
+    app = create_app(isolated_settings)
 
     with TestClient(app) as client:
         response = client.post(
@@ -181,4 +195,8 @@ def test_disposable_password_login_uses_the_runner_credentials(tmp_path):
             },
         )
 
-    assert response.status_code == 200, response.json().get("code")
+    assert response.status_code == 200
+    assert response.json()["status"] == "enrollment_required"
+    assert response.json()["purpose"] == "enroll"
+    assert response.cookies.get("adas_session") is None
+    assert response.cookies.get("adas_mfa_challenge")

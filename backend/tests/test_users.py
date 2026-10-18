@@ -13,7 +13,7 @@ from app.models import AuditLog, MfaChallenge, MfaCredential
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from .conftest import auth_headers, make_admin, make_operator
+from .conftest import _complete_mfa_login, auth_headers, make_admin, make_operator
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -26,7 +26,11 @@ def admin_headers(client, session):
 
 
 def add_pending_mfa_challenge(session: Session, user) -> None:
-    session.add(MfaCredential(user_id=user.user_id))
+    credential = session.get(MfaCredential, user.user_id)
+    if credential is None:
+        credential = MfaCredential(user_id=user.user_id)
+        session.add(credential)
+    session.flush()
     session.add(
         MfaChallenge(
             user_id=user.user_id,
@@ -34,7 +38,7 @@ def add_pending_mfa_challenge(session: Session, user) -> None:
                 f"pending-challenge-{user.user_id}-{user.username}"
             ),
             purpose="login",
-            credential_version=0,
+            credential_version=credential.credential_version,
             password_changed_at=user.password_changed_at,
             expires_at=datetime.now(UTC) + timedelta(minutes=5),
         )
@@ -149,13 +153,14 @@ class TestChangeMyPassword:
     ):
         operator = make_operator(session)
         headers = auth_headers(client, "operator", "Operator123")
-        session.add(MfaCredential(user_id=operator.user_id))
+        credential = session.get(MfaCredential, operator.user_id)
+        assert credential is not None
         session.add(
             MfaChallenge(
                 user_id=operator.user_id,
                 token_hash=hash_challenge_token("one-time-test-challenge"),
                 purpose="login",
-                credential_version=0,
+                credential_version=credential.credential_version,
                 password_changed_at=operator.password_changed_at,
                 expires_at=datetime.now(UTC) + timedelta(minutes=5),
             )
@@ -189,11 +194,7 @@ class TestChangeMyPassword:
         assert resp.status_code == 204
 
         # Verify can now log in with new password
-        login = client.post(
-            "/api/auth/login",
-            data={"username": "operator", "password": "NewPass456"},
-        )
-        assert login.status_code == 200
+        _complete_mfa_login(client, "operator", "NewPass456")
 
     def test_wrong_old_password_rejected(self, client: TestClient, session: Session):
         make_operator(session)
@@ -514,11 +515,8 @@ class TestCreateUser:
             },
             headers=headers,
         )
-        login = client.post(
-            "/api/auth/login",
-            data={"username": "freshuser", "password": "Fresh1234"},
-        )
-        assert login.status_code == 200
+        result = _complete_mfa_login(client, "freshuser", "Fresh1234")
+        assert result["body"]["status"] == "authenticated"
 
 
 # ---------------------------------------------------------------------------
@@ -810,11 +808,7 @@ class TestResetPassword:
         )
 
         # Operator can now login with new password
-        login = client.post(
-            "/api/auth/login",
-            data={"username": "operator", "password": "Resetpass1"},
-        )
-        assert login.status_code == 200
+        _complete_mfa_login(client, "operator", "Resetpass1")
 
     def test_reset_password_complexity_enforced(
         self, client: TestClient, session: Session

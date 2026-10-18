@@ -96,11 +96,23 @@ def _mint_session(
         user,
         user_agent=request.headers.get("user-agent"),
         source_ip=request.client.host if request.client else None,
+        auth_method="demo_impersonation",
+        app_settings=_app_settings(request),
     )
     session.commit()
     session.refresh(user)
-    set_session_cookie(response, create_session_token(user, auth_session))
-    return DevSessionUser(user_id=user.user_id, username=user.username, role=user.role)
+    app_settings = _app_settings(request)
+    set_session_cookie(
+        response,
+        create_session_token(user, auth_session, app_settings),
+        app_settings,
+    )
+    return DevSessionUser(
+        user_id=user.user_id,
+        username=user.username,
+        role=user.role,
+        auth_method="demo_impersonation",
+    )
 
 
 @router.get("/status", response_model=DevStatusResponse)
@@ -214,7 +226,9 @@ def dev_login_as(
     token = request.cookies.get(_app_settings(request).SESSION_COOKIE_NAME)
     if token:
         try:
-            _, auth_session = authenticate_session_token(token, session)
+            _, auth_session = authenticate_session_token(
+                token, session, _app_settings(request)
+            )
             revoke_session(session, auth_session.session_id, "admin_revoke")
         except AppHTTPException:
             # get_current_user already authenticated this request, so this

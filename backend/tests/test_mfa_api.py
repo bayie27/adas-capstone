@@ -254,19 +254,22 @@ def test_invalid_origin_is_rejected_without_cacheable_auth_response(
     assert response.headers["cache-control"] == "no-store"
 
 
-def test_ordinary_application_keeps_old_login_and_does_not_register_mfa(
+def test_ordinary_application_registers_mfa_and_password_only_issues_challenge(
     session, client
 ):
     user = _user(session, "mfa-staged-user")
 
-    missing = client.get("/api/auth/mfa/status")
+    challenge_status = client.get("/api/auth/mfa/challenge")
     login = client.post(
         "/api/auth/login",
         data={"username": user.username, "password": "CorrectHorse9"},
     )
 
-    assert missing.status_code == 404
+    assert challenge_status.status_code == 401
     assert login.status_code == 200
-    assert "user" in login.json()
-    assert login.json()["user"]["user_id"] == user.user_id
-    assert login.cookies.get("adas_session")
+    assert set(login.json()) == {"status", "purpose", "expires_at"}
+    assert login.json()["status"] == "enrollment_required"
+    assert login.json()["purpose"] == "enroll"
+    assert login.cookies.get("adas_session") is None
+    assert login.cookies.get("adas_mfa_challenge")
+    assert login.headers["cache-control"] == "no-store"

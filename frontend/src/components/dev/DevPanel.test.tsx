@@ -88,7 +88,12 @@ describe("DevPanelTrigger", () => {
       export_jobs: 5,
       snapshots: 62,
       audit_rows: 0,
-      session: { user_id: 1, username: "admin", role: "Admin" },
+      session: {
+        user_id: 1,
+        username: "admin",
+        role: "Admin",
+        auth_method: "demo_impersonation",
+      },
     })
 
     render(renderWithProviders(<DevPanelTrigger />))

@@ -9,16 +9,35 @@ import jwt
 import pytest
 from app.core.config import settings
 from app.core.security import create_session_token, decode_session_token
-from app.models import AuditLog, AuthSession
+from app.models import AuditLog, AuthSession, MfaCredential
 from app.services.sessions import create_session, get_active_session, revoke_session
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from .conftest import auth_headers, make_admin, make_operator
+from .conftest import (
+    _complete_mfa_login,
+    auth_headers,
+    login,
+    make_admin,
+    make_operator,
+)
 
 
 def _cookie_header(token: str) -> dict:
     return {"Cookie": f"{settings.SESSION_COOKIE_NAME}={token}"}
+
+
+def _create_totp_session(session: Session, user):
+    credential = session.get(MfaCredential, user.user_id)
+    assert credential is not None and credential.state == "enrolled"
+    return create_session(
+        session,
+        user,
+        user_agent=None,
+        source_ip=None,
+        auth_method="totp",
+        mfa_credential_version=credential.credential_version,
+    )
 
 
 class TestLogin:
@@ -28,28 +47,20 @@ class TestLogin:
         self, client: TestClient, session: Session
     ):
         make_admin(session)
-        resp = client.post(
-            "/api/auth/login",
-            data={"username": "admin", "password": "Admin123"},
-        )
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body == {"user": body["user"]}
+        result = _complete_mfa_login(client, "admin", "Admin123")
+        body = result["body"]
+        assert body == {"status": "authenticated", "user": body["user"]}
         assert "access_token" not in body
         assert "token" not in body
         assert body["user"]["username"] == "admin"
         assert "password_hash" not in body["user"]
 
-        cookie = resp.cookies.get(settings.SESSION_COOKIE_NAME)
-        assert cookie is not None
-        assert resp.headers["cache-control"] == "no-store"
+        assert result["session_cookie"]
 
     def test_login_stamps_last_login(self, client: TestClient, session: Session):
         user = make_admin(session)
         assert user.last_login is None
-        client.post(
-            "/api/auth/login", data={"username": "admin", "password": "Admin123"}
-        )
+        login(client, "admin", "Admin123")
         session.refresh(user)
         assert user.last_login is not None
 
@@ -57,9 +68,7 @@ class TestLogin:
         self, client: TestClient, session: Session
     ):
         make_admin(session)
-        client.post(
-            "/api/auth/login", data={"username": "admin", "password": "Admin123"}
-        )
+        login(client, "admin", "Admin123")
         rows = session.exec(
             select(AuditLog).where(AuditLog.action == "LOGIN_SUCCESS")
         ).all()
@@ -140,12 +149,12 @@ class TestLogin:
         flaky; this instead proves the *mechanism* runs: an unknown
         username still triggers a dummy Argon2id verification rather than
         short-circuiting before any hashing cost is paid."""
-        import app.api.routes.auth as auth_module
+        import app.services.mfa as mfa_module
 
         calls = []
-        original = auth_module.verify_dummy_password
+        original = mfa_module.verify_dummy_password
         monkeypatch.setattr(
-            auth_module,
+            mfa_module,
             "verify_dummy_password",
             lambda pw: (calls.append(pw), original(pw))[1],
         )
@@ -284,7 +293,7 @@ class TestJWTVerification:
 
     def _valid_session_and_user(self, session: Session):
         user = make_admin(session)
-        auth_session = create_session(session, user, user_agent=None, source_ip=None)
+        auth_session = _create_totp_session(session, user)
         session.commit()
         return user, auth_session
 
@@ -365,6 +374,7 @@ class TestJWTVerification:
             user_id=user.user_id,
             created_at=past - timedelta(hours=8),
             expires_at=past,
+            auth_method="password",
         )
         session.add(auth_session)
         session.commit()
@@ -402,7 +412,7 @@ class TestJWTVerification:
     ):
         user_a = make_admin(session, username="usera")
         user_b = make_operator(session, username="userb")
-        session_b = create_session(session, user_b, user_agent=None, source_ip=None)
+        session_b = _create_totp_session(session, user_b)
         session.commit()
 
         # Token claims to be user_a, but sid points at user_b's session row.
@@ -442,7 +452,7 @@ class TestSessionAuthority:
 
     def test_deleted_session_row_rejected(self, client: TestClient, session: Session):
         user = make_admin(session)
-        auth_session = create_session(session, user, user_agent=None, source_ip=None)
+        auth_session = _create_totp_session(session, user)
         session.commit()
         token = create_session_token(user, auth_session)
 
@@ -455,7 +465,7 @@ class TestSessionAuthority:
 
     def test_revoked_session_row_rejected(self, client: TestClient, session: Session):
         user = make_admin(session)
-        auth_session = create_session(session, user, user_agent=None, source_ip=None)
+        auth_session = _create_totp_session(session, user)
         session.commit()
         token = create_session_token(user, auth_session)
 
@@ -472,7 +482,7 @@ class TestSessionAuthority:
         """The JWT's own `exp` is still in the future, but its session row's
         expires_at is already past — the DB row wins."""
         user = make_admin(session)
-        auth_session = create_session(session, user, user_agent=None, source_ip=None)
+        auth_session = _create_totp_session(session, user)
         session.commit()
         auth_session.expires_at = datetime.now(UTC) - timedelta(minutes=1)
         session.add(auth_session)
@@ -504,6 +514,7 @@ class TestSessionAuthority:
             user_id=user.user_id,
             created_at=now - timedelta(hours=8),
             expires_at=now,
+            auth_method="password",
         )
         session.add(auth_session)
         session.commit()
@@ -519,14 +530,10 @@ class TestConcurrencyAndMultiSession:
         self, client: TestClient, session: Session
     ):
         make_admin(session)
-        resp1 = client.post(
-            "/api/auth/login", data={"username": "admin", "password": "Admin123"}
-        )
-        resp2 = client.post(
-            "/api/auth/login", data={"username": "admin", "password": "Admin123"}
-        )
-        cookie1 = resp1.cookies.get(settings.SESSION_COOKIE_NAME)
-        cookie2 = resp2.cookies.get(settings.SESSION_COOKIE_NAME)
+        result1 = _complete_mfa_login(client, "admin", "Admin123")
+        result2 = _complete_mfa_login(client, "admin", "Admin123")
+        cookie1 = result1["session_cookie"]
+        cookie2 = result2["session_cookie"]
         assert cookie1 != cookie2
 
         payload1 = decode_session_token(cookie1)
@@ -537,14 +544,10 @@ class TestConcurrencyAndMultiSession:
         self, client: TestClient, session: Session
     ):
         user = make_admin(session)
-        resp1 = client.post(
-            "/api/auth/login", data={"username": "admin", "password": "Admin123"}
-        )
-        resp2 = client.post(
-            "/api/auth/login", data={"username": "admin", "password": "Admin123"}
-        )
-        cookie1 = resp1.cookies.get(settings.SESSION_COOKIE_NAME)
-        cookie2 = resp2.cookies.get(settings.SESSION_COOKIE_NAME)
+        result1 = _complete_mfa_login(client, "admin", "Admin123")
+        result2 = _complete_mfa_login(client, "admin", "Admin123")
+        cookie1 = result1["session_cookie"]
+        cookie2 = result2["session_cookie"]
 
         sid1 = decode_session_token(cookie1)["sid"]
         revoke_session(session, sid1, "admin_revoke")
@@ -566,10 +569,7 @@ class TestConcurrencyAndMultiSession:
         """Edge case 1.10 — no half-applied writes; the *next* request is
         the one that gets 401, not a corrupted in-flight one."""
         make_admin(session)
-        resp = client.post(
-            "/api/auth/login", data={"username": "admin", "password": "Admin123"}
-        )
-        cookie = resp.cookies.get(settings.SESSION_COOKIE_NAME)
+        cookie = _complete_mfa_login(client, "admin", "Admin123")["session_cookie"]
         sid = decode_session_token(cookie)["sid"]
 
         ok = client.get("/api/users/me", headers=_cookie_header(cookie))
@@ -611,10 +611,7 @@ class TestConcurrencyAndMultiSession:
 class TestLogout:
     def test_logout_revokes_session(self, client: TestClient, session: Session):
         make_admin(session)
-        resp = client.post(
-            "/api/auth/login", data={"username": "admin", "password": "Admin123"}
-        )
-        cookie = resp.cookies.get(settings.SESSION_COOKIE_NAME)
+        cookie = _complete_mfa_login(client, "admin", "Admin123")["session_cookie"]
 
         logout_resp = client.post("/api/auth/logout", headers=_cookie_header(cookie))
         assert logout_resp.status_code == 204
@@ -626,10 +623,7 @@ class TestLogout:
 
     def test_logout_clears_the_cookie(self, client: TestClient, session: Session):
         make_admin(session)
-        resp = client.post(
-            "/api/auth/login", data={"username": "admin", "password": "Admin123"}
-        )
-        cookie = resp.cookies.get(settings.SESSION_COOKIE_NAME)
+        cookie = _complete_mfa_login(client, "admin", "Admin123")["session_cookie"]
         logout_resp = client.post("/api/auth/logout", headers=_cookie_header(cookie))
         set_cookie = logout_resp.headers.get("set-cookie", "")
         assert settings.SESSION_COOKIE_NAME in set_cookie
@@ -637,10 +631,7 @@ class TestLogout:
 
     def test_logout_writes_logout_audit_row(self, client: TestClient, session: Session):
         make_admin(session)
-        resp = client.post(
-            "/api/auth/login", data={"username": "admin", "password": "Admin123"}
-        )
-        cookie = resp.cookies.get(settings.SESSION_COOKIE_NAME)
+        cookie = _complete_mfa_login(client, "admin", "Admin123")["session_cookie"]
         client.post("/api/auth/logout", headers=_cookie_header(cookie))
 
         rows = session.exec(select(AuditLog).where(AuditLog.action == "LOGOUT")).all()
@@ -650,10 +641,7 @@ class TestLogout:
     def test_logout_twice_both_return_204(self, client: TestClient, session: Session):
         """Edge case 10.5."""
         make_admin(session)
-        resp = client.post(
-            "/api/auth/login", data={"username": "admin", "password": "Admin123"}
-        )
-        cookie = resp.cookies.get(settings.SESSION_COOKIE_NAME)
+        cookie = _complete_mfa_login(client, "admin", "Admin123")["session_cookie"]
 
         first = client.post("/api/auth/logout", headers=_cookie_header(cookie))
         second = client.post("/api/auth/logout", headers=_cookie_header(cookie))
@@ -757,10 +745,7 @@ class TestRateLimit:
                 "/api/auth/login",
                 data={"username": "admin", "password": "wrongpassword"},
             )
-        ok = client.post(
-            "/api/auth/login", data={"username": "admin", "password": "Admin123"}
-        )
-        assert ok.status_code == 200
+        auth_headers(client, "admin", "Admin123")
 
         # The limiter should be clear again — another failure doesn't 429.
         resp = client.post(

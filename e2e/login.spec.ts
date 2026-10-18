@@ -1,70 +1,55 @@
 import { expect, test } from "@playwright/test"
 
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD
-const ISOLATED_API_ORIGIN = process.env.E2E_BACKEND_ORIGIN
+import {
+  enrollFromLogin,
+  getMfaAccount,
+  loginWithAuthenticator,
+  logoutFromUi,
+  startPasswordFlow,
+} from "./support/mfa"
 
-test("admin can log in and reach the dashboard", async ({ page }) => {
-  test.skip(!ADMIN_PASSWORD, "E2E_ADMIN_PASSWORD is not configured for this run")
-  if (
-    process.env.MFA_E2E_MODE === "isolated" &&
-    process.env.DEFAULT_ADMIN_PASSWORD !== ADMIN_PASSWORD
-  ) {
-    throw new Error("The browser and backend do not share the disposable admin credential")
-  }
-
-  let blockedApiOrigin: string | undefined
-  if (process.env.MFA_E2E_MODE === "isolated") {
-    if (!ISOLATED_API_ORIGIN) {
-      throw new Error("E2E_BACKEND_ORIGIN is required for the isolated browser run")
-    }
-    await page.route("**/*", async (route) => {
-      const requestUrl = new URL(route.request().url())
-      if (requestUrl.pathname.startsWith("/api/") && requestUrl.origin !== ISOLATED_API_ORIGIN) {
-        const requestOrigin = requestUrl.origin
-        blockedApiOrigin = requestOrigin
-        await route.abort()
-        return
-      }
-      await route.continue()
-    })
+test("a disposable user enrolls and then completes ordinary MFA login", async ({ page }) => {
+  test.setTimeout(90_000)
+  test.skip(
+    process.env.E2E_LIVE_DEPLOYMENT === "1",
+    "Enrollment is refused against live deployments; use the isolated E2E harness.",
+  )
+  if (process.env.MFA_E2E_MODE !== "isolated") {
+    throw new Error("MFA browser login requires a fresh isolated E2E environment.")
   }
 
-  await page.goto("/login")
-
-  await page.getByPlaceholder("username").fill("admin")
-  const passwordInput = page.getByPlaceholder("password")
-  await passwordInput.fill(ADMIN_PASSWORD as string)
-  if ((await passwordInput.inputValue()) !== ADMIN_PASSWORD) {
-    throw new Error("The password input did not retain the disposable credential")
-  }
-  let submittedCredentialsMatch = false
-  page.on("request", (request) => {
-    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/auth/login") {
-      const body = new URLSearchParams(request.postData() ?? "")
-      submittedCredentialsMatch =
-        body.get("username") === "admin" && body.get("password") === ADMIN_PASSWORD
-    }
-  })
-  const loginResponsePromise = page
-    .waitForResponse(
-      (response) =>
-        response.request().method() === "POST" &&
-        new URL(response.url()).pathname === "/api/auth/login",
-    )
-    .catch(() => null)
-  await page.getByRole("button", { name: "Login" }).click()
-  const loginResponse = await loginResponsePromise
-  if (blockedApiOrigin) {
-    throw new Error(`Blocked API request outside the isolated backend: ${blockedApiOrigin}`)
-  }
-  if (!loginResponse) {
-    throw new Error("The password login API did not return a response")
-  }
-  if (!submittedCredentialsMatch) {
-    throw new Error("The browser did not submit the disposable credentials unchanged")
-  }
-  expect(loginResponse.status()).toBe(200)
-
-  await expect(page).toHaveURL(/\/admin$/)
+  const account = getMfaAccount("mfa-login")
+  const passwordStage = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/auth/login",
+  )
+  const enrollment = await enrollFromLogin(page, account)
+  const staged = await passwordStage
+  expect(staged.status()).toBe(200)
+  const challenge = await staged.json()
+  expect(challenge.status).toBe("enrollment_required")
+  expect(challenge).not.toHaveProperty("user")
+  await expect(page).toHaveURL(/\/user$/)
   await expect(page.getByRole("link", { name: "Dashboard" })).toBeVisible()
+
+  await logoutFromUi(page)
+  const secondStage = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/auth/login",
+  )
+  const acceptedStep = await loginWithAuthenticator(
+    page,
+    account,
+    enrollment.secret,
+    enrollment.step,
+  )
+  const challenged = await secondStage
+  expect(challenged.status()).toBe(200)
+  const secondChallenge = await challenged.json()
+  expect(secondChallenge.status).toBe("mfa_required")
+  expect(secondChallenge).not.toHaveProperty("user")
+  expect(acceptedStep).toBeGreaterThan(enrollment.step)
+  await expect(page).toHaveURL(/\/user$/)
 })

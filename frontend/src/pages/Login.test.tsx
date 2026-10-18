@@ -1,119 +1,89 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { MemoryRouter } from "react-router-dom"
+import { MemoryRouter, useLocation } from "react-router-dom"
 import { describe, expect, it, vi } from "vitest"
 
-import Login from "./Login"
+import type { CurrentUserResponse } from "@/api/auth"
 import { useAuthStore } from "@/store/useAuthStore"
+import Login from "./Login"
 
-vi.mock("@/api/auth", async () => {
-  const actual = await vi.importActual<typeof import("@/api/auth")>("@/api/auth")
-  return { ...actual, loginUser: vi.fn() }
+const completedUser: CurrentUserResponse = {
+  user_id: 42,
+  username: "operator",
+  first_name: "Test",
+  last_name: "Operator",
+  role: "Operator",
+  is_active: true,
+  created_at: "2026-10-18T12:00:00Z",
+  updated_at: "2026-10-18T12:00:00Z",
+  password_changed_at: null,
+  last_login: "2026-10-18T12:00:00Z",
+}
+
+vi.mock("@/pages/auth/MfaLoginFlow", async () => {
+  const React = await import("react")
+  return {
+    MfaLoginFlow: ({
+      onAuthenticated,
+      initialMessage,
+    }: {
+      onAuthenticated: (user: CurrentUserResponse) => void
+      initialMessage?: string
+    }) =>
+      React.createElement(
+        React.Fragment,
+        null,
+        initialMessage ? React.createElement("p", null, initialMessage) : null,
+        React.createElement(
+          "button",
+          { onClick: () => onAuthenticated(completedUser) },
+          "Complete MFA",
+        ),
+      ),
+  }
 })
 
-import { loginUser } from "@/api/auth"
-
-function rateLimitError(retryAfterHeader?: string) {
-  return {
-    isAxiosError: true,
-    response: {
-      status: 429,
-      data: { code: "AUTH_RATE_LIMITED", detail: "Too many attempts. Try again later." },
-      headers: retryAfterHeader === undefined ? {} : { "retry-after": retryAfterHeader },
-    },
-  }
+function LocationDisplay() {
+  const location = useLocation()
+  return <p data-testid="location">{location.pathname}</p>
 }
 
 function renderLogin() {
-  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
-  useAuthStore.setState({ role: null, username: null, userId: null })
+  const queryClient = new QueryClient()
+  useAuthStore.setState({ role: null, username: null, userId: null, sessionEpoch: 0 })
   return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter>
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={["/login"]}>
+        <LocationDisplay />
         <Login />
       </MemoryRouter>
     </QueryClientProvider>,
   )
 }
 
-async function submitLogin(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText("Username"), "operator")
-  await user.type(screen.getByLabelText("Password"), "hunter2")
-  await user.click(screen.getByRole("button", { name: /login/i }))
-}
-
-describe("Login rate-limit countdown", () => {
-  it("renders a real countdown driven by the Retry-After header and re-enables at zero", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
-    vi.mocked(loginUser).mockRejectedValue(rateLimitError("3"))
+describe("Login MFA activation", () => {
+  it("uses the MFA flow and only populates client auth after completed MFA", async () => {
+    const user = userEvent.setup()
     renderLogin()
 
-    await submitLogin(user)
+    expect(useAuthStore.getState().role).toBeNull()
+    expect(screen.getByTestId("location")).toHaveTextContent("/login")
+    await user.click(screen.getByRole("button", { name: "Complete MFA" }))
 
-    // The exact starting number is timing-fuzzy (useNow floors to the
-    // nearest second; some real time elapses between the mutation
-    // rejecting and the deadline being set), same as every other countdown
-    // in this app -- assert the shape, then drive it all the way to zero.
-    const initialButton = await screen.findByRole("button", { name: /try again in \d+s/i })
-    expect(initialButton).toBeDisabled()
-
-    await vi.advanceTimersByTimeAsync(4000)
-    const reenabled = await screen.findByRole("button", { name: /^login$/i })
-    expect(reenabled).toBeEnabled()
-
-    vi.useRealTimers()
+    expect(useAuthStore.getState()).toMatchObject({
+      role: "Operator",
+      username: "operator",
+      userId: 42,
+    })
+    expect(screen.getByTestId("location")).toHaveTextContent("/user")
   })
 
-  it("falls back to a fixed 60s countdown when Retry-After is absent", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
-    vi.mocked(loginUser).mockRejectedValue(rateLimitError(undefined))
+  it("consumes an existing session-loss message without persisting credentials", () => {
+    window.sessionStorage.setItem("auth-message", "Your session expired.")
     renderLogin()
 
-    await submitLogin(user)
-
-    expect(await screen.findByRole("button", { name: /try again in 6[01]s/i })).toBeDisabled()
-    vi.useRealTimers()
-  })
-
-  it("falls back to 60s when Retry-After is present but not a valid number", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
-    vi.mocked(loginUser).mockRejectedValue(rateLimitError("not-a-number"))
-    renderLogin()
-
-    await submitLogin(user)
-
-    expect(await screen.findByRole("button", { name: /try again in 6[01]s/i })).toBeDisabled()
-    vi.useRealTimers()
-  })
-
-  it("keeps the countdown running even if the operator edits a field mid-wait", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime })
-    vi.mocked(loginUser).mockRejectedValue(rateLimitError("30"))
-    renderLogin()
-
-    await submitLogin(user)
-    const before = await screen.findByRole("button", { name: /try again in \d+s/i })
-    // A count, not the exact string -- shouldAdvanceTime ties the fake clock
-    // to wall time, and findByRole's own polling plus user.type()'s
-    // simulated keystrokes below both consume an uncontrolled amount of it,
-    // so asserting the text is byte-identical is exactly the kind of
-    // flake that produced a real CI failure here (31s -> 30s between the
-    // two reads). What this test actually guards against is a *reset* --
-    // editing a field re-deriving a fresh ~30s deadline instead of the
-    // countdown continuing to tick down.
-    const secondsBefore = Number(before.textContent?.match(/(\d+)s/)?.[1])
-    expect(Number.isNaN(secondsBefore)).toBe(false)
-
-    await user.type(screen.getByLabelText("Username"), "x")
-    const after = screen.getByRole("button", { name: /try again in \d+s/i })
-    expect(after).toBeDisabled()
-    const secondsAfter = Number(after.textContent?.match(/(\d+)s/)?.[1])
-    expect(secondsAfter).toBeLessThanOrEqual(secondsBefore)
-    vi.useRealTimers()
+    expect(screen.getByText("Your session expired.")).toBeInTheDocument()
+    expect(window.sessionStorage.getItem("auth-message")).toBeNull()
   })
 })

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useNavigate } from "react-router-dom"
 import { RiEditBoxLine, RiLockPasswordLine } from "@remixicon/react"
 
 import { Badge, BadgeDot } from "@/components/ui/Badge"
@@ -12,15 +13,27 @@ import { formatShortDateTime, formatRelativeDateTime } from "@/utils/datetime"
 import { ChangePasswordModal } from "@/pages/profile/ChangePasswordModal"
 import { EditProfileModal } from "@/pages/profile/EditProfileModal"
 import { AlarmSettingsCard } from "@/pages/profile/AlarmSettingsCard"
+import { MfaSettingsCard } from "@/pages/profile/MfaSettingsCard"
 import { toast } from "@/store/useToastStore"
 
 type ModalState = { kind: "closed" } | { kind: "password" } | { kind: "edit_profile" }
 
 export default function ProfileSettings() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const role = useAuthStore((state) => state.role)
   const username = useAuthStore((state) => state.username)
   const userId = useAuthStore((state) => state.userId)
   const [modal, setModal] = useState<ModalState>({ kind: "closed" })
+
+  function handleMfaSessionRevoked() {
+    queryClient.clear()
+    useAuthStore.getState().clearSession()
+  }
+
+  function handleMfaSignedOut() {
+    navigate("/login", { replace: true })
+  }
 
   const profileQuery = useQuery({
     queryKey: myProfileQueryKey(userId),
@@ -167,7 +180,15 @@ export default function ProfileSettings() {
             </Button>
           </div>
 
-          {/* Section 4: Alarm Settings */}
+          {/* Section 4: Authenticator */}
+          <div className="py-8">
+            <MfaSettingsCard
+              onSessionRevoked={handleMfaSessionRevoked}
+              onSignedOut={handleMfaSignedOut}
+            />
+          </div>
+
+          {/* Section 5: Alarm Settings */}
           <div className="pt-8">
             <AlarmSettingsCard className="border-0 bg-transparent p-0 shadow-none" />
           </div>

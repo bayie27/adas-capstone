@@ -149,7 +149,7 @@ def test_p28_preserves_history_and_rewrites_only_the_contract_values(p28_databas
     before_audit = _fetch_rows(engine, "audit_log", _AUDIT_COLUMNS)
     engine.dispose()
 
-    command.upgrade(get_alembic_config(p28_database), "head")
+    command.upgrade(get_alembic_config(p28_database), "c28d3f1a9e7b")
     engine = create_db_engine(p28_database)
     after_detection = _fetch_rows(engine, "detection_log", _DETECTION_COLUMNS)
     after_audit = _fetch_rows(engine, "audit_log", _AUDIT_COLUMNS)
@@ -167,7 +167,7 @@ def test_p28_preserves_history_and_rewrites_only_the_contract_values(p28_databas
 
 
 def test_p28_preserves_indexes_and_restores_append_only_triggers(p28_database):
-    command.upgrade(get_alembic_config(p28_database), "head")
+    command.upgrade(get_alembic_config(p28_database), "c28d3f1a9e7b")
     engine = create_db_engine(p28_database)
     with engine.connect() as conn:
         detection_indexes = {

@@ -9,11 +9,12 @@ import pytest
 from alembic import command
 from app.core.config import Settings
 from app.core.db import create_db_engine
-from app.core.migrations import get_alembic_config, get_code_head_revision
+from app.core.migrations import get_alembic_config
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 _PREVIOUS_REVISION = "c28d3f1a9e7b"
+_MFA_FOUNDATION_REVISION = "5b87b6564753"
 _NOW = "2026-10-18 01:02:03.000000"
 _OLD_SESSION_COLUMNS = (
     "session_id, user_id, created_at, expires_at, revoked_at, "
@@ -142,7 +143,7 @@ def _table_names(engine) -> set[str]:
 
 
 def _upgrade(settings: Settings):
-    command.upgrade(get_alembic_config(settings), "head")
+    command.upgrade(get_alembic_config(settings), _MFA_FOUNDATION_REVISION)
     return create_db_engine(settings)
 
 
@@ -512,5 +513,5 @@ def test_downgrade_refuses_mfa_data_loss(tmp_path, loss_item: str):
                 conn.execute(text("SELECT count(*) FROM mfa_challenge")).scalar_one()
                 == 1
             )
-    assert revision == get_code_head_revision(settings)
+    assert revision == _MFA_FOUNDATION_REVISION
     engine.dispose()

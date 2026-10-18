@@ -20,12 +20,14 @@ from pathlib import Path
 
 import pytest
 from app.core.config import Settings
+from app.core.config import settings as global_settings
 from app.core.db import create_db_engine, init_db
 from app.dev import seed as perf_seed
 from app.dev.profiles import SeedCameraSpec, build_default_cameras, build_default_users
 from app.main import create_app
 from app.models import AIStatus, ConnectionStatus, DetectionLog
 from app.services.cameras import reconcile_camera_desired_states
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import insert
 from sqlmodel import Session
@@ -80,9 +82,11 @@ def pytest_collection_modifyitems(config, items):
 def _build_perf_settings(db_path: Path) -> Settings:
     return Settings(
         _env_file=None,
-        SECRET_KEY="perf-test-secret-key-not-for-production-use",
-        INTERNAL_API_KEY="perf-test-internal-api-key-not-for-production",
+        SECRET_KEY=global_settings.SECRET_KEY.get_secret_value(),
+        INTERNAL_API_KEY=global_settings.INTERNAL_API_KEY.get_secret_value(),
         DEFAULT_ADMIN_PASSWORD="perf-test-admin-password-123",
+        MFA_ENCRYPTION_KEY=Fernet.generate_key().decode("ascii"),
+        SESSION_COOKIE_SECURE=False,
         DATABASE_URL=f"sqlite:///{db_path}",
         SCHEDULER_ENABLED=False,
     )
@@ -223,12 +227,10 @@ def internal_headers(_perf_settings: Settings) -> dict:
 
 
 def operator_auth_headers(perf_client: TestClient, perf_seeded: dict) -> dict:
+    from ..conftest import _complete_mfa_login
+
     username = next(iter(perf_seeded["operators"]))
-    resp = perf_client.post(
-        "/api/auth/login",
-        data={"username": username, "password": "operator123"},
-    )
-    assert resp.status_code == 200, f"perf login failed: {resp.text}"
-    cookie_name = "adas_session"
-    cookie_value = resp.cookies.get(cookie_name)
+    result = _complete_mfa_login(perf_client, username, "operator123")
+    cookie_name = perf_client.app.state.settings.SESSION_COOKIE_NAME
+    cookie_value = result["session_cookie"]
     return {"Cookie": f"{cookie_name}={cookie_value}"}

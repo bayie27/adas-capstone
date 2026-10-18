@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react"
+import { act, cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { useState } from "react"
 
 import { MfaSettingsCard } from "./MfaSettingsCard"
 import { MfaSensitiveFlowProvider } from "@/components/auth/MfaSensitiveFlowProvider"
@@ -90,6 +91,22 @@ function renderCard(
   }
 }
 
+function ReplacementRevocationHost({ onSignedOut }: { onSignedOut: () => void }) {
+  const [sessionActive, setSessionActive] = useState(true)
+  return (
+    <MfaSensitiveFlowProvider>
+      {sessionActive ? (
+        <MfaSettingsCard
+          onSessionRevoked={() => setSessionActive(false)}
+          onSignedOut={onSignedOut}
+        />
+      ) : (
+        <p>Profile session cleared</p>
+      )}
+    </MfaSensitiveFlowProvider>
+  )
+}
+
 async function startReplacement(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByText(/8 recovery codes remaining/i)
   await user.click(screen.getByRole("button", { name: /replace authenticator/i }))
@@ -106,6 +123,7 @@ describe("MfaSettingsCard", () => {
     vi.mocked(getMfaEnrollment).mockResolvedValue(provisioning)
   })
   afterEach(() => {
+    cleanup()
     vi.restoreAllMocks()
     expect(isAuthRedirectSuspended()).toBe(false)
   })
@@ -157,6 +175,61 @@ describe("MfaSettingsCard", () => {
     expect(order).toEqual(["session-revoked", "signed-out"])
     expect(isAuthRedirectSuspended()).toBe(false)
   })
+
+  it.each(["socket-close-before-response", "response-before-socket-close"] as const)(
+    "keeps replacement codes through %s and releases redirect suspension on acknowledgment",
+    async (order) => {
+      const user = userEvent.setup()
+      let resolveConfirmation:
+        | ((value: { status: "reauthentication_required"; recovery_codes: string[] }) => void)
+        | undefined
+      const onSessionLost = vi.fn()
+      const onSignedOut = vi.fn()
+      vi.mocked(beginMfaReplacement).mockResolvedValue(replaceChallenge)
+      vi.mocked(confirmMfaEnrollment).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveConfirmation = resolve
+          }),
+      )
+      vi.mocked(getMfaStatus).mockResolvedValue(enrolledStatus)
+      render(<ReplacementRevocationHost onSignedOut={onSignedOut} />)
+
+      await startReplacement(user)
+      await user.type(screen.getByLabelText("Authenticator code"), "654321")
+      await user.click(screen.getByRole("button", { name: /confirm authenticator/i }))
+      expect(isAuthRedirectSuspended()).toBe(true)
+
+      const simulateSocketClose = () => {
+        if (!isAuthRedirectSuspended()) onSessionLost()
+      }
+      if (order === "socket-close-before-response") {
+        simulateSocketClose()
+        expect(onSessionLost).not.toHaveBeenCalled()
+        expect(screen.getByTestId("qr-code")).toBeInTheDocument()
+      }
+
+      await act(async () => {
+        resolveConfirmation?.({
+          status: "reauthentication_required",
+          recovery_codes: ["ABCD-EFGH-JKLM"],
+        })
+      })
+      expect(await screen.findByText("ABCD-EFGH-JKLM")).toBeInTheDocument()
+      expect(screen.getByText("Profile session cleared")).toBeInTheDocument()
+      expect(isAuthRedirectSuspended()).toBe(true)
+
+      if (order === "response-before-socket-close") {
+        simulateSocketClose()
+        expect(onSessionLost).not.toHaveBeenCalled()
+      }
+
+      await user.click(screen.getByRole("checkbox", { name: /i saved these codes/i }))
+      await user.click(screen.getByRole("button", { name: /continue/i }))
+      expect(onSignedOut).toHaveBeenCalledOnce()
+      expect(isAuthRedirectSuspended()).toBe(false)
+    },
+  )
 
   it("keeps proof failures inline and does not revoke a valid session", async () => {
     const user = userEvent.setup()
@@ -269,7 +342,7 @@ describe("MfaSettingsCard", () => {
 
     expect(
       await screen.findByText(
-        /demo session still requires your password and current authenticator code/i,
+        /demo impersonation session.*security changes still require your password/i,
       ),
     ).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: /replace authenticator/i }))
@@ -286,7 +359,7 @@ describe("MfaSettingsCard", () => {
       state: "recovery_pending",
       recovery_codes_remaining: 0,
       enrolled_at: null,
-      auth_method: "password",
+      auth_method: "demo_impersonation",
     }
     renderCard(recoveryPending)
 

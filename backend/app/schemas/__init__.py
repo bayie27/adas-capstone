@@ -11,7 +11,6 @@ from app.schemas.analytics import (
     PerformanceGlobalKpis,
 )
 from app.schemas.audit import AuditLogListResponse, AuditLogRead
-from app.schemas.auth import LoginResponse
 from app.schemas.camera import (
     AiBreakdown,
     CameraBreakdowns,
@@ -127,7 +126,6 @@ __all__ = [
     "HelpArticleSummary",
     "IncidentPayload",
     "LocationFrequency",
-    "LoginResponse",
     "MaintenanceNoticeData",
     "PeakAccidentHour",
     "PerformanceAnalyticsResponse",

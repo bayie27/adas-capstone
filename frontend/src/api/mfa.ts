@@ -42,7 +42,7 @@ export interface MfaStatusResponse {
   state: "unenrolled" | "enrolled" | "recovery_pending"
   recovery_codes_remaining: number
   enrolled_at: string | null
-  auth_method: "password" | "totp" | "demo_impersonation"
+  auth_method: "totp" | "demo_impersonation"
 }
 
 export interface RecoveryCodesResponse {

@@ -7,6 +7,7 @@ import { GlobalAlerts } from "@/components/GlobalAlerts"
 import { MaintenanceNotice } from "@/components/MaintenanceNotice"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { RealtimeAlertsBridge } from "@/components/RealtimeAlertsBridge"
+import { MfaSensitiveFlowProvider } from "@/components/auth/MfaSensitiveFlowProvider"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { DevPanelTrigger } from "@/components/dev/DevPanelTrigger"
 import { ExportJobsTray } from "@/components/exports/ExportJobsTray"
@@ -47,74 +48,76 @@ function HelpCenterRoute() {
 function App() {
   return (
     <Router>
-      <RealtimeAlertsBridge />
-      <GlobalAlerts />
-      {/* Same placement as GlobalAlerts: inside Router (useNavigate) and
+      <MfaSensitiveFlowProvider>
+        <RealtimeAlertsBridge />
+        <GlobalAlerts />
+        {/* Same placement as GlobalAlerts: inside Router (useNavigate) and
           QueryClientProvider (useQueryClient), but outside ErrorBoundary and
           Suspense so it survives a page crash and lazy-route loading — and
           so it is available on /login too. */}
-      <MaintenanceNotice />
-      <DevPanelTrigger />
-      {/* Lower right floating overlays: Tray buttons & Toasts */}
-      <div className="fixed bottom-10 right-5 z-[9990] flex flex-col items-end gap-3 pointer-events-none">
-        <div className="flex items-center gap-3">
-          <ExportJobsTray />
-          <OngoingIncidentsTray />
+        <MaintenanceNotice />
+        <DevPanelTrigger />
+        {/* Lower right floating overlays: Tray buttons & Toasts */}
+        <div className="fixed bottom-10 right-5 z-[9990] flex flex-col items-end gap-3 pointer-events-none">
+          <div className="flex items-center gap-3">
+            <ExportJobsTray />
+            <OngoingIncidentsTray />
+          </div>
+          <ToastContainer />
         </div>
-        <ToastContainer />
-      </div>
-      <ErrorBoundary>
-        <Suspense fallback={<RouteFallback />}>
-          <Routes>
-            <Route element={<AuthLayout />}>
-              <Route path="/login" element={<Login />} />
-            </Route>
-            <Route path="/" element={<Navigate to="/login" replace />} />
-            {/* AI Performance is an Administrator-only surface. Keep a
+        <ErrorBoundary>
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
+              <Route element={<AuthLayout />}>
+                <Route path="/login" element={<Login />} />
+              </Route>
+              <Route path="/" element={<Navigate to="/login" replace />} />
+              {/* AI Performance is an Administrator-only surface. Keep a
                 deterministic redirect for stale Operator bookmarks instead
                 of allowing the old /user/ai path to mount the page. */}
-            <Route path="/user/ai" element={<Navigate to="/user" replace />} />
+              <Route path="/user/ai" element={<Navigate to="/user" replace />} />
 
-            <Route
-              path="/admin"
-              element={
-                <ProtectedRoute requiredRole="Admin">
-                  <AppLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<Dashboard />} />
-              <Route path="cameras" element={<Cameras />} />
-              <Route path="detections" element={<Detections />} />
-              <Route path="health" element={<SystemHealth />} />
-              <Route path="ai" element={<AiPerformance />} />
-              <Route path="profile" element={<ProfileSettings />} />
-              <Route path="help" element={<HelpCenterRoute />} />
-              <Route path="users" element={<Users />} />
-              <Route path="audit" element={<AuditLog />} />
-              <Route path="maintenance" element={<Maintenance />} />
-            </Route>
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute requiredRole="Admin">
+                    <AppLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<Dashboard />} />
+                <Route path="cameras" element={<Cameras />} />
+                <Route path="detections" element={<Detections />} />
+                <Route path="health" element={<SystemHealth />} />
+                <Route path="ai" element={<AiPerformance />} />
+                <Route path="profile" element={<ProfileSettings />} />
+                <Route path="help" element={<HelpCenterRoute />} />
+                <Route path="users" element={<Users />} />
+                <Route path="audit" element={<AuditLog />} />
+                <Route path="maintenance" element={<Maintenance />} />
+              </Route>
 
-            <Route
-              path="/user"
-              element={
-                <ProtectedRoute requiredRole="Operator">
-                  <AppLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<Dashboard />} />
-              <Route path="cameras" element={<Cameras />} />
-              <Route path="detections" element={<Detections />} />
-              <Route path="health" element={<SystemHealth />} />
-              <Route path="profile" element={<ProfileSettings />} />
-              <Route path="help" element={<HelpCenterRoute />} />
-            </Route>
+              <Route
+                path="/user"
+                element={
+                  <ProtectedRoute requiredRole="Operator">
+                    <AppLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<Dashboard />} />
+                <Route path="cameras" element={<Cameras />} />
+                <Route path="detections" element={<Detections />} />
+                <Route path="health" element={<SystemHealth />} />
+                <Route path="profile" element={<ProfileSettings />} />
+                <Route path="help" element={<HelpCenterRoute />} />
+              </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </ErrorBoundary>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
+      </MfaSensitiveFlowProvider>
     </Router>
   )
 }

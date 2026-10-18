@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -15,7 +16,11 @@ bootstrap_backend()
 
 from alembic import command  # noqa: E402
 from app.core.config import Settings  # noqa: E402
+from app.core.db import create_db_engine  # noqa: E402
 from app.core.migrations import get_alembic_config  # noqa: E402
+from app.core.security import get_password_hash  # noqa: E402
+from app.models import AlarmSettings, User, UserRole  # noqa: E402
+from sqlmodel import Session, select  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FASTAPI_COMMAND = [
@@ -44,6 +49,15 @@ _REQUIRED_STORAGE_PATHS = (
     "LOG_DIR",
 )
 _OPTIONAL_STORAGE_PATHS = ("PROTECTED_BACKUP_DIR", "PROTECTED_ARCHIVE_DIR")
+_MFA_ACCOUNT_NAMES = frozenset(
+    {
+        "mfa-login",
+        "mfa-recovery",
+        "mfa-replacement",
+        "mfa-rotation",
+        "mfa-wrong-code",
+    }
+)
 
 
 def _path_under_run_root(name: str, value: str, run_root: Path) -> Path:
@@ -101,6 +115,7 @@ def validate_e2e_environment(
         "DEFAULT_ADMIN_PASSWORD",
         "E2E_ADMIN_PASSWORD",
         "MFA_ENCRYPTION_KEY",
+        "E2E_MFA_ACCOUNTS",
     )
     if any(not environment.get(name) for name in required_values):
         raise ValueError(
@@ -109,6 +124,24 @@ def validate_e2e_environment(
     if environment["DEFAULT_ADMIN_PASSWORD"] != environment["E2E_ADMIN_PASSWORD"]:
         raise ValueError(
             "The browser login credential must match the disposable admin password."
+        )
+    try:
+        mfa_accounts = json.loads(environment["E2E_MFA_ACCOUNTS"])
+    except (TypeError, json.JSONDecodeError):
+        raise ValueError(
+            "E2E_MFA_ACCOUNTS must contain isolated account credentials."
+        ) from None
+    if (
+        not isinstance(mfa_accounts, dict)
+        or set(mfa_accounts) != _MFA_ACCOUNT_NAMES
+        or any(
+            not isinstance(password, str) or len(password) < 24
+            for password in mfa_accounts.values()
+        )
+        or len(set(mfa_accounts.values())) != len(_MFA_ACCOUNT_NAMES)
+    ):
+        raise ValueError(
+            "E2E_MFA_ACCOUNTS must contain unique disposable account credentials."
         )
     if environment.get("SESSION_COOKIE_SECURE") != "false":
         raise ValueError(
@@ -145,6 +178,40 @@ def _settings_from_environment(environment: Mapping[str, str]) -> Settings:
     )
 
 
+def _seed_isolated_login_accounts(
+    settings: Settings, environment: Mapping[str, str]
+) -> None:
+    """Seed disposable users directly in the isolated harness before startup."""
+    accounts = json.loads(environment["E2E_MFA_ACCOUNTS"])
+    engine = create_db_engine(settings)
+    try:
+        with Session(engine) as session:
+            rows = [("admin", environment["E2E_ADMIN_PASSWORD"], UserRole.ADMIN)]
+            rows.extend(
+                (username, password, UserRole.OPERATOR)
+                for username, password in accounts.items()
+            )
+            for username, password, role in rows:
+                if session.exec(select(User).where(User.username == username)).first():
+                    raise ValueError(
+                        "The isolated E2E database already contains login accounts."
+                    )
+                user = User(
+                    username=username,
+                    first_name="E2E",
+                    last_name="Disposable",
+                    role=role,
+                    password_hash=get_password_hash(password),
+                    is_active=True,
+                )
+                session.add(user)
+                session.flush()
+                session.add(AlarmSettings(user_id=user.user_id))
+            session.commit()
+    finally:
+        engine.dispose()
+
+
 def main(
     environment: Mapping[str, str] | None = None, *, repo_root: Path = REPO_ROOT
 ) -> int:
@@ -162,6 +229,7 @@ def main(
                 )
         isolated_settings = _settings_from_environment(child_environment)
         command.upgrade(get_alembic_config(isolated_settings), "head")
+        _seed_isolated_login_accounts(isolated_settings, child_environment)
     except Exception as exc:
         # Only known-safe validation/command context is printed; the secret
         # environment values are never interpolated into this message.

@@ -30,6 +30,7 @@ export interface DevSessionUser {
   user_id: number
   username: string
   role: ApiUserRole
+  auth_method: "demo_impersonation"
 }
 
 export interface DevSeedResult {

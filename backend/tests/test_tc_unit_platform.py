@@ -241,7 +241,14 @@ class TestSessionRevocationReasons:
         reason matching its trigger, and no revoked session validates
         afterwards."""
         user = make_admin(session, username=f"tcrevoke{reason[:6]}")
-        auth_session = create_session(session, user, user_agent=None, source_ip=None)
+        auth_session = create_session(
+            session,
+            user,
+            user_agent=None,
+            source_ip=None,
+            auth_method="totp",
+            mfa_credential_version=1,
+        )
         session.commit()
 
         revoke_session(session, auth_session.session_id, reason)
