@@ -32,6 +32,7 @@ export function PasswordInput({
   iconSize = 14,
   disabled,
   error,
+  maxLength,
   ignorePasswordManagers,
 }: {
   label: string
@@ -45,6 +46,7 @@ export function PasswordInput({
   iconSize?: number
   disabled?: boolean
   error?: string
+  maxLength?: number
   /**
    * Opts this field out of third-party password-manager extensions
    * (1Password, LastPass, Bitwarden) via their documented ignore attributes.
@@ -66,6 +68,7 @@ export function PasswordInput({
       placeholder={placeholder}
       disabled={disabled}
       error={error}
+      maxLength={maxLength}
       labelClassName={labelClassName}
       data-1p-ignore={ignorePasswordManagers || undefined}
       data-lpignore={ignorePasswordManagers ? "true" : undefined}
