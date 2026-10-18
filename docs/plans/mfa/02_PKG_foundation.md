@@ -69,8 +69,8 @@ Run relevant Ruff/Prettier checks without touching unrelated files. Walk matrix 
 
 ## Completion notes — executor fills with actual evidence
 
-- Status: P1 implementation and required verification complete; package is ready for its PR.
-- Branch/base/revision: `feat/mfa-foundation` from fetched `origin/main` at `c1ba666`; migration `c28d3f1a9e7b` → `5b87b6564753`.
+- Status: P1 implementation and required verification complete; PR [#241](https://github.com/bayie27/adas-capstone/pull/241) is open and unmerged.
+- Branch/base/revision: `feat/mfa-foundation` from fetched `origin/main` at `c1ba666`; implementation commit `656c6329ddb0f7603bcf7856358e4734cf9b9fe8`; migration `c28d3f1a9e7b` → `5b87b6564753`.
 - Runtime/dependencies: Python 3.12.13, uv 0.11.3, Node 22.23.1, pnpm 11.17.0, Playwright 1.62.1, PyOTP 2.10.0, cryptography 50.0.2. PyOTP and cryptography versions were checked against current PyPI metadata on 2026-10-18; exact resolved versions are recorded in `uv.lock`.
 - Red/green evidence: the new crypto/config/runner modules and tables each failed before implementation (missing dependency/module/schema/setting/runner). The CORS mismatch was forced by setting the imported global origin to a foreign value; the old assertion returned 403, and the app-settings assertion passed after the change.
 - Focused backend: `uv run pytest backend/tests/test_mfa_crypto.py backend/tests/test_mfa_migrations.py backend/tests/test_e2e_runner.py backend/tests/test_config.py` — **43 passed** (12 warnings: existing Passlib deprecation and SQLite expression-index reflection warnings). `uv run pytest backend/tests/test_auth.py::TestOriginValidation::test_listed_origin_allowed` — **1 passed** (2 warnings).
@@ -80,6 +80,7 @@ Run relevant Ruff/Prettier checks without touching unrelated files. Walk matrix 
 - Focused style checks: Ruff lint/format and Prettier checks passed for P1-owned files; `git diff --check` is clean.
 - Paper-sync check: a local pending proposal is recorded in `paper_sync/findings/2026-10-18-mfa-foundation.md` and `paper_sync/TRACKER.md`; it cites the live Doc/Sheet and current rendered pages. No Drive Doc, Sheet, or comment was written. Existing password-only requirement and login diagram remain accurate for P1.
 - Pre-PR gate: `pnpm full:check` — exit 0. Ruff format/lint passed; Prettier, ESLint, and TypeScript passed; backend suite **1,215 passed, 19 skipped**; frontend suite **357 passed**; production build succeeded; isolated Chromium login **1 passed**. The worktree has no `.env`, so the successful run received generated process-only `SECRET_KEY`, `INTERNAL_API_KEY`, and `DEFAULT_ADMIN_PASSWORD`, plus a fresh disposable `DATABASE_URL` under ignored `var/tmp/full-check-811c3c7bb3234890851dda82372a6e35`. Playwright used its own isolated root and dedicated ports. The first invocation without those process values stopped at settings import; it did not access a database. Existing notices included Passlib/argon2 deprecation, SQLite expression-index reflection, Vite's `__dirname` config-loader warning, and jsdom media-method messages.
+- Push hook: the first push attempt lacked process values and stopped at settings import. Retried with generated process-only credentials and a separate disposable database path; the pre-push `pnpm check` passed and published the branch. No hook was bypassed.
 - Limitations: no P2 routes/services, no live MFA enrollment/recovery, no optional visual/demo run, no real `.env` or application database changes, and no Drive writes. The temporary browser roots and full-check database are ignored scratch artifacts; live device/rollout drills remain for later packages.
 
 Update this section and the overview row. Do not start P2 or merge this PR automatically.
