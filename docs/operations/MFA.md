@@ -152,3 +152,27 @@ while services are stopped; it is not a database repair or password-reset tool. 
 restore drill must record the actual end-to-end time through service readiness and
 the required heartbeat. Database replacement time alone does not establish the
 existing 60-second recovery target.
+
+For an offline CLI restore, stop the backend and AI engine, then run:
+
+```powershell
+uv run --no-sync python -m app.maintenance restore <backup_id>
+```
+
+Restart the services, then run the readiness check:
+
+```powershell
+uv run --no-sync python -m app.maintenance restart --phase wait --timeout 60 --require-heartbeat
+```
+
+Only after that command confirms backend readiness and a fresh AI heartbeat, record
+the completion audit:
+
+```powershell
+uv run --no-sync python -m app.maintenance restore --finalize completed
+```
+
+Verify the restore status is `completed`. If readiness or heartbeat is not confirmed,
+do not mark the restore complete; follow the emergency rollback procedure instead.
+The offline CLI finalization step is separate from the Maintenance UI's supervised
+coordinator flow.
