@@ -10,7 +10,7 @@ rows reviewable and diffable in the repo.
 The live tracker row may already exist; check the finding ledger and live Sheet
 before appending.
 
-33 finding(s), 21 unsynced.
+34 finding(s), 22 unsynced.
 
 | Section / Chapter | Page Number | Required Revision | Notes | Status | Assigned to | Synced | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -47,3 +47,4 @@ before appending.
 | Testing and Validation | pending fresh PDF mapping; native ranges recorded below from the live document read on 2026-09-16 | Convert the stale pre-execution plan into an evidence-qualified record aligned with the current tracker, adopted model profile, three-device technical topology, single-laptop UAT environment, revised performance criteria, and UAT evidence | The live Doc is Capstone Test Execution and Validation, one tab, 283 paragraphs, 10 tables. Native ranges are verified; PDF export succeeded but the signed connector file could not be materialized in this environment, so rendered page mapping remains pending. | Not started | Daniboy | no | [2026-09-16-test-execution-validation-plan.md](findings/2026-09-16-test-execution-validation-plan.md) |
 | Testing and Validation | pp. 187–191 (live TOC; fresh PDF export unavailable) | Distinguish three-device technical/system network testing from single-laptop participant-facing UAT | Technical/system testing used a Linux VMS simulator, Windows ADAS server, and separate browser-only operator laptop over HTTPS/WSS. Participant-facing UAT used a single-laptop evaluation environment. Cached rendered pages were inspected, but the current PDF export endpoint returned 403. | In progress | Daniboy | no | [2026-09-16-three-device-testing-setup.md](findings/2026-09-16-three-device-testing-setup.md) |
 | ERD, Data Dictionary, Auth Session, Frameworks and Libraries | 114–117, 128, 131–132, 170, 226–228 | Align the paper's schema and backend library description with staged MFA storage. | P1 is additive; public login remains password-only until cutover. | Not started | Daniboy | no | [2026-10-18-mfa-foundation.md](findings/2026-10-18-mfa-foundation.md) |
+| Frameworks and Libraries | 177; 🚩 Action Stream!A90:H90 | Document the local QR-rendering dependency used by the staged MFA enrollment component. | P3 components remain inactive until the P4 cutover; no live Drive writes are proposed as completed work. | Not started | Daniboy | no | [2026-10-18-mfa-frontend.md](findings/2026-10-18-mfa-frontend.md) |

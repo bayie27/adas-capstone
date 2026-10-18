@@ -80,7 +80,7 @@ export function Input({
       </div>
 
       {error ? (
-        <p id={messageId} className="mt-1.5 text-caption text-danger">
+        <p id={messageId} role="alert" className="mt-1.5 text-caption text-danger">
           {error}
         </p>
       ) : hint ? (

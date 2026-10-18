@@ -62,7 +62,11 @@ export function isAuthRedirectSuspended(): boolean {
 // every 401 the same forced a hard reload out of the restore modal on a
 // mistyped password instead of showing the inline "incorrect password"
 // error the modal already renders for exactly this response.
-const SESSION_LOSS_EXCLUDED_CODES = new Set(["AUTH_INVALID_CREDENTIALS"])
+const SESSION_LOSS_EXCLUDED_CODES = new Set([
+  "AUTH_INVALID_CREDENTIALS",
+  "MFA_CHALLENGE_INVALID",
+  "MFA_INVALID_CODE",
+])
 
 api.interceptors.response.use(
   (response) => response,
@@ -107,6 +111,9 @@ export type ApiErrorCode =
   | "TEMPORARILY_UNAVAILABLE"
   | "CONFLICT_DUPLICATE"
   | "AUTH_INVALID_CREDENTIALS"
+  | "MFA_CHALLENGE_INVALID"
+  | "MFA_INVALID_CODE"
+  | "MFA_STATE_CONFLICT"
   | "AUTH_EXPIRED"
   | "AUTH_REVOKED"
   | "ORIGIN_REJECTED"

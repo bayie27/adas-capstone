@@ -1,6 +1,6 @@
 # MFA implementation — Luna Max execution overview
 
-**Status:** P1 and P2 implementation and verification are complete; P2 PR #242 is open and unmerged; P3–P5 have not started.
+**Status:** P1 and P2 are merged; P3 PR #243 is open after implementation and pre-PR verification; P4–P5 have not started.
 **Approved scope:** Mandatory TOTP for normal local ADAS authentication.  
 **Execution:** Five sequential, manually started Luna Max conversations; one PR per package.  
 **Planning baseline:** 2026-10-17, main at `9bc7a29`. Reinspect the repository before execution.
@@ -82,8 +82,8 @@ The completion ledger reflects current execution state. The planning tests below
 | Package | Status      | Branch/PR                                                                         | Merge commit | Evidence                                                                                                                              |
 | ------- | ----------- | --------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
 | P1      | Merged      | `feat/mfa-foundation` / [#241](https://github.com/bayie27/adas-capstone/pull/241) | `8b6778c`    | Merged into main; P1 completion notes record migration, matrix, isolated E2E, and `pnpm full:check` results.                          |
-| P2      | PR open     | `feat/mfa-backend` / [#242](https://github.com/bayie27/adas-capstone/pull/242)    | —            | Implementation commit `a013139`; completion notes record the matrix walk, focused tests, successful full gate, and paper-sync result. |
-| P3      | Not started | —                                                                                 | —            | —                                                                                                                                     |
+| P2      | Merged      | `feat/mfa-backend` / [#242](https://github.com/bayie27/adas-capstone/pull/242)    | `796ea43`    | Merged into main; the P2 implementation commit is `a013139`.                                                                          |
+| P3      | PR open     | `feat/mfa-frontend` / [#243](https://github.com/bayie27/adas-capstone/pull/243)   | —            | Implementation commit `b12176a`; `pnpm full:check` passed with documented test-only defaults. P3 components remain inactive until P4. |
 | P4      | Not started | —                                                                                 | —            | —                                                                                                                                     |
 | P5      | Not started | —                                                                                 | —            | —                                                                                                                                     |
 

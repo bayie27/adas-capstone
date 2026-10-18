@@ -63,6 +63,24 @@ describe("api response interceptor", () => {
     }
   })
 
+  it.each(["MFA_INVALID_CODE", "MFA_CHALLENGE_INVALID"])(
+    "keeps the current session for an inline %s proof failure",
+    async (code) => {
+      const clearSession = vi.fn()
+      useAuthStore.setState({ clearSession })
+      const location = stubLocation("/admin/profile")
+
+      try {
+        await expect(getRejectedHandler()(make401(code))).rejects.toBeTruthy()
+
+        expect(clearSession).not.toHaveBeenCalled()
+        expect(location.replace).not.toHaveBeenCalled()
+      } finally {
+        location.restore()
+      }
+    },
+  )
+
   it.each(["AUTH_REQUIRED", "AUTH_EXPIRED", "AUTH_REVOKED"])(
     "clears the session and redirects to /login for a genuine %s",
     async (code) => {
