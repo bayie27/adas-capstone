@@ -52,7 +52,8 @@ breakdown.
   per-camera performance. Operators can use the Dashboard and Detections pages for
   their day-to-day monitoring.
 - **Profile**: your own name, username, password, and alarm sound preferences. See
-  [Updating Your Profile and Password](updating-your-profile-and-password).
+  [Updating Your Profile and Password](updating-your-profile-and-password), and [Setting
+  Up Your Authenticator and Recovery Codes](managing-your-authenticator-and-recovery).
 - **Users, Audit Log, Maintenance**: Administrator-only areas for managing accounts,
   reviewing every recorded action, and backing up or restoring the database.
 
@@ -69,13 +70,17 @@ Follow [Your First 15 Minutes: An Onboarding Checklist](your-first-15-minutes-ch
 for a short, in-order walkthrough. In brief, a few things worth doing before you're
 relying on this system for real:
 
-1. Open your **Profile** page and set an alarm sound and volume you'll actually notice.
+1. Finish authenticator setup and save the one-time recovery codes somewhere secure
+   away from your phone. See [Setting Up Your Authenticator and Recovery
+   Codes](managing-your-authenticator-and-recovery).
+2. Open your **Profile** page and set an alarm sound and volume you'll actually notice.
    See [Choosing Your Alarm Sound and Volume](choosing-your-alarm-sound-and-volume).
-2. Check the **Cameras** page so you know what's currently being monitored and what
+3. Check the **Cameras** page so you know what's currently being monitored and what
    each camera is called. See [Camera Connection Status vs. AI Status](camera-connection-vs-ai-status).
-3. Skim [Confirming an Accident Alert](confirming-an-accident-alert) and [Dismissing a
+4. Skim [Confirming an Accident Alert](confirming-an-accident-alert) and [Dismissing a
    False Positive](dismissing-a-false-positive) so the two most common actions aren't
    unfamiliar the first time an alert actually arrives.
 
-None of this is required to use the system (it'll work without it), but it means the
-first real alert you handle won't be the first time you've seen any of this.
+Authenticator enrollment is required before normal dashboard access. The other steps
+are optional preparation, but they mean the first real alert you handle won't be the
+first time you've seen any of this.

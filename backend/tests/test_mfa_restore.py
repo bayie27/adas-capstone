@@ -8,16 +8,21 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from alembic import command
+from app.api.dependencies import authenticate_session_token
 from app.core.config import Settings
 from app.core.db import create_db_engine
+from app.core.errors import AppHTTPException
 from app.core.mfa import (
     decrypt_totp_secret,
     encrypt_totp_secret,
     generate_recovery_codes,
     generate_totp_secret,
+    hash_challenge_token,
     hash_recovery_code,
 )
 from app.core.migrations import get_alembic_config, get_code_head_revision
+from app.core.rate_limit import SlidingWindowLimiter
+from app.core.security import create_session_token
 from app.maintenance.backup import create_backup
 from app.maintenance.manifest import (
     ORIGIN_MANUAL,
@@ -38,6 +43,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.services.mfa import MfaRequestContext, verify_challenge
 from cryptography.fernet import Fernet
 from sqlalchemy import text
 from sqlmodel import Session, select
@@ -170,7 +176,15 @@ def _build_current_database(db_path, *, key: str | None = None, corrupt=False):
         )
         session.commit()
     engine.dispose()
-    return settings, stable_key, head, active_seed, pending_seed, active_hashes
+    return (
+        settings,
+        stable_key,
+        head,
+        active_seed,
+        pending_seed,
+        active_codes,
+        active_hashes,
+    )
 
 
 def _restore(path, backup_dir, key, head, backup_id):
@@ -188,9 +202,15 @@ def test_restore_preserves_snapshot_factor_state_and_invalidates_every_session(
 ):
     db_path = tmp_path / "primary.db"
     backup_dir = tmp_path / "backups"
-    settings, key, head, old_seed, _pending_seed, old_hashes = _build_current_database(
-        db_path
-    )
+    (
+        settings,
+        key,
+        head,
+        old_seed,
+        _pending_seed,
+        _active_codes,
+        old_hashes,
+    ) = _build_current_database(db_path)
     selected = create_backup(
         db_path=db_path, backup_dir=backup_dir, origin=ORIGIN_MANUAL
     )
@@ -277,6 +297,129 @@ def test_restore_preserves_snapshot_factor_state_and_invalidates_every_session(
         )
 
 
+def test_snapshot_restore_can_resurrect_a_consumed_recovery_code(tmp_path):
+    db_path = tmp_path / "recovery-primary.db"
+    backup_dir = tmp_path / "recovery-backups"
+    (
+        settings,
+        key,
+        head,
+        _active_seed,
+        _pending_seed,
+        recovery_codes,
+        _recovery_hashes,
+    ) = _build_current_database(db_path)
+    code = recovery_codes[0]
+    code_hash = hash_recovery_code(1, 7, code)
+    challenge_token = "mfa-p5-recovery-before-snapshot-restore"
+    now = datetime.now(UTC)
+
+    engine = create_db_engine(settings)
+    with Session(engine) as session:
+        challenge = session.get(MfaChallenge, 1)
+        assert challenge is not None
+        challenge.token_hash = hash_challenge_token(challenge_token)
+        challenge.purpose = "login"
+        challenge.pending_secret_ciphertext = None
+        challenge.created_at = now
+        challenge.expires_at = now + timedelta(minutes=5)
+        session.add(challenge)
+        session.commit()
+    engine.dispose()
+
+    selected = create_backup(
+        db_path=db_path, backup_dir=backup_dir, origin=ORIGIN_MANUAL
+    )
+    selected_path = db_path_for(backup_dir, selected.backup_id)
+    selected_manifest = manifest_path_for(backup_dir, selected.backup_id)
+    backup_digest = compute_sha256(selected_path)
+    manifest_bytes = selected_manifest.read_bytes()
+    key_bytes = key.encode("ascii")
+    backup_contains_key = key_bytes in selected_path.read_bytes()
+    manifest_contains_key = key_bytes in manifest_bytes
+    assert not backup_contains_key, "stable MFA key was copied into the backup"
+    assert not manifest_contains_key, "stable MFA key was copied into the manifest"
+
+    context = MfaRequestContext(source_ip="127.0.0.1", user_agent="p5-local-drill")
+    limiter = SlidingWindowLimiter(10, 300)
+    engine = create_db_engine(settings)
+    first_recovery = verify_challenge(
+        engine,
+        challenge_token=challenge_token,
+        method="recovery",
+        code=code,
+        context=context,
+        settings=settings,
+        mfa_limiter=limiter,
+    )
+    assert first_recovery.body.purpose == "recovery_enroll"
+    assert first_recovery.session_token is None
+    engine.dispose()
+
+    engine = create_db_engine(settings)
+    with Session(engine) as session:
+        consumed = session.exec(
+            select(MfaRecoveryCode).where(MfaRecoveryCode.code_hash == code_hash)
+        ).one()
+        credential = session.get(MfaCredential, 1)
+        revoked_sessions = session.exec(
+            select(AuthSession).where(AuthSession.user_id == 1)
+        ).all()
+        assert consumed.consumed_at is not None
+        assert credential is not None and credential.state == "recovery_pending"
+        assert all(row.revocation_reason == "mfa_recovery" for row in revoked_sessions)
+    engine.dispose()
+
+    restored = _restore(db_path, backup_dir, key, head, selected.backup_id)
+    assert restored.status == "db_restored"
+    assert compute_sha256(selected_path) == backup_digest
+    assert selected_manifest.read_bytes() == manifest_bytes
+
+    engine = create_db_engine(settings)
+    second_challenge_token = "mfa-p5-recovery-after-snapshot-restore"
+    now = datetime.now(UTC)
+    with Session(engine) as session:
+        user = session.get(User, 1)
+        credential = session.get(MfaCredential, 1)
+        assert user is not None and credential is not None
+        session.add(
+            MfaChallenge(
+                user_id=1,
+                token_hash=hash_challenge_token(second_challenge_token),
+                purpose="login",
+                credential_version=credential.credential_version,
+                password_changed_at=user.password_changed_at,
+                created_at=now,
+                expires_at=now + timedelta(minutes=5),
+            )
+        )
+        session.commit()
+
+    second_recovery = verify_challenge(
+        engine,
+        challenge_token=second_challenge_token,
+        method="recovery",
+        code=code,
+        context=context,
+        settings=settings,
+        mfa_limiter=limiter,
+    )
+    assert second_recovery.body.purpose == "recovery_enroll"
+    assert second_recovery.session_token is None
+    with Session(engine) as session:
+        consumed_again = session.exec(
+            select(MfaRecoveryCode).where(MfaRecoveryCode.code_hash == code_hash)
+        ).one()
+        credential = session.get(MfaCredential, 1)
+        restored_sessions = session.exec(
+            select(AuthSession).where(AuthSession.user_id == 1)
+        ).all()
+        assert consumed_again.consumed_at is not None
+        assert credential is not None and credential.state == "recovery_pending"
+        assert all(row.revocation_reason == "mfa_restore" for row in restored_sessions)
+    engine.dispose()
+
+
 @pytest.mark.parametrize(
     ("failure", "key_value"),
     [
@@ -359,6 +502,14 @@ def test_emergency_rollback_also_invalidates_pre_outage_sessions_and_challenges(
     db_path = tmp_path / "rollback-primary.db"
     backup_dir = tmp_path / "rollback-backups"
     settings, key, head, *_ = _build_current_database(db_path)
+    engine = create_db_engine(settings)
+    with Session(engine) as session:
+        user = session.get(User, 1)
+        auth_session = session.get(AuthSession, "totp-session")
+        assert user is not None and auth_session is not None
+        pre_outage_token = create_session_token(user, auth_session, settings)
+    engine.dispose()
+
     selected = create_backup(
         db_path=db_path, backup_dir=backup_dir, origin=ORIGIN_MANUAL
     )
@@ -393,6 +544,9 @@ def test_emergency_rollback_also_invalidates_pre_outage_sessions_and_challenges(
             assert len(audit) == 1
             detail = json.loads(audit[0][0])
             assert detail["source"] == "emergency_rollback"
+            with pytest.raises(AppHTTPException) as rejected:
+                authenticate_session_token(pre_outage_token, session, settings)
+            assert rejected.value.code == "AUTH_REVOKED"
     finally:
         engine.dispose()
 

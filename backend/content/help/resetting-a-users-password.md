@@ -19,6 +19,10 @@ locked-out account after too many failed attempts (see [Why Am I Locked Out Afte
 Failed Logins?](faq-why-am-i-locked-out-after-failed-logins)), or an account you're
 handing back to someone after it was temporarily deactivated.
 
+A password reset changes only the password. It does not reset, replace, or bypass the
+user's authenticator or recovery codes. For those situations, see [Setting Up Your
+Authenticator and Recovery Codes](managing-your-authenticator-and-recovery).
+
 This is a different action from what a person does for themselves on their own Profile
 page. See [Updating Your Profile and Password](updating-your-profile-and-password) for
 that self-service flow, which requires knowing the _current_ password. A reset here
@@ -50,4 +54,5 @@ least one number.
 
 Tell the user their new password through some channel outside this system. It isn't
 emailed or displayed to them automatically. They can change it to something only they
-know the moment they log back in, from their own Profile page.
+know the moment they log back in, from their own Profile page. They must still complete
+the required authenticator step with their existing factor or an unused recovery code.

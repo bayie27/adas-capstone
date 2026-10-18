@@ -5,6 +5,7 @@ Start with the [project overview](../README.md), then choose the guide for your 
 | Guide                                    | Contents                                                                      |
 | ---------------------------------------- | ----------------------------------------------------------------------------- |
 | [Operations](operations/README.md)       | Installation, environment, launcher, development panel, clips and maintenance |
+| [MFA operations](operations/MFA.md)      | Authenticator enrollment, recovery, key escrow, cutover preflight and restore |
 | [LAN setup](operations/LAN_SETUP.md)     | Certificates, network configuration and two-machine setup                     |
 | [Architecture](architecture/README.md)   | Current component boundaries and decision rationale                           |
 | [Validation](validation/README.md)       | Test commands and dated validation references                                 |

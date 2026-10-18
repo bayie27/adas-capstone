@@ -40,10 +40,13 @@ only after you're locked out.
 ## What happens after you change it
 
 Once it's changed, every device you're logged in on is signed out, including the one
-you just used. You'll need to log back in with the new password. This is intentional,
-not a bug: see [Why Do I Need to Log In Again After Changing My
+you just used. You'll need to log back in with the new password and complete the
+authenticator step. This is intentional, not a bug: see [Why Do I Need to Log In Again After Changing My
 Password?](faq-why-log-in-again-after-password-change) for why a password change always
 does this, whether you initiated it yourself here or an Administrator reset it for you.
+
+For authenticator replacement, recovery, or recovery-code rotation, see [Setting Up Your
+Authenticator and Recovery Codes](managing-your-authenticator-and-recovery).
 
 ## If you've forgotten your current password
 
