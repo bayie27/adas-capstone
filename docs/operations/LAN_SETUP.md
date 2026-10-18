@@ -401,20 +401,20 @@ downstream will work, and debugging it from the client machine only adds variabl
 
 Work top to bottom. Each step's failure has a different cause, so do not skip ahead.
 
-| #   | Do                                             | Expect                                                                                             |
-| --- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| 7.1 | `ping 192.168.50.1`                            | Replies. Failure here is Step 1 or the ICMP rule in Step 2.                                        |
-| 7.2 | `ping adas.local`                              | Resolves to `192.168.50.1` (check the bracketed address). Step 4.                                  |
-| 7.3 | `Test-NetConnection adas.local -Port 8000`     | `TcpTestSucceeded : True`. Failure with 7.1 passing is Step 2.                                     |
-| 7.4 | `Test-NetConnection adas.local -Port 5173`     | `TcpTestSucceeded : True`.                                                                         |
-| 7.5 | Browse `https://adas.local:8000/healthz/ready` | `200`, and **no certificate warning at all**. A warning means Step 3c.                             |
-| 7.6 | Browse `https://adas.local:5173`               | Login page renders.                                                                                |
-| 7.7 | Log in as `admin`                              | Dashboard loads and **stays** logged in when you navigate. This is the Secure-cookie path working. |
-| 7.8 | DevTools → Network → **WS**                    | Connection open, `CONNECTION_READY` received.                                                      |
-| 7.9 | Wait for a detection                           | Alert appears in under 2 s, snapshot renders, the camera goes `Paused`.                            |
+| #   | Do                                                 | Expect                                                                                                                                                                                     |
+| --- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 7.1 | `ping 192.168.50.1`                                | Replies. Failure here is Step 1 or the ICMP rule in Step 2.                                                                                                                                |
+| 7.2 | `ping adas.local`                                  | Resolves to `192.168.50.1` (check the bracketed address). Step 4.                                                                                                                          |
+| 7.3 | `Test-NetConnection adas.local -Port 8000`         | `TcpTestSucceeded : True`. Failure with 7.1 passing is Step 2.                                                                                                                             |
+| 7.4 | `Test-NetConnection adas.local -Port 5173`         | `TcpTestSucceeded : True`.                                                                                                                                                                 |
+| 7.5 | Browse `https://adas.local:8000/healthz/ready`     | `200`, and **no certificate warning at all**. A warning means Step 3c.                                                                                                                     |
+| 7.6 | Browse `https://adas.local:5173`                   | Login page renders.                                                                                                                                                                        |
+| 7.7 | Sign in as `admin` with password and authenticator | First sign-in enrolls an authenticator and presents one-time recovery codes. After acknowledgment the Dashboard stays logged in when you navigate. This is the Secure-cookie path working. |
+| 7.8 | DevTools → Network → **WS**                        | Connection open, `CONNECTION_READY` received.                                                                                                                                              |
+| 7.9 | Wait for a detection                               | Alert appears in under 2 s, snapshot renders, the camera goes `Paused`.                                                                                                                    |
 
 The login is the username `admin` — **not an email** — with `DEFAULT_ADMIN_PASSWORD` from the server's
-`.env`.
+`.env`, followed by its local authenticator. Keep `DEV_TOOLS_ENABLED=false` for an operational server. It may be set to `true` only for a disposable LAN demonstration database; any resulting session is labeled as demo impersonation and does not prove normal MFA login.
 
 Then exercise the incident workflow, which is the part a panel will ask about:
 
@@ -540,8 +540,7 @@ Leave `certs/` alone too — it is gitignored, and the certificate is valid for 
 pwsh -File scripts/start-dev.ps1
 ```
 
-Log in at `http://localhost:5173`. If that works, the machine is genuinely back to its ordinary state
-and you have not left the LAN profile half-applied.
+Sign in at `http://localhost:5173` with the authenticator. If that works, the machine is genuinely back to its ordinary state and you have not left the LAN profile half-applied.
 
 ### 11.8 Disk housekeeping (optional)
 

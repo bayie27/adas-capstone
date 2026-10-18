@@ -5,6 +5,11 @@ import {
   E2E_FRONTEND_ORIGIN,
 } from "./e2e/isolated-env.mjs"
 
+// Playwright 1.62 includes the full accessible page in failure context files by
+// default. MFA setup and recovery views contain credentials, so keep those
+// automatic snapshots out of browser artifacts as well as disabling traces.
+process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1"
+
 // E2E spans both the backend and the frontend, so this lives at the repo
 // root rather than inside frontend/. Runs locally before PRs and in CI;
 // excluded from `pnpm check`.
@@ -38,14 +43,22 @@ const baseURL = isLiveDeployment ? process.env.E2E_BASE_URL : E2E_FRONTEND_ORIGI
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  // MFA attempts share an IP-based rate limiter. Keep stateful auth scenarios
+  // serial so one disposable account cannot throttle another scenario.
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // MFA E2E scenarios mutate enrollment, recovery-code, and rate-limit state;
+  // a retry would replay a partially completed lifecycle against that state.
+  retries: 0,
+  workers: 1,
   reporter: "html",
   use: {
     baseURL,
-    trace: "on-first-retry",
+    // Authenticator seeds, recovery codes, and HttpOnly cookies must never be
+    // copied into Playwright artifacts, including traces and failure captures.
+    trace: "off",
+    screenshot: "off",
+    video: "off",
   },
   // The comment this replaces claimed 1% "absorbs antialiasing without hiding a
   // real palette change". It did the opposite, and Phase 2 proved it: a

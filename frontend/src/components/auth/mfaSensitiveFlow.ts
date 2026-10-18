@@ -4,6 +4,7 @@ export interface ShowMfaRecoveryCodesOptions {
   codes: string[]
   accountName: string
   onAcknowledged: () => void
+  onDismissed?: () => void
 }
 
 export interface MfaSensitiveFlowContextValue {

@@ -25,6 +25,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from app.core.mfa import decrypt_totp_secret, validate_encryption_key
 from app.maintenance.backup import (
     MaintenanceBusyError,
     _check_disk_space,
@@ -37,6 +38,7 @@ from app.maintenance.manifest import (
     ORIGIN_PRE_RESTORE,
     db_path_for,
     read_manifest,
+    read_schema_revision,
     validate_backup_id,
 )
 from app.maintenance.storage import (
@@ -400,6 +402,7 @@ def _verify_manifest_artifact(
     *,
     full: bool,
     require_revision: bool = True,
+    expected_schema_revision: str | None = None,
 ):
     """Verify one manifest and return its path without exposing the root."""
     manifest = read_manifest(artifact_dir, backup_id)
@@ -423,12 +426,122 @@ def _verify_manifest_artifact(
         raise RestoreError(f"Backup {backup_id} failed integrity_check.")
     if not run_foreign_key_check(artifact_path):
         raise RestoreError(f"Backup {backup_id} failed foreign_key_check.")
+    if expected_schema_revision is not None and (
+        manifest.schema_revision != expected_schema_revision
+    ):
+        raise RestoreCandidateInvalidError(
+            "Restore point schema does not match the current MFA-enabled release. "
+            "Use a backup created by the matching application code."
+        )
     if require_revision and (
         manifest.schema_revision is None
         or not _is_revision_compatible(manifest.schema_revision)
     ):
         raise RestoreError(f"Backup {backup_id} has an incompatible schema revision.")
     return manifest, artifact_path
+
+
+def _read_mfa_ciphertexts(path: Path, expected_schema_revision: str) -> list[str]:
+    """Read a candidate's schema and all seed ciphertexts through mode=ro."""
+    if read_schema_revision(path) != expected_schema_revision:
+        raise RestoreCandidateInvalidError(
+            "Restore point schema does not match the current MFA-enabled release. "
+            "Use a backup created by the matching application code."
+        )
+    try:
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            rows = connection.execute(
+                "SELECT active_secret_ciphertext FROM mfa_credential "
+                "WHERE active_secret_ciphertext IS NOT NULL"
+            ).fetchall()
+            pending = connection.execute(
+                "SELECT pending_secret_ciphertext FROM mfa_challenge "
+                "WHERE pending_secret_ciphertext IS NOT NULL"
+            ).fetchall()
+            return [row[0] for row in (*rows, *pending)]
+        finally:
+            connection.close()
+    except sqlite3.DatabaseError:
+        raise RestoreCandidateInvalidError(
+            "Restore point does not contain compatible MFA storage."
+        ) from None
+
+
+def _validate_and_invalidate_mfa_candidate(
+    path: Path,
+    *,
+    mfa_encryption_key: str,
+    expected_schema_revision: str,
+    target_ref: str,
+    source: str,
+) -> None:
+    """Validate and transform only a temporary copy, never a backup artifact."""
+    try:
+        validate_encryption_key(mfa_encryption_key)
+        ciphertexts = _read_mfa_ciphertexts(path, expected_schema_revision)
+        for ciphertext in ciphertexts:
+            decrypt_totp_secret(ciphertext, mfa_encryption_key)
+    except RestoreCandidateInvalidError:
+        raise
+    except Exception:
+        raise RestoreCandidateInvalidError(
+            "Restore point contains MFA secrets that cannot be decrypted with "
+            "the configured MFA_ENCRYPTION_KEY."
+        ) from None
+
+    now = (
+        datetime.now(UTC)
+        .replace(tzinfo=None)
+        .isoformat(sep=" ", timespec="microseconds")
+    )
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute("BEGIN IMMEDIATE")
+        revoked = connection.execute(
+            "UPDATE auth_session SET revoked_at=?, revocation_reason='mfa_restore' "
+            "WHERE revoked_at IS NULL",
+            (now,),
+        ).rowcount
+        cleared = connection.execute("DELETE FROM mfa_challenge").rowcount
+        connection.execute(
+            "INSERT INTO audit_log "
+            "(actor_type, action, target_type, target_ref, result, detail, created_at) "
+            "VALUES ('system', 'MFA_RESTORE_INVALIDATE', 'system', ?, 'success', ?, ?)",
+            (
+                target_ref,
+                json.dumps(
+                    {
+                        "source": source,
+                        "revoked_sessions": max(0, revoked or 0),
+                        "cleared_challenges": max(0, cleared or 0),
+                    },
+                    separators=(",", ":"),
+                ),
+                now,
+            ),
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise RestoreCandidateInvalidError(
+            "Restore candidate could not be safely invalidated."
+        ) from None
+    finally:
+        connection.close()
+
+    if not run_integrity_check(path) or not run_foreign_key_check(path):
+        raise RestoreCandidateInvalidError(
+            "Restore candidate failed integrity checks after MFA invalidation."
+        )
+    try:
+        for ciphertext in _read_mfa_ciphertexts(path, expected_schema_revision):
+            decrypt_totp_secret(ciphertext, mfa_encryption_key)
+    except Exception:
+        raise RestoreCandidateInvalidError(
+            "Restored MFA secrets failed post-transform validation."
+        ) from None
 
 
 def _record_failed_state_if_current(
@@ -497,6 +610,8 @@ def perform_offline_restore(
     backup_dir: Path,
     db_path: Path,
     backup_id: str,
+    mfa_encryption_key: str,
+    expected_schema_revision: str,
     storage_tier: str = STORAGE_TIER_DEGRADED,
     protected_backup_dir: Path | None = None,
     storage_provider: StorageTargetProvider | None = None,
@@ -510,6 +625,16 @@ def perform_offline_restore(
     leaves the primary database half-replaced."""
     validate_backup_id(backup_id)
     validate_storage_tier(storage_tier)
+    if not expected_schema_revision:
+        raise RestoreCandidateInvalidError(
+            "The current MFA-enabled schema revision is unavailable."
+        )
+    try:
+        validate_encryption_key(mfa_encryption_key)
+    except ValueError:
+        raise RestoreCandidateInvalidError(
+            "MFA_ENCRYPTION_KEY is required and must be a valid Fernet key."
+        ) from None
     state: RestoreState | None = None
     tmp_restore_path: Path | None = None
     state_owned = False
@@ -589,7 +714,12 @@ def perform_offline_restore(
                     storage_tier=STORAGE_TIER_DEGRADED,
                     storage_reason="pre_restore_emergency",
                 )
-                _verify_manifest_artifact(backup_dir, emergency.backup_id, full=True)
+                _verify_manifest_artifact(
+                    backup_dir,
+                    emergency.backup_id,
+                    full=True,
+                    expected_schema_revision=expected_schema_revision,
+                )
             state.emergency_backup_id = emergency.backup_id
             state.emergency_storage_tier = STORAGE_TIER_DEGRADED
             write_restore_state(backup_dir, state)
@@ -607,14 +737,21 @@ def perform_offline_restore(
             # local emergency state, so a duplicate id in both roots cannot
             # silently select the wrong database.
             with _timed_step(state, "verify_selected_backup"):
-                _manifest, selected_path = _verify_manifest_artifact(
-                    selected_root, backup_id, full=True
+                selected_manifest, selected_path = _verify_manifest_artifact(
+                    selected_root,
+                    backup_id,
+                    full=True,
+                    expected_schema_revision=expected_schema_revision,
                 )
 
             # Step 5 — restore to a temporary path and validate again.
             tmp_restore_path = db_path.with_name(db_path.name + ".restoring.tmp")
             with _timed_step(state, "restore_to_temp"):
                 shutil.copyfile(selected_path, tmp_restore_path)
+                if compute_sha256(tmp_restore_path) != selected_manifest.sha256:
+                    raise RestoreError(
+                        "The compatible restore candidate copy failed checksum validation."
+                    )
                 if not run_integrity_check(tmp_restore_path):
                     tmp_restore_path.unlink(missing_ok=True)
                     _remove_sidecars(tmp_restore_path)
@@ -625,6 +762,13 @@ def perform_offline_restore(
                     raise RestoreError(
                         "Restored temp database failed foreign_key_check."
                     )
+                _validate_and_invalidate_mfa_candidate(
+                    tmp_restore_path,
+                    mfa_encryption_key=mfa_encryption_key,
+                    expected_schema_revision=expected_schema_revision,
+                    target_ref=f"restore:{backup_id}",
+                    source="restore",
+                )
 
             # Step 6 — remove obsolete WAL/SHM sidecars, for both the
             # primary path and the temp copy itself (see _remove_sidecars).
@@ -668,11 +812,28 @@ def perform_offline_restore(
             _remove_sidecars(tmp_restore_path)
 
 
-def perform_rollback(*, backup_dir: Path, db_path: Path) -> RestoreState:
+def perform_rollback(
+    *,
+    backup_dir: Path,
+    db_path: Path,
+    mfa_encryption_key: str,
+    expected_schema_revision: str,
+) -> RestoreState:
     """Invoked by the orchestrator when readiness or a required startup
     check fails after `perform_offline_restore`. Restores the emergency
     pre-restore backup recorded in `restore_state.json`. A failed restore
     may never leave the system silently half-restored (D-011)."""
+    if not expected_schema_revision:
+        raise RestoreCandidateInvalidError(
+            "The current MFA-enabled schema revision is unavailable."
+        )
+    try:
+        validate_encryption_key(mfa_encryption_key)
+    except ValueError:
+        raise RestoreCandidateInvalidError(
+            "MFA_ENCRYPTION_KEY is required and must be a valid Fernet key."
+        ) from None
+
     state: RestoreState | None = None
     emergency_id: str | None = None
     tmp_restore_path: Path | None = None
@@ -694,16 +855,34 @@ def perform_rollback(*, backup_dir: Path, db_path: Path) -> RestoreState:
                 )
             with _timed_step(state, "rollback_verify_emergency"):
                 _manifest, emergency_path = _verify_manifest_artifact(
-                    backup_dir, emergency_id, full=True
+                    backup_dir,
+                    emergency_id,
+                    full=True,
+                    expected_schema_revision=expected_schema_revision,
                 )
 
             tmp_restore_path = db_path.with_name(db_path.name + ".rollback.tmp")
             with _timed_step(state, "rollback_restore_to_temp"):
                 shutil.copyfile(emergency_path, tmp_restore_path)
+                if compute_sha256(tmp_restore_path) != _manifest.sha256:
+                    raise RestoreError(
+                        "The emergency restore candidate copy failed checksum validation."
+                    )
                 if not run_integrity_check(tmp_restore_path):
                     tmp_restore_path.unlink(missing_ok=True)
                     _remove_sidecars(tmp_restore_path)
                     raise RestoreError("Emergency backup failed integrity_check.")
+                if not run_foreign_key_check(tmp_restore_path):
+                    tmp_restore_path.unlink(missing_ok=True)
+                    _remove_sidecars(tmp_restore_path)
+                    raise RestoreError("Emergency backup failed foreign_key_check.")
+                _validate_and_invalidate_mfa_candidate(
+                    tmp_restore_path,
+                    mfa_encryption_key=mfa_encryption_key,
+                    expected_schema_revision=expected_schema_revision,
+                    target_ref=f"rollback:{emergency_id}",
+                    source="emergency_rollback",
+                )
 
             with _timed_step(state, "rollback_remove_sidecars"):
                 _remove_sidecars(db_path)

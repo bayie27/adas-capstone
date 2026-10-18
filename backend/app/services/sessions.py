@@ -1,6 +1,7 @@
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, col, select
@@ -17,7 +18,7 @@ def create_session(
     *,
     user_agent: str | None = None,
     source_ip: str | None = None,
-    auth_method: str = "password",
+    auth_method: Literal["password", "totp", "demo_impersonation"],
     mfa_credential_version: int | None = None,
     app_settings: Settings | None = None,
 ) -> AuthSession:

@@ -194,6 +194,8 @@ export function MfaSettingsCard({
 
   function onEnrollmentCompleted(result: EnrollmentConfirmationResponse) {
     const closesCurrentSession = typeof mode === "object" && mode.closesCurrentSession
+    const releaseAfterCodeDisplay = closesCurrentSession ? redirectRelease.current : null
+    if (closesCurrentSession) redirectRelease.current = null
     const codes = result.recovery_codes
     if (result.status === "authenticated") {
       setStatus({
@@ -209,9 +211,10 @@ export function MfaSettingsCard({
       codes,
       accountName: result.status === "authenticated" ? result.user.username : accountName,
       onAcknowledged: () => {
-        releaseAuthRedirect()
+        releaseAfterCodeDisplay?.()
         if (closesCurrentSession) onSignedOut()
       },
+      onDismissed: releaseAfterCodeDisplay ?? undefined,
     })
     if (closesCurrentSession) onSessionRevoked()
   }
@@ -285,8 +288,8 @@ export function MfaSettingsCard({
             </p>
             {status.auth_method === "demo_impersonation" ? (
               <p className="text-caption text-fg-muted">
-                This demo session still requires your password and current authenticator code for
-                security changes.
+                DEMO IMPERSONATION SESSION. Security changes still require your password and current
+                authenticator code.
               </p>
             ) : null}
           </>
@@ -297,7 +300,8 @@ export function MfaSettingsCard({
           </p>
         ) : status.auth_method === "demo_impersonation" ? (
           <p className="text-secondary text-fg-muted">
-            This demo account has no authenticator yet. Verify your password to set one up.
+            DEMO IMPERSONATION SESSION. This account has no authenticator yet. Verify your password
+            to set one up.
           </p>
         ) : (
           <p className="text-secondary text-fg-muted">

@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom"
 import { Sidebar } from "@/components/layouts/Sidebar"
+import { DemoImpersonationNotice } from "@/components/auth/DemoImpersonationNotice"
 
 /**
  * The one authenticated shell. AdminLayout and UserLayout were byte-identical
@@ -11,6 +12,7 @@ export default function AppLayout() {
     <div className="flex h-screen overflow-hidden bg-canvas">
       <Sidebar />
       <main className="ml-[272px] flex-1 overflow-y-auto">
+        <DemoImpersonationNotice />
         <Outlet />
       </main>
     </div>

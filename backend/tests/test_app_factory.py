@@ -11,12 +11,15 @@ from pathlib import Path
 import pytest
 from app.core.config import Settings, settings
 from app.core.db import get_engine, get_session
+from app.core.security import create_session_token
 from app.main import create_app
-from app.models import Camera
+from app.models import Camera, User
+from app.services.sessions import create_session
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
+from starlette.websockets import WebSocketDisconnect
 
-from .conftest import make_operator
+from .conftest import _TEST_MFA_ENCRYPTION_KEY, _complete_mfa_login, make_operator
 
 
 def _real_db_path() -> Path:
@@ -28,9 +31,11 @@ def _real_db_path() -> Path:
 def _dev_tools_settings(tmp_path, **overrides) -> Settings:
     return Settings(
         _env_file=None,
-        SECRET_KEY="dev-tools-gate-secret-key-not-for-production",
-        INTERNAL_API_KEY="dev-tools-gate-internal-api-key",
+        SECRET_KEY=settings.SECRET_KEY.get_secret_value(),
+        INTERNAL_API_KEY=settings.INTERNAL_API_KEY.get_secret_value(),
         DEFAULT_ADMIN_PASSWORD="dev-tools-gate-admin-password-123",
+        MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
+        SESSION_COOKIE_SECURE=False,
         DATABASE_URL=f"sqlite:///{tmp_path / 'gate.db'}",
         SCHEDULER_ENABLED=False,
         EXPORT_JOB_WORKERS=0,
@@ -79,6 +84,32 @@ class TestDevToolsGate:
         assert {"demo", "empty"} <= {p["name"] for p in body["profiles"]}
         # Nothing an anonymous caller could act on.
         assert set(body) == {"enabled", "profiles"}
+
+    def test_disabled_tools_reject_existing_demo_session_on_rest_and_ws(self, tmp_path):
+        app_settings = _dev_tools_settings(tmp_path, DEV_TOOLS_ENABLED=False)
+        app = create_app(app_settings)
+        with TestClient(app) as client:
+            assert client.get("/api/dev/status").status_code == 404
+            with Session(app.state.engine) as session:
+                user = session.exec(select(User).where(User.username == "admin")).one()
+                auth_session = create_session(
+                    session,
+                    user,
+                    auth_method="demo_impersonation",
+                    app_settings=app_settings,
+                )
+                session.commit()
+                token = create_session_token(user, auth_session, app_settings)
+            headers = {"Cookie": f"{app_settings.SESSION_COOKIE_NAME}={token}"}
+            response = client.get("/api/users/me", headers=headers)
+            assert response.status_code == 401
+            assert response.json()["code"] == "AUTH_REVOKED"
+            with (
+                pytest.raises(WebSocketDisconnect) as disconnected,
+                client.websocket_connect("/ws/alerts", headers=headers),
+            ):
+                pass
+            assert disconnected.value.code == 4001
 
 
 class TestAppFactoryIsolation:
@@ -160,9 +191,11 @@ class TestSchedulerJobWiring:
 
         app_settings = Settings(
             _env_file=None,
-            SECRET_KEY="test-secret-key-not-for-production-use",
-            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            SECRET_KEY=settings.SECRET_KEY.get_secret_value(),
+            INTERNAL_API_KEY=settings.INTERNAL_API_KEY.get_secret_value(),
             DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
+            SESSION_COOKIE_SECURE=False,
             DATABASE_URL=f"sqlite:///{tmp_path / 'scheduler.db'}",
             SCHEDULER_ENABLED=True,
             SNAPSHOT_ROOT=tmp_path / "snapshots",
@@ -185,9 +218,11 @@ class TestConcurrentWriteLockHandling:
         db_path = tmp_path / "lock.db"
         app_settings = Settings(
             _env_file=None,
-            SECRET_KEY="test-secret-key-not-for-production-use",
-            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            SECRET_KEY=settings.SECRET_KEY.get_secret_value(),
+            INTERNAL_API_KEY=settings.INTERNAL_API_KEY.get_secret_value(),
             DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
+            SESSION_COOKIE_SECURE=False,
             DATABASE_URL=f"sqlite:///{db_path}",
             SCHEDULER_ENABLED=False,
             SQLITE_BUSY_TIMEOUT_MS=50,
@@ -244,9 +279,11 @@ class TestSnapshotRootStartupCheck:
         assert not snapshot_root.exists()
         app_settings = Settings(
             _env_file=None,
-            SECRET_KEY="test-secret-key-not-for-production-use",
-            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            SECRET_KEY=settings.SECRET_KEY.get_secret_value(),
+            INTERNAL_API_KEY=settings.INTERNAL_API_KEY.get_secret_value(),
             DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
+            SESSION_COOKIE_SECURE=False,
             DATABASE_URL=f"sqlite:///{tmp_path / 'snaproot.db'}",
             SCHEDULER_ENABLED=False,
             SNAPSHOT_ROOT=snapshot_root,
@@ -267,9 +304,11 @@ class TestSnapshotRootStartupCheck:
         snapshot_root = blocking_file / "snapshots"
         app_settings = Settings(
             _env_file=None,
-            SECRET_KEY="test-secret-key-not-for-production-use",
-            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            SECRET_KEY=settings.SECRET_KEY.get_secret_value(),
+            INTERNAL_API_KEY=settings.INTERNAL_API_KEY.get_secret_value(),
             DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
+            SESSION_COOKIE_SECURE=False,
             DATABASE_URL=f"sqlite:///{tmp_path / 'snaproot2.db'}",
             SCHEDULER_ENABLED=False,
             SNAPSHOT_ROOT=snapshot_root,
@@ -289,9 +328,11 @@ class TestExportWorkerGating:
         direct process_export_job() call) with the scheduler off."""
         app_settings = Settings(
             _env_file=None,
-            SECRET_KEY="test-secret-key-not-for-production-use",
-            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            SECRET_KEY=settings.SECRET_KEY.get_secret_value(),
+            INTERNAL_API_KEY=settings.INTERNAL_API_KEY.get_secret_value(),
             DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
+            SESSION_COOKIE_SECURE=False,
             DATABASE_URL=f"sqlite:///{tmp_path / 'export_workers.db'}",
             SCHEDULER_ENABLED=False,
             EXPORT_JOB_WORKERS=1,
@@ -303,12 +344,8 @@ class TestExportWorkerGating:
             with Session(app.state.engine) as session:
                 make_operator(session, username="exportop", password="Operator123")
 
-            login_resp = client.post(
-                "/api/auth/login",
-                data={"username": "exportop", "password": "Operator123"},
-            )
-            assert login_resp.status_code == 200, login_resp.text
-            cookie_val = login_resp.cookies.get(app_settings.SESSION_COOKIE_NAME)
+            login_resp = _complete_mfa_login(client, "exportop", "Operator123")
+            cookie_val = login_resp["session_cookie"]
             headers = {"Cookie": f"{app_settings.SESSION_COOKIE_NAME}={cookie_val}"}
 
             create_resp = client.post(

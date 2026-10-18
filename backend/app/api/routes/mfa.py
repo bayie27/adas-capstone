@@ -1,5 +1,6 @@
-"""Thin, dormant API adapter for the transactional MFA services."""
+"""Thin API adapter for the transactional MFA services."""
 
+import json
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -84,6 +85,24 @@ def install_auth_no_store(app: FastAPI) -> None:
 async def mfa_validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
+    is_auth = request.url.path.startswith("/api/auth")
+    if not is_auth:
+        # Preserve the application's existing validation contract on other
+        # routes; only auth validation needs the stricter input/context scrub.
+        errors = json.loads(json.dumps(exc.errors(), default=str))
+        for error in errors:
+            locations = [str(part).lower() for part in error.get("loc", [])]
+            if any("password" in part for part in locations):
+                error.pop("input", None)
+        return JSONResponse(
+            status_code=422,
+            content=ApiError(
+                detail="Validation failed",
+                code="VALIDATION_ERROR",
+                errors=errors,
+            ).model_dump(),
+        )
+
     errors = []
     for error in exc.errors():
         safe_error = {
@@ -135,7 +154,7 @@ def _set_challenge_cookie(
     )
 
 
-def _clear_challenge_cookie(response: Response, settings: Settings) -> None:
+def clear_challenge_cookie(response: Response, settings: Settings) -> None:
     response.delete_cookie(
         key=_challenge_cookie_name(),
         httponly=True,
@@ -159,7 +178,7 @@ def _apply_result(
             settings=settings,
         )
     elif result.clear_challenge:
-        _clear_challenge_cookie(response, settings)
+        clear_challenge_cookie(response, settings)
     if result.session_token:
         set_session_cookie(response, result.session_token, settings)
     elif result.clear_session:
@@ -186,7 +205,7 @@ def _call_challenge(
     except AppHTTPException as exc:
         if getattr(exc, "code", None) == "MFA_CHALLENGE_INVALID":
             clear_response = Response()
-            _clear_challenge_cookie(clear_response, settings)
+            clear_challenge_cookie(clear_response, settings)
             headers = dict(exc.headers or {})
             headers["Set-Cookie"] = clear_response.headers["set-cookie"]
             exc.headers = headers

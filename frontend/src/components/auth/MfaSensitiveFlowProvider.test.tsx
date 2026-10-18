@@ -5,7 +5,13 @@ import { describe, expect, it, vi } from "vitest"
 import { MfaSensitiveFlowProvider } from "./MfaSensitiveFlowProvider"
 import { useMfaSensitiveFlow } from "./mfaSensitiveFlow"
 
-function ShowCodes({ onAcknowledged }: { onAcknowledged: () => void }) {
+function ShowCodes({
+  onAcknowledged,
+  onDismissed,
+}: {
+  onAcknowledged: () => void
+  onDismissed?: () => void
+}) {
   const flow = useMfaSensitiveFlow()
   return (
     <button
@@ -15,6 +21,7 @@ function ShowCodes({ onAcknowledged }: { onAcknowledged: () => void }) {
           codes: ["ABCD-EFGH-JKLM"],
           accountName: "operator",
           onAcknowledged,
+          onDismissed,
         })
       }
     >
@@ -47,9 +54,10 @@ describe("MfaSensitiveFlowProvider", () => {
   it("clears sensitive memory when the provider unmounts", async () => {
     const user = userEvent.setup()
     const onAcknowledged = vi.fn()
+    const onDismissed = vi.fn()
     const view = render(
       <MfaSensitiveFlowProvider>
-        <ShowCodes onAcknowledged={onAcknowledged} />
+        <ShowCodes onAcknowledged={onAcknowledged} onDismissed={onDismissed} />
       </MfaSensitiveFlowProvider>,
     )
 
@@ -59,5 +67,6 @@ describe("MfaSensitiveFlowProvider", () => {
 
     expect(screen.queryByText("ABCD-EFGH-JKLM")).not.toBeInTheDocument()
     expect(onAcknowledged).not.toHaveBeenCalled()
+    expect(onDismissed).toHaveBeenCalledOnce()
   })
 })

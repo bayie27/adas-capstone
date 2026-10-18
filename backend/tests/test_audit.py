@@ -29,7 +29,14 @@ from .conftest import auth_headers, make_admin, make_camera, make_operator
 def _cookie_header_for(session: Session, user) -> dict:
     """Authenticates without going through POST /login, so no LOGIN_SUCCESS
     row is written — needed for tests that assert an exact row count."""
-    auth_session = create_session(session, user, user_agent=None, source_ip=None)
+    auth_session = create_session(
+        session,
+        user,
+        user_agent=None,
+        source_ip=None,
+        auth_method="totp",
+        mfa_credential_version=1,
+    )
     session.commit()
     token = create_session_token(user, auth_session)
     return {"Cookie": f"{settings.SESSION_COOKIE_NAME}={token}"}

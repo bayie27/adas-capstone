@@ -36,6 +36,19 @@ vi.mock("@/api/settings", async () => {
   }
 })
 
+vi.mock("@/api/mfa", async () => {
+  const actual = await vi.importActual<typeof import("@/api/mfa")>("@/api/mfa")
+  return {
+    ...actual,
+    getMfaStatus: vi.fn().mockResolvedValue({
+      state: "enrolled",
+      recovery_codes_remaining: 8,
+      enrolled_at: "2026-10-18T12:00:00Z",
+      auth_method: "totp",
+    }),
+  }
+})
+
 vi.mock("@/utils/detectionSound", async () => {
   const actual =
     await vi.importActual<typeof import("@/utils/detectionSound")>("@/utils/detectionSound")
@@ -52,6 +65,7 @@ import { ToastContainer } from "@/components/ui/ToastContainer"
 import { toast } from "@/store/useToastStore"
 import { useAlertStore } from "@/store/useAlertStore"
 import type { AlertLog } from "@/api/alerts"
+import { MfaSensitiveFlowProvider } from "@/components/auth/MfaSensitiveFlowProvider"
 
 const mockProfile: UserRecord = {
   user_id: 10,
@@ -72,7 +86,9 @@ function renderProfileSettings() {
     <QueryClientProvider client={client}>
       <MemoryRouter>
         <ToastContainer />
-        <ProfileSettings />
+        <MfaSensitiveFlowProvider>
+          <ProfileSettings />
+        </MfaSensitiveFlowProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )

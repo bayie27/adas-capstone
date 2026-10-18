@@ -33,6 +33,7 @@ from app.api.routes import (
     help,
     internal,
     maintenance,
+    mfa,
     settings,
     system,
     system_health,
@@ -43,6 +44,7 @@ from app.core.config import settings as default_settings
 from app.core.db import create_db_engine, get_engine, init_db
 from app.core.errors import AppHTTPException
 from app.core.logging import configure_logging, request_id_ctx
+from app.core.mfa import validate_encryption_key
 from app.core.monitor import (
     HealthStore,
     run_health_sample,
@@ -65,6 +67,7 @@ from app.services.maintenance_schedule import (
     run_daily_backup,
     run_daily_backup_if_due,
 )
+from app.services.mfa import validate_stored_mfa_secrets
 from app.services.realtime import CloseCode, RealtimeManager
 from app.services.realtime_revalidation import ws_session_revalidation
 from app.services.reports.jobs import (
@@ -88,6 +91,14 @@ async def lifespan(app: FastAPI):
     app_settings: Settings = app.state.settings
     engine = app.state.engine
 
+    mfa_key_setting = app_settings.MFA_ENCRYPTION_KEY
+    if mfa_key_setting is None:
+        raise RuntimeError("MFA_ENCRYPTION_KEY is required to start the backend.")
+    try:
+        mfa_key = validate_encryption_key(mfa_key_setting.get_secret_value())
+    except ValueError:
+        raise RuntimeError("MFA_ENCRYPTION_KEY must be a valid Fernet key.") from None
+
     # Edge case 6.9 / docs/archive/be_audit/00_FINDINGS.md F25 — the same "fail at boot,
     # not on first use" philosophy as F2's RTSP_URL_TEMPLATE validation.
     # The backend only ever *reads* from SNAPSHOT_ROOT (app/services/
@@ -108,6 +119,11 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     init_db(engine, app_settings)
     app.state.db_initialized = True
+
+    try:
+        validate_stored_mfa_secrets(engine, mfa_key)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from None
 
     # On every server start, reset all enabled cameras to Disconnected/Inactive.
     # The AI engine is responsible for updating statuses as it connects to each feed.
@@ -472,7 +488,9 @@ async def websocket_alerts(
 
     with Session(engine) as session:
         try:
-            user, auth_session = authenticate_session_token(token, session)
+            user, auth_session = authenticate_session_token(
+                token, session, websocket.app.state.settings
+            )
         except AppHTTPException:
             await websocket.close(code=CloseCode.AUTH_FAILED)
             return
@@ -591,9 +609,9 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.middleware("http")(
         make_origin_validation_middleware(resolved_settings.CORS_ORIGINS)
     )
-
     application.include_router(internal.router)
     application.include_router(auth.router)
+    application.include_router(mfa.router)
     application.include_router(cameras.router)
     application.include_router(alerts.router)
     application.include_router(users.router)
@@ -619,6 +637,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     )
     application.add_exception_handler(OperationalError, operational_error_handler)
     application.add_exception_handler(Exception, global_exception_handler)
+    mfa.install_auth_no_store(application)
 
     application.add_api_websocket_route("/ws/alerts", websocket_alerts)
     application.add_api_route("/", health_check, methods=["GET"])

@@ -150,13 +150,13 @@ Run `Get-Help scripts/start-dev.ps1 -Full` (or open the script) for the full com
 
 ### The dev panel — reseed, fire incidents, and switch accounts without restarting anything
 
-Once the backend and frontend are up, log in at `http://localhost:5173` and press **`Ctrl+Shift+D`** (or click the small terminal icon bottom-right). This opens a drawer that talks to five backend routes under `/api/dev/*`, gated behind the `DEV_TOOLS_ENABLED` setting (on by default when `ENVIRONMENT=development`; an explicit `.env` value always wins, which is what lets it stay on for a LAN demo box running a production build). If the trigger doesn't appear, either the flag is off or the backend isn't reachable — it's a runtime probe against `GET /api/dev/status`, not a build-time flag, so it also works in a `pnpm build` bundle.
+For a disposable development or LAN demo database only, explicitly set `DEV_TOOLS_ENABLED=true` in `.env`. Operational configurations keep it `false`. After completing normal password-plus-authenticator sign-in, press **`Ctrl+Shift+D`** (or click the small terminal icon bottom-right). The drawer talks to routes under `/api/dev/*`; it remains available in a production build only when explicitly enabled for the demo. If the trigger doesn't appear, the flag is off or the backend isn't reachable.
 
 **Data — reseed without restarting the server.** This is the in-process equivalent of `reseed_dev.py`: it wipes every operational table, reseeds the chosen profile, and mints a fresh session cookie in the same response so you stay logged in — no restart, no re-login, and every other connected dashboard's WebSocket reconnects onto the new session automatically. Because that operation is destructive, selecting a profile only opens a named confirmation; the database is not changed until **Confirm reseed '<profile>'** is clicked. See [Seed profiles](#seed-profiles) below for what each one contains.
 
 **Simulate — fire a detection with no AI engine, RTSP feed, or GPU involved.** "Inject a detection" runs the exact same ingest path a real webhook from the AI engine would (`services/incidents.ingest_detection`) — the camera self-blindfolds, the WebSocket broadcasts to every connected dashboard, the alarm modal pops and the siren plays, all for real. Pick a camera ID or let it choose a free one, set a confidence, and watch the full HITL pipeline fire without touching MediaMTX or a GPU. "Make stale" / "Clear cooldown" push a camera's heartbeat state directly, for exercising the `Unresponsive` presentation or an operator's post-incident cooldown window on demand.
 
-**Session — switch accounts instantly.** Click any seeded username to become that user immediately, no password, no page reload. This requires only _some_ existing authenticated session, by design — it's an account switcher for hopping between seeded demo accounts once you're in, not a way to authenticate without credentials in the first place.
+**Session — switch accounts instantly.** Click any seeded username to create a visibly labeled demo impersonation session, without another password or page reload. The switch requires an existing authenticated session. It is for disposable demos only and does not prove normal account identity or replace authenticator proof for security changes.
 
 Full endpoint reference and the reasoning behind each design choice: [`docs/archive/dev_plan/02_PKG_dev_api.md`](../archive/dev_plan/02_PKG_dev_api.md) and [`docs/archive/dev_plan/03_PKG_dev_panel.md`](../archive/dev_plan/03_PKG_dev_panel.md).
 
@@ -200,7 +200,7 @@ uv run python ai_engine/capacity.py
 pwsh -File scripts/start-dev.ps1 -Reseed demo -All
 ```
 
-This reseeds `demo` (which is the default profile, but stating it explicitly is clearer on a first run), then brings up all four components in the bring-up order MediaMTX → backend → frontend → AI engine. Log in at `http://localhost:5173` as `admin` with the `DEFAULT_ADMIN_PASSWORD` from your `.env`.
+This reseeds `demo` (which is the default profile, but stating it explicitly is clearer on a first run), then brings up all four components in the bring-up order MediaMTX → backend → frontend → AI engine. Sign in at `http://localhost:5173` as `admin` with the `DEFAULT_ADMIN_PASSWORD` from your `.env`, then enroll a local authenticator and save the one-time recovery codes before continuing.
 
 **What a working run looks like:** the frontend connects, the backend accepts camera heartbeats, and configured simulation streams are processed. Camera availability and alerts depend on the seed profile, populated clips and model configuration; do not treat historical throughput or per-clip outcomes as startup guarantees.
 
@@ -395,6 +395,17 @@ The confirmation starts a durable, audited request. The system takes the
 services offline briefly, restores the selected point, verifies readiness and
 the AI heartbeat, and safely recovers the original database if the restored
 services fail that check. Users may be signed out during this process.
+
+A restore accepts only a backup from the current MFA-capable schema and the
+deployment's stable `MFA_ENCRYPTION_KEY`. The restore process transforms a
+compatible candidate copy, invalidating every restored session and pending
+challenge before it replaces the live database. Emergency rollback applies
+the same invalidation to its candidate copy. Users must sign in again after
+either path. A restore also restores the selected snapshot's authenticator
+and recovery-code state, so it can make an older authenticator seed or unused
+recovery-code batch usable again. The selected backup and emergency backup
+artifacts remain unchanged; keep the stable MFA key securely escrowed outside
+the database backup set.
 
 **Technical maintenance for deployment operators:**
 

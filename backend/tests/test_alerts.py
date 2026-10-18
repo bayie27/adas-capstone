@@ -1166,6 +1166,9 @@ class TestAlertCameraStatusSideEffects:
 
         job_ids = {job.id for job in scheduler.get_jobs()}
         assert f"cooldown:{camera.camera_id}" in job_ids
+        # Restore the lifespan's disabled scheduler before TestClient exits;
+        # this test only needs an unstarted scheduler as an add_job recorder.
+        monkeypatch.setattr(client.app.state, "scheduler", None)
 
     def test_dismiss_ongoing_reactivates_enabled_camera_and_broadcasts(
         self,

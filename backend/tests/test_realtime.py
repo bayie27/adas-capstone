@@ -28,7 +28,14 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from starlette.websockets import WebSocketState
 
-from .conftest import auth_headers, make_camera, make_detection, make_operator
+from .conftest import (
+    _TEST_MFA_ENCRYPTION_KEY,
+    _complete_mfa_login,
+    auth_headers,
+    make_camera,
+    make_detection,
+    make_operator,
+)
 
 # ---------------------------------------------------------------------------
 # Handshake failure modes
@@ -116,9 +123,11 @@ def test_handshake_inactive_user_closes_4001(client: TestClient, session: Sessio
 def _build_app(tmp_path, **overrides):
     app_settings = Settings(
         _env_file=None,
-        SECRET_KEY="test-secret-key-not-for-production-use",
-        INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+        SECRET_KEY=default_settings.SECRET_KEY.get_secret_value(),
+        INTERNAL_API_KEY=default_settings.INTERNAL_API_KEY.get_secret_value(),
         DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+        MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
+        SESSION_COOKIE_SECURE=False,
         DATABASE_URL=f"sqlite:///{tmp_path / 'realtime.db'}",
         SCHEDULER_ENABLED=False,
         SNAPSHOT_ROOT=tmp_path / "snapshots",
@@ -130,11 +139,8 @@ def _build_app(tmp_path, **overrides):
 def _login_and_get_cookie_header(
     client: TestClient, app_settings: Settings, username, password
 ):
-    resp = client.post(
-        "/api/auth/login", data={"username": username, "password": password}
-    )
-    assert resp.status_code == 200, resp.text
-    cookie_val = resp.cookies.get(app_settings.SESSION_COOKIE_NAME)
+    result = _complete_mfa_login(client, username, password)
+    cookie_val = result["session_cookie"]
     return {"Cookie": f"{app_settings.SESSION_COOKIE_NAME}={cookie_val}"}
 
 
@@ -487,13 +493,15 @@ def test_read_loop_deregisters_connection_on_non_disconnect_exception(
     session: Session, monkeypatch: pytest.MonkeyPatch
 ):
     operator = make_operator(session, username="wsleak", password="Operator123")
-    auth_session = create_session(session, operator)
+    auth_session = create_session(
+        session, operator, auth_method="totp", mfa_credential_version=1
+    )
     session.commit()
 
     monkeypatch.setattr(
         main_module,
         "authenticate_session_token",
-        lambda token, sess: (operator, auth_session),
+        lambda token, sess, app_settings=None: (operator, auth_session),
     )
 
     manager = RealtimeManager(queue_maxsize=10, send_timeout_seconds=1)

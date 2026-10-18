@@ -119,8 +119,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: cp .env.example .env
-      - run: uv run python backend/scripts/reset_db.py
+      # Playwright provisions a UUID-scoped database, storage roots, accounts,
+      # and fresh signing/MFA keys through the process environment.
       - run: pnpm exec playwright test --project=chromium
       - uses: actions/upload-artifact@v4
         if: always()

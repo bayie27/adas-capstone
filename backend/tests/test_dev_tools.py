@@ -14,6 +14,7 @@ that the very next request rejects — the trap conftest.py's
 
 import asyncio
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from app.core.config import Settings
@@ -21,6 +22,7 @@ from app.core.config import settings as global_settings
 from app.main import create_app
 from app.models import AuditLog, Camera, DetectionLog, HelpArticle, User
 from app.schemas.events import EventType
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import ArgumentError
@@ -38,6 +40,7 @@ def dev_settings_fixture(tmp_path) -> Settings:
         SECRET_KEY=global_settings.SECRET_KEY.get_secret_value(),
         INTERNAL_API_KEY="dev-tools-internal-api-key",
         DEFAULT_ADMIN_PASSWORD=ADMIN_PASSWORD,
+        MFA_ENCRYPTION_KEY=Fernet.generate_key().decode("ascii"),
         DATABASE_URL=f"sqlite:///{tmp_path / 'adas.db'}",
         SNAPSHOT_ROOT=snapshot_root,
         LEGACY_SNAPSHOT_DIR=snapshot_root,
@@ -49,7 +52,7 @@ def dev_settings_fixture(tmp_path) -> Settings:
 
 
 @pytest.fixture(name="dev_client")
-def dev_client_fixture(dev_settings: Settings):
+def dev_client_fixture(dev_settings: Settings, monkeypatch):
     """`base_url="https://testserver"` is required, not cosmetic.
 
     app/core/security.py reads the process-global `app.core.config.settings`
@@ -63,6 +66,17 @@ def dev_client_fixture(dev_settings: Settings):
     no cookie and 401 AUTH_REQUIRED. This only surfaces when the local .env
     omits `SESSION_COOKIE_SECURE=false` — CI always has it, via
     `.env.example`, so this was invisible there."""
+    for field in (
+        "SECRET_KEY",
+        "ALGORITHM",
+        "JWT_ISSUER",
+        "JWT_AUDIENCE",
+        "SESSION_COOKIE_NAME",
+        "SESSION_LIFETIME_MINUTES",
+        "SESSION_COOKIE_SECURE",
+        "DEV_TOOLS_ENABLED",
+    ):
+        monkeypatch.setattr(global_settings, field, getattr(dev_settings, field))
     app = create_app(dev_settings)
     with TestClient(app, base_url="https://testserver") as client:
         yield client
@@ -83,9 +97,10 @@ def captured_broadcasts_fixture(dev_client: TestClient) -> list:
 
 
 def login(client: TestClient, username: str, password: str):
-    return client.post(
-        "/api/auth/login", data={"username": username, "password": password}
-    )
+    from .conftest import _complete_mfa_login
+
+    _complete_mfa_login(client, username, password)
+    return SimpleNamespace(status_code=200, text="")
 
 
 def login_admin(client: TestClient) -> None:
@@ -186,12 +201,16 @@ def test_reseed_returns_a_working_cookie_for_the_requested_user(
     assert body["detections"] == 18
     assert body["session"]["username"] == "dsahagun"
     assert body["session"]["role"] == "Operator"
+    assert body["session"]["auth_method"] == "demo_impersonation"
     assert resp.cookies.get(global_settings.SESSION_COOKIE_NAME)
 
     # The returned cookie authenticates the very next request.
     me = dev_client.get("/api/users/me")
     assert me.status_code == 200, me.text
     assert me.json()["username"] == "dsahagun"
+    status = dev_client.get("/api/auth/mfa/status")
+    assert status.status_code == 200, status.text
+    assert status.json()["auth_method"] == "demo_impersonation"
 
 
 def test_reseed_falls_back_to_admin_when_the_caller_is_gone(

@@ -9,7 +9,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from app.core.config import settings
+from alembic import command
+from app.core.config import Settings, settings
+from app.core.migrations import get_alembic_config, get_code_head_revision
 from app.maintenance import archive as archive_mod
 from app.maintenance import backup as backup_mod
 from app.maintenance import restore as restore_mod
@@ -41,6 +43,10 @@ from app.services.maintenance_schedule import (
     protected_backup_is_due,
     scheduled_backup_is_due,
 )
+from cryptography.fernet import Fernet
+
+_RESTORE_KEY = Fernet.generate_key().decode("ascii")
+_RESTORE_SCHEMA_REVISION = get_code_head_revision(settings)
 
 
 class FakeStorageProvider:
@@ -73,6 +79,32 @@ def _make_db(path: Path, value: str = "seed") -> None:
     conn.close()
 
 
+def _make_mfa_restore_db(path: Path, value: str = "seed") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    app_settings = Settings(
+        _env_file=None,
+        SECRET_KEY="protected-restore-test-secret-not-production",
+        INTERNAL_API_KEY="protected-restore-internal-test-key",
+        DEFAULT_ADMIN_PASSWORD="ProtectedRestoreTest123!",
+        MFA_ENCRYPTION_KEY=_RESTORE_KEY,
+        DATABASE_URL=f"sqlite:///{path.as_posix()}",
+    )
+    command.upgrade(get_alembic_config(app_settings), "head")
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
+    conn.execute("INSERT INTO t (v) VALUES (?)", (value,))
+    conn.commit()
+    conn.close()
+
+
+def _restore_key_args() -> dict[str, str]:
+    assert _RESTORE_SCHEMA_REVISION is not None
+    return {
+        "mfa_encryption_key": _RESTORE_KEY,
+        "expected_schema_revision": _RESTORE_SCHEMA_REVISION,
+    }
+
+
 def _write_value(path: Path, value: str) -> None:
     conn = sqlite3.connect(path)
     conn.execute("INSERT INTO t (v) VALUES (?)", (value,))
@@ -94,6 +126,16 @@ def storage_paths(tmp_path):
     protected = tmp_path / "protected"
     protected.mkdir()
     _make_db(db_path)
+    return db_path, local, protected
+
+
+@pytest.fixture
+def restore_storage_paths(tmp_path):
+    db_path = tmp_path / "adas.db"
+    local = tmp_path / "backups"
+    protected = tmp_path / "protected"
+    protected.mkdir()
+    _make_mfa_restore_db(db_path)
     return db_path, local, protected
 
 
@@ -392,10 +434,10 @@ def test_same_backup_id_in_both_roots_is_selected_by_tier(storage_paths, monkeyp
     assert selected.storage_tier == STORAGE_TIER_PROTECTED
 
 
-def test_protected_restore_creates_a_local_emergency_reserve(storage_paths):
-    db_path, local, protected = storage_paths
+def test_protected_restore_creates_a_local_emergency_reserve(restore_storage_paths):
+    db_path, local, protected = restore_storage_paths
     selected_source = db_path.with_name("selected.db")
-    _make_db(selected_source, "selected")
+    _make_mfa_restore_db(selected_source, "selected")
     provider = _different_device_provider()
     selected = create_backup(
         db_path=selected_source,
@@ -410,6 +452,7 @@ def test_protected_restore_creates_a_local_emergency_reserve(storage_paths):
         backup_dir=local,
         db_path=db_path,
         backup_id=selected.backup_id,
+        **_restore_key_args(),
         storage_tier=STORAGE_TIER_PROTECTED,
         protected_backup_dir=protected,
         storage_provider=provider,
@@ -425,10 +468,12 @@ def test_protected_restore_creates_a_local_emergency_reserve(storage_paths):
     assert emergency.storage_tier == STORAGE_TIER_DEGRADED
 
 
-def test_protected_media_loss_before_copy_does_not_mutate_live_database(storage_paths):
-    db_path, local, protected = storage_paths
+def test_protected_media_loss_before_copy_does_not_mutate_live_database(
+    restore_storage_paths,
+):
+    db_path, local, protected = restore_storage_paths
     selected_source = db_path.with_name("selected.db")
-    _make_db(selected_source, "selected")
+    _make_mfa_restore_db(selected_source, "selected")
     selected = create_backup(
         db_path=selected_source,
         backup_dir=local,
@@ -444,6 +489,7 @@ def test_protected_media_loss_before_copy_does_not_mutate_live_database(storage_
             backup_dir=local,
             db_path=db_path,
             backup_id=selected.backup_id,
+            **_restore_key_args(),
             storage_tier=STORAGE_TIER_PROTECTED,
             protected_backup_dir=protected,
             storage_provider=unavailable,
@@ -456,11 +502,11 @@ def test_protected_media_loss_before_copy_does_not_mutate_live_database(storage_
 
 
 def test_protected_media_loss_after_local_copy_can_finish_restore(
-    storage_paths, monkeypatch
+    restore_storage_paths, monkeypatch
 ):
-    db_path, local, protected = storage_paths
+    db_path, local, protected = restore_storage_paths
     selected_source = db_path.with_name("selected.db")
-    _make_db(selected_source, "selected")
+    _make_mfa_restore_db(selected_source, "selected")
     selected = create_backup(
         db_path=selected_source,
         backup_dir=local,
@@ -482,6 +528,7 @@ def test_protected_media_loss_after_local_copy_can_finish_restore(
         backup_dir=local,
         db_path=db_path,
         backup_id=selected.backup_id,
+        **_restore_key_args(),
         storage_tier=STORAGE_TIER_PROTECTED,
         protected_backup_dir=protected,
         storage_provider=_different_device_provider(),
@@ -491,14 +538,17 @@ def test_protected_media_loss_after_local_copy_can_finish_restore(
     assert _values(db_path) == ["selected"]
 
 
-def test_failed_local_rollback_records_manual_intervention(storage_paths, monkeypatch):
-    db_path, local, _protected = storage_paths
+def test_failed_local_rollback_records_manual_intervention(
+    restore_storage_paths, monkeypatch
+):
+    db_path, local, _protected = restore_storage_paths
     selected = create_backup(db_path=db_path, backup_dir=local, origin=ORIGIN_MANUAL)
     _write_value(db_path, "before-restore")
     restore_mod.perform_offline_restore(
         backup_dir=local,
         db_path=db_path,
         backup_id=selected.backup_id,
+        **_restore_key_args(),
         storage_tier=STORAGE_TIER_DEGRADED,
     )
 
@@ -507,7 +557,11 @@ def test_failed_local_rollback_records_manual_intervention(storage_paths, monkey
 
     monkeypatch.setattr(restore_mod.shutil, "copyfile", fail_copy)
     with pytest.raises(OSError):
-        restore_mod.perform_rollback(backup_dir=local, db_path=db_path)
+        restore_mod.perform_rollback(
+            backup_dir=local,
+            db_path=db_path,
+            **_restore_key_args(),
+        )
 
     state = restore_mod.read_restore_state(local)
     assert state is not None

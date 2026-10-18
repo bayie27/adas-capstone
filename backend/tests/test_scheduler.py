@@ -192,12 +192,14 @@ class TestExpireStaleSessions:
                 user_id=user.user_id,
                 created_at=now - timedelta(hours=9),
                 expires_at=now - timedelta(hours=1),
+                auth_method="password",
             )
             still_valid = AuthSession(
                 session_id=str(uuid.uuid4()),
                 user_id=user.user_id,
                 created_at=now,
                 expires_at=now + timedelta(hours=7),
+                auth_method="password",
             )
             already_revoked = AuthSession(
                 session_id=str(uuid.uuid4()),
@@ -206,6 +208,7 @@ class TestExpireStaleSessions:
                 expires_at=now - timedelta(hours=2),
                 revoked_at=now - timedelta(hours=1),
                 revocation_reason="logout",
+                auth_method="password",
             )
             session.add(expired)
             session.add(still_valid)

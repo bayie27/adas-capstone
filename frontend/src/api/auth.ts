@@ -8,10 +8,6 @@ export interface LoginCredentials {
   password: string
 }
 
-export interface LoginResponse {
-  user: CurrentUserResponse
-}
-
 export interface CurrentUserResponse {
   user_id: number
   username: string
@@ -25,25 +21,7 @@ export interface CurrentUserResponse {
   last_login: string | null
 }
 
-const authApi = axios.create({
-  baseURL: API_BASE_URL,
-  // The login/logout requests carry or receive the session cookie too.
-  withCredentials: true,
-})
-
-export async function loginUser(credentials: LoginCredentials) {
-  const formData = new URLSearchParams()
-  formData.set("username", credentials.username.trim())
-  formData.set("password", credentials.password)
-
-  const { data } = await authApi.post<LoginResponse>("/auth/login", formData, {
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-  })
-
-  return data
-}
+const authApi = axios.create({ baseURL: API_BASE_URL, withCredentials: true })
 
 export async function logoutUser() {
   await authApi.post("/auth/logout")

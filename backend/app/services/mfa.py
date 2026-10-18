@@ -1,4 +1,4 @@
-"""Transactional MFA services used by the staged, dormant API adapter."""
+"""Transactional MFA services used by the integrated authentication API."""
 
 import hmac
 import secrets

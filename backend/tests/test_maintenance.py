@@ -30,6 +30,9 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
+from alembic import command
+from app.core.config import Settings
+from app.core.migrations import get_alembic_config, get_code_head_revision
 from app.maintenance import archive as archive_mod
 from app.maintenance import coordinator as coordinator_mod
 from app.maintenance import restore as restore_mod
@@ -64,6 +67,7 @@ from app.maintenance.verify import (
     validate_backup,
 )
 from app.models import AuditLog
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
@@ -145,6 +149,32 @@ def maint_paths(tmp_path):
     backup_dir = tmp_path / "backups"
     _make_real_db(db_path)
     return SimpleNamespace(db_path=db_path, backup_dir=backup_dir)
+
+
+def _mfa_restore_paths(tmp_path):
+    db_path = tmp_path / "adas.db"
+    backup_dir = tmp_path / "backups"
+    mfa_key = Fernet.generate_key().decode("ascii")
+    app_settings = Settings(
+        _env_file=None,
+        SECRET_KEY="restore-test-signing-secret-not-production",
+        INTERNAL_API_KEY="restore-test-internal-key",
+        DEFAULT_ADMIN_PASSWORD="RestoreTestAdmin123!",
+        MFA_ENCRYPTION_KEY=mfa_key,
+        DATABASE_URL=f"sqlite:///{db_path.as_posix()}",
+    )
+    command.upgrade(get_alembic_config(app_settings), "head")
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
+    conn.execute("INSERT INTO t (v) VALUES ('seed')")
+    conn.commit()
+    conn.close()
+    return SimpleNamespace(
+        db_path=db_path,
+        backup_dir=backup_dir,
+        mfa_encryption_key=mfa_key,
+        expected_schema_revision=get_code_head_revision(app_settings),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -508,6 +538,10 @@ class TestManifest:
 
 
 class TestRestoreCore:
+    @pytest.fixture
+    def maint_paths(self, tmp_path):
+        return _mfa_restore_paths(tmp_path)
+
     def test_offline_restore_happy_path_replaces_db_and_removes_sidecars(
         self, maint_paths
     ):
@@ -525,6 +559,8 @@ class TestRestoreCore:
             backup_dir=maint_paths.backup_dir,
             db_path=maint_paths.db_path,
             backup_id=m1.backup_id,
+            mfa_encryption_key=maint_paths.mfa_encryption_key,
+            expected_schema_revision=maint_paths.expected_schema_revision,
         )
 
         assert state.status == restore_mod.STATUS_DB_RESTORED
@@ -547,6 +583,8 @@ class TestRestoreCore:
                 backup_dir=maint_paths.backup_dir,
                 db_path=maint_paths.db_path,
                 backup_id="../../.env",
+                mfa_encryption_key=maint_paths.mfa_encryption_key,
+                expected_schema_revision=maint_paths.expected_schema_revision,
             )
 
     def test_rollback_restores_emergency_backup(self, maint_paths):
@@ -559,11 +597,16 @@ class TestRestoreCore:
             backup_dir=maint_paths.backup_dir,
             db_path=maint_paths.db_path,
             backup_id=m1.backup_id,
+            mfa_encryption_key=maint_paths.mfa_encryption_key,
+            expected_schema_revision=maint_paths.expected_schema_revision,
         )
         assert _read_rows(maint_paths.db_path) == ["seed"]
 
         state = restore_mod.perform_rollback(
-            backup_dir=maint_paths.backup_dir, db_path=maint_paths.db_path
+            backup_dir=maint_paths.backup_dir,
+            db_path=maint_paths.db_path,
+            mfa_encryption_key=maint_paths.mfa_encryption_key,
+            expected_schema_revision=maint_paths.expected_schema_revision,
         )
 
         assert state.status == restore_mod.STATUS_ROLLED_BACK
@@ -575,7 +618,10 @@ class TestRestoreCore:
     def test_rollback_without_prior_restore_raises(self, maint_paths):
         with pytest.raises(restore_mod.RestoreError):
             restore_mod.perform_rollback(
-                backup_dir=maint_paths.backup_dir, db_path=maint_paths.db_path
+                backup_dir=maint_paths.backup_dir,
+                db_path=maint_paths.db_path,
+                mfa_encryption_key=maint_paths.mfa_encryption_key,
+                expected_schema_revision=maint_paths.expected_schema_revision,
             )
 
     def test_restore_state_lives_in_a_file_not_a_table(self, maint_paths):
@@ -589,6 +635,8 @@ class TestRestoreCore:
             backup_dir=maint_paths.backup_dir,
             db_path=maint_paths.db_path,
             backup_id=m1.backup_id,
+            mfa_encryption_key=maint_paths.mfa_encryption_key,
+            expected_schema_revision=maint_paths.expected_schema_revision,
         )
 
         state_file = restore_mod.restore_state_path(maint_paths.backup_dir)
@@ -606,7 +654,8 @@ class TestRestoreCore:
         }
         conn.close()
         assert "restore_state" not in table_names
-        assert "t" in table_names  # only the app's own table exists
+        assert "t" in table_names
+        assert "mfa_challenge" in table_names
 
         reread = restore_mod.read_restore_state(maint_paths.backup_dir)
         assert reread is not None
@@ -649,8 +698,9 @@ class TestRestoreCore:
         )
         assert second.request_id != state.request_id
 
-    def test_record_restore_outcome_audit_writes_system_actor_row(self, maint_paths):
-        conn = sqlite3.connect(maint_paths.db_path)
+    def test_record_restore_outcome_audit_writes_system_actor_row(self, tmp_path):
+        db_path = tmp_path / "restore-outcome.db"
+        conn = sqlite3.connect(db_path)
         conn.execute(
             """CREATE TABLE audit_log (
                 audit_id INTEGER PRIMARY KEY, actor_type TEXT NOT NULL,
@@ -668,9 +718,9 @@ class TestRestoreCore:
             requested_at="2026-01-01T00:00:00+00:00",
             emergency_backup_id="def456",
         )
-        restore_mod.record_restore_outcome_audit(maint_paths.db_path, state=state)
+        restore_mod.record_restore_outcome_audit(db_path, state=state)
 
-        conn = sqlite3.connect(maint_paths.db_path)
+        conn = sqlite3.connect(db_path)
         row = conn.execute(
             "SELECT actor_type, action, result FROM audit_log"
         ).fetchone()
@@ -691,12 +741,17 @@ class TestRestoreCore:
             backup_dir=maint_paths.backup_dir,
             db_path=maint_paths.db_path,
             backup_id=m1.backup_id,
+            mfa_encryption_key=maint_paths.mfa_encryption_key,
+            expected_schema_revision=maint_paths.expected_schema_revision,
         )
 
         readiness_ok = False  # the orchestrator's /healthz/ready poll "failed"
         if not readiness_ok:
             state = restore_mod.perform_rollback(
-                backup_dir=maint_paths.backup_dir, db_path=maint_paths.db_path
+                backup_dir=maint_paths.backup_dir,
+                db_path=maint_paths.db_path,
+                mfa_encryption_key=maint_paths.mfa_encryption_key,
+                expected_schema_revision=maint_paths.expected_schema_revision,
             )
 
         assert state.status == restore_mod.STATUS_ROLLED_BACK
@@ -907,6 +962,7 @@ def maintenance_settings(client: TestClient, tmp_path, monkeypatch):
 
     monkeypatch.setattr(app_settings, "DATABASE_URL", real_db_url)
     monkeypatch.setattr(app_settings, "BACKUP_DIR", backup_dir)
+    monkeypatch.setattr(app_settings, "PROTECTED_BACKUP_DIR", None)
     monkeypatch.setattr(app_settings, "ARCHIVE_DIR", archive_dir)
     # GET /api/system/maintenance/status reads LOG_DIR/maintenance-runs.jsonl
     # from this same global — without patching it too, the status route

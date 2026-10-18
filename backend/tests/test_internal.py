@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from .conftest import (
+    _TEST_MFA_ENCRYPTION_KEY,
     auth_headers,
     internal_headers,
     make_camera,
@@ -745,9 +746,11 @@ class TestConcurrentDisableRace:
     def _make_client(self, tmp_path) -> TestClient:
         app_settings = Settings(
             _env_file=None,
-            SECRET_KEY="test-secret-key-not-for-production-use",
-            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            SECRET_KEY=settings.SECRET_KEY.get_secret_value(),
+            INTERNAL_API_KEY=settings.INTERNAL_API_KEY.get_secret_value(),
             DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
+            SESSION_COOKIE_SECURE=False,
             DATABASE_URL=f"sqlite:///{tmp_path / 'race.db'}",
             SCHEDULER_ENABLED=False,
             SNAPSHOT_ROOT=tmp_path / "snapshots",
@@ -942,9 +945,11 @@ class TestConcurrentHeartbeatRace:
     def _make_client(self, tmp_path) -> TestClient:
         app_settings = Settings(
             _env_file=None,
-            SECRET_KEY="test-secret-key-not-for-production-use",
-            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            SECRET_KEY=settings.SECRET_KEY.get_secret_value(),
+            INTERNAL_API_KEY=settings.INTERNAL_API_KEY.get_secret_value(),
             DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
+            SESSION_COOKIE_SECURE=False,
             DATABASE_URL=f"sqlite:///{tmp_path / 'hbrace.db'}",
             SCHEDULER_ENABLED=False,
             SNAPSHOT_ROOT=tmp_path / "snapshots",
@@ -1057,9 +1062,11 @@ class TestConcurrentDuplicateSourceEventId:
     def _make_client(self, tmp_path) -> TestClient:
         app_settings = Settings(
             _env_file=None,
-            SECRET_KEY="test-secret-key-not-for-production-use",
-            INTERNAL_API_KEY="test-internal-api-key-not-for-production",
+            SECRET_KEY=settings.SECRET_KEY.get_secret_value(),
+            INTERNAL_API_KEY=settings.INTERNAL_API_KEY.get_secret_value(),
             DEFAULT_ADMIN_PASSWORD="test-admin-password-123",
+            MFA_ENCRYPTION_KEY=_TEST_MFA_ENCRYPTION_KEY,
+            SESSION_COOKIE_SECURE=False,
             DATABASE_URL=f"sqlite:///{tmp_path / 'duprace.db'}",
             SCHEDULER_ENABLED=False,
             SNAPSHOT_ROOT=tmp_path / "snapshots",

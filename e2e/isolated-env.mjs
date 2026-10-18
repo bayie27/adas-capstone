@@ -6,6 +6,13 @@ export const E2E_BACKEND_ORIGIN = "http://127.0.0.1:18000"
 export const E2E_FRONTEND_ORIGIN = "http://127.0.0.1:15173"
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..")
+const MFA_ACCOUNT_NAMES = [
+  "mfa-login",
+  "mfa-recovery",
+  "mfa-replacement",
+  "mfa-rotation",
+  "mfa-wrong-code",
+]
 
 function sqliteUrl(databasePath) {
   return `sqlite:///${databasePath.replaceAll("\\", "/")}`
@@ -23,6 +30,9 @@ export function createIsolatedE2EEnvironment({
 
   const adminPassword = randomBytes(24).toString("hex")
   const mfaKey = `${randomBytes(32).toString("base64url")}=`
+  const mfaAccounts = Object.fromEntries(
+    MFA_ACCOUNT_NAMES.map((username) => [username, randomBytes(24).toString("hex")]),
+  )
   const storagePath = (name) => path.join(root, name)
   const apiOrigin = E2E_BACKEND_ORIGIN
 
@@ -38,6 +48,7 @@ export function createIsolatedE2EEnvironment({
       INTERNAL_API_KEY: randomBytes(32).toString("hex"),
       DEFAULT_ADMIN_PASSWORD: adminPassword,
       E2E_ADMIN_PASSWORD: adminPassword,
+      E2E_MFA_ACCOUNTS: JSON.stringify(mfaAccounts),
       MFA_ENCRYPTION_KEY: mfaKey,
       DATABASE_URL: sqliteUrl(path.join(root, "database.db")),
       SESSION_COOKIE_NAME: "adas_session",

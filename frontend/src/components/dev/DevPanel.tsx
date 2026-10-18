@@ -144,7 +144,7 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
       `Seeded '${result.profile}': ${result.detections} detections, ` +
       `${result.cameras} cameras, ${result.users} users, ` +
       `${result.health_samples} health rows, ${result.export_jobs} exports, ` +
-      `${result.snapshots} snapshots. Signed in as ${result.session.username}.`
+      `${result.snapshots} snapshots. Demo impersonation session for ${result.session.username}.`
     )
   }
 
@@ -376,7 +376,7 @@ export default function DevPanel({ isOpen, onClose }: DevPanelProps) {
                 run(`login:${username}`, async () => {
                   const { session } = await loginAs(username)
                   applyNewSession(session, false)
-                  return `Signed in as ${session.username} (${session.role}).`
+                  return `Demo impersonation session for ${session.username} (${session.role}).`
                 })
               }
               className="rounded-lg border border-stroke bg-surface-1 px-3 py-1.5 text-xs text-fg transition-colors hover:border-stroke-strong disabled:opacity-50"

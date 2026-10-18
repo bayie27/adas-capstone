@@ -1073,10 +1073,12 @@ def build_demo_users() -> list[SeedUserSpec]:
     return users
 
 
-# actor_type, result and a plausible target for each of the 26 actions in
-# AUDIT_ACTIONS. The catalog is iterated rather than listed so a new action
+# actor_type, result and a plausible target for each action in AUDIT_ACTIONS.
+# The catalog is iterated rather than listed so a new action
 # cannot silently go unseeded.
-_AUDIT_SYSTEM_ACTIONS = frozenset({"BACKUP_TRIGGER", "RESTORE_TRIGGER"})
+_AUDIT_SYSTEM_ACTIONS = frozenset(
+    {"BACKUP_TRIGGER", "RESTORE_TRIGGER", "MFA_ROLLOUT", "MFA_RESTORE_INVALIDATE"}
+)
 _AUDIT_DENIED_ACTIONS = frozenset(
     {"LOGIN_FAILURE", "USER_ROLE_CHANGE", "CAMERA_DELETE"}
 )
@@ -1116,7 +1118,11 @@ def build_demo_audit_specs(now: datetime) -> list[SeedAuditSpec]:
                 actor_type="system" if is_system else "user",
                 actor_key=None if is_system else actor_cycle[index % len(actor_cycle)],
                 action=action,
-                target_type=_AUDIT_TARGET_TYPES.get(action.split("_", 1)[0]),
+                target_type=(
+                    "system"
+                    if is_system
+                    else _AUDIT_TARGET_TYPES.get(action.split("_", 1)[0])
+                ),
                 target_ref=str(index + 1),
                 result=result,
                 minutes_ago=240 + index * 7,

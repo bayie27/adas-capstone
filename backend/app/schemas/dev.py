@@ -29,6 +29,7 @@ class DevSessionUser(BaseModel):
     user_id: int
     username: str
     role: UserRole
+    auth_method: Literal["demo_impersonation"]
 
 
 class DevReseedRequest(BaseModel):

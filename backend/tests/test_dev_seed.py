@@ -130,7 +130,8 @@ def test_empty_profile_seeds_nothing_but_keeps_help_articles(seeded):
 
     assert cameras == []
     assert detections == []
-    assert audit == []
+    assert len(audit) == 1
+    assert audit[0].action == "MFA_ROLLOUT"
     # init_db()'s default admin survives; nothing else is created.
     assert [u.username for u in users] == ["admin"]
     # FR-20's help content is seeded by init_db(), not by a profile, so an
@@ -301,7 +302,8 @@ def test_uat_profile_matches_the_journey_baseline(seeded):
     assert len(operator_alarms) == 6
     assert {alarm.volume for alarm in operator_alarms} == {50}
     assert {alarm.snooze_duration for alarm in operator_alarms} == {30}
-    assert audit == []
+    assert len(audit) == 1
+    assert audit[0].action == "MFA_ROLLOUT"
     assert result.detections == 16
     assert result.health_samples > 0
 

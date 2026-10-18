@@ -9,13 +9,16 @@ export function MfaSensitiveFlowProvider({ children }: { children: ReactNode }) 
   const dialogRef = useRef<HTMLDivElement | null>(null)
 
   const showCodes = useCallback((options: ShowMfaRecoveryCodesOptions) => {
+    displayRef.current?.onDismissed?.()
     displayRef.current = options
     setDisplay(options)
   }, [])
 
   const clearCodes = useCallback(() => {
+    const current = displayRef.current
     displayRef.current = null
     setDisplay(null)
+    current?.onDismissed?.()
   }, [])
 
   const acknowledge = useCallback(() => {
@@ -32,6 +35,7 @@ export function MfaSensitiveFlowProvider({ children }: { children: ReactNode }) 
 
   useEffect(() => {
     return () => {
+      displayRef.current?.onDismissed?.()
       displayRef.current = null
     }
   }, [])
