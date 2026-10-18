@@ -62,14 +62,15 @@ Walk matrix V01–V05 and reconcile all earlier rows. Keep sensitive raw materia
 
 ## Completion notes — executor fills
 
-- Status: P5 implementation and scoped evidence prepared; required full gate pending.
+- Status: P5 implementation and scoped evidence prepared; required full gate passed on the committed implementation tree.
 - Base: updated `origin/main` at P4 merge `38a5c5d0d9d2a3abeae6df2470b52e76e1bf4ba8`; P4 branch tree `d39f0ba12d0d1dc7e855ecac522c3ad0b65587d4` matches. Reused P4 full-gate evidence: backend 1,375 passed/5 skipped, frontend 395 passed, build passed, Chromium E2E 6/6.
 - P5 environment: Windows 10.0.26200.0, Python 3.12.13, Node 22.23.1, pnpm 11.17.0; one laptop only. `test_help.py` + `test_mfa_restore.py`: 40 passed. A second targeted restore run after adding the rollback-cookie assertion: 8 passed. Ruff format/lint, scoped Prettier, local relative-link reference check, and paper tracker generator passed.
 - One-laptop drill: restore 130.31 ms, rollback 95.46 ms, fresh loopback backend readiness 4.279 s; the pre-restore cookie was rejected with 401 `AUTH_REVOKED`. The 60-second restore-to-alert target is not established because no AI heartbeat was measured. Laptop-local key ACL and backup/manifest exclusion passed. Physical phone, cloud-sync setting, second LAN client/TLS, and independent offline escrow/replacement host remain Not run.
 - Safe evidence: `var/test-evidence/mfa-p5-one-laptop-e0bd670e26.json` and `var/test-evidence/mfa-p5-loopback-76edf34f0d.json`; disposable secrets and databases were removed. No production or working database was opened.
 - Documentation/help and local paper/validation proposals are in `docs/operations/MFA.md`, `backend/content/help/`, `docs/validation/mfa-validation.md`, and `paper_sync/findings/2026-10-19-mfa-validation-operations.md`; tracker regenerated at `paper_sync/TRACKER.md` (35 findings).
 - Paper-sync package: `PS-20261019-MFA-VALIDATION-OPERATIONS`. Current live Doc and validation Doc/Sheet were read; live PDF export returned 403, so current page mapping is pending. No Drive writes/comments were made.
-- Pre-PR `pnpm full:check`, exact tested commit, push, and PR: pending. No manual `pnpm check` was run; the authorized push hook owns that check.
+- Required pre-PR `pnpm full:check`: exit 0 on implementation commit `8d4ccfda5ba332f8ec6ec5e54752ebefd6e6c1ef`. Backend: 1,377 passed/5 skipped; frontend: 395 passed across 62 files; frontend build passed; Chromium E2E: 6/6 passed. Ruff format/lint, Prettier, ESLint, and frontend typecheck passed. The default-sandbox attempt stopped before checks at pnpm's workspace `realpath` EPERM; retrying the same gate with permitted workspace access completed. Environment: Windows 10.0.26200.0, Python 3.12.13, Node 22.23.1, pnpm 11.17.0. Existing Passlib/SQLAlchemy/Starlette and Vite/jsdom warnings did not fail the gate.
+- Push and PR: pending. No manual `pnpm check` was run; the authorized push hook owns that check.
 - Remaining human prerequisites: physical authenticator/storage and cloud-sync policy observation, second-client LAN HTTPS/Secure-cookie/WebSocket and clock check, independent offline escrow custody and replacement-host drill, and end-to-end restore-to-AI-heartbeat timing. Do not treat the package as release acceptance.
 
 Update the overview row honestly. Stop after this handoff's work and report; do not merge, deploy, repair user factors, or apply shared-document proposals automatically.

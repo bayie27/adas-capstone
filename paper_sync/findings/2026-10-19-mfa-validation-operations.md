@@ -876,7 +876,7 @@ Separately, repository validation of the mandatory-MFA implementation used dispo
 
 #### Evidence
 
-P4 full gate on the exact merged code tree; P5 `uv run python -m pytest backend/tests/test_help.py backend/tests/test_mfa_restore.py -q`; safe records `P5-1L-RESTORE-ESCROW-01` and `P5-1L-POST-ROLLBACK-AUTH-01`. Exact P5 full-gate counts will be added after the required `pnpm full:check` completes. The live current PDF page mapping remains pending.
+P4 full gate on the exact merged code tree; P5 `pnpm full:check` passed on implementation commit `8d4ccfda5ba332f8ec6ec5e54752ebefd6e6c1ef` (backend 1,377 passed/5 skipped; frontend 395 across 62 files; build passed; Chromium E2E 6/6). P5 scoped help/restore selectors and safe records `P5-1L-RESTORE-ESCROW-01` and `P5-1L-POST-ROLLBACK-AUTH-01`. Physical phone, cloud-sync setting, second-client LAN/TLS, AI heartbeat, and independent offline escrow remain not run. The live current PDF page mapping remains pending.
 
 #### Proposed comment (same gate as replacement)
 
