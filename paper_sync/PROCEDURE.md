@@ -12,10 +12,10 @@ This procedure answers one question — **the code changed; which paper claims d
 
 Everything live is in Google Drive. **Nothing in this repo is authoritative for paper state.**
 
-| Artifact                                               | Type  | Role                                                                                   |
-| ------------------------------------------------------ | ----- | -------------------------------------------------------------------------------------- |
-| `Group7_Capstone Project Defense Document - ITCAPROJ1` | Doc   | **The paper.** Read during analysis; write only under the defense-paper approval gate. |
-| `ADAS_Paper_Audit_Tracker`                             | Sheet | **The assignable summary.** One row per change.                                        |
+| Artifact                                          | Type  | Role                                                                                                                            |
+| ------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Current defense paper (configured in `CLAUDE.md`) | Doc   | **The paper.** Resolve and verify the current native Doc link in `CLAUDE.md`; write only under the defense-paper approval gate. |
+| `ADAS_Paper_Audit_Tracker`                        | Sheet | **The assignable summary.** One row per change.                                                                                 |
 
 First perform the local claim-bearing triage in Step 2. If no relevant surface changed, report that result without fetching Drive artifacts. Otherwise read both during analysis. Findings always go to `paper_sync/findings/`. Codex may apply approved updates to the relevant Doc and Sheet in a separate gated phase; Claude remains read-only and leaves the Drive write to a human.
 

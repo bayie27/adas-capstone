@@ -125,14 +125,14 @@ Full backend scope is required for models/core/conftest/app-factory changes; use
 
 P1–P4 add results to their own completion notes. P5 links final evidence here, with actual commit/environment/command/exit status, safe artifact location, and failed/skipped/manual prerequisites. Do not put secrets or unredacted auth responses into the ledger.
 
-| Group                          | Status       | Evidence |
-| ------------------------------ | ------------ | -------- |
-| Foundation/harness             | Not executed | —        |
-| Backend/transactions           | Not executed | —        |
-| Frontend components            | Not executed | —        |
-| Cutover/browser/demo           | Not executed | —        |
-| Restore/escrow                 | Not executed | —        |
-| Physical authenticator/LAN TLS | Not executed | —        |
-| Operations/paper proposals     | Not executed | —        |
+| Group                          | Status        | Evidence                                                                                                                                                                                                             |
+| ------------------------------ | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Foundation/harness             | Verified (P1) | `pnpm full:check`: backend 1,215 passed/19 skipped, frontend 357 passed, build passed, isolated Chromium login passed; disposable migration preservation/downgrade/schema checks passed. See `02_PKG_foundation.md`. |
+| Backend/transactions           | Not executed  | —                                                                                                                                                                                                                    |
+| Frontend components            | Not executed  | —                                                                                                                                                                                                                    |
+| Cutover/browser/demo           | Not executed  | —                                                                                                                                                                                                                    |
+| Restore/escrow                 | Not executed  | —                                                                                                                                                                                                                    |
+| Physical authenticator/LAN TLS | Not executed  | —                                                                                                                                                                                                                    |
+| Operations/paper proposals     | Not executed  | —                                                                                                                                                                                                                    |
 
 The planning baseline is in the overview and proves only the pre-MFA implementation's existing tests, not any row of this acceptance matrix.

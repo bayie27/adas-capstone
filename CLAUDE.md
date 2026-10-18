@@ -30,7 +30,7 @@ and verify their current state before relying on or changing them.
 
 | Resource                           | Link                                                                                                                                                |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Capstone defense document          | [Group 7 Defense Document](https://docs.google.com/document/d/1MkTrdBPrrXpw8JGC4xrS475wbF7Yn-9YCaXIN-xd0aw/edit)                                    |
+| Capstone defense document          | [REVISED_FINAL_PAPEL](https://docs.google.com/document/d/1tCbJglHEobGee_KXKMWmghMLne0nroWNnbj2MDh8240/edit)                                         |
 | Test Execution and Validation Plan | [Capstone Test Execution and Validation](https://docs.google.com/document/d/1EAoDetxkq6a3gzihU4iqp8pEXm4LcXfxmb8p5bCnBow/edit)                      |
 | Test execution tracker             | [ADAS Test Execution Tracker](https://docs.google.com/spreadsheets/d/16GSpVeXcGAxx_1lp9vKSG6QKB9CG_xGc816KWf5dyhw/edit?gid=740963224#gid=740963224) |
 | Test evidence library              | [ADAS Test Evidence](https://drive.google.com/drive/folders/1oqXolcjA7Aeu_hTSbg7aH7-UX_gbc8a2)                                                      |
