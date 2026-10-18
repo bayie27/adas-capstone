@@ -48,7 +48,13 @@ class TestDevToolsGate:
     from ENVIRONMENT only when it is left unset, so a production deployment
     is off by default while the LAN demo box can still turn it on."""
 
-    def test_defaults_on_in_development_and_off_in_production(self, tmp_path):
+    def test_defaults_on_in_development_and_off_in_production(
+        self, tmp_path, monkeypatch
+    ):
+        # The full suite imports ai_engine.config, whose load_dotenv() copies
+        # values from CI's .env into os.environ. Exercise the actual Settings
+        # default independently from the explicit operational example value.
+        monkeypatch.delenv("DEV_TOOLS_ENABLED", raising=False)
         assert _dev_tools_settings(tmp_path).DEV_TOOLS_ENABLED is True
         assert (
             _dev_tools_settings(tmp_path, ENVIRONMENT="production").DEV_TOOLS_ENABLED
