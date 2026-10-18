@@ -1,6 +1,6 @@
 # Setup and operations
 
-[Documentation index](../README.md) · [Project overview](../../README.md)
+[Documentation index](../README.md) · [Project overview](../../README.md) · [MFA operations](MFA.md)
 
 Run commands from the repository root. This guide retains the detailed setup, simulation, development and maintenance instructions from the project README.
 
@@ -200,7 +200,7 @@ uv run python ai_engine/capacity.py
 pwsh -File scripts/start-dev.ps1 -Reseed demo -All
 ```
 
-This reseeds `demo` (which is the default profile, but stating it explicitly is clearer on a first run), then brings up all four components in the bring-up order MediaMTX → backend → frontend → AI engine. Sign in at `http://localhost:5173` as `admin` with the `DEFAULT_ADMIN_PASSWORD` from your `.env`, then enroll a local authenticator and save the one-time recovery codes before continuing.
+This reseeds `demo` (which is the default profile, but stating it explicitly is clearer on a first run), then brings up all four components in the bring-up order MediaMTX → backend → frontend → AI engine. Sign in at `http://localhost:5173` as `admin` with the `DEFAULT_ADMIN_PASSWORD` from your `.env`, then enroll a local authenticator and save the one-time recovery codes before continuing. Follow [MFA operations](MFA.md) for key custody, recovery, and restore behavior.
 
 **What a working run looks like:** the frontend connects, the backend accepts camera heartbeats, and configured simulation streams are processed. Camera availability and alerts depend on the seed profile, populated clips and model configuration; do not treat historical throughput or per-clip outcomes as startup guarantees.
 
@@ -405,7 +405,8 @@ either path. A restore also restores the selected snapshot's authenticator
 and recovery-code state, so it can make an older authenticator seed or unused
 recovery-code batch usable again. The selected backup and emergency backup
 artifacts remain unchanged; keep the stable MFA key securely escrowed outside
-the database backup set.
+the database backup set. See [MFA operations](MFA.md) for key custody, snapshot
+semantics, and the required reauthentication checks.
 
 **Technical maintenance for deployment operators:**
 

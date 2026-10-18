@@ -13,6 +13,7 @@ The default Python suite excludes `slow`, `clips` and `gpu` tiers. Explicitly se
 ## Validation references
 
 - [Test execution and validation plan](test-execution-validation-plan.md)
+- [MFA implementation validation and evidence](mfa-validation.md)
 - [Unit-testing selection and traceability](unit-testing-coverage-review.md)
 - [Frontend visual checklist](../../frontend/VISUAL_CHECKLIST.md)
 - [End-to-end and screenshot tests](../../e2e/README.md)

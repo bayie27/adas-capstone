@@ -14,8 +14,8 @@ on](/help/change-password-modal.png)
 Changing your password signs out every session on every device you're logged in on,
 including the one you just used to change it. This is intentional: it makes sure a
 password change actually invalidates anything relying on the old one, rather than
-leaving an old, still-valid session running somewhere you've forgotten about. Just log
-back in with your new password.
+leaving an old, still-valid session running somewhere you've forgotten about. Log back
+in with your new password and complete the authenticator step.
 
 This applies the same way whether you changed it yourself from your Profile page (see
 [Updating Your Profile and Password](updating-your-profile-and-password)) or an

@@ -316,6 +316,31 @@ class TestRoleFilter:
             "faq-what-does-precision-score-mean",
         }
 
+    def test_mfa_guidance_is_operator_visible_and_covers_recovery_boundaries(
+        self, client: TestClient, session: Session
+    ):
+        seed_help_articles(session, content_dir=REAL_CONTENT_DIR)
+        make_operator(session)
+        headers = auth_headers(client, "operator", "Operator123")
+
+        response = client.get(
+            "/api/help/articles/managing-your-authenticator-and-recovery",
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        body = " ".join(response.json()["body_markdown"].casefold().split())
+        assert "wait for the next code" in body
+        assert "another unused recovery code" in body
+        assert "final recovery code" in body
+        assert "current authenticator remains active" in body
+        assert "signs you out on every device" in body
+        assert "cloud sync" in body
+        assert "adas cannot inspect or enforce" in body
+        assert "no in-app or administrator mfa reset" in body
+        assert "sqlite" not in body
+        assert "database" not in body
+
 
 # ---------------------------------------------------------------------------
 # Search

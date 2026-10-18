@@ -414,7 +414,11 @@ Work top to bottom. Each step's failure has a different cause, so do not skip ah
 | 7.9 | Wait for a detection                               | Alert appears in under 2 s, snapshot renders, the camera goes `Paused`.                                                                                                                    |
 
 The login is the username `admin` — **not an email** — with `DEFAULT_ADMIN_PASSWORD` from the server's
-`.env`, followed by its local authenticator. Keep `DEV_TOOLS_ENABLED=false` for an operational server. It may be set to `true` only for a disposable LAN demonstration database; any resulting session is labeled as demo impersonation and does not prove normal MFA login.
+`.env`, followed by its local authenticator. See [MFA operations](MFA.md) for enrollment,
+recovery-code storage, and stable-key requirements. Keep `DEV_TOOLS_ENABLED=false` for
+an operational server. It may be set to `true` only for a disposable LAN demonstration
+database; any resulting session is labeled as demo impersonation and does not prove
+normal MFA login.
 
 Then exercise the incident workflow, which is the part a panel will ask about:
 
