@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, col, select
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.models import AuthSession, User
 
 logger = logging.getLogger("uvicorn.error")
@@ -17,17 +17,23 @@ def create_session(
     *,
     user_agent: str | None = None,
     source_ip: str | None = None,
+    auth_method: str = "password",
+    mfa_credential_version: int | None = None,
+    app_settings: Settings | None = None,
 ) -> AuthSession:
     """D-006 — creates the server-side session record that the JWT `sid`
     claim points at. Added to the caller's session; the caller commits
     together with the rest of the login transaction."""
     assert user.user_id is not None
     now = datetime.now(UTC)
+    resolved_settings = app_settings if app_settings is not None else settings
     auth_session = AuthSession(
         session_id=str(uuid.uuid4()),
         user_id=user.user_id,
         created_at=now,
-        expires_at=now + timedelta(minutes=settings.SESSION_LIFETIME_MINUTES),
+        expires_at=now + timedelta(minutes=resolved_settings.SESSION_LIFETIME_MINUTES),
+        auth_method=auth_method,
+        mfa_credential_version=mfa_credential_version,
         user_agent=user_agent[:256] if user_agent else None,
         source_ip=source_ip,
     )

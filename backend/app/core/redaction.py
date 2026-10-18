@@ -6,7 +6,11 @@ from app.core.config import settings
 # resolved RTSP URL (01_CONTRACTS.md §1.6) generically, not just rtsp://.
 CREDENTIAL_URL_PATTERN = re.compile(r"://[^/@\s:]+:[^/@\s]+@")
 SENSITIVE_ASSIGNMENT_PATTERN = re.compile(
-    r"(?i)\b(password|passphrase|token|api[_-]?key|secret)\s*=\s*([^\s,]+)"
+    r"(?i)\b(password|passphrase|token|challenge[_-]?token|api[_-]?key|secret|"
+    r"seed|ciphertext|otp|totp|code|mfa[_-]?encryption[_-]?key|"
+    r"mfa[_-]?(?:code|secret|seed|key|challenge|token)|"
+    r"recovery[_-]?codes?|manual[_-]?key|provisioning[_-]?uri|"
+    r"(?:active|pending)[_-]?secret[_-]?ciphertext)\s*=\s*([^\s,]+)"
 )
 
 
@@ -21,6 +25,8 @@ def collect_secret_values() -> list[str]:
     ]
     if settings.DSS_PASS is not None:
         candidates.append(settings.DSS_PASS.get_secret_value())
+    if settings.MFA_ENCRYPTION_KEY is not None:
+        candidates.append(settings.MFA_ENCRYPTION_KEY.get_secret_value())
     return [value for value in candidates if value]
 
 

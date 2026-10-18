@@ -23,6 +23,7 @@ from app.schemas import (
     UserUpdatePassword,
 )
 from app.services import audit
+from app.services.mfa import invalidate_user_challenge
 from app.services.realtime import RealtimeManager
 from app.services.sessions import revoke_all_for_user
 
@@ -151,6 +152,7 @@ async def change_my_password(
     current_user.password_hash = get_password_hash(passwords_in.new_password)
     current_user.password_changed_at = datetime.now(UTC)
     session.add(current_user)
+    invalidate_user_challenge(session, current_user.user_id)
     # D-006 — a self password change revokes every session for this user,
     # including the one making this request. The user must log in again.
     revoke_all_for_user(session, current_user.user_id, "password_change")
@@ -394,6 +396,8 @@ async def update_user(
         revoke_all_for_user(session, target.user_id, "account_disabled")
     elif role_changed:
         revoke_all_for_user(session, target.user_id, "role_change")
+    if being_deactivated or role_changed:
+        invalidate_user_challenge(session, target.user_id)
 
     # USER_UPDATE is the base action for this route ("USER_UPDATE, plus ...
     # as applicable" — 01_CONTRACTS.md §10); role/enable/disable are
@@ -487,6 +491,7 @@ async def reset_user_password(
     target.password_hash = get_password_hash(passwords_in.new_password)
     target.password_changed_at = datetime.now(UTC)
     session.add(target)
+    invalidate_user_challenge(session, target.user_id)
     revoke_all_for_user(session, target.user_id, "password_reset")
     audit.record(
         session,
@@ -556,6 +561,7 @@ async def delete_user(
 
     target.is_active = False
     session.add(target)
+    invalidate_user_challenge(session, target.user_id)
     revoke_all_for_user(session, target.user_id, "account_disabled")
     audit.record(
         session,
