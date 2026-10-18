@@ -4,7 +4,7 @@ import jwt
 from fastapi import Response
 from passlib.context import CryptContext
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.models import AuthSession, User
 
 # Argon2id per 01_CONTRACTS.md §3.1 / D-005 password handling. No bcrypt->argon2
@@ -33,56 +33,72 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_session_token(user: User, auth_session: AuthSession) -> str:
+def create_session_token(
+    user: User,
+    auth_session: AuthSession,
+    app_settings: Settings | None = None,
+) -> str:
     """D-006 claims. `sub` is the immutable user_id, never the mutable
     username. `role` supports frontend initialization only — every request
     re-authorizes from the current database role, never this claim."""
+    resolved_settings = app_settings if app_settings is not None else settings
     to_encode = {
         "sub": str(user.user_id),
         "sid": auth_session.session_id,
         "role": str(user.role),
         "iat": datetime.now(UTC),
         "exp": auth_session.expires_at,
-        "iss": settings.JWT_ISSUER,
-        "aud": settings.JWT_AUDIENCE,
+        "iss": resolved_settings.JWT_ISSUER,
+        "aud": resolved_settings.JWT_AUDIENCE,
     }
     return jwt.encode(
-        to_encode, settings.SECRET_KEY.get_secret_value(), algorithm=settings.ALGORITHM
+        to_encode,
+        resolved_settings.SECRET_KEY.get_secret_value(),
+        algorithm=resolved_settings.ALGORITHM,
     )
 
 
-def decode_session_token(token: str) -> dict:
+def decode_session_token(token: str, app_settings: Settings | None = None) -> dict:
     """Verifies signature, issuer, audience, and expiration, restricted to
     the configured algorithm (rejects `alg: none` and any other algorithm —
     edge case 8.1). Passing `issuer=`/`audience=` is what actually makes
     `jwt.decode` check those claims; writing them without passing these
     kwargs would silently skip verification (edge case 8.3)."""
+    resolved_settings = app_settings if app_settings is not None else settings
     return jwt.decode(
         token,
-        settings.SECRET_KEY.get_secret_value(),
-        algorithms=[settings.ALGORITHM],
-        issuer=settings.JWT_ISSUER,
-        audience=settings.JWT_AUDIENCE,
+        resolved_settings.SECRET_KEY.get_secret_value(),
+        algorithms=[resolved_settings.ALGORITHM],
+        issuer=resolved_settings.JWT_ISSUER,
+        audience=resolved_settings.JWT_AUDIENCE,
     )
 
 
-def set_session_cookie(response: Response, token: str) -> None:
+def set_session_cookie(
+    response: Response,
+    token: str,
+    app_settings: Settings | None = None,
+) -> None:
+    resolved_settings = app_settings if app_settings is not None else settings
     response.set_cookie(
-        key=settings.SESSION_COOKIE_NAME,
+        key=resolved_settings.SESSION_COOKIE_NAME,
         value=token,
-        max_age=settings.SESSION_LIFETIME_MINUTES * 60,
+        max_age=resolved_settings.SESSION_LIFETIME_MINUTES * 60,
         httponly=True,
-        secure=settings.SESSION_COOKIE_SECURE,
+        secure=resolved_settings.SESSION_COOKIE_SECURE,
         samesite="strict",
         path="/",
     )
 
 
-def clear_session_cookie(response: Response) -> None:
+def clear_session_cookie(
+    response: Response, app_settings: Settings | None = None
+) -> None:
+    resolved_settings = app_settings if app_settings is not None else settings
     response.delete_cookie(
-        key=settings.SESSION_COOKIE_NAME,
+        key=resolved_settings.SESSION_COOKIE_NAME,
         httponly=True,
-        secure=settings.SESSION_COOKIE_SECURE,
+        secure=resolved_settings.SESSION_COOKIE_SECURE,
         samesite="strict",
         path="/",
     )

@@ -79,13 +79,13 @@ Review these seams explicitly rather than accepting happy-path completion: inter
 
 The completion ledger reflects current execution state. The planning tests below are not implementation evidence.
 
-| Package | Status      | Branch/PR                                                                         | Merge commit | Evidence                                                                                   |
-| ------- | ----------- | --------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------ |
-| P1      | PR open     | `feat/mfa-foundation` / [#241](https://github.com/bayie27/adas-capstone/pull/241) | —            | P1 completion notes record migration, matrix, isolated E2E, and `pnpm full:check` results. |
-| P2      | Not started | —                                                                                 | —            | —                                                                                          |
-| P3      | Not started | —                                                                                 | —            | —                                                                                          |
-| P4      | Not started | —                                                                                 | —            | —                                                                                          |
-| P5      | Not started | —                                                                                 | —            | —                                                                                          |
+| Package | Status      | Branch/PR                                                                         | Merge commit | Evidence                                                                                                                                    |
+| ------- | ----------- | --------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1      | Merged      | `feat/mfa-foundation` / [#241](https://github.com/bayie27/adas-capstone/pull/241) | `8b6778c`    | Merged into main; P1 completion notes record migration, matrix, isolated E2E, and `pnpm full:check` results.                                |
+| P2      | Ready to PR | `feat/mfa-backend`                                                                | —            | Completion notes record the matrix walk, focused tests, successful full gate, and paper-sync result; PR details to be added after creation. |
+| P3      | Not started | —                                                                                 | —            | —                                                                                                                                           |
+| P4      | Not started | —                                                                                 | —            | —                                                                                                                                           |
+| P5      | Not started | —                                                                                 | —            | —                                                                                                                                           |
 
 Each executor fills its package's Completion notes and its row here with actual commands, exit results, deviations, unresolved blockers, and PR URL. Do not invent a merge SHA; the next conversation verifies the merge and can record it. P5 assembles final evidence from those notes rather than repeating passing checks without cause.
 

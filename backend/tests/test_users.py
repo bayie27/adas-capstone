@@ -5,9 +5,11 @@ Covers: CRUD, RBAC, last-admin guards, self-service, password rules.
 """
 
 import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.models import AuditLog
+from app.core.mfa import hash_challenge_token
+from app.models import AuditLog, MfaChallenge, MfaCredential
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
@@ -21,6 +23,23 @@ from .conftest import auth_headers, make_admin, make_operator
 def admin_headers(client, session):
     make_admin(session)
     return auth_headers(client, "admin", "Admin123")
+
+
+def add_pending_mfa_challenge(session: Session, user) -> None:
+    session.add(MfaCredential(user_id=user.user_id))
+    session.add(
+        MfaChallenge(
+            user_id=user.user_id,
+            token_hash=hash_challenge_token(
+                f"pending-challenge-{user.user_id}-{user.username}"
+            ),
+            purpose="login",
+            credential_version=0,
+            password_changed_at=user.password_changed_at,
+            expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        )
+    )
+    session.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +144,38 @@ class TestUpdateMyProfile:
 
 
 class TestChangeMyPassword:
+    def test_password_change_invalidates_pending_mfa_challenge(
+        self, client: TestClient, session: Session
+    ):
+        operator = make_operator(session)
+        headers = auth_headers(client, "operator", "Operator123")
+        session.add(MfaCredential(user_id=operator.user_id))
+        session.add(
+            MfaChallenge(
+                user_id=operator.user_id,
+                token_hash=hash_challenge_token("one-time-test-challenge"),
+                purpose="login",
+                credential_version=0,
+                password_changed_at=operator.password_changed_at,
+                expires_at=datetime.now(UTC) + timedelta(minutes=5),
+            )
+        )
+        session.commit()
+
+        response = client.patch(
+            "/api/users/me/password",
+            json={"old_password": "Operator123", "new_password": "NewPass456"},
+            headers=headers,
+        )
+
+        assert response.status_code == 204
+        assert (
+            session.exec(
+                select(MfaChallenge).where(MfaChallenge.user_id == operator.user_id)
+            ).first()
+            is None
+        )
+
     def test_operator_can_change_own_password(
         self, client: TestClient, session: Session
     ):
@@ -500,6 +551,32 @@ class TestUpdateUser:
         assert resp.status_code == 200
         assert resp.json()["role"] == "Admin"
 
+    @pytest.mark.parametrize(
+        "payload",
+        [{"role": "Admin"}, {"is_active": False}],
+    )
+    def test_role_change_or_deactivation_invalidates_pending_mfa_challenge(
+        self, client: TestClient, session: Session, payload: dict
+    ):
+        make_admin(session)
+        operator = make_operator(session)
+        add_pending_mfa_challenge(session, operator)
+        headers = auth_headers(client, "admin", "Admin123")
+
+        response = client.patch(
+            f"/api/users/{operator.user_id}",
+            json=payload,
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        assert (
+            session.exec(
+                select(MfaChallenge).where(MfaChallenge.user_id == operator.user_id)
+            ).first()
+            is None
+        )
+
     def test_cannot_demote_last_admin(self, client: TestClient, session: Session):
         """TC-U-105 alt / Use Case 2 — last admin lockout prevention."""
         admin = make_admin(session)
@@ -717,6 +794,7 @@ class TestResetPassword:
     ):
         make_admin(session)
         op = make_operator(session)
+        add_pending_mfa_challenge(session, op)
         headers = auth_headers(client, "admin", "Admin123")
         resp = client.post(
             f"/api/users/{op.user_id}/reset-password",
@@ -724,6 +802,12 @@ class TestResetPassword:
             headers=headers,
         )
         assert resp.status_code == 204
+        assert (
+            session.exec(
+                select(MfaChallenge).where(MfaChallenge.user_id == op.user_id)
+            ).first()
+            is None
+        )
 
         # Operator can now login with new password
         login = client.post(
@@ -779,9 +863,16 @@ class TestDeleteUser:
     def test_admin_can_delete_operator(self, client: TestClient, session: Session):
         make_admin(session)
         op = make_operator(session)
+        add_pending_mfa_challenge(session, op)
         headers = auth_headers(client, "admin", "Admin123")
         resp = client.delete(f"/api/users/{op.user_id}", headers=headers)
         assert resp.status_code == 204
+        assert (
+            session.exec(
+                select(MfaChallenge).where(MfaChallenge.user_id == op.user_id)
+            ).first()
+            is None
+        )
 
         # Deleted operator cannot log in
         login = client.post(

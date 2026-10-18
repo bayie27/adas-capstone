@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
     from app.services.reports.jobs import ExportJobQueue
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.db import get_session
 from app.core.errors import AppHTTPException
 from app.core.monitor import HealthStore
@@ -46,7 +46,7 @@ def _auth_revoked() -> AppHTTPException:
 
 
 def authenticate_session_token(
-    token: str, session: Session
+    token: str, session: Session, app_settings: Settings | None = None
 ) -> tuple[User, AuthSession]:
     """D-006 request authentication, in order: (1) verify the JWT signature,
     issuer, audience, and expiry; (2) load the auth_session by `sid` and
@@ -61,7 +61,7 @@ def authenticate_session_token(
     the same session cookie, just plucked from a different object.
     """
     try:
-        payload = decode_session_token(token)
+        payload = decode_session_token(token, app_settings)
     except jwt.ExpiredSignatureError as exc:
         raise AppHTTPException(
             status.HTTP_401_UNAUTHORIZED,

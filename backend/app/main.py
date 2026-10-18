@@ -555,6 +555,10 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         resolved_settings.LOGIN_RATE_LIMIT_ATTEMPTS,
         resolved_settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
     )
+    application.state.mfa_rate_limiter = SlidingWindowLimiter(
+        resolved_settings.LOGIN_RATE_LIMIT_ATTEMPTS,
+        resolved_settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    )
     # On app.state, not a module global, so tests get a clean instance per
     # app (04_PKG_realtime.md Step 2).
     application.state.realtime_manager = RealtimeManager(

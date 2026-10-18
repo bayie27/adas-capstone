@@ -67,3 +67,7 @@ class SlidingWindowLimiter:
 
 def get_rate_limiter(request: Request) -> SlidingWindowLimiter:
     return request.app.state.rate_limiter
+
+
+def get_mfa_rate_limiter(request: Request) -> SlidingWindowLimiter:
+    return request.app.state.mfa_rate_limiter
